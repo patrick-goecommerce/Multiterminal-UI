@@ -56,6 +56,8 @@ func NewSession(id, rows, cols int) *Session {
 // Start launches the given command (e.g. []string{"bash"} or
 // []string{"claude", "--dangerously-skip-permissions"}) inside a new PTY.
 // The working directory is set to dir.
+// If enableKittyKbd is true, the kitty keyboard protocol is enabled after
+// start so that Shift+Enter and other modified keys are reported correctly.
 func (s *Session) Start(argv []string, dir string, env []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -69,9 +71,13 @@ func (s *Session) Start(argv []string, dir string, env []string) error {
 
 	s.cmd = exec.Command(argv[0], argv[1:]...)
 	s.cmd.Dir = dir
-	if len(env) > 0 {
-		s.cmd.Env = append(os.Environ(), env...)
-	}
+
+	// Always set TERM and COLORTERM so child processes see a capable terminal.
+	baseEnv := append(os.Environ(),
+		"TERM=xterm-256color",
+		"COLORTERM=truecolor",
+	)
+	s.cmd.Env = append(baseEnv, env...)
 
 	rows := s.Screen.Rows()
 	cols := s.Screen.Cols()
@@ -93,6 +99,35 @@ func (s *Session) Start(argv []string, dir string, env []string) error {
 	go s.waitLoop()
 
 	return nil
+}
+
+// EnableKittyKeyboard sends the kitty keyboard protocol enable sequence
+// (CSI > 1 u) to the PTY. This tells applications inside the terminal
+// (like Claude Code) that Shift+Enter and other modified keys will be
+// reported as distinct CSI u escape sequences.
+//
+// Call this after Start for Claude Code sessions so Shift+Enter (for
+// multiline input) works out of the box.
+func (s *Session) EnableKittyKeyboard() {
+	s.mu.Lock()
+	ptmx := s.ptmx
+	s.mu.Unlock()
+	if ptmx != nil {
+		// CSI > 1 u  — push "disambiguate escape codes" flag onto the stack.
+		// This makes Shift+Enter report as \x1b[13;2u instead of plain \r.
+		ptmx.Write([]byte("\x1b[>1u"))
+	}
+}
+
+// DisableKittyKeyboard pops the kitty keyboard protocol flags (CSI < 1 u).
+// Called during cleanup / Close.
+func (s *Session) DisableKittyKeyboard() {
+	s.mu.Lock()
+	ptmx := s.ptmx
+	s.mu.Unlock()
+	if ptmx != nil {
+		ptmx.Write([]byte("\x1b[<1u"))
+	}
 }
 
 // readLoop continuously reads from the PTY and writes to the Screen.

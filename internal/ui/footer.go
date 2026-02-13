@@ -51,7 +51,7 @@ func RenderFooter(d FooterData, width int) string {
 		))
 
 	// Shortcuts hint (right-aligned)
-	shortcuts := FooterDimStyle.Render("Ctrl+N:new  Ctrl+T:tab  Ctrl+B:files  ?:help")
+	shortcuts := FooterDimStyle.Render("Ctrl+N:new  Ctrl+T:tab  Ctrl+B:files  Ctrl+F:focus  ?:help")
 
 	left := strings.Join(sections, FooterSepStyle.Render(""))
 	right := shortcuts

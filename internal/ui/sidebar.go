@@ -20,6 +20,7 @@ type FileEntry struct {
 // Sidebar holds the state of the file browser sidebar.
 type Sidebar struct {
 	Visible  bool
+	Focused  bool   // when true, arrow keys navigate the sidebar instead of panes
 	RootDir  string
 	Entries  []FileEntry // flat list of currently visible entries
 	Selected int         // index into Entries
@@ -88,6 +89,20 @@ func (sb *Sidebar) SelectedPath() string {
 	return sb.Entries[sb.Selected].Path
 }
 
+// SelectedEntry returns the currently selected FileEntry, or nil.
+func (sb *Sidebar) SelectedEntry() *FileEntry {
+	if sb.Selected < 0 || sb.Selected >= len(sb.Entries) {
+		return nil
+	}
+	return &sb.Entries[sb.Selected]
+}
+
+// IsSelectedDir reports whether the currently selected entry is a directory.
+func (sb *Sidebar) IsSelectedDir() bool {
+	e := sb.SelectedEntry()
+	return e != nil && e.IsDir
+}
+
 // Render draws the sidebar as a string.
 func (sb *Sidebar) Render(height int) string {
 	if !sb.Visible {
@@ -97,8 +112,12 @@ func (sb *Sidebar) Render(height int) string {
 	var b strings.Builder
 	maxW := sb.Width - 3 // account for border + padding
 
-	// Title
-	title := SidebarTitle.Render("Files")
+	// Title (shows focus indicator)
+	titleText := "Files"
+	if sb.Focused {
+		titleText = "Files [ACTIVE]"
+	}
+	title := SidebarTitle.Render(titleText)
 	b.WriteString(title)
 	b.WriteByte('\n')
 
@@ -129,7 +148,7 @@ func (sb *Sidebar) Render(height int) string {
 				icon = "▸ "
 			}
 		} else {
-			icon = "  "
+			icon = fileIcon(entry.Name) + " "
 		}
 
 		name := entry.Name
@@ -225,4 +244,41 @@ func flattenEntries(entries []FileEntry, filter string) []FileEntry {
 // flattenFromRoot re-flattens the existing entry list preserving expand state.
 func flattenFromRoot(entries []FileEntry, filter string) []FileEntry {
 	return flattenEntries(entries, filter)
+}
+
+// IsImage reports whether the filename has an image extension.
+func IsImage(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tiff":
+		return true
+	}
+	return false
+}
+
+// fileIcon returns a unicode icon for common file types.
+func fileIcon(name string) string {
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	// Images
+	case ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tiff":
+		return "\U0001F5BC" // framed picture
+	// Code
+	case ".go", ".rs", ".py", ".js", ".ts", ".jsx", ".tsx", ".c", ".cpp", ".h", ".java", ".rb":
+		return "\u2630" // trigram (code-ish)
+	// Config / data
+	case ".json", ".yaml", ".yml", ".toml", ".xml", ".env", ".ini", ".conf":
+		return "\u2699" // gear
+	// Documents
+	case ".md", ".txt", ".rst", ".doc", ".pdf":
+		return "\u2637" // document-ish
+	// Shell / scripts
+	case ".sh", ".bash", ".zsh", ".fish", ".bat", ".ps1":
+		return "\u25B6" // play/run
+	// Lock / build
+	case ".lock", ".sum":
+		return "\u26BF" // lock
+	default:
+		return "\u2022" // bullet
+	}
 }

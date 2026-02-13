@@ -69,6 +69,10 @@ type Model struct {
 	// passthrough: when true, all key events go to the focused terminal
 	// instead of being handled by the app. Toggle with Ctrl+G (escape hatch).
 	passthrough bool
+
+	// sidebarFocused: when true, arrow keys and Enter navigate the sidebar
+	// instead of panes. Toggled with Ctrl+F.
+	sidebarFocused bool
 }
 
 // New creates the initial Model.
@@ -166,6 +170,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// ---------------------------------------------------------------
+	// Sidebar focus mode – navigate files, Enter inserts path
+	// ---------------------------------------------------------------
+	if m.sidebarFocused && m.sidebar.Visible {
+		return m.handleSidebarFocusKey(msg)
+	}
+
+	// ---------------------------------------------------------------
 	// Passthrough mode – everything except Ctrl+G goes to terminal
 	// ---------------------------------------------------------------
 	if m.passthrough {
@@ -191,6 +202,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.lastCtrlC = time.Now()
 		// Also forward a single Ctrl+C to the focused terminal
 		m.sendKeyToTerminal(msg)
+		return m, nil
+	}
+
+	// Shift+Enter → send kitty CSI u sequence to child PTY.
+	// Many terminals report Alt+Enter when Shift+Enter is pressed;
+	// Bubbletea v1 surfaces this as KeyEnter with Alt=true.
+	if isKey(msg, tea.KeyEnter) && msg.Alt {
+		m.sendBytesToTerminal([]byte("\x1b[13;2u"))
 		return m, nil
 	}
 
@@ -222,7 +241,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Toggle sidebar
 	if isKey(msg, tea.KeyCtrlB) {
 		m.sidebar.Visible = !m.sidebar.Visible
+		if !m.sidebar.Visible {
+			m.sidebarFocused = false
+			m.sidebar.Focused = false
+		}
 		m.resizeAllPanes()
+		return m, nil
+	}
+
+	// Focus sidebar (Ctrl+F)
+	if isKey(msg, tea.KeyCtrlF) {
+		if m.sidebar.Visible {
+			m.sidebarFocused = !m.sidebarFocused
+			m.sidebar.Focused = m.sidebarFocused
+		}
 		return m, nil
 	}
 
@@ -280,6 +312,49 @@ func (m Model) handleDialogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.launchPane(m.dialog.Choice)
 		}
 	}
+	return m, nil
+}
+
+// handleSidebarFocusKey processes keys when the sidebar is focused.
+// Arrow keys navigate the file tree; Enter inserts a file path into the
+// focused terminal pane (or toggles a directory).
+func (m Model) handleSidebarFocusKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc, tea.KeyCtrlF:
+		// Return focus to panes
+		m.sidebarFocused = false
+		m.sidebar.Focused = false
+		return m, nil
+	case tea.KeyUp:
+		m.sidebar.MoveUp()
+		return m, nil
+	case tea.KeyDown:
+		m.sidebar.MoveDown()
+		return m, nil
+	case tea.KeyEnter:
+		if m.sidebar.IsSelectedDir() {
+			m.sidebar.Toggle()
+		} else {
+			// Insert file path into focused terminal
+			m.insertFilePathToTerminal()
+		}
+		return m, nil
+	case tea.KeyCtrlB:
+		// Close sidebar
+		m.sidebar.Visible = false
+		m.sidebarFocused = false
+		m.sidebar.Focused = false
+		m.resizeAllPanes()
+		return m, nil
+	}
+
+	// Start search with /
+	if isRune(msg, '/') {
+		m.sidebar.Editing = true
+		m.sidebar.Search = ""
+		return m, nil
+	}
+
 	return m, nil
 }
 
@@ -554,6 +629,13 @@ func (m *Model) launchPane(choice ui.LaunchChoice) {
 
 	// Start the process
 	_ = sess.Start(choice.Argv, dir, nil)
+
+	// Enable kitty keyboard protocol for Claude Code panes so that
+	// Shift+Enter is reported as CSI 13;2 u (multiline input).
+	if mode == ui.PaneModeClaudeNormal || mode == ui.PaneModeClaudeYOLO {
+		sess.EnableKittyKeyboard()
+	}
+
 	m.resizeAllPanes()
 }
 
@@ -665,6 +747,40 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+// insertFilePathToTerminal types the selected sidebar file path into the
+// focused terminal pane. For image files, it adds the path as-is – Claude
+// Code can read images by path reference.
+func (m *Model) insertFilePathToTerminal() {
+	path := m.sidebar.SelectedPath()
+	if path == "" {
+		return
+	}
+
+	// Quote the path if it contains spaces
+	if strings.Contains(path, " ") {
+		path = "\"" + path + "\""
+	}
+
+	m.sendBytesToTerminal([]byte(path))
+}
+
+// sendBytesToTerminal writes raw bytes to the focused terminal's PTY.
+func (m *Model) sendBytesToTerminal(data []byte) {
+	tab := m.activeTab()
+	if tab == nil || len(tab.Panes) == 0 {
+		return
+	}
+	idx := tab.FocusIdx
+	if idx < 0 || idx >= len(tab.Panes) {
+		return
+	}
+	sess := tab.Panes[idx].Session
+	if sess == nil || !sess.IsRunning() {
+		return
+	}
+	sess.Write(data)
 }
 
 // sendKeyToTerminal forwards a key event to the focused terminal session.

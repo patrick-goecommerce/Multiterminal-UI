@@ -23,32 +23,41 @@ func isRune(msg tea.KeyMsg, r rune) bool {
 // ShortcutHelp returns the full help text displayed when the user presses '?'.
 func ShortcutHelp() string {
 	return `
-╔═══════════════════════════════════════════════════════╗
-║               Multiterminal – Shortcuts               ║
-╠═══════════════════════════════════════════════════════╣
-║                                                       ║
-║  Tabs                                                 ║
-║    Ctrl+T        Create new tab                       ║
-║    Ctrl+W        Close current tab                    ║
-║    1-9           Switch to tab N (when not typing)    ║
-║    Ctrl+PgUp     Previous tab                         ║
-║    Ctrl+PgDn     Next tab                             ║
-║                                                       ║
-║  Panes                                                ║
-║    Ctrl+N        New pane (opens launch dialog)       ║
-║    Ctrl+X        Close focused pane                   ║
-║    ←↑↓→          Navigate between panes               ║
-║    Tab           Cycle focus to next pane              ║
-║                                                       ║
-║  Sidebar                                              ║
-║    Ctrl+B        Toggle file browser                  ║
-║    /              Start search in sidebar             ║
-║    Enter          Expand/collapse directory            ║
-║                                                       ║
-║  General                                              ║
-║    Ctrl+S        Set working directory for tab        ║
-║    ?             Show/hide this help                  ║
-║    Ctrl+C (×2)   Quit                                 ║
-║                                                       ║
-╚═══════════════════════════════════════════════════════╝`
+╔════════════════════════════════════════════════════════════╗
+║                 Multiterminal – Shortcuts                  ║
+╠════════════════════════════════════════════════════════════╣
+║                                                            ║
+║  Tabs                                                      ║
+║    Ctrl+T         Create new tab                           ║
+║    Ctrl+W         Close current tab                        ║
+║    1-9            Switch to tab N (when not typing)        ║
+║                                                            ║
+║  Panes                                                     ║
+║    Ctrl+N         New pane (opens launch dialog)           ║
+║    Ctrl+X         Close focused pane                       ║
+║    ←↑↓→           Navigate between panes                   ║
+║    Tab            Cycle focus to next pane                  ║
+║    Ctrl+G         Passthrough mode (all keys to terminal)  ║
+║    Alt+Enter      Shift+Enter (newline in Claude Code)     ║
+║                                                            ║
+║  File Browser (Sidebar)                                    ║
+║    Ctrl+B         Toggle file browser                      ║
+║    Ctrl+F         Focus/unfocus sidebar                    ║
+║    ↑↓             Navigate files (when sidebar focused)    ║
+║    Enter           Dir: expand/collapse                    ║
+║                    File: insert path into terminal         ║
+║    /               Start search (filters file list)        ║
+║    Esc             Return focus to panes                   ║
+║                                                            ║
+║  General                                                   ║
+║    Ctrl+S         Set working directory for tab            ║
+║    ?              Show/hide this help                      ║
+║    Ctrl+C (×2)    Quit                                     ║
+║                                                            ║
+║  File Insertion                                            ║
+║    Focus sidebar (Ctrl+F), navigate to file, press Enter.  ║
+║    The full path is typed into the focused terminal pane.  ║
+║    Images work too – Claude Code can read them by path.    ║
+║                                                            ║
+╚════════════════════════════════════════════════════════════╝`
 }
