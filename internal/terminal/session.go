@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,8 +41,11 @@ type Session struct {
 	done chan struct{}
 
 	// OutputCh receives a signal each time new data is written to Screen.
-	// The main Bubbletea loop can select on this to know when to re-render.
 	OutputCh chan struct{}
+
+	// RawOutputCh carries raw PTY output bytes for the GUI frontend (xterm.js).
+	// Each message is a copy of the bytes read from the PTY.
+	RawOutputCh chan []byte
 
 	// ExitCode is set when the process terminates.
 	ExitCode int
@@ -60,11 +64,12 @@ type Session struct {
 // start any process yet. Call Start to spawn the shell.
 func NewSession(id, rows, cols int) *Session {
 	return &Session{
-		ID:       id,
-		Screen:   NewScreen(rows, cols),
-		Status:   StatusRunning,
-		OutputCh: make(chan struct{}, 1),
-		done:     make(chan struct{}),
+		ID:          id,
+		Screen:      NewScreen(rows, cols),
+		Status:      StatusRunning,
+		OutputCh:    make(chan struct{}, 1),
+		RawOutputCh: make(chan []byte, 64),
+		done:        make(chan struct{}),
 	}
 }
 
@@ -78,13 +83,30 @@ func (s *Session) Start(argv []string, dir string, env []string) error {
 
 	if len(argv) == 0 {
 		argv = defaultShell()
+	} else if runtime.GOOS == "windows" {
+		// On Windows, CLI tools like "claude" are often .cmd/.bat shims
+		// that cannot be executed directly by ConPTY. Wrap them via COMSPEC
+		// so the shell resolves PATHEXT and handles .cmd files properly.
+		shell := os.Getenv("COMSPEC")
+		if shell == "" {
+			shell = `C:\Windows\System32\cmd.exe`
+		}
+		argv = append([]string{shell, "/c"}, argv...)
 	}
 
-	// Always set TERM and COLORTERM so child processes see a capable terminal.
-	fullEnv := append(os.Environ(),
-		"TERM=xterm-256color",
-		"COLORTERM=truecolor",
-	)
+	// Build environment: inherit from parent but strip variables that would
+	// prevent Claude Code from launching inside our terminal panes.
+	parentEnv := os.Environ()
+	fullEnv := make([]string, 0, len(parentEnv)+len(env)+2)
+	for _, e := range parentEnv {
+		// CLAUDECODE is set by Claude Code sessions; remove it so nested
+		// Claude instances don't refuse to start.
+		if strings.HasPrefix(e, "CLAUDECODE=") {
+			continue
+		}
+		fullEnv = append(fullEnv, e)
+	}
+	fullEnv = append(fullEnv, "TERM=xterm-256color", "COLORTERM=truecolor")
 	fullEnv = append(fullEnv, env...)
 
 	rows := s.Screen.Rows()
@@ -130,7 +152,11 @@ func (s *Session) readLoop() {
 	for {
 		n, err := s.p.Read(buf)
 		if n > 0 {
-			s.Screen.Write(buf[:n])
+			chunk := make([]byte, n)
+			copy(chunk, buf[:n])
+
+			s.Screen.Write(chunk)
+
 			// Update title and timestamps
 			s.mu.Lock()
 			if s.Screen.Title != "" {
@@ -139,7 +165,14 @@ func (s *Session) readLoop() {
 			s.LastOutputAt = time.Now()
 			s.Activity = ActivityActive
 			s.mu.Unlock()
-			// Signal that new output is available (non-blocking)
+
+			// Send raw bytes to GUI frontend (non-blocking)
+			select {
+			case s.RawOutputCh <- chunk:
+			default:
+			}
+
+			// Signal for legacy TUI consumers (non-blocking)
 			select {
 			case s.OutputCh <- struct{}{}:
 			default:
@@ -222,6 +255,13 @@ func (s *Session) IsRunning() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.Status == StatusRunning
+}
+
+// GetTokens returns a snapshot of the token/cost info.
+func (s *Session) GetTokens() TokenInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Tokens
 }
 
 // EnableKittyKeyboard sends the kitty keyboard protocol enable sequence

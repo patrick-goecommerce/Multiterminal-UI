@@ -13,41 +13,22 @@ import (
 
 // Config holds all user-configurable settings.
 type Config struct {
-	// DefaultShell is the shell spawned for new terminal panes.
-	DefaultShell string `yaml:"default_shell"`
-
-	// DefaultDir is the working directory for new tabs.
-	// Empty means the current working directory at launch time.
-	DefaultDir string `yaml:"default_dir"`
-
-	// Theme can be "dark" or "light".
-	Theme string `yaml:"theme"`
-
-	// MaxPanesPerTab limits panes in a single tab (1-12).
-	MaxPanesPerTab int `yaml:"max_panes_per_tab"`
-
-	// SidebarWidth is the character width of the file browser sidebar.
-	SidebarWidth int `yaml:"sidebar_width"`
-
-	// ClaudeCommand is the base command for launching Claude Code.
-	ClaudeCommand string `yaml:"claude_command"`
-
-	// ClaudeModels lists available models for the launch dialog.
-	ClaudeModels []ModelEntry `yaml:"claude_models"`
-
-	// CommitReminderMinutes is how often (in minutes) to show a commit reminder.
-	// Set to 0 to disable. Default: 30.
-	CommitReminderMinutes int `yaml:"commit_reminder_minutes"`
-
-	// RestoreSession controls whether the previous tab/pane layout is
-	// restored on startup. Default: true.
-	RestoreSession *bool `yaml:"restore_session"`
+	DefaultShell          string       `yaml:"default_shell" json:"default_shell"`
+	DefaultDir            string       `yaml:"default_dir" json:"default_dir"`
+	Theme                 string       `yaml:"theme" json:"theme"`
+	TerminalColor         string       `yaml:"terminal_color" json:"terminal_color"`
+	MaxPanesPerTab        int          `yaml:"max_panes_per_tab" json:"max_panes_per_tab"`
+	SidebarWidth          int          `yaml:"sidebar_width" json:"sidebar_width"`
+	ClaudeCommand         string       `yaml:"claude_command" json:"claude_command"`
+	ClaudeModels          []ModelEntry `yaml:"claude_models" json:"claude_models"`
+	CommitReminderMinutes int          `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
+	RestoreSession        *bool        `yaml:"restore_session" json:"restore_session"`
 }
 
 // ModelEntry represents a selectable Claude model in the launch dialog.
 type ModelEntry struct {
-	Label string `yaml:"label"` // Display name (e.g. "Opus 4.6")
-	ID    string `yaml:"id"`    // Model identifier (e.g. "claude-opus-4-6")
+	Label string `yaml:"label" json:"label"`
+	ID    string `yaml:"id" json:"id"`
 }
 
 // DefaultConfig returns the built-in defaults.
@@ -59,6 +40,7 @@ func DefaultConfig() Config {
 		DefaultShell:          "",
 		DefaultDir:            "",
 		Theme:                 "dark",
+		TerminalColor:         "#39ff14",
 		MaxPanesPerTab:        12,
 		SidebarWidth:          30,
 		ClaudeCommand:         "claude",
@@ -102,7 +84,7 @@ func Load() Config {
 	data, err := os.ReadFile(p)
 	if err != nil {
 		// No config file yet – write defaults for future editing
-		writeDefaults(p, cfg)
+		_ = writeDefaults(p, cfg)
 		return cfg
 	}
 
@@ -139,12 +121,21 @@ func Load() Config {
 	return cfg
 }
 
-// writeDefaults persists the default configuration to disk.
-func writeDefaults(path string, cfg Config) {
+// Save writes the given config to the YAML file.
+func Save(cfg Config) error {
+	p := configPath()
+	if p == "" {
+		return nil
+	}
+	return writeDefaults(p, cfg)
+}
+
+// writeDefaults persists the configuration to disk.
+func writeDefaults(path string, cfg Config) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
-		return
+		return err
 	}
-	header := []byte("# Multiterminal configuration\n# Edit this file to customise defaults.\n\n")
-	_ = os.WriteFile(path, append(header, data...), 0644)
+	header := []byte("# Multiterminal UI configuration\n# Edit this file to customise defaults.\n\n")
+	return os.WriteFile(path, append(header, data...), 0644)
 }

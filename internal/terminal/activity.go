@@ -67,39 +67,48 @@ func (s *Session) DetectActivity() ActivityState {
 	currentActivity := s.Activity
 	s.mu.Unlock()
 
-	// If we're not active (no recent output), check for idle timeout
-	if currentActivity == ActivityActive && !lastOutput.IsZero() {
-		if time.Since(lastOutput) > 2*time.Second {
-			// Output stopped — check what's on screen
-			newState := s.classifyScreenState()
-			s.mu.Lock()
-			s.Activity = newState
-			s.mu.Unlock()
-			return newState
-		}
+	// Need output to have happened at all
+	if lastOutput.IsZero() {
+		return currentActivity
 	}
 
-	return currentActivity
+	elapsed := time.Since(lastOutput)
+
+	// While actively producing output, stay in Active state
+	if elapsed < 1500*time.Millisecond {
+		return currentActivity
+	}
+
+	// Output stopped for >1.5s — classify what's on screen
+	newState := s.classifyScreenState()
+	s.mu.Lock()
+	s.Activity = newState
+	s.mu.Unlock()
+	return newState
 }
 
-// classifyScreenState examines the last few rows of the screen to determine
+// classifyScreenState examines the last rows of the screen to determine
 // if Claude is done or waiting for input.
 func (s *Session) classifyScreenState() ActivityState {
 	rows := s.Screen.Rows()
-	// Check last 5 non-empty rows
-	for r := rows - 1; r >= 0 && r >= rows-5; r-- {
+	// Check last 15 non-empty rows (Claude Code uses a rich TUI with status bars)
+	scanFrom := rows - 15
+	if scanFrom < 0 {
+		scanFrom = 0
+	}
+	for r := rows - 1; r >= scanFrom; r-- {
 		line := s.Screen.PlainTextRow(r)
 		if line == "" {
 			continue
 		}
 		trimmed := strings.TrimSpace(line)
 
-		// Needs input patterns
+		// Needs input patterns (check first — takes priority)
 		if needsInputPattern.MatchString(trimmed) {
 			return ActivityNeedsInput
 		}
 
-		// Prompt returned (Claude is done)
+		// Prompt returned (Claude/shell is done)
 		if promptPattern.MatchString(trimmed) {
 			return ActivityDone
 		}
@@ -119,8 +128,21 @@ var (
 	costPattern        = regexp.MustCompile(`\$(\d+\.\d+)`)
 	inputTokenPattern  = regexp.MustCompile(`(\d+\.?\d*)[kK]?\s*(?:input|in\b)`)
 	outputTokenPattern = regexp.MustCompile(`(\d+\.?\d*)[kK]?\s*(?:output|out\b)`)
-	needsInputPattern  = regexp.MustCompile(`(?i)\[Y/n\]|\[y/N\]|\(y/n\)|proceed\?|continue\?|confirm|approve|allow|permission`)
-	promptPattern      = regexp.MustCompile(`(?:^|\s)[>$%#]\s*$|^\s*[>]\s*$`)
+
+	// Needs user input: permission prompts, Y/n confirmations, etc.
+	needsInputPattern = regexp.MustCompile(`(?i)` +
+		`\[Y/n\]|\[y/N\]|\(y/n\)|` + // Classic Y/n prompts
+		`(?:proceed|continue|confirm|approve|allow)\s*\?|` + // Question prompts
+		`permission|Do you want to|Would you like to|` + // Permission phrases
+		`Press Enter to|waiting for|Waiting for`)
+
+	// Prompt returned — Claude or shell is done and waiting for new input.
+	// Matches: ❯, >, $, %, # at end of line (with optional whitespace)
+	// Also matches Windows cmd.exe prompt like C:\path>
+	promptPattern = regexp.MustCompile(
+		`[❯›»]\s*$|` + // Claude Code prompt characters (U+276F, U+203A, U+00BB)
+		`(?:^|\s)[>$%#]\s*$|` + // Unix shell prompts
+		`^[A-Za-z]:\\[^>]*>\s*$`) // Windows cmd.exe prompt (C:\Users\x>)
 )
 
 // parseTokenCount converts strings like "15.2k" or "3800" to an integer.

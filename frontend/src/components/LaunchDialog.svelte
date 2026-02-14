@@ -1,0 +1,211 @@
+<script lang="ts">
+  import { createEventDispatcher } from 'svelte';
+  import { config } from '../stores/config';
+
+  export let visible: boolean = false;
+
+  const dispatch = createEventDispatcher();
+
+  let selectedModel = '';
+
+  function launch(type: 'shell' | 'claude' | 'claude-yolo') {
+    dispatch('launch', { type, model: selectedModel });
+    dispatch('close');
+    selectedModel = '';
+  }
+
+  function close() {
+    dispatch('close');
+    selectedModel = '';
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') close();
+    if (e.key === '1') launch('shell');
+    if (e.key === '2') launch('claude');
+    if (e.key === '3') launch('claude-yolo');
+  }
+</script>
+
+<svelte:window on:keydown={visible ? handleKeydown : undefined} />
+
+{#if visible}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div class="overlay" on:click={close}>
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="dialog" on:click|stopPropagation>
+      <h3>Neues Terminal</h3>
+
+      <div class="options">
+        <button class="option" on:click={() => launch('shell')}>
+          <span class="option-key">1</span>
+          <span class="option-icon">&#9000;</span>
+          <div class="option-text">
+            <strong>Shell</strong>
+            <span>Standard-Terminal</span>
+          </div>
+        </button>
+
+        <button class="option" on:click={() => launch('claude')}>
+          <span class="option-key">2</span>
+          <span class="option-icon">&#10024;</span>
+          <div class="option-text">
+            <strong>Claude Code</strong>
+            <span>Normal-Modus</span>
+          </div>
+        </button>
+
+        <button class="option yolo" on:click={() => launch('claude-yolo')}>
+          <span class="option-key">3</span>
+          <span class="option-icon">&#9889;</span>
+          <div class="option-text">
+            <strong>Claude YOLO</strong>
+            <span>Alle Berechtigungen</span>
+          </div>
+        </button>
+      </div>
+
+      {#if $config.claude_models.length > 0}
+        <div class="model-picker">
+          <label>Modell:</label>
+          <select bind:value={selectedModel}>
+            {#each $config.claude_models as model}
+              <option value={model.id}>{model.label}</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
+
+      <div class="dialog-footer">
+        <button class="cancel-btn" on:click={close}>Abbrechen (Esc)</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .dialog {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    min-width: 360px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  h3 {
+    margin: 0 0 16px;
+    color: var(--fg);
+    font-size: 16px;
+  }
+
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--fg);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+  }
+
+  .option:hover {
+    border-color: var(--accent);
+    background: var(--bg-tertiary);
+  }
+
+  .option.yolo:hover {
+    border-color: var(--error);
+  }
+
+  .option-key {
+    font-size: 11px;
+    padding: 2px 6px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    color: var(--fg-muted);
+    font-family: monospace;
+  }
+
+  .option-icon {
+    font-size: 20px;
+  }
+
+  .option-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .option-text strong {
+    font-size: 14px;
+  }
+
+  .option-text span {
+    font-size: 11px;
+    color: var(--fg-muted);
+  }
+
+  .model-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .model-picker label {
+    font-size: 12px;
+    color: var(--fg-muted);
+  }
+
+  .model-picker select {
+    flex: 1;
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg);
+    font-size: 12px;
+  }
+
+  .dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .cancel-btn {
+    padding: 6px 14px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg-muted);
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .cancel-btn:hover {
+    color: var(--fg);
+  }
+</style>

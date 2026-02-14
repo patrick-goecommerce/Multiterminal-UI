@@ -1,0 +1,19 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "mtui",
+  "outputfilename": "mtui",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Patrick GoEcommerce"
+  },
+  "info": {
+    "companyName": "",
+    "productName": "Multiterminal UI",
+    "productVersion": "2.0.0",
+    "copyright": "",
+    "comments": "A terminal multiplexer for Claude Code power users"
+  }
+}

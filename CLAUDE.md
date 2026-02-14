@@ -1,6 +1,6 @@
 # Multiterminal
 
-A TUI terminal multiplexer built for Claude Code power users.
+A GUI terminal multiplexer built for Claude Code power users.
 
 ## Code Rules
 - **Max 300 lines per Go file.** If a file grows beyond 300 lines, split it into
@@ -8,33 +8,24 @@ A TUI terminal multiplexer built for Claude Code power users.
   on a single responsibility.
 
 ## Tech Stack
-- **Language:** Go 1.21+
-- **TUI framework:** Bubbletea + Lipgloss + Bubbles
-- **Terminal emulation:** Custom VT100 screen buffer + go-pty (cross-platform)
+- **Language:** Go 1.21+ (backend) + TypeScript/Svelte (frontend)
+- **GUI framework:** Wails v2 (Go ↔ WebView bridge)
+- **Frontend:** Svelte 4 + Vite + xterm.js
+- **Terminal emulation:** xterm.js (frontend) + VT100 screen buffer for activity scanning (backend)
+- **PTY management:** go-pty (cross-platform: Unix PTY + Windows ConPTY)
 - **Config:** YAML (~/.multiterminal.yaml)
 
 ## Project Structure
 ```
-main.go                          Entry point
+main.go                          Wails entry point
+wails.json                       Wails project configuration
+app.go                           (reserved for future use)
 internal/
-  app/
-    model.go                     Main Bubbletea model, types, Init, Update
-    input.go                     Keyboard input routing (handleKey, dialog, sidebar)
-    keybytes.go                  Key-to-PTY-bytes conversion table
-    view.go                      View rendering (View, renderNormal, renderPanes)
-    tabs.go                      Tab & pane management (add/close/navigate/launch)
-    status.go                    Layout, git helpers, Claude scanning, footer
-    session_persist.go           Session save/restore across restarts
-    keymap.go                    Key binding definitions & help text
-  ui/
-    styles.go                    Lipgloss style constants
-    themes.go                    Theme definitions (dark, light, dracula, nord, solarized)
-    layout.go                    Grid layout calculator for panes
-    tabbar.go                    Tab bar component
-    pane.go                      Terminal pane component (wraps a session)
-    footer.go                    Global status footer (branch, model, cost, shortcuts)
-    sidebar.go                   File browser sidebar with search
-    dialog.go                    Launch dialog (Shell / Claude / YOLO / model picker)
+  backend/
+    app.go                       Main Wails App struct, session management, bindings
+    app_scan.go                  Periodic activity detection & token scanning
+    app_files.go                 Filesystem API (list dir, search files)
+    app_git.go                   Git branch & commit info helpers
   terminal/
     session.go                   PTY session lifecycle (start, read, close)
     activity.go                  Claude activity detection & token scanning
@@ -45,44 +36,68 @@ internal/
   config/
     config.go                    YAML configuration loader
     session.go                   Session state persistence (JSON)
+  app/                           (legacy TUI code, to be removed)
+  ui/                            (legacy TUI code, to be removed)
+frontend/
+  src/
+    App.svelte                   Root application component
+    main.ts                      Entry point
+    stores/
+      tabs.ts                    Tab & pane state management
+      config.ts                  App configuration store
+      theme.ts                   Theme management (5 built-in themes)
+    components/
+      TabBar.svelte              Tab bar with add/close/rename
+      Toolbar.svelte             Action toolbar (new terminal, files, etc.)
+      PaneGrid.svelte            Grid layout for terminal panes
+      TerminalPane.svelte        xterm.js terminal wrapper with titlebar
+      Sidebar.svelte             File browser with search
+      Footer.svelte              Status bar (branch, cost, shortcuts)
+      LaunchDialog.svelte        Shell/Claude/YOLO launch dialog
+    lib/
+      terminal.ts                xterm.js setup & theme configuration
 ```
 
 ## Build & Run
 ```bash
-# Linux / macOS
-go build -o multiterminal .
-./multiterminal
+# Development (hot-reload)
+wails dev
 
-# Windows
-go build -o multiterminal.exe .
-.\multiterminal.exe
+# Production build
+wails build
 
-# Cross-compile for Windows from Linux/macOS
-GOOS=windows GOARCH=amd64 go build -o multiterminal.exe .
+# The binary is placed in build/bin/multiterminal.exe (Windows)
+# or build/bin/multiterminal (Linux/macOS)
 ```
+
+## Architecture
+
+```
+┌─ Wails Window (Native OS Window) ────────────────────────┐
+│  ┌─ Svelte Frontend ──────────────────────────────────┐  │
+│  │  Tab Bar → Toolbar → Pane Grid (xterm.js) → Footer │  │
+│  └────────────────────────────────────────────────────┘  │
+│                    ↕ Wails Bindings + Events              │
+│  ┌─ Go Backend ───────────────────────────────────────┐  │
+│  │  PTY Sessions · Activity Scanner · Config · Git    │  │
+│  └────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Data flow:**
+- Keyboard input → xterm.js `onData` → Wails binding `WriteToSession` → PTY
+- PTY output → Go `RawOutputCh` → Wails event `terminal:output` → xterm.js `write`
+- Activity/tokens → Go scan loop → Wails event `terminal:activity` → UI update
 
 ## Key Shortcuts
 | Key              | Action                                        |
 |------------------|-----------------------------------------------|
 | Ctrl+T           | New tab                                       |
 | Ctrl+W           | Close tab                                     |
-| 1-9              | Switch tab                                    |
 | Ctrl+N           | New pane (opens launch dialog)                |
 | Ctrl+X           | Close focused pane                            |
 | Ctrl+Z           | Zoom (maximise / restore) focused pane        |
-| Ctrl+Scroll Up   | Zoom in (maximise)                            |
-| Ctrl+Scroll Down | Zoom out (restore grid)                       |
-| Arrow keys       | Navigate panes                                |
-| Tab              | Cycle focus to next pane                      |
-| Ctrl+G           | Passthrough mode (all keys to terminal)       |
-| Alt+Enter        | Send Shift+Enter (newline in Claude Code)     |
 | Ctrl+B           | Toggle file browser sidebar                   |
-| Ctrl+F           | Focus/unfocus sidebar for navigation          |
-| Enter (sidebar)  | Dir: expand/collapse · File: insert path      |
-| /  (sidebar)     | Start file search                             |
-| Ctrl+S           | Set working directory for tab                 |
-| ?                | Show keyboard shortcuts help                  |
-| Ctrl+C (x2)      | Quit                                          |
 
 ## Smart Features
 
@@ -93,21 +108,8 @@ Claude Code panes automatically scan for token usage and cost information.
 
 ### Auto-detect Claude Activity
 The pane border **flashes** when Claude changes state:
-- **Green flash** (3s) — Claude finished generating (prompt returned)
-- **Yellow flash** (5s) — Claude needs user input (confirmation, Y/n, etc.)
-
-This works even when the pane is not focused, so you can work in another
-terminal and see at a glance when Claude needs attention.
-
-### Commit Reminder
-A configurable reminder appears in the footer when too much time has passed
-since the last git commit. Default: 30 minutes.
-Set `commit_reminder_minutes: 0` in config to disable.
-
-### Zoom (Maximise Pane)
-Press **Ctrl+Z** to toggle the focused pane between maximised (full content
-area) and normal grid layout. Useful when you want to focus on one Claude
-session's output. Footer shows `[ZOOM]` when active.
+- **Green glow** — Claude finished generating (prompt returned)
+- **Yellow pulse** — Claude needs user input (confirmation, Y/n, etc.)
 
 ### Themes
 Five built-in colour themes. Set `theme` in `~/.multiterminal.yaml`:
@@ -117,23 +119,10 @@ Five built-in colour themes. Set `theme` in `~/.multiterminal.yaml`:
 - `nord` — Nord color scheme
 - `solarized` — Solarized Dark
 
-## File Insertion from Sidebar
-1. Open the sidebar with **Ctrl+B**
-2. Focus it with **Ctrl+F** (title shows "Files [ACTIVE]")
-3. Navigate with arrow keys, search with `/`
-4. Press **Enter** on a file → its full path is typed into the focused terminal
-5. Works with images too — Claude Code reads images by path
-
-## Shift+Enter Support
-For Claude Code panes, the kitty keyboard protocol is auto-enabled so that
-Shift+Enter works natively for multiline input. As fallback, **Alt+Enter**
-sends the same CSI u sequence (`ESC[13;2u`).
-
 ## Configuration
 See `~/.multiterminal.yaml` for defaults (auto-created on first run).
 
 ```yaml
-# Example configuration
 theme: dracula
 default_dir: /path/to/project
 max_panes_per_tab: 12

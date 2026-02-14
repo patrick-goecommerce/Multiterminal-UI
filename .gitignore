@@ -1,2 +1,20 @@
 multiterminal
 multiterminal.exe
+mtui
+mtui.exe
+
+# Logs
+*.log
+
+# Wails build output
+build/bin/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Wails generated bindings
+frontend/wailsjs/
+
+# IDE
+.claude/

@@ -1,0 +1,97 @@
+package backend
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"sync"
+	"time"
+
+	"github.com/patrick-goecommerce/multiterminal/internal/terminal"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+// ActivityInfo is sent to the frontend when a session's activity state changes.
+type ActivityInfo struct {
+	ID       int    `json:"id"`
+	Activity string `json:"activity"` // "idle", "active", "done", "needsInput"
+	Cost     string `json:"cost"`
+}
+
+// prevActivity tracks the last emitted state per session to avoid spamming.
+var (
+	prevActivityMu sync.Mutex
+	prevActivity   = make(map[int]string)
+	prevCost       = make(map[int]string)
+)
+
+// scanLoop periodically scans all sessions for activity changes and token info.
+func (a *App) scanLoop(ctx context.Context) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.scanAllSessions()
+		}
+	}
+}
+
+func activityString(a terminal.ActivityState) string {
+	switch a {
+	case terminal.ActivityActive:
+		return "active"
+	case terminal.ActivityDone:
+		return "done"
+	case terminal.ActivityNeedsInput:
+		return "needsInput"
+	default:
+		return "idle"
+	}
+}
+
+// scanAllSessions checks each session for activity and token updates.
+func (a *App) scanAllSessions() {
+	a.mu.Lock()
+	ids := make([]int, 0, len(a.sessions))
+	sessions := make([]*terminal.Session, 0, len(a.sessions))
+	for id, s := range a.sessions {
+		ids = append(ids, id)
+		sessions = append(sessions, s)
+	}
+	a.mu.Unlock()
+
+	for i, sess := range sessions {
+		id := ids[i]
+		sess.ScanTokens()
+		activity := sess.DetectActivity()
+		actStr := activityString(activity)
+
+		tokens := sess.GetTokens()
+		costStr := ""
+		if tokens.TotalCost > 0 {
+			costStr = fmt.Sprintf("$%.2f", tokens.TotalCost)
+		}
+
+		// Only emit when state or cost actually changed
+		prevActivityMu.Lock()
+		changed := prevActivity[id] != actStr || prevCost[id] != costStr
+		if changed {
+			prevActivity[id] = actStr
+			prevCost[id] = costStr
+		}
+		prevActivityMu.Unlock()
+
+		if changed {
+			log.Printf("[scan] session %d: activity=%s cost=%s", id, actStr, costStr)
+			runtime.EventsEmit(a.ctx, "terminal:activity", ActivityInfo{
+				ID:       id,
+				Activity: actStr,
+				Cost:     costStr,
+			})
+		}
+	}
+}

@@ -1,37 +1,64 @@
-// Multiterminal – A TUI terminal multiplexer optimised for Claude Code.
+// Multiterminal UI (mtui) – A GUI terminal multiplexer optimised for Claude Code.
 //
-// Features:
-//   - Tabbed workspaces, each with up to 12 terminal panes
-//   - One-click Claude Code launch (normal / YOLO mode / model picker)
-//   - Per-pane status: git branch, model, activity
-//   - Global footer: branch (copyable), model, shortcuts
-//   - Collapsible file-browser sidebar with search
-//   - Working directory preset per tab
-//
-// Stack: Go · Bubbletea · Lipgloss · Bubbles · creack/pty
+// Stack: Go · Wails · Svelte · xterm.js · go-pty
 package main
 
 import (
-	"fmt"
+	"embed"
+	"log"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/patrick-goecommerce/multiterminal/internal/app"
+	"github.com/patrick-goecommerce/multiterminal/internal/backend"
 	"github.com/patrick-goecommerce/multiterminal/internal/config"
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/logger"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
+//go:embed all:frontend/dist
+var assets embed.FS
+
 func main() {
-	cfg := config.Load()
-	model := app.New(cfg)
-
-	p := tea.NewProgram(
-		model,
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-	)
-
-	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+	// Log to file for debugging
+	f, err := os.OpenFile("mtui.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err == nil {
+		log.SetOutput(f)
+		defer f.Close()
 	}
+	log.Println("Starting Multiterminal UI...")
+
+	cfg := config.Load()
+	log.Println("Config loaded, theme:", cfg.Theme)
+
+	app := backend.NewApp(cfg)
+	log.Println("App created, starting Wails...")
+
+	err = wails.Run(&options.App{
+		Title:            "Multiterminal UI",
+		Width:            1400,
+		Height:           900,
+		MinWidth:         800,
+		MinHeight:        600,
+		WindowStartState: options.Maximised,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+		},
+		OnStartup:  app.Startup,
+		OnShutdown: app.Shutdown,
+		Bind: []interface{}{
+			app,
+		},
+		LogLevel: logger.DEBUG,
+		Windows: &windows.Options{
+			WebviewIsTransparent: false,
+			WindowIsTranslucent:  false,
+		},
+	})
+	if err != nil {
+		log.Println("Wails error:", err)
+		println("Error:", err.Error())
+	}
+	log.Println("Multiterminal UI exited")
 }
