@@ -61,6 +61,7 @@ func ShortcutHelp() string {
 ║    Pane border flashes green when Claude finishes          ║
 ║    Pane border flashes yellow when input is needed         ║
 ║    Commit reminder after 30 min (configurable in YAML)    ║
+║    Session restore: tabs & panes saved on quit            ║
 ║    Theme: set "theme" in ~/.multiterminal.yaml             ║
 ║      Available: dark, light, dracula, nord, solarized      ║
 ║                                                            ║

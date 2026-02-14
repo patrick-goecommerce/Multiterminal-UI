@@ -38,6 +38,10 @@ type Config struct {
 	// CommitReminderMinutes is how often (in minutes) to show a commit reminder.
 	// Set to 0 to disable. Default: 30.
 	CommitReminderMinutes int `yaml:"commit_reminder_minutes"`
+
+	// RestoreSession controls whether the previous tab/pane layout is
+	// restored on startup. Default: true.
+	RestoreSession *bool `yaml:"restore_session"`
 }
 
 // ModelEntry represents a selectable Claude model in the launch dialog.
@@ -47,6 +51,9 @@ type ModelEntry struct {
 }
 
 // DefaultConfig returns the built-in defaults.
+// boolPtr returns a pointer to a bool value.
+func boolPtr(b bool) *bool { return &b }
+
 func DefaultConfig() Config {
 	return Config{
 		DefaultShell:          "",
@@ -56,6 +63,7 @@ func DefaultConfig() Config {
 		SidebarWidth:          30,
 		ClaudeCommand:         "claude",
 		CommitReminderMinutes: 30,
+		RestoreSession:        boolPtr(true),
 		ClaudeModels: []ModelEntry{
 			{Label: "Default", ID: ""},
 			{Label: "Opus 4.6", ID: "claude-opus-4-6"},
@@ -63,6 +71,14 @@ func DefaultConfig() Config {
 			{Label: "Haiku 4.5", ID: "claude-haiku-4-5-20251001"},
 		},
 	}
+}
+
+// ShouldRestoreSession returns whether the session should be restored.
+func (c Config) ShouldRestoreSession() bool {
+	if c.RestoreSession == nil {
+		return true
+	}
+	return *c.RestoreSession
 }
 
 // configPath returns the path to ~/.multiterminal.yaml.
@@ -114,6 +130,10 @@ func Load() Config {
 
 	if cfg.CommitReminderMinutes < 0 {
 		cfg.CommitReminderMinutes = 0
+	}
+
+	if cfg.RestoreSession == nil {
+		cfg.RestoreSession = boolPtr(true)
 	}
 
 	return cfg
