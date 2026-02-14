@@ -54,13 +54,14 @@
     applyTheme(selectedTheme, colorValue);
   }
 
-  function save() {
-    config.update((cfg) => {
-      cfg.terminal_color = colorValue;
-      cfg.theme = selectedTheme;
-      return cfg;
-    });
-    App.SaveConfig($config);
+  async function save() {
+    const updated = { ...$config, terminal_color: colorValue, theme: selectedTheme };
+    config.set(updated);
+    try {
+      await App.SaveConfig(updated);
+    } catch (err) {
+      console.error('[SettingsDialog] SaveConfig failed:', err);
+    }
     dispatch('close');
   }
 
