@@ -33,13 +33,19 @@ jobs:
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Rename portable binary
+        shell: bash
+        run: mv build/bin/mtui.exe "mtui-portable-${{ steps.version.outputs.version }}.exe"
+
       - name: Build installer
         run: iscc /DMyAppVersion=${{ steps.version.outputs.version }} installer.iss
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mtui-installer
-          path: installer-output/mtui-setup-*.exe
+          name: mtui-windows
+          path: |
+            mtui-portable-*.exe
+            installer-output/mtui-setup-*.exe
 
   release:
     needs: [build-windows]
@@ -54,4 +60,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: artifacts/mtui-setup-*.exe
+          files: |
+            artifacts/mtui-portable-*.exe
+            artifacts/mtui-setup-*.exe
