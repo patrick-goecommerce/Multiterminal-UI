@@ -1,20 +1,33 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { config } from '../stores/config';
-  import { applyAccentColor } from '../stores/theme';
+  import { applyAccentColor, applyTheme } from '../stores/theme';
+  import type { ThemeName } from '../stores/theme';
   import * as App from '../../wailsjs/go/backend/App';
 
   export let visible: boolean = false;
 
   const dispatch = createEventDispatcher();
 
+  const availableThemes: { value: ThemeName; label: string }[] = [
+    { value: 'dark', label: 'Dark (Catppuccin Mocha)' },
+    { value: 'light', label: 'Light' },
+    { value: 'dracula', label: 'Dracula' },
+    { value: 'nord', label: 'Nord' },
+    { value: 'solarized', label: 'Solarized Dark' },
+  ];
+
   let colorValue = $config.terminal_color || '#39ff14';
   let hexInput = colorValue;
+  let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'dark';
+  let savedTheme: ThemeName = selectedTheme;
 
   // Sync when dialog opens
   $: if (visible) {
     colorValue = $config.terminal_color || '#39ff14';
     hexInput = colorValue;
+    selectedTheme = ($config.theme as ThemeName) || 'dark';
+    savedTheme = selectedTheme;
   }
 
   function handleColorInput(e: Event) {
@@ -35,25 +48,34 @@
     }
   }
 
-  function save() {
-    config.update((cfg) => {
-      cfg.terminal_color = colorValue;
-      return cfg;
-    });
-    App.SaveConfig($config);
+  function handleThemeChange(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    selectedTheme = target.value as ThemeName;
+    applyTheme(selectedTheme, colorValue);
+  }
+
+  async function save() {
+    const updated = { ...$config, terminal_color: colorValue, theme: selectedTheme };
+    config.set(updated);
+    try {
+      await App.SaveConfig(updated);
+    } catch (err) {
+      console.error('[SettingsDialog] SaveConfig failed:', err);
+    }
     dispatch('close');
   }
 
   function close() {
-    // Revert to saved color
-    applyAccentColor($config.terminal_color || '#39ff14');
+    // Revert to saved theme and color
+    applyTheme(savedTheme, $config.terminal_color || '#39ff14');
     dispatch('close');
   }
 
   function resetDefault() {
     colorValue = '#39ff14';
     hexInput = '#39ff14';
-    applyAccentColor('#39ff14');
+    selectedTheme = 'dark';
+    applyTheme('dark', '#39ff14');
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -72,6 +94,16 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="dialog" on:click|stopPropagation>
       <h3>Einstellungen</h3>
+
+      <div class="setting-group">
+        <label class="setting-label" for="theme-select">Theme</label>
+        <p class="setting-desc">Farbschema der gesamten Oberfläche.</p>
+        <select id="theme-select" class="theme-select" value={selectedTheme} on:change={handleThemeChange}>
+          {#each availableThemes as t}
+            <option value={t.value} selected={t.value === selectedTheme}>{t.label}</option>
+          {/each}
+        </select>
+      </div>
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
@@ -150,6 +182,33 @@
 
   .setting-group {
     margin-bottom: 24px;
+  }
+
+  .theme-select {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+    appearance: auto;
+  }
+
+  .theme-select:hover {
+    border-color: var(--accent);
+  }
+
+  .theme-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(203, 166, 247, 0.2);
+  }
+
+  .theme-select option {
+    background: var(--bg-secondary);
+    color: var(--fg);
   }
 
   .setting-label {

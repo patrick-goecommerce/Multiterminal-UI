@@ -241,6 +241,9 @@
   function handleClosePane(e: CustomEvent<{ paneId: string; sessionId: number }>) {
     const tab = $activeTab;
     if (!tab) return;
+    const pane = tab.panes.find((p) => p.id === e.detail.paneId);
+    const name = pane?.name || 'Terminal';
+    if (!confirm(`"${name}" wirklich schließen?`)) return;
     App.CloseSession(e.detail.sessionId);
     tabStore.closePane(tab.id, e.detail.paneId);
   }
@@ -301,18 +304,6 @@
       const tab = $activeTab;
       if (tab?.focusedPaneId) {
         tabStore.toggleMaximize(tab.id, tab.focusedPaneId);
-      }
-      return;
-    }
-    if (e.ctrlKey && e.key === 'x') {
-      e.preventDefault();
-      const tab = $activeTab;
-      if (tab) {
-        const focused = tab.panes.find((p) => p.focused);
-        if (focused) {
-          App.CloseSession(focused.sessionId);
-          tabStore.closePane(tab.id, focused.id);
-        }
       }
       return;
     }

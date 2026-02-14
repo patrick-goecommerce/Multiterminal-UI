@@ -15,6 +15,7 @@ export interface AppConfig {
   claude_command: string;
   claude_models: ModelEntry[];
   commit_reminder_minutes: number;
+  restore_session?: boolean;
 }
 
 export const config = writable<AppConfig>({

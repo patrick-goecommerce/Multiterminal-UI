@@ -5,7 +5,7 @@
   import { currentTheme } from '../stores/theme';
   import { config } from '../stores/config';
   import * as App from '../../wailsjs/go/backend/App';
-  import { EventsOn } from '../../wailsjs/runtime/runtime';
+  import { EventsOn, ClipboardGetText, ClipboardSetText } from '../../wailsjs/runtime/runtime';
 
   export let pane: Pane;
 
@@ -38,26 +38,31 @@
     // Intercept keys that should NOT go to the PTY but to the app
     termInstance.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type !== 'keydown') return true;
-      // Ctrl+V → paste from clipboard into PTY
+      // Ctrl+V → paste from clipboard into PTY (via Wails native clipboard)
       if (e.ctrlKey && e.key === 'v') {
-        navigator.clipboard.readText().then((text) => {
+        ClipboardGetText().then((text) => {
           if (text) {
             const encoder = new TextEncoder();
             const bytes = encoder.encode(text);
-            const b64 = btoa(String.fromCharCode(...bytes));
-            App.WriteToSession(pane.sessionId, b64);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            App.WriteToSession(pane.sessionId, btoa(binary));
           }
+        }).catch((err) => {
+          console.error('[TerminalPane] clipboard read failed:', err);
         });
         return false;
       }
       // Ctrl+C with selection → copy to clipboard
       if (e.ctrlKey && e.key === 'c' && termInstance?.terminal.hasSelection()) {
-        navigator.clipboard.writeText(termInstance.terminal.getSelection());
+        ClipboardSetText(termInstance.terminal.getSelection());
         termInstance.terminal.clearSelection();
         return false;
       }
-      // Ctrl+Z, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+X, Ctrl+B → let app handle (don't send to PTY)
-      if (e.ctrlKey && ['z', 'n', 't', 'w', 'x', 'b'].includes(e.key)) {
+      // Ctrl+Z, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+B → let app handle (don't send to PTY)
+      if (e.ctrlKey && ['z', 'n', 't', 'w', 'b'].includes(e.key)) {
         return false;
       }
       return true;
