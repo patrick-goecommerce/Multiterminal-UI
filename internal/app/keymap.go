@@ -36,6 +36,7 @@ func ShortcutHelp() string {
 ║    Ctrl+N         New pane (opens launch dialog)           ║
 ║    Ctrl+X         Close focused pane                       ║
 ║    Ctrl+Z         Zoom (maximise/restore) focused pane     ║
+║    Ctrl+Scroll    Zoom in (up) / zoom out (down)           ║
 ║    ←↑↓→           Navigate between panes                   ║
 ║    Tab            Cycle focus to next pane                  ║
 ║    Ctrl+G         Passthrough mode (all keys to terminal)  ║

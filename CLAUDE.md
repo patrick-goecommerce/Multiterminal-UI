@@ -54,6 +54,8 @@ GOOS=windows GOARCH=amd64 go build -o multiterminal.exe .
 | Ctrl+N           | New pane (opens launch dialog)                |
 | Ctrl+X           | Close focused pane                            |
 | Ctrl+Z           | Zoom (maximise / restore) focused pane        |
+| Ctrl+Scroll Up   | Zoom in (maximise)                            |
+| Ctrl+Scroll Down | Zoom out (restore grid)                       |
 | Arrow keys       | Navigate panes                                |
 | Tab              | Cycle focus to next pane                      |
 | Ctrl+G           | Passthrough mode (all keys to terminal)       |

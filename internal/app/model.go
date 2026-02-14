@@ -153,7 +153,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 
 	case tea.MouseMsg:
-		// Future: mouse support for clicking on tabs/panes
+		// Ctrl+Scroll: zoom in / zoom out
+		if msg.Ctrl && msg.Button == tea.MouseButtonWheelUp {
+			if !m.zoomed {
+				m.zoomed = true
+				m.resizeAllPanes()
+			}
+			return m, nil
+		}
+		if msg.Ctrl && msg.Button == tea.MouseButtonWheelDown {
+			if m.zoomed {
+				m.zoomed = false
+				m.resizeAllPanes()
+			}
+			return m, nil
+		}
 		return m, nil
 	}
 
