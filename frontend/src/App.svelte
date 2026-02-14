@@ -241,6 +241,9 @@
   function handleClosePane(e: CustomEvent<{ paneId: string; sessionId: number }>) {
     const tab = $activeTab;
     if (!tab) return;
+    const pane = tab.panes.find((p) => p.id === e.detail.paneId);
+    const name = pane?.name || 'Terminal';
+    if (!confirm(`"${name}" wirklich schließen?`)) return;
     App.CloseSession(e.detail.sessionId);
     tabStore.closePane(tab.id, e.detail.paneId);
   }
@@ -310,6 +313,7 @@
       if (tab) {
         const focused = tab.panes.find((p) => p.focused);
         if (focused) {
+          if (!confirm(`"${focused.name}" wirklich schließen?`)) return;
           App.CloseSession(focused.sessionId);
           tabStore.closePane(tab.id, focused.id);
         }
