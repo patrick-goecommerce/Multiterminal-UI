@@ -2,6 +2,11 @@
 
 A TUI terminal multiplexer built for Claude Code power users.
 
+## Code Rules
+- **Max 300 lines per Go file.** If a file grows beyond 300 lines, split it into
+  logically grouped smaller files within the same package. Keep each file focused
+  on a single responsibility.
+
 ## Tech Stack
 - **Language:** Go 1.21+
 - **TUI framework:** Bubbletea + Lipgloss + Bubbles
@@ -13,8 +18,14 @@ A TUI terminal multiplexer built for Claude Code power users.
 main.go                          Entry point
 internal/
   app/
-    model.go                     Main Bubbletea model (orchestrates everything)
-    keymap.go                    Key binding definitions
+    model.go                     Main Bubbletea model, types, Init, Update
+    input.go                     Keyboard input routing (handleKey, dialog, sidebar)
+    keybytes.go                  Key-to-PTY-bytes conversion table
+    view.go                      View rendering (View, renderNormal, renderPanes)
+    tabs.go                      Tab & pane management (add/close/navigate/launch)
+    status.go                    Layout, git helpers, Claude scanning, footer
+    session_persist.go           Session save/restore across restarts
+    keymap.go                    Key binding definitions & help text
   ui/
     styles.go                    Lipgloss style constants
     themes.go                    Theme definitions (dark, light, dracula, nord, solarized)
@@ -25,10 +36,15 @@ internal/
     sidebar.go                   File browser sidebar with search
     dialog.go                    Launch dialog (Shell / Claude / YOLO / model picker)
   terminal/
-    screen.go                    VT100 screen buffer + ANSI parser
-    session.go                   PTY session lifecycle + token tracker + activity detection
+    session.go                   PTY session lifecycle (start, read, close)
+    activity.go                  Claude activity detection & token scanning
+    screen.go                    VT100 screen buffer core + ANSI parser
+    screen_csi.go                CSI dispatch, SGR handling, color parsing
+    screen_ops.go                Screen operations (scroll, erase, insert, delete)
+    screen_render.go             Screen rendering (Render, RenderRegion, PlainText)
   config/
     config.go                    YAML configuration loader
+    session.go                   Session state persistence (JSON)
 ```
 
 ## Build & Run
