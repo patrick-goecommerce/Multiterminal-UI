@@ -2,18 +2,10 @@
 
 package terminal
 
-import (
-	"syscall"
+import gopty "github.com/aymanbagabas/go-pty"
 
-	gopty "github.com/aymanbagabas/go-pty"
-)
-
-// hidePTYConsole sets CREATE_NO_WINDOW on the process creation flags so
-// that child processes spawned via ConPTY do not flash a visible console
-// window. This is only needed when the host app is a GUI app.
-func hidePTYConsole(cmd *gopty.Cmd) {
-	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
-	}
-	cmd.SysProcAttr.CreationFlags |= 0x08000000 // CREATE_NO_WINDOW
-}
+// hidePTYConsole is intentionally a no-op on Windows.
+// ConPTY already creates a pseudo-console for the child process; setting
+// CREATE_NO_WINDOW would prevent the process from attaching to it and
+// break terminal I/O entirely.
+func hidePTYConsole(_ *gopty.Cmd) {}

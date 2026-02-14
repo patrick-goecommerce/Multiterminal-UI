@@ -10,6 +10,7 @@ import (
 func (a *App) GetGitBranch(dir string) string {
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Dir = dir
+	hideConsole(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -21,6 +22,7 @@ func (a *App) GetGitBranch(dir string) string {
 func (a *App) GetLastCommitTime(dir string) int64 {
 	cmd := exec.Command("git", "log", "-1", "--format=%ct")
 	cmd.Dir = dir
+	hideConsole(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return 0
