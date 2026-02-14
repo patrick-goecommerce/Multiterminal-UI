@@ -61,8 +61,8 @@
         termInstance.terminal.clearSelection();
         return false;
       }
-      // Ctrl+Z, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+X, Ctrl+B → let app handle (don't send to PTY)
-      if (e.ctrlKey && ['z', 'n', 't', 'w', 'x', 'b'].includes(e.key)) {
+      // Ctrl+Z, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+B → let app handle (don't send to PTY)
+      if (e.ctrlKey && ['z', 'n', 't', 'w', 'b'].includes(e.key)) {
         return false;
       }
       return true;

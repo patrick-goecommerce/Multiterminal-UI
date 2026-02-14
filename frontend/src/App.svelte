@@ -307,19 +307,6 @@
       }
       return;
     }
-    if (e.ctrlKey && e.key === 'x') {
-      e.preventDefault();
-      const tab = $activeTab;
-      if (tab) {
-        const focused = tab.panes.find((p) => p.focused);
-        if (focused) {
-          if (!confirm(`"${focused.name}" wirklich schließen?`)) return;
-          App.CloseSession(focused.sessionId);
-          tabStore.closePane(tab.id, focused.id);
-        }
-      }
-      return;
-    }
   }
 
   $: totalCost = (() => {

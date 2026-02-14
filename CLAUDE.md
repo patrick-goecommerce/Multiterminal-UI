@@ -95,7 +95,6 @@ wails build
 | Ctrl+T           | New tab                                       |
 | Ctrl+W           | Close tab                                     |
 | Ctrl+N           | New pane (opens launch dialog)                |
-| Ctrl+X           | Close focused pane                            |
 | Ctrl+Z           | Zoom (maximise / restore) focused pane        |
 | Ctrl+B           | Toggle file browser sidebar                   |
 
