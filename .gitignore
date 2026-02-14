@@ -16,5 +16,8 @@ frontend/dist/
 # Wails generated bindings
 frontend/wailsjs/
 
+# Installer output
+installer-output/
+
 # IDE
 .claude/
