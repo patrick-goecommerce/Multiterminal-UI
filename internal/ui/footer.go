@@ -9,13 +9,17 @@ import (
 
 // FooterData holds the information displayed in the global status footer.
 type FooterData struct {
-	Branch   string // current git branch of the focused pane
-	Model    string // Claude model of the focused pane
-	Mode     string // "Shell" / "Claude" / "YOLO"
-	TabCount int    // total number of tabs
-	TabIdx   int    // 0-based active tab index
-	PaneIdx  int    // 0-based active pane index in the tab
-	PaneName string // name of the focused pane
+	Branch         string // current git branch of the focused pane
+	Model          string // Claude model of the focused pane
+	Mode           string // "Shell" / "Claude" / "YOLO"
+	TabCount       int    // total number of tabs
+	TabIdx         int    // 0-based active tab index
+	PaneIdx        int    // 0-based active pane index in the tab
+	PaneName       string // name of the focused pane
+	TotalCost      string // total token cost across all Claude panes
+	CommitReminder string // commit reminder message (empty = no reminder)
+	ThemeName      string // active theme name
+	Zoomed         bool   // whether a pane is maximized
 }
 
 // RenderFooter draws the global status bar at the bottom of the screen.
@@ -44,14 +48,28 @@ func RenderFooter(d FooterData, width int) string {
 				FooterValStyle.Render(" "+d.Mode))
 	}
 
+	// Total cost across all Claude panes
+	if d.TotalCost != "" {
+		sections = append(sections,
+			FooterKeyStyle.Render("cost:")+
+				lipgloss.NewStyle().Bold(true).Foreground(ColorWarning).Render(" "+d.TotalCost))
+	}
+
 	// Tab / Pane indicator
-	sections = append(sections,
-		FooterDimStyle.Render(
-			fmt.Sprintf("Tab %d/%d  Pane %d", d.TabIdx+1, d.TabCount, d.PaneIdx+1),
-		))
+	tabInfo := fmt.Sprintf("Tab %d/%d  Pane %d", d.TabIdx+1, d.TabCount, d.PaneIdx+1)
+	if d.Zoomed {
+		tabInfo += " [ZOOM]"
+	}
+	sections = append(sections, FooterDimStyle.Render(tabInfo))
+
+	// Commit reminder (flashes with warning color)
+	if d.CommitReminder != "" {
+		sections = append(sections,
+			lipgloss.NewStyle().Bold(true).Foreground(ColorWarning).Render(d.CommitReminder))
+	}
 
 	// Shortcuts hint (right-aligned)
-	shortcuts := FooterDimStyle.Render("Ctrl+N:new  Ctrl+T:tab  Ctrl+B:files  Ctrl+F:focus  ?:help")
+	shortcuts := FooterDimStyle.Render("Ctrl+N:new  Ctrl+Z:zoom  Ctrl+B:files  ?:help")
 
 	left := strings.Join(sections, FooterSepStyle.Render(""))
 	right := shortcuts

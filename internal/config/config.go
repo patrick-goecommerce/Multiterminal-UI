@@ -34,6 +34,10 @@ type Config struct {
 
 	// ClaudeModels lists available models for the launch dialog.
 	ClaudeModels []ModelEntry `yaml:"claude_models"`
+
+	// CommitReminderMinutes is how often (in minutes) to show a commit reminder.
+	// Set to 0 to disable. Default: 30.
+	CommitReminderMinutes int `yaml:"commit_reminder_minutes"`
 }
 
 // ModelEntry represents a selectable Claude model in the launch dialog.
@@ -45,12 +49,13 @@ type ModelEntry struct {
 // DefaultConfig returns the built-in defaults.
 func DefaultConfig() Config {
 	return Config{
-		DefaultShell:   "",
-		DefaultDir:     "",
-		Theme:          "dark",
-		MaxPanesPerTab: 12,
-		SidebarWidth:   30,
-		ClaudeCommand:  "claude",
+		DefaultShell:          "",
+		DefaultDir:            "",
+		Theme:                 "dark",
+		MaxPanesPerTab:        12,
+		SidebarWidth:          30,
+		ClaudeCommand:         "claude",
+		CommitReminderMinutes: 30,
 		ClaudeModels: []ModelEntry{
 			{Label: "Default", ID: ""},
 			{Label: "Opus 4.6", ID: "claude-opus-4-6"},
@@ -99,6 +104,16 @@ func Load() Config {
 	}
 	if cfg.SidebarWidth > 60 {
 		cfg.SidebarWidth = 60
+	}
+
+	// Validate theme name
+	validThemes := map[string]bool{"dark": true, "light": true, "dracula": true, "nord": true, "solarized": true}
+	if !validThemes[cfg.Theme] {
+		cfg.Theme = "dark"
+	}
+
+	if cfg.CommitReminderMinutes < 0 {
+		cfg.CommitReminderMinutes = 0
 	}
 
 	return cfg

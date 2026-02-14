@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/patrick-goecommerce/multiterminal/internal/terminal"
@@ -25,6 +26,13 @@ type PaneInfo struct {
 	Model   string   // Claude model ID (empty for shell)
 	Branch  string   // git branch (updated periodically)
 	Focused bool
+
+	// Flash effect: the pane border flashes when Claude finishes or needs input.
+	FlashUntil time.Time      // border flashes until this time
+	FlashColor lipgloss.Color // color to flash (green = done, yellow = needs input)
+
+	// TokenCost is the formatted cost string (e.g. "$0.12") to show in title.
+	TokenCost string
 }
 
 // RenderPane draws a single terminal pane with its border, title bar and
@@ -34,10 +42,16 @@ func RenderPane(p PaneInfo, rect Rect) string {
 		return ""
 	}
 
-	// Choose border style based on focus
+	// Choose border style based on focus and flash state
 	border := PaneBorderUnfocused
 	if p.Focused {
 		border = PaneBorderFocused
+	}
+	// Flash effect overrides border color
+	if time.Now().Before(p.FlashUntil) {
+		border = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(p.FlashColor)
 	}
 
 	// Build title line: name + mode indicator + status dot
@@ -100,7 +114,13 @@ func buildPaneTitle(p PaneInfo) string {
 		modelInfo = " (" + p.Model + ")"
 	}
 
-	return statusDot + " " + PaneTitleStyle.Render(name+modeLabel+modelInfo)
+	// Token cost (only for Claude panes with tracked cost)
+	var costInfo string
+	if p.TokenCost != "" {
+		costInfo = " " + lipgloss.NewStyle().Foreground(ColorWarning).Render(p.TokenCost)
+	}
+
+	return statusDot + " " + PaneTitleStyle.Render(name+modeLabel+modelInfo) + costInfo
 }
 
 // renderScreenContent extracts the visible portion of the terminal screen

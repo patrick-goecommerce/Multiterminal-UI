@@ -35,6 +35,7 @@ func ShortcutHelp() string {
 ║  Panes                                                     ║
 ║    Ctrl+N         New pane (opens launch dialog)           ║
 ║    Ctrl+X         Close focused pane                       ║
+║    Ctrl+Z         Zoom (maximise/restore) focused pane     ║
 ║    ←↑↓→           Navigate between panes                   ║
 ║    Tab            Cycle focus to next pane                  ║
 ║    Ctrl+G         Passthrough mode (all keys to terminal)  ║
@@ -54,10 +55,13 @@ func ShortcutHelp() string {
 ║    ?              Show/hide this help                      ║
 ║    Ctrl+C (×2)    Quit                                     ║
 ║                                                            ║
-║  File Insertion                                            ║
-║    Focus sidebar (Ctrl+F), navigate to file, press Enter.  ║
-║    The full path is typed into the focused terminal pane.  ║
-║    Images work too – Claude Code can read them by path.    ║
+║  Smart Features                                            ║
+║    Token/cost tracker shown in footer and pane titles      ║
+║    Pane border flashes green when Claude finishes          ║
+║    Pane border flashes yellow when input is needed         ║
+║    Commit reminder after 30 min (configurable in YAML)    ║
+║    Theme: set "theme" in ~/.multiterminal.yaml             ║
+║      Available: dark, light, dracula, nord, solarized      ║
 ║                                                            ║
 ╚════════════════════════════════════════════════════════════╝`
 }

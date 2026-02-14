@@ -822,6 +822,45 @@ func (s *Screen) RenderRegion(startRow, startCol, endRow, endCol int) string {
 	return b.String()
 }
 
+// PlainTextRow returns the plain text content of a single row (no ANSI),
+// with trailing spaces trimmed. Useful for pattern matching.
+func (s *Screen) PlainTextRow(row int) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if row < 0 || row >= s.rows {
+		return ""
+	}
+	var b strings.Builder
+	for _, c := range s.cells[row] {
+		ch := c.Char
+		if ch == 0 {
+			ch = ' '
+		}
+		b.WriteRune(ch)
+	}
+	return strings.TrimRight(b.String(), " ")
+}
+
+// PlainText returns the full screen content as plain text (no ANSI).
+func (s *Screen) PlainText() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var b strings.Builder
+	for r := 0; r < s.rows; r++ {
+		if r > 0 {
+			b.WriteByte('\n')
+		}
+		for _, c := range s.cells[r] {
+			ch := c.Char
+			if ch == 0 {
+				ch = ' '
+			}
+			b.WriteRune(ch)
+		}
+	}
+	return b.String()
+}
+
 // sgrSequence produces the SGR escape sequence to switch to the given style.
 func sgrSequence(st CellStyle) string {
 	var parts []string

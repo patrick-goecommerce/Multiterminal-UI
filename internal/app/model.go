@@ -73,10 +73,21 @@ type Model struct {
 	// sidebarFocused: when true, arrow keys and Enter navigate the sidebar
 	// instead of panes. Toggled with Ctrl+F.
 	sidebarFocused bool
+
+	// zoomed: when true, the focused pane is maximised to fill the content area.
+	zoomed bool
+
+	// Commit reminder tracking
+	lastCommitCheck time.Time
+	lastCommitTime  time.Time
+	commitReminder  string
 }
 
 // New creates the initial Model.
 func New(cfg config.Config) Model {
+	// Apply theme from configuration
+	ui.SetTheme(cfg.Theme)
+
 	dir := cfg.DefaultDir
 	if dir == "" {
 		dir, _ = os.Getwd()
@@ -123,6 +134,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Refresh git branch for the focused pane
 		m.refreshGitBranch()
+		// Scan Claude panes for token/cost info and activity changes
+		m.scanClaudePanes()
+		// Check commit reminder
+		m.checkCommitReminder()
 		// Check for new output from all sessions
 		m.checkSessionOutput()
 		return m, tickCmd()
@@ -255,6 +270,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.sidebarFocused = !m.sidebarFocused
 			m.sidebar.Focused = m.sidebarFocused
 		}
+		return m, nil
+	}
+
+	// Zoom toggle (maximise / restore focused pane)
+	if isKey(msg, tea.KeyCtrlZ) {
+		m.zoomed = !m.zoomed
+		m.resizeAllPanes()
 		return m, nil
 	}
 
@@ -460,6 +482,12 @@ func (m Model) renderPanes(areaW, areaH int) string {
 			Foreground(ui.ColorMuted).
 			Render("No panes. Press Ctrl+N to create one.")
 		return placeholder
+	}
+
+	// Zoom mode: only render the focused pane at full size
+	if m.zoomed && tab.FocusIdx >= 0 && tab.FocusIdx < len(tab.Panes) {
+		fullRect := ui.Rect{X: 0, Y: 0, Width: areaW, Height: areaH}
+		return ui.RenderPane(tab.Panes[tab.FocusIdx], fullRect)
 	}
 
 	rects := ui.ComputeGrid(len(tab.Panes), areaW, areaH)
@@ -913,6 +941,23 @@ func (m *Model) resizeAllPanes() {
 		contentH = 3
 	}
 
+	// Zoom mode: give the focused pane the full content area
+	if m.zoomed && tab.FocusIdx >= 0 && tab.FocusIdx < len(tab.Panes) {
+		p := tab.Panes[tab.FocusIdx]
+		innerW := contentW - 2
+		innerH := contentH - 3
+		if innerW < 1 {
+			innerW = 1
+		}
+		if innerH < 1 {
+			innerH = 1
+		}
+		if p.Session != nil {
+			p.Session.Resize(innerH, innerW)
+		}
+		return
+	}
+
 	rects := ui.ComputeGrid(len(tab.Panes), contentW, contentH)
 	for i, p := range tab.Panes {
 		if i >= len(rects) {
@@ -969,6 +1014,98 @@ func gitBranch(dir string) string {
 // handles display updates.
 func (m *Model) checkSessionOutput() {}
 
+// scanClaudePanes checks all Claude panes for activity changes and token info.
+// When Claude finishes or needs input, the pane border flashes.
+func (m *Model) scanClaudePanes() {
+	for ti := range m.tabs {
+		for pi := range m.tabs[ti].Panes {
+			p := &m.tabs[ti].Panes[pi]
+			if p.Session == nil {
+				continue
+			}
+			if p.Mode != ui.PaneModeClaudeNormal && p.Mode != ui.PaneModeClaudeYOLO {
+				continue
+			}
+
+			// Detect activity state changes
+			state := p.Session.DetectActivity()
+			switch state {
+			case terminal.ActivityDone:
+				// Flash green for 3 seconds
+				if time.Now().After(p.FlashUntil) {
+					p.FlashUntil = time.Now().Add(3 * time.Second)
+					p.FlashColor = ui.ColorSuccess
+					p.Session.ResetActivity()
+				}
+			case terminal.ActivityNeedsInput:
+				// Flash yellow/warning until user interacts
+				if time.Now().After(p.FlashUntil) {
+					p.FlashUntil = time.Now().Add(5 * time.Second)
+					p.FlashColor = ui.ColorWarning
+					p.Session.ResetActivity()
+				}
+			}
+
+			// Update token cost display per pane
+			if p.Session.Tokens.TotalCost > 0 {
+				p.TokenCost = fmt.Sprintf("$%.2f", p.Session.Tokens.TotalCost)
+			}
+		}
+	}
+}
+
+// checkCommitReminder checks if it's time to show a commit reminder.
+func (m *Model) checkCommitReminder() {
+	if m.cfg.CommitReminderMinutes <= 0 {
+		m.commitReminder = ""
+		return
+	}
+
+	// Only check every 30 seconds to avoid hammering git
+	if time.Since(m.lastCommitCheck) < 30*time.Second {
+		return
+	}
+	m.lastCommitCheck = time.Now()
+
+	dir := m.currentDir()
+	lastCommit := gitLastCommitTime(dir)
+
+	if lastCommit.IsZero() {
+		m.commitReminder = ""
+		return
+	}
+
+	m.lastCommitTime = lastCommit
+	elapsed := time.Since(lastCommit)
+	threshold := time.Duration(m.cfg.CommitReminderMinutes) * time.Minute
+
+	if elapsed >= threshold {
+		mins := int(elapsed.Minutes())
+		m.commitReminder = fmt.Sprintf("COMMIT REMINDER: %dm since last commit!", mins)
+	} else {
+		m.commitReminder = ""
+	}
+}
+
+// gitLastCommitTime returns the time of the last git commit in the given dir.
+func gitLastCommitTime(dir string) time.Time {
+	cmd := exec.Command("git", "-C", dir, "log", "-1", "--format=%ct")
+	out, err := cmd.Output()
+	if err != nil {
+		return time.Time{}
+	}
+	ts := strings.TrimSpace(string(out))
+	if ts == "" {
+		return time.Time{}
+	}
+	var sec int64
+	_, err = fmt.Sscanf(ts, "%d", &sec)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Unix(sec, 0)
+}
+
 // currentDir returns the working directory of the active tab.
 func (m *Model) currentDir() string {
 	tab := m.activeTab()
@@ -982,8 +1119,11 @@ func (m *Model) currentDir() string {
 // footerData assembles the data needed to render the footer.
 func (m *Model) footerData() ui.FooterData {
 	d := ui.FooterData{
-		TabCount: len(m.tabs),
-		TabIdx:   m.tabIdx,
+		TabCount:       len(m.tabs),
+		TabIdx:         m.tabIdx,
+		ThemeName:      ui.ActiveTheme.Name,
+		Zoomed:         m.zoomed,
+		CommitReminder: m.commitReminder,
 	}
 
 	tab := m.activeTab()
@@ -1006,6 +1146,21 @@ func (m *Model) footerData() ui.FooterData {
 			d.Mode = "YOLO"
 		}
 	}
+
+	// Calculate total cost across all Claude panes in all tabs
+	var totalCost float64
+	for _, ts := range m.tabs {
+		for _, p := range ts.Panes {
+			if p.Session != nil && (p.Mode == ui.PaneModeClaudeNormal || p.Mode == ui.PaneModeClaudeYOLO) {
+				p.Session.ScanTokens()
+				totalCost += p.Session.Tokens.TotalCost
+			}
+		}
+	}
+	if totalCost > 0 {
+		d.TotalCost = fmt.Sprintf("$%.2f", totalCost)
+	}
+
 	return d
 }
 

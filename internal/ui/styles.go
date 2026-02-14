@@ -92,7 +92,7 @@ var (
 
 	FooterSepStyle = lipgloss.NewStyle().
 			Foreground(ColorMuted).
-			SetString(" │ ")
+			SetString(" | ")
 )
 
 // Sidebar styles
