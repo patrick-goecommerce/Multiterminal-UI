@@ -130,6 +130,7 @@ func (s *Session) Start(argv []string, dir string, env []string) error {
 	cmd := p.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = fullEnv
+	hidePTYConsole(cmd)
 
 	if err := cmd.Start(); err != nil {
 		p.Close()
