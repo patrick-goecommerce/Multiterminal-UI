@@ -36,15 +36,10 @@ jobs:
       - name: Build installer
         run: iscc /DMyAppVersion=${{ steps.version.outputs.version }} installer.iss
 
-      - name: Rename portable binary
-        run: mv build/bin/mtui.exe mtui-windows-amd64.exe
-
       - uses: actions/upload-artifact@v4
         with:
-          name: mtui-windows-amd64
-          path: |
-            mtui-windows-amd64.exe
-            installer-output/mtui-setup-*.exe
+          name: mtui-installer
+          path: installer-output/mtui-setup-*.exe
 
   release:
     needs: [build-windows]
@@ -59,6 +54,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: |
-            artifacts/mtui-windows-amd64.exe
-            artifacts/installer-output/mtui-setup-*.exe
+          files: artifacts/mtui-setup-*.exe
