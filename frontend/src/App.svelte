@@ -220,22 +220,42 @@
     const baseName = getClaudeName(type, model);
     const name = issueCtx ? `${baseName} – #${issueCtx.number}` : baseName;
     try {
-      // Auto-create branch for issue if enabled
       let issueBranch = '';
-      if (issueCtx && $config.auto_branch_on_issue !== false) {
-        try {
-          issueBranch = await App.GetOrCreateIssueBranch(tab.dir || '', issueCtx.number, issueCtx.title);
-        } catch (branchErr: any) {
-          const msg = branchErr?.message || String(branchErr);
-          if (!confirm(`Branch-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne eigenen Branch starten?`)) return;
+      let worktreePath = '';
+      let sessionDir = tab.dir || '';
+
+      if (issueCtx) {
+        const useWorktrees = ($config as any).use_worktrees === true;
+
+        if (useWorktrees) {
+          // Worktree mode: create isolated directory per issue
+          try {
+            const wt = await App.CreateWorktree(sessionDir, issueCtx.number, issueCtx.title);
+            if (wt) {
+              sessionDir = wt.path;
+              issueBranch = wt.branch;
+              worktreePath = wt.path;
+            }
+          } catch (wtErr: any) {
+            const msg = wtErr?.message || String(wtErr);
+            if (!confirm(`Worktree-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne Worktree starten?`)) return;
+          }
+        } else if ($config.auto_branch_on_issue !== false) {
+          // Branch mode: switch branch in shared directory
+          try {
+            issueBranch = await App.GetOrCreateIssueBranch(sessionDir, issueCtx.number, issueCtx.title);
+          } catch (branchErr: any) {
+            const msg = branchErr?.message || String(branchErr);
+            if (!confirm(`Branch-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne eigenen Branch starten?`)) return;
+          }
         }
       }
 
-      const sessionId = await App.CreateSession(argv, tab.dir || '', 24, 80);
+      const sessionId = await App.CreateSession(argv, sessionDir, 24, 80);
       if (sessionId > 0) {
-        tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx?.number, issueCtx?.title, issueBranch);
+        tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx?.number, issueCtx?.title, issueBranch, worktreePath);
         if (issueCtx) {
-          App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, tab.dir || '');
+          App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
           // Auto-send issue prompt after Claude starts up
           setTimeout(() => {
             const prompt = buildIssuePrompt(issueCtx);

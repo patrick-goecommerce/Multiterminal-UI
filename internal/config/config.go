@@ -13,18 +13,19 @@ import (
 
 // Config holds all user-configurable settings.
 type Config struct {
-	DefaultShell          string       `yaml:"default_shell" json:"default_shell"`
-	DefaultDir            string       `yaml:"default_dir" json:"default_dir"`
-	Theme                 string       `yaml:"theme" json:"theme"`
-	TerminalColor         string       `yaml:"terminal_color" json:"terminal_color"`
-	MaxPanesPerTab        int          `yaml:"max_panes_per_tab" json:"max_panes_per_tab"`
-	SidebarWidth          int          `yaml:"sidebar_width" json:"sidebar_width"`
-	ClaudeCommand         string       `yaml:"claude_command" json:"claude_command"`
-	ClaudeModels          []ModelEntry `yaml:"claude_models" json:"claude_models"`
+	DefaultShell          string         `yaml:"default_shell" json:"default_shell"`
+	DefaultDir            string         `yaml:"default_dir" json:"default_dir"`
+	Theme                 string         `yaml:"theme" json:"theme"`
+	TerminalColor         string         `yaml:"terminal_color" json:"terminal_color"`
+	MaxPanesPerTab        int            `yaml:"max_panes_per_tab" json:"max_panes_per_tab"`
+	SidebarWidth          int            `yaml:"sidebar_width" json:"sidebar_width"`
+	ClaudeCommand         string         `yaml:"claude_command" json:"claude_command"`
+	ClaudeModels          []ModelEntry   `yaml:"claude_models" json:"claude_models"`
 	CommitReminderMinutes int            `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
 	RestoreSession        *bool          `yaml:"restore_session" json:"restore_session"`
 	LoggingEnabled        bool           `yaml:"logging_enabled" json:"logging_enabled"`
 	AutoBranchOnIssue     *bool          `yaml:"auto_branch_on_issue" json:"auto_branch_on_issue"`
+	UseWorktrees          *bool          `yaml:"use_worktrees" json:"use_worktrees"`
 	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
 }
@@ -66,6 +67,7 @@ func DefaultConfig() Config {
 		CommitReminderMinutes: 30,
 		RestoreSession:        boolPtr(true),
 		AutoBranchOnIssue:     boolPtr(true),
+		UseWorktrees:          boolPtr(false), // opt-in: parallel issue work via git worktrees
 		IssueTracking: IssueTracking{
 			AutoCommentOnStart:  true,
 			AutoCommentOnDone:   true,
@@ -99,6 +101,14 @@ func (c Config) ShouldAutoBranch() bool {
 		return true
 	}
 	return *c.AutoBranchOnIssue
+}
+
+// ShouldUseWorktrees returns whether to create git worktrees for issues.
+func (c Config) ShouldUseWorktrees() bool {
+	if c.UseWorktrees == nil {
+		return false
+	}
+	return *c.UseWorktrees
 }
 
 // configPath returns the path to ~/.multiterminal.yaml.

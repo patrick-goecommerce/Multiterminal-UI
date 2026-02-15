@@ -96,6 +96,9 @@
     {#if pane.issueNumber}
       <span class="issue-badge" title="Issue #{pane.issueNumber}: {pane.issueTitle}">#{pane.issueNumber}</span>
     {/if}
+    {#if pane.worktreePath}
+      <span class="worktree-badge" title="Worktree: {pane.worktreePath}">worktree</span>
+    {/if}
     {#if pane.model}
       <span class="model-label">{pane.model}</span>
     {/if}
@@ -194,6 +197,12 @@
     font-size: 10px; padding: 1px 6px; border-radius: 4px;
     background: #23863633; color: #22c55e; font-weight: 600; white-space: nowrap;
     cursor: default;
+  }
+
+  .worktree-badge {
+    font-size: 9px; padding: 1px 5px; border-radius: 4px;
+    background: #2563eb22; color: #60a5fa; white-space: nowrap;
+    cursor: default; font-style: italic;
   }
 
   .model-label { font-size: 10px; color: var(--fg-muted); }

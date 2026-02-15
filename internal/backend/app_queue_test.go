@@ -8,8 +8,9 @@ import (
 
 func newTestApp() *App {
 	return &App{
-		sessions: make(map[int]*terminal.Session),
-		queues:   make(map[int]*sessionQueue),
+		sessions:      make(map[int]*terminal.Session),
+		queues:        make(map[int]*sessionQueue),
+		sessionIssues: make(map[int]*sessionIssue),
 	}
 }
 

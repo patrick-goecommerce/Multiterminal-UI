@@ -131,4 +131,3 @@ func (a *App) IsGitRepo(dir string) bool {
 func (a *App) HasCleanWorkingTree(dir string) bool {
 	return hasCleanWorkingTree(dir)
 }
-

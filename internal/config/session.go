@@ -12,8 +12,8 @@ import (
 
 // SessionState is the top-level structure serialised to disk.
 type SessionState struct {
-	ActiveTab int             `json:"active_tab"`
-	Tabs      []SavedTab      `json:"tabs"`
+	ActiveTab int        `json:"active_tab"`
+	Tabs      []SavedTab `json:"tabs"`
 }
 
 // SavedTab captures a single tab's layout.
@@ -27,10 +27,10 @@ type SavedTab struct {
 // SavedPane captures enough information to re-launch a single pane.
 type SavedPane struct {
 	Name        string `json:"name"`
-	Mode        int    `json:"mode"`                    // maps to ui.PaneMode (0=shell, 1=claude, 2=yolo)
-	Model       string `json:"model"`                   // model label (empty for shell)
-	IssueNumber int    `json:"issue_number,omitempty"`   // linked GitHub issue number
-	IssueBranch string `json:"issue_branch,omitempty"`   // branch created for issue
+	Mode        int    `json:"mode"`                   // maps to ui.PaneMode (0=shell, 1=claude, 2=yolo)
+	Model       string `json:"model"`                  // model label (empty for shell)
+	IssueNumber int    `json:"issue_number,omitempty"` // linked GitHub issue number
+	IssueBranch string `json:"issue_branch,omitempty"` // branch created for issue
 }
 
 // sessionPath returns the path to ~/.multiterminal-session.json.
