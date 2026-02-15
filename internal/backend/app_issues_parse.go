@@ -56,6 +56,7 @@ func parseIssueList(data []byte) []Issue {
 			State:     r.State,
 			Author:    r.Author.Login,
 			Labels:    labels,
+			Body:      r.Body,
 			CreatedAt: r.CreatedAt,
 			UpdatedAt: r.UpdatedAt,
 			Comments:  commentCount,

@@ -12,6 +12,7 @@
     state: string;
     author: string;
     labels: string[];
+    body: string;
     createdAt: string;
     updatedAt: string;
     comments: number;
@@ -113,10 +114,20 @@
   $: if (stateFilter && ghStatus === 'ok') loadIssues();
   $: openCount = issues.filter(i => i.state === 'OPEN').length;
 
+  function buildDragText(number: number, title: string, body: string): string {
+    let text = `Closes #${number}: ${title}`;
+    if (body) {
+      // Truncate body to first 200 chars for commit messages
+      const desc = body.length > 200 ? body.slice(0, 200).trimEnd() + '...' : body;
+      text += `\n\n${desc}`;
+    }
+    text += `\n\nRef: #${number}`;
+    return text;
+  }
+
   function handleDragStart(e: DragEvent, issue: Issue) {
     if (!e.dataTransfer) return;
-    const text = `Closes #${issue.number} - ${issue.title}`;
-    e.dataTransfer.setData('text/plain', text);
+    e.dataTransfer.setData('text/plain', buildDragText(issue.number, issue.title, issue.body));
     e.dataTransfer.setData('application/x-issue-number', String(issue.number));
     e.dataTransfer.effectAllowed = 'copy';
   }
@@ -162,7 +173,16 @@
       </button>
     </div>
 
-    <h4 class="detail-title">{selectedIssue.title}</h4>
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <h4
+      class="detail-title"
+      draggable="true"
+      on:dragstart={(e) => {
+        if (!e.dataTransfer || !selectedIssue) return;
+        e.dataTransfer.setData('text/plain', buildDragText(selectedIssue.number, selectedIssue.title, selectedIssue.body));
+        e.dataTransfer.effectAllowed = 'copy';
+      }}
+    >{selectedIssue.title}</h4>
 
     <div class="detail-meta">
       <span>{selectedIssue.author}</span>
@@ -340,7 +360,8 @@
   }
   .edit-btn:hover { color: var(--fg); background: var(--bg-tertiary); }
 
-  .detail-title { font-size: 14px; font-weight: 700; color: var(--fg); padding: 10px 10px 4px; line-height: 1.3; }
+  .detail-title { font-size: 14px; font-weight: 700; color: var(--fg); padding: 10px 10px 4px; line-height: 1.3; cursor: grab; }
+  .detail-title:active { cursor: grabbing; }
   .detail-meta { font-size: 11px; color: var(--fg-muted); padding: 0 10px 8px; display: flex; gap: 8px; }
   .label-row { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 8px; }
   .detail-body {
