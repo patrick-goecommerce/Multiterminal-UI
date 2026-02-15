@@ -53,11 +53,11 @@ frontend/
       PaneGrid.svelte            Grid layout for terminal panes
       TerminalPane.svelte        xterm.js terminal wrapper with titlebar
       QueuePanel.svelte          Pipeline queue panel (per-pane prompt batching)
-      Sidebar.svelte             File browser with search
+      Sidebar.svelte             File browser with search & git status
       Footer.svelte              Status bar (branch, cost, shortcuts)
       LaunchDialog.svelte        Shell/Claude/YOLO launch dialog
     lib/
-      terminal.ts                xterm.js setup & theme configuration
+      terminal.ts                xterm.js setup, theme config & search addon
 ```
 
 ## Build & Run
@@ -99,6 +99,8 @@ wails build
 | Ctrl+N           | New pane (opens launch dialog)                |
 | Ctrl+Z           | Zoom (maximise / restore) focused pane        |
 | Ctrl+B           | Toggle file browser sidebar                   |
+| Ctrl+F           | Search in terminal output (per pane)          |
+| Ctrl+1-9         | Focus pane by index (1 = first pane)          |
 
 ## Smart Features
 

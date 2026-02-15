@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import TabBar from './components/TabBar.svelte';
   import Toolbar from './components/Toolbar.svelte';
   import PaneGrid from './components/PaneGrid.svelte';
@@ -9,6 +9,7 @@
   import ProjectDialog from './components/ProjectDialog.svelte';
   import SettingsDialog from './components/SettingsDialog.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
+  import CrashDialog from './components/CrashDialog.svelte';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
@@ -21,11 +22,16 @@
   let showSettingsDialog = false;
   let showCommandPalette = false;
   let showSidebar = false;
+  let showCrashDialog = false;
   let branch = '';
   let commitAgeMinutes = -1;
 
   const modeMap: Record<string, number> = { shell: 0, claude: 1, 'claude-yolo': 2 };
   const modeReverse: PaneMode[] = ['shell', 'claude', 'claude-yolo'];
+
+  let branchInterval: ReturnType<typeof setInterval> | null = null;
+  let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
+  let storeUnsubscribe: (() => void) | null = null;
 
   async function restoreSession(): Promise<boolean> {
     try {
@@ -112,6 +118,14 @@
       applyTheme('dark');
     }
 
+    // Check for repeated crashes and suggest logging
+    try {
+      const health = await App.CheckHealth();
+      if (health.crash_detected && !health.logging_enabled) {
+        showCrashDialog = true;
+      }
+    } catch {}
+
     // Try restoring previous session, otherwise create default tab
     const restored = await restoreSession();
     if (!restored) {
@@ -140,7 +154,7 @@
 
     // Auto-save session periodically (debounced via store subscription)
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
-    tabStore.subscribe(() => {
+    storeUnsubscribe = tabStore.subscribe(() => {
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(saveSession, 1000);
     });
@@ -151,11 +165,19 @@
     // Update git branch and commit age periodically
     updateBranch();
     updateCommitAge();
-    setInterval(updateBranch, 10000);
-    setInterval(updateCommitAge, 30000);
+    branchInterval = setInterval(updateBranch, 10000);
+    commitAgeInterval = setInterval(updateCommitAge, 30000);
 
     // Keyboard shortcuts
     document.addEventListener('keydown', handleGlobalKeydown);
+  });
+
+  onDestroy(() => {
+    if (branchInterval) clearInterval(branchInterval);
+    if (commitAgeInterval) clearInterval(commitAgeInterval);
+    if (storeUnsubscribe) storeUnsubscribe();
+    window.removeEventListener('beforeunload', saveSession);
+    document.removeEventListener('keydown', handleGlobalKeydown);
   });
 
   async function updateBranch() {
@@ -268,6 +290,34 @@
     tabStore.renamePane(tab.id, e.detail.paneId, e.detail.name);
   }
 
+  async function handleRestartPane(e: CustomEvent<{ paneId: string; sessionId: number; mode: PaneMode; model: string; name: string }>) {
+    const tab = $activeTab;
+    if (!tab) return;
+    const { paneId, sessionId, mode, model, name } = e.detail;
+
+    App.CloseSession(sessionId);
+    tabStore.closePane(tab.id, paneId);
+
+    const claudeCmd = $config.claude_command || 'claude';
+    let argv: string[] = [];
+    if (mode === 'claude') {
+      argv = model ? [claudeCmd, '--model', model] : [claudeCmd];
+    } else if (mode === 'claude-yolo') {
+      argv = model
+        ? [claudeCmd, '--dangerously-skip-permissions', '--model', model]
+        : [claudeCmd, '--dangerously-skip-permissions'];
+    }
+
+    try {
+      const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80);
+      if (newSessionId > 0) {
+        tabStore.addPane(tab.id, newSessionId, name, mode, model);
+      }
+    } catch (err) {
+      console.error('[handleRestartPane] failed:', err);
+    }
+  }
+
   function handleSendCommand(e: CustomEvent<{ text: string }>) {
     const tab = $activeTab;
     if (!tab) return;
@@ -325,6 +375,21 @@
       }
       return;
     }
+    // Ctrl+F → let terminal pane handle search (don't intercept here)
+    if (e.ctrlKey && e.key === 'f') {
+      return;
+    }
+    // Ctrl+1-9 → focus pane by index
+    if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+      e.preventDefault();
+      const tab = $activeTab;
+      if (!tab) return;
+      const idx = parseInt(e.key) - 1;
+      if (idx < tab.panes.length) {
+        tabStore.focusPane(tab.id, tab.panes[idx].id);
+      }
+      return;
+    }
   }
 
   $: totalCost = (() => {
@@ -364,6 +429,12 @@
     const { name, dir } = e.detail;
     tabStore.addTab(name, dir);
   }
+
+  function handleCrashEnable() {
+    showCrashDialog = false;
+    App.EnableLogging(true);
+    config.update(c => ({ ...c, logging_enabled: true }));
+  }
 </script>
 
 <div class="app">
@@ -393,6 +464,7 @@
       on:maximizePane={handleMaximizePane}
       on:focusPane={handleFocusPane}
       on:renamePane={handleRenamePane}
+      on:restartPane={handleRestartPane}
     />
   </div>
 
@@ -424,6 +496,12 @@
     visible={showCommandPalette}
     on:send={handleSendCommand}
     on:close={() => (showCommandPalette = false)}
+  />
+
+  <CrashDialog
+    visible={showCrashDialog}
+    on:enable={handleCrashEnable}
+    on:dismiss={() => (showCrashDialog = false)}
   />
 </div>
 

@@ -144,12 +144,14 @@ func (a *App) processQueue(sessionId int) {
 		}
 	}
 
-	// Find and send the next "pending" item
-	var next *QueueItem
+	// Find and send the next "pending" item (copy value to avoid dangling pointer after unlock)
+	var next QueueItem
+	var hasNext bool
 	for i := range q.items {
 		if q.items[i].Status == "pending" {
 			q.items[i].Status = "sent"
-			next = &q.items[i]
+			next = q.items[i]
+			hasNext = true
 			break
 		}
 	}
@@ -157,7 +159,7 @@ func (a *App) processQueue(sessionId int) {
 	sess := a.sessions[sessionId]
 	a.mu.Unlock()
 
-	if next != nil && sess != nil {
+	if hasNext && sess != nil {
 		sess.Write([]byte(next.Prompt + "\n"))
 		log.Printf("[queue] session %d: sent item %d: %q", sessionId, next.ID, truncateStr(next.Prompt, 60))
 	}

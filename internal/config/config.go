@@ -23,6 +23,7 @@ type Config struct {
 	ClaudeModels          []ModelEntry `yaml:"claude_models" json:"claude_models"`
 	CommitReminderMinutes int            `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
 	RestoreSession        *bool          `yaml:"restore_session" json:"restore_session"`
+	LoggingEnabled        bool           `yaml:"logging_enabled" json:"logging_enabled"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
 }
 

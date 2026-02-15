@@ -20,6 +20,7 @@ import (
 type App struct {
 	ctx       context.Context
 	cfg       config.Config
+	health    config.HealthState
 	sessions  map[int]*terminal.Session
 	queues    map[int]*sessionQueue
 	mu        sync.Mutex
@@ -39,6 +40,12 @@ func NewApp(cfg config.Config) *App {
 // Startup is called when the Wails app starts. It receives the app context.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// Load health state and mark this session as started (dirty)
+	a.health = config.LoadHealth()
+	config.MarkStarting(&a.health)
+	_ = config.SaveHealth(a.health)
+
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
 	a.cancelAll = cancel
@@ -60,6 +67,17 @@ func (a *App) Shutdown(ctx context.Context) {
 	for _, s := range sessions {
 		s.Close()
 	}
+
+	// Mark clean shutdown and auto-disable logging if stable
+	config.MarkCleanShutdown(&a.health)
+	if config.ShouldAutoDisableLogging(&a.health) {
+		config.DisableAutoLogging(&a.health)
+		a.cfg.LoggingEnabled = false
+		_ = config.Save(a.cfg)
+		log.Println("[Shutdown] Auto-logging disabled after 3 clean shutdowns")
+	}
+	_ = config.SaveHealth(a.health)
+	log.Println("[Shutdown] Clean shutdown recorded")
 }
 
 // SessionInfo is the JSON-serialisable session metadata sent to the frontend.

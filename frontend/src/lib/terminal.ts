@@ -1,9 +1,11 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { SearchAddon } from '@xterm/addon-search';
 
 export interface TerminalInstance {
   terminal: Terminal;
   fitAddon: FitAddon;
+  searchAddon: SearchAddon;
   dispose: () => void;
 }
 
@@ -140,10 +142,15 @@ export function createTerminal(theme: string = 'dark'): TerminalInstance {
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
 
+  const searchAddon = new SearchAddon();
+  terminal.loadAddon(searchAddon);
+
   return {
     terminal,
     fitAddon,
+    searchAddon,
     dispose: () => {
+      searchAddon.dispose();
       fitAddon.dispose();
       terminal.dispose();
     },

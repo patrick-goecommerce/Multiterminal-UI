@@ -21,6 +21,8 @@
   let hexInput = colorValue;
   let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'dark';
   let savedTheme: ThemeName = selectedTheme;
+  let loggingEnabled = $config.logging_enabled || false;
+  let logPath = '';
 
   // Sync when dialog opens
   $: if (visible) {
@@ -28,6 +30,8 @@
     hexInput = colorValue;
     selectedTheme = ($config.theme as ThemeName) || 'dark';
     savedTheme = selectedTheme;
+    loggingEnabled = $config.logging_enabled || false;
+    App.GetLogPath().then(p => logPath = p).catch(() => {});
   }
 
   function handleColorInput(e: Event) {
@@ -54,8 +58,17 @@
     applyTheme(selectedTheme, colorValue);
   }
 
+  function handleLoggingToggle() {
+    loggingEnabled = !loggingEnabled;
+    if (loggingEnabled) {
+      App.EnableLogging(false).then(p => { if (p) logPath = p; });
+    } else {
+      App.DisableLogging();
+    }
+  }
+
   async function save() {
-    const updated = { ...$config, terminal_color: colorValue, theme: selectedTheme };
+    const updated = { ...$config, terminal_color: colorValue, theme: selectedTheme, logging_enabled: loggingEnabled };
     config.set(updated);
     try {
       await App.SaveConfig(updated);
@@ -141,6 +154,21 @@
           <button class="preset" style="background: #facc15" on:click={() => { colorValue = '#facc15'; hexInput = '#facc15'; applyAccentColor('#facc15'); }} title="Gold"></button>
           <button class="preset" style="background: #38bdf8" on:click={() => { colorValue = '#38bdf8'; hexInput = '#38bdf8'; applyAccentColor('#38bdf8'); }} title="Sky Blue"></button>
         </div>
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Logging</label>
+        <p class="setting-desc">Schreibt detaillierte Protokolle in eine Datei. Wird automatisch deaktiviert nach 3 stabilen Starts.</p>
+        <div class="toggle-row">
+          <button class="toggle-btn" class:toggle-on={loggingEnabled} on:click={handleLoggingToggle}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{loggingEnabled ? 'Aktiv' : 'Inaktiv'}</span>
+        </div>
+        {#if loggingEnabled && logPath}
+          <p class="log-path">{logPath}</p>
+        {/if}
       </div>
 
       <div class="dialog-footer">
@@ -362,5 +390,56 @@
 
   .btn-save:hover {
     opacity: 0.9;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .toggle-btn {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    border: none;
+    background: var(--bg-tertiary);
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+    padding: 0;
+  }
+
+  .toggle-btn.toggle-on {
+    background: var(--accent);
+  }
+
+  .toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--fg);
+    transition: transform 0.2s;
+  }
+
+  .toggle-btn.toggle-on .toggle-knob {
+    transform: translateX(20px);
+  }
+
+  .toggle-label {
+    font-size: 13px;
+    color: var(--fg-muted);
+  }
+
+  .log-path {
+    font-size: 11px;
+    color: var(--fg-muted);
+    margin: 8px 0 0;
+    font-family: monospace;
+    word-break: break-all;
+    opacity: 0.7;
   }
 </style>
