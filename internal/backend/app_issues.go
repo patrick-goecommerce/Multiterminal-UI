@@ -17,6 +17,7 @@ type Issue struct {
 	State     string   `json:"state"`
 	Author    string   `json:"author"`
 	Labels    []string `json:"labels"`
+	Body      string   `json:"body"`
 	CreatedAt string   `json:"createdAt"`
 	UpdatedAt string   `json:"updatedAt"`
 	Comments  int      `json:"comments"`
@@ -75,7 +76,7 @@ func (a *App) GetIssues(dir string, state string) []Issue {
 		state = "open"
 	}
 
-	fields := "number,title,state,author,labels,createdAt,updatedAt,comments,url"
+	fields := "number,title,state,author,labels,body,createdAt,updatedAt,comments,url"
 	cmd := exec.Command("gh", "issue", "list",
 		"--state", state,
 		"--limit", "50",

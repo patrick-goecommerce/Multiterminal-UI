@@ -152,6 +152,33 @@
   }
 
   // Desktop notifications when Claude state changes and window is not focused
+  let dropHighlight = false;
+
+  function handleDragOver(e: DragEvent) {
+    if (!e.dataTransfer) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    dropHighlight = true;
+  }
+
+  function handleDragLeave() {
+    dropHighlight = false;
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    dropHighlight = false;
+    if (!e.dataTransfer) return;
+    const text = e.dataTransfer.getData('text/plain');
+    if (text) {
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(text);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      App.WriteToSession(pane.sessionId, btoa(binary));
+    }
+  }
+
   let lastNotifiedActivity = '';
   $: if (pane.activity !== lastNotifiedActivity) {
     const prev = lastNotifiedActivity;
@@ -173,7 +200,11 @@
   class:focused={pane.focused}
   class:activity-done={pane.activity === 'done'}
   class:activity-needs-input={pane.activity === 'needsInput'}
+  class:drop-target={dropHighlight}
   on:click={() => dispatch('focus', { paneId: pane.id })}
+  on:dragover={handleDragOver}
+  on:dragleave={handleDragLeave}
+  on:drop={handleDrop}
 >
   <PaneTitlebar
     {pane}
@@ -212,6 +243,11 @@
   }
 
   .terminal-pane.focused { border-color: var(--pane-border-focused); }
+
+  .terminal-pane.drop-target {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px rgba(203, 166, 247, 0.4), inset 0 0 4px rgba(203, 166, 247, 0.1);
+  }
 
   .terminal-pane.activity-done {
     border-color: #22c55e;

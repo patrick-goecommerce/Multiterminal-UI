@@ -12,6 +12,7 @@
     state: string;
     author: string;
     labels: string[];
+    body: string;
     createdAt: string;
     updatedAt: string;
     comments: number;
@@ -112,6 +113,26 @@
   $: if (dir && ghStatus === 'ok') loadIssues();
   $: if (stateFilter && ghStatus === 'ok') loadIssues();
   $: openCount = issues.filter(i => i.state === 'OPEN').length;
+
+  function buildDragText(number: number, title: string, body: string, labels: string[]): string {
+    let text = `Closes #${number}: ${title}`;
+    if (labels.length > 0) {
+      text += `\nLabels: ${labels.join(', ')}`;
+    }
+    if (body) {
+      const desc = body.length > 200 ? body.slice(0, 200).trimEnd() + '...' : body;
+      text += `\n\n${desc}`;
+    }
+    text += `\n\nRef: #${number}`;
+    return text;
+  }
+
+  function handleDragStart(e: DragEvent, issue: Issue) {
+    if (!e.dataTransfer) return;
+    e.dataTransfer.setData('text/plain', buildDragText(issue.number, issue.title, issue.body, issue.labels));
+    e.dataTransfer.setData('application/x-issue-number', String(issue.number));
+    e.dataTransfer.effectAllowed = 'copy';
+  }
 </script>
 
 {#if ghStatus === 'not_installed'}
@@ -154,7 +175,16 @@
       </button>
     </div>
 
-    <h4 class="detail-title">{selectedIssue.title}</h4>
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <h4
+      class="detail-title"
+      draggable="true"
+      on:dragstart={(e) => {
+        if (!e.dataTransfer || !selectedIssue) return;
+        e.dataTransfer.setData('text/plain', buildDragText(selectedIssue.number, selectedIssue.title, selectedIssue.body, selectedIssue.labels));
+        e.dataTransfer.effectAllowed = 'copy';
+      }}
+    >{selectedIssue.title}</h4>
 
     <div class="detail-meta">
       <span>{selectedIssue.author}</span>
@@ -222,7 +252,7 @@
       {#each filteredIssues as issue (issue.number)}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div class="issue-item" on:click={() => openIssue(issue.number)}>
+        <div class="issue-item" draggable="true" on:dragstart={(e) => handleDragStart(e, issue)} on:click={() => openIssue(issue.number)}>
           <div class="issue-icon" class:open={issue.state === 'OPEN'} class:closed={issue.state !== 'OPEN'}>
             {issue.state === 'OPEN' ? '●' : '✓'}
           </div>
@@ -292,6 +322,8 @@
     transition: background 0.1s;
   }
   .issue-item:hover { background: var(--bg-tertiary); }
+  .issue-item[draggable="true"] { cursor: grab; }
+  .issue-item[draggable="true"]:active { cursor: grabbing; }
   .issue-icon { font-size: 12px; padding-top: 2px; flex-shrink: 0; }
   .issue-icon.open { color: var(--success); }
   .issue-icon.closed { color: #a371f7; }
@@ -330,7 +362,8 @@
   }
   .edit-btn:hover { color: var(--fg); background: var(--bg-tertiary); }
 
-  .detail-title { font-size: 14px; font-weight: 700; color: var(--fg); padding: 10px 10px 4px; line-height: 1.3; }
+  .detail-title { font-size: 14px; font-weight: 700; color: var(--fg); padding: 10px 10px 4px; line-height: 1.3; cursor: grab; }
+  .detail-title:active { cursor: grabbing; }
   .detail-meta { font-size: 11px; color: var(--fg-muted); padding: 0 10px 8px; display: flex; gap: 8px; }
   .label-row { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 8px; }
   .detail-body {
