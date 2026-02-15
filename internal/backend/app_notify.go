@@ -18,7 +18,7 @@ func (a *App) SendNotification(title string, body string) {
 		AppID:               "Multiterminal",
 		Title:               title,
 		Message:             body,
-		ActivationType:      toast.Protocol,
+		ActivationType:      "protocol",
 		ActivationArguments: "multiterminal:focus",
 	}
 	if err := n.Push(); err != nil {
