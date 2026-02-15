@@ -21,6 +21,7 @@ export interface AppConfig {
   claude_models: ModelEntry[];
   commit_reminder_minutes: number;
   restore_session?: boolean;
+  logging_enabled?: boolean;
   commands: CommandEntry[];
 }
 
