@@ -114,10 +114,12 @@
   $: if (stateFilter && ghStatus === 'ok') loadIssues();
   $: openCount = issues.filter(i => i.state === 'OPEN').length;
 
-  function buildDragText(number: number, title: string, body: string): string {
+  function buildDragText(number: number, title: string, body: string, labels: string[]): string {
     let text = `Closes #${number}: ${title}`;
+    if (labels.length > 0) {
+      text += `\nLabels: ${labels.join(', ')}`;
+    }
     if (body) {
-      // Truncate body to first 200 chars for commit messages
       const desc = body.length > 200 ? body.slice(0, 200).trimEnd() + '...' : body;
       text += `\n\n${desc}`;
     }
@@ -127,7 +129,7 @@
 
   function handleDragStart(e: DragEvent, issue: Issue) {
     if (!e.dataTransfer) return;
-    e.dataTransfer.setData('text/plain', buildDragText(issue.number, issue.title, issue.body));
+    e.dataTransfer.setData('text/plain', buildDragText(issue.number, issue.title, issue.body, issue.labels));
     e.dataTransfer.setData('application/x-issue-number', String(issue.number));
     e.dataTransfer.effectAllowed = 'copy';
   }
@@ -179,7 +181,7 @@
       draggable="true"
       on:dragstart={(e) => {
         if (!e.dataTransfer || !selectedIssue) return;
-        e.dataTransfer.setData('text/plain', buildDragText(selectedIssue.number, selectedIssue.title, selectedIssue.body));
+        e.dataTransfer.setData('text/plain', buildDragText(selectedIssue.number, selectedIssue.title, selectedIssue.body, selectedIssue.labels));
         e.dataTransfer.effectAllowed = 'copy';
       }}
     >{selectedIssue.title}</h4>
