@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { ClipboardSetText } from '../../wailsjs/runtime/runtime';
   import * as App from '../../wailsjs/go/backend/App';
 
   interface FileEntry {
@@ -15,7 +16,6 @@
   export let depth: number = 0;
   export let gitStatuses: Record<string, string> = {};
   export let copiedPath: string = '';
-  export let sortModifiedFirst: boolean = false;
 
   const dispatch = createEventDispatcher();
 
@@ -40,16 +40,17 @@
   }
 
   function handleClick(e: MouseEvent) {
-    if (e.shiftKey) {
-      e.preventDefault();
-      dispatch('shiftclick', { path: entry.path });
-      return;
-    }
     if (entry.isDir) {
       toggle();
     } else {
       dispatch('selectFile', { path: entry.path });
     }
+  }
+
+  function handleCopy(e: MouseEvent) {
+    e.stopPropagation();
+    ClipboardSetText(entry.path);
+    dispatch('copied', { path: entry.path });
   }
 
   function getStatusLabel(status: string): string {
@@ -74,25 +75,17 @@
     }
   }
 
-  function sortEntries(items: FileEntry[]): FileEntry[] {
-    if (!sortModifiedFirst) return items;
-    return [...items].sort((a, b) => {
-      const aChanged = (gitStatuses[a.path] || '') !== '';
-      const bChanged = (gitStatuses[b.path] || '') !== '';
-      if (aChanged !== bChanged) return aChanged ? -1 : 1;
-      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-    });
-  }
-
   $: status = gitStatuses[entry.path] || '';
-  $: children = entry.children ? sortEntries(entry.children) : [];
+  $: children = entry.children || [];
 </script>
 
-<button
+<div
   class="file-entry {getStatusClass(status)}"
   style="padding-left: {10 + depth * 16}px"
   on:click={handleClick}
+  on:keydown
+  role="treeitem"
+  tabindex="-1"
   title={entry.path}
 >
   <span class="file-icon">
@@ -108,7 +101,12 @@
   {:else if status}
     <span class="git-badge {getStatusClass(status)}">{getStatusLabel(status)}</span>
   {/if}
-</button>
+  <button class="copy-btn" on:click={handleCopy} title="Pfad kopieren">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M4 4v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2v2a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2zm2-2v2h2a2 2 0 0 1 2 2v2h2V2H6zM2 6v6h6V6H2z"/>
+    </svg>
+  </button>
+</div>
 
 {#if entry.expanded && entry.children}
   {#each children as child (child.path)}
@@ -117,9 +115,8 @@
       depth={depth + 1}
       {gitStatuses}
       {copiedPath}
-      {sortModifiedFirst}
       on:selectFile
-      on:shiftclick
+      on:copied
     />
   {/each}
 {/if}
@@ -140,6 +137,14 @@
 
   .file-icon { font-size: 12px; flex-shrink: 0; }
   .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+
+  .copy-btn {
+    opacity: 0; background: none; border: none; color: var(--fg-muted);
+    cursor: pointer; padding: 1px 3px; border-radius: 3px; flex-shrink: 0;
+    display: flex; align-items: center; transition: opacity 0.15s;
+  }
+  .file-entry:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { color: var(--fg); background: var(--bg-secondary); }
 
   .git-badge {
     font-size: 10px; font-weight: 700; padding: 0 4px;
