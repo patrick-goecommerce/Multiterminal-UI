@@ -115,10 +115,10 @@ func TestInputTokenPattern_Match(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"15.2k input tokens", "15.2"},
+		{"15.2k input tokens", "15.2k"},
 		{"3800 input", "3800"},
-		{"10k in total", "10"},
-		{"5.5K input", "5.5"},
+		{"10k in total", "10k"},
+		{"5.5K input", "5.5K"},
 	}
 	for _, tt := range tests {
 		matches := inputTokenPattern.FindStringSubmatch(tt.input)
@@ -141,9 +141,9 @@ func TestOutputTokenPattern_Match(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"3.8k output tokens", "3.8"},
+		{"3.8k output tokens", "3.8k"},
 		{"500 output", "500"},
-		{"12k out", "12"},
+		{"12k out", "12k"},
 	}
 	for _, tt := range tests {
 		matches := outputTokenPattern.FindStringSubmatch(tt.input)
@@ -246,14 +246,11 @@ func TestScanTokens_ExtractsCost(t *testing.T) {
 	if tokens.TotalCost != 3.45 {
 		t.Errorf("TotalCost = %f, want 3.45", tokens.TotalCost)
 	}
-	// BUG: inputTokenPattern/outputTokenPattern capture groups exclude [kK],
-	// so parseTokenCount receives "15.2" instead of "15.2k" → returns 15 not 15200.
-	// The [kK]? should be inside the capture group to fix this.
 	if tokens.InputTokens != 15200 {
-		t.Errorf("InputTokens = %d, want 15200 (known bug: [kK] outside capture group)", tokens.InputTokens)
+		t.Errorf("InputTokens = %d, want 15200", tokens.InputTokens)
 	}
 	if tokens.OutputTokens != 3800 {
-		t.Errorf("OutputTokens = %d, want 3800 (known bug: [kK] outside capture group)", tokens.OutputTokens)
+		t.Errorf("OutputTokens = %d, want 3800", tokens.OutputTokens)
 	}
 }
 

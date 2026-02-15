@@ -126,8 +126,8 @@ func (s *Session) ResetActivity() {
 // Token/cost regex patterns
 var (
 	costPattern        = regexp.MustCompile(`\$(\d+\.\d+)`)
-	inputTokenPattern  = regexp.MustCompile(`(\d+\.?\d*)[kK]?\s*(?:input|in\b)`)
-	outputTokenPattern = regexp.MustCompile(`(\d+\.?\d*)[kK]?\s*(?:output|out\b)`)
+	inputTokenPattern  = regexp.MustCompile(`(\d+\.?\d*[kK]?)\s*(?:input|in\b)`)
+	outputTokenPattern = regexp.MustCompile(`(\d+\.?\d*[kK]?)\s*(?:output|out\b)`)
 
 	// Needs user input: permission prompts, Y/n confirmations, etc.
 	needsInputPattern = regexp.MustCompile(`(?i)` +
