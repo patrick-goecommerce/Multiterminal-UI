@@ -9,6 +9,7 @@
   import QueuePanel from './QueuePanel.svelte';
 
   export let pane: Pane;
+  export let paneIndex: number = 0;
 
   const dispatch = createEventDispatcher();
 
@@ -277,6 +278,35 @@
       default: return 'dot-idle';
     }
   }
+
+  function handleRestart() {
+    dispatch('restart', { paneId: pane.id, sessionId: pane.sessionId, mode: pane.mode, model: pane.model, name: pane.name });
+  }
+
+  // Desktop notifications when Claude state changes and window is not focused
+  let lastNotifiedActivity = '';
+  $: if (pane.activity !== lastNotifiedActivity) {
+    const prev = lastNotifiedActivity;
+    lastNotifiedActivity = pane.activity;
+    if (!document.hasFocus() && (pane.mode === 'claude' || pane.mode === 'claude-yolo')) {
+      if (pane.activity === 'done' && prev === 'active') {
+        sendNotification(`${pane.name} - Fertig`, 'Claude ist fertig. Prompt bereit.');
+      } else if (pane.activity === 'needsInput') {
+        sendNotification(`${pane.name} - Eingabe nötig`, 'Claude wartet auf Bestätigung.');
+      }
+    }
+  }
+
+  function sendNotification(title: string, body: string) {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/wails.png' });
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(p => {
+        if (p === 'granted') new Notification(title, { body, icon: '/wails.png' });
+      });
+    }
+  }
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -293,6 +323,9 @@
     class:titlebar-needs-input={pane.activity === 'needsInput'}
   >
     <div class="pane-title-left">
+      {#if paneIndex > 0}
+        <span class="pane-index" title="Ctrl+{paneIndex}">{paneIndex}</span>
+      {/if}
       <span class="status-dot {getActivityDot(pane.activity)}"></span>
       {#if editing}
         <input
@@ -347,6 +380,13 @@
     </div>
   {/if}
   <div class="terminal-container" bind:this={containerEl}></div>
+  {#if !pane.running}
+    <div class="exited-overlay">
+      <div class="exited-msg">Prozess beendet</div>
+      <button class="restart-btn" on:click|stopPropagation={handleRestart}>Neu starten</button>
+      <button class="close-btn-overlay" on:click|stopPropagation={handleClose}>Schließen</button>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -576,5 +616,66 @@
 
   .terminal-container :global(.xterm) {
     height: 100%;
+  }
+
+  .pane-index {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--fg-muted);
+    background: var(--bg-tertiary);
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .exited-overlay {
+    position: absolute;
+    inset: 30px 0 0 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    z-index: 10;
+  }
+
+  .exited-msg {
+    color: var(--fg-muted);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .restart-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 6px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .restart-btn:hover {
+    filter: brightness(1.2);
+  }
+
+  .close-btn-overlay {
+    background: none;
+    border: 1px solid var(--fg-muted);
+    color: var(--fg-muted);
+    padding: 4px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .close-btn-overlay:hover {
+    border-color: var(--fg);
+    color: var(--fg);
   }
 </style>

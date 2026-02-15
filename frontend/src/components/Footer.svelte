@@ -42,6 +42,8 @@
   </div>
   <div class="footer-right">
     <span class="shortcut">Ctrl+N:new</span>
+    <span class="shortcut">Ctrl+1-9:pane</span>
+    <span class="shortcut">Ctrl+F:search</span>
     <span class="shortcut">Ctrl+Z:zoom</span>
     <span class="shortcut">Ctrl+B:files</span>
   </div>

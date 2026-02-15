@@ -23,6 +23,10 @@
     dispatch('renamePane', e.detail);
   }
 
+  function handleRestart(e: CustomEvent) {
+    dispatch('restartPane', e.detail);
+  }
+
   $: maximizedPane = panes.find((p) => p.maximized);
   $: visiblePanes = maximizedPane ? [maximizedPane] : panes;
   $: gridCols = maximizedPane ? 1 : Math.min(Math.ceil(Math.sqrt(panes.length)), 3);
@@ -35,10 +39,12 @@
   {#each visiblePanes as pane (pane.id)}
     <TerminalPane
       {pane}
+      paneIndex={panes.indexOf(pane) + 1}
       on:close={handleClose}
       on:maximize={handleMaximize}
       on:focus={handleFocus}
       on:rename={handleRename}
+      on:restart={handleRestart}
     />
   {/each}
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import * as App from '../../wailsjs/go/backend/App';
+  import { ClipboardSetText } from '../../wailsjs/runtime/runtime';
 
   export let visible: boolean = false;
   export let dir: string = '';
@@ -72,6 +73,22 @@
     }
     entry.expanded = true;
     entries = entries;
+  }
+
+  let copiedPath = '';
+  let copiedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleFileClick(e: MouseEvent, entry: FileEntry) {
+    if (e.shiftKey) {
+      // Shift+Click → copy path to clipboard
+      e.preventDefault();
+      ClipboardSetText(entry.path);
+      copiedPath = entry.path;
+      if (copiedTimer) clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => { copiedPath = ''; }, 1500);
+      return;
+    }
+    selectFile(entry);
   }
 
   function selectFile(entry: FileEntry) {
@@ -177,14 +194,17 @@
       {/if}
     </div>
 
+    <div class="shift-hint">Shift+Click = Pfad kopieren</div>
     <div class="file-list">
       {#if searching && searchResults.length > 0}
         {#each searchResults as entry}
           {@const status = getGitStatus(entry.path)}
-          <button class="file-entry {getStatusClass(status)}" on:click={() => selectFile(entry)}>
+          <button class="file-entry {getStatusClass(status)}" on:click={(e) => handleFileClick(e, entry)} title={entry.path}>
             <span class="file-icon">{entry.isDir ? '\u{1F4C1}' : '\u{1F4C4}'}</span>
             <span class="file-name">{entry.name}</span>
-            {#if status}
+            {#if copiedPath === entry.path}
+              <span class="copied-badge">kopiert!</span>
+            {:else if status}
               <span class="git-badge {getStatusClass(status)}">{getStatusLabel(status)}</span>
             {/if}
           </button>
@@ -194,7 +214,7 @@
       {:else}
         {#each sortedEntries as entry}
           {@const status = getGitStatus(entry.path)}
-          <button class="file-entry {getStatusClass(status)}" on:click={() => selectFile(entry)}>
+          <button class="file-entry {getStatusClass(status)}" on:click={(e) => handleFileClick(e, entry)} title={entry.path}>
             <span class="file-icon">
               {#if entry.isDir}
                 {entry.expanded ? '\u{1F4C2}' : '\u{1F4C1}'}
@@ -203,17 +223,21 @@
               {/if}
             </span>
             <span class="file-name">{entry.name}</span>
-            {#if status}
+            {#if copiedPath === entry.path}
+              <span class="copied-badge">kopiert!</span>
+            {:else if status}
               <span class="git-badge {getStatusClass(status)}">{getStatusLabel(status)}</span>
             {/if}
           </button>
           {#if entry.expanded && entry.children}
             {#each sortEntries(entry.children) as child}
               {@const childStatus = getGitStatus(child.path)}
-              <button class="file-entry nested {getStatusClass(childStatus)}" on:click={() => selectFile(child)}>
+              <button class="file-entry nested {getStatusClass(childStatus)}" on:click={(e) => handleFileClick(e, child)} title={child.path}>
                 <span class="file-icon">{child.isDir ? '\u{1F4C1}' : '\u{1F4C4}'}</span>
                 <span class="file-name">{child.name}</span>
-                {#if childStatus}
+                {#if copiedPath === child.path}
+                  <span class="copied-badge">kopiert!</span>
+                {:else if childStatus}
                   <span class="git-badge {getStatusClass(childStatus)}">{getStatusLabel(childStatus)}</span>
                 {/if}
               </button>
@@ -309,4 +333,24 @@
   .git-badge.git-renamed { background: #6bc5d222; color: #6bc5d2; }
 
   .no-results { padding: 12px; text-align: center; color: var(--fg-muted); font-size: 12px; }
+
+  .shift-hint {
+    padding: 3px 10px;
+    font-size: 10px;
+    color: var(--fg-muted);
+    border-bottom: 1px solid var(--border);
+    opacity: 0.7;
+  }
+
+  .copied-badge {
+    font-size: 10px; font-weight: 600; padding: 0 4px;
+    border-radius: 3px; flex-shrink: 0; line-height: 16px;
+    background: #22c55e33; color: #22c55e;
+    animation: fade-in 0.15s ease;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
 </style>

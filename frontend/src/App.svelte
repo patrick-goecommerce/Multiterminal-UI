@@ -268,6 +268,34 @@
     tabStore.renamePane(tab.id, e.detail.paneId, e.detail.name);
   }
 
+  async function handleRestartPane(e: CustomEvent<{ paneId: string; sessionId: number; mode: PaneMode; model: string; name: string }>) {
+    const tab = $activeTab;
+    if (!tab) return;
+    const { paneId, sessionId, mode, model, name } = e.detail;
+
+    App.CloseSession(sessionId);
+    tabStore.closePane(tab.id, paneId);
+
+    const claudeCmd = $config.claude_command || 'claude';
+    let argv: string[] = [];
+    if (mode === 'claude') {
+      argv = model ? [claudeCmd, '--model', model] : [claudeCmd];
+    } else if (mode === 'claude-yolo') {
+      argv = model
+        ? [claudeCmd, '--dangerously-skip-permissions', '--model', model]
+        : [claudeCmd, '--dangerously-skip-permissions'];
+    }
+
+    try {
+      const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80);
+      if (newSessionId > 0) {
+        tabStore.addPane(tab.id, newSessionId, name, mode, model);
+      }
+    } catch (err) {
+      console.error('[handleRestartPane] failed:', err);
+    }
+  }
+
   function handleSendCommand(e: CustomEvent<{ text: string }>) {
     const tab = $activeTab;
     if (!tab) return;
@@ -408,6 +436,7 @@
       on:maximizePane={handleMaximizePane}
       on:focusPane={handleFocusPane}
       on:renamePane={handleRenamePane}
+      on:restartPane={handleRestartPane}
     />
   </div>
 
