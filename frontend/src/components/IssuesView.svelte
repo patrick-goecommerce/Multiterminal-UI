@@ -112,6 +112,14 @@
   $: if (dir && ghStatus === 'ok') loadIssues();
   $: if (stateFilter && ghStatus === 'ok') loadIssues();
   $: openCount = issues.filter(i => i.state === 'OPEN').length;
+
+  function handleDragStart(e: DragEvent, issue: Issue) {
+    if (!e.dataTransfer) return;
+    const text = `Closes #${issue.number} - ${issue.title}`;
+    e.dataTransfer.setData('text/plain', text);
+    e.dataTransfer.setData('application/x-issue-number', String(issue.number));
+    e.dataTransfer.effectAllowed = 'copy';
+  }
 </script>
 
 {#if ghStatus === 'not_installed'}
@@ -222,7 +230,7 @@
       {#each filteredIssues as issue (issue.number)}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div class="issue-item" on:click={() => openIssue(issue.number)}>
+        <div class="issue-item" draggable="true" on:dragstart={(e) => handleDragStart(e, issue)} on:click={() => openIssue(issue.number)}>
           <div class="issue-icon" class:open={issue.state === 'OPEN'} class:closed={issue.state !== 'OPEN'}>
             {issue.state === 'OPEN' ? '●' : '✓'}
           </div>
@@ -292,6 +300,8 @@
     transition: background 0.1s;
   }
   .issue-item:hover { background: var(--bg-tertiary); }
+  .issue-item[draggable="true"] { cursor: grab; }
+  .issue-item[draggable="true"]:active { cursor: grabbing; }
   .issue-icon { font-size: 12px; padding-top: 2px; flex-shrink: 0; }
   .issue-icon.open { color: var(--success); }
   .issue-icon.closed { color: #a371f7; }
