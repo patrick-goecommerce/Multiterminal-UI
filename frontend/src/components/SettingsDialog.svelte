@@ -54,7 +54,7 @@
   async function save() {
     const updated = { ...$config, terminal_color: colorValue, theme: selectedTheme, logging_enabled: loggingEnabled };
     config.set(updated);
-    try { await App.SaveConfig(updated); } catch (err) { alert(`SaveConfig fehlgeschlagen: ${err}`); }
+    try { await App.SaveConfig(updated); } catch (err) { console.error('[SettingsDialog] SaveConfig failed:', err); }
     dispatch('close');
   }
 

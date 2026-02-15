@@ -6,6 +6,10 @@ package main
 import (
 	"embed"
 	"log"
+	"net"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/patrick-goecommerce/multiterminal/internal/backend"
 	"github.com/patrick-goecommerce/multiterminal/internal/config"
@@ -20,6 +24,15 @@ import (
 var assets embed.FS
 
 func main() {
+	// If launched via multiterminal: protocol (notification click),
+	// signal the running instance to focus and exit immediately.
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "multiterminal:") {
+			signalFocus()
+			return
+		}
+	}
+
 	log.Println("Starting Multiterminal UI...")
 
 	cfg := config.Load()
@@ -57,4 +70,14 @@ func main() {
 		println("Error:", err.Error())
 	}
 	log.Println("Multiterminal UI exited")
+}
+
+// signalFocus connects to the running instance's focus listener
+// to bring the window to the foreground.
+func signalFocus() {
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:41987", 2*time.Second)
+	if err != nil {
+		return
+	}
+	conn.Close()
 }

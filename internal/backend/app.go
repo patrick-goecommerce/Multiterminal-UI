@@ -50,6 +50,10 @@ func (a *App) Startup(ctx context.Context) {
 	scanCtx, cancel := context.WithCancel(ctx)
 	a.cancelAll = cancel
 	go a.scanLoop(scanCtx)
+
+	// Start focus listener and register custom protocol for notification clicks
+	a.startFocusListener()
+	registerProtocol()
 }
 
 // Shutdown is called when the Wails app is closing. Clean up all sessions.
@@ -189,11 +193,14 @@ func (a *App) GetConfig() config.Config {
 }
 
 // SaveConfig saves the given config to disk and updates the in-memory copy.
-func (a *App) SaveConfig(cfg config.Config) {
+func (a *App) SaveConfig(cfg config.Config) error {
+	log.Printf("[SaveConfig] theme=%q terminal_color=%q", cfg.Theme, cfg.TerminalColor)
 	a.cfg = cfg
 	if err := config.Save(cfg); err != nil {
 		log.Printf("[SaveConfig] error: %v", err)
+		return fmt.Errorf("config save failed: %w", err)
 	}
+	return nil
 }
 
 // SaveTabs persists the current tab/pane layout to disk so it can be
