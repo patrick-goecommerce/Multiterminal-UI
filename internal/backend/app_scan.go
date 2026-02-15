@@ -53,6 +53,14 @@ func activityString(a terminal.ActivityState) string {
 	}
 }
 
+// cleanupActivityTracking removes stale tracking data for a closed session.
+func cleanupActivityTracking(id int) {
+	prevActivityMu.Lock()
+	delete(prevActivity, id)
+	delete(prevCost, id)
+	prevActivityMu.Unlock()
+}
+
 // scanAllSessions checks each session for activity and token updates.
 func (a *App) scanAllSessions() {
 	a.mu.Lock()
