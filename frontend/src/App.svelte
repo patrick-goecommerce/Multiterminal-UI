@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import TabBar from './components/TabBar.svelte';
   import Toolbar from './components/Toolbar.svelte';
   import PaneGrid from './components/PaneGrid.svelte';
@@ -26,6 +26,10 @@
 
   const modeMap: Record<string, number> = { shell: 0, claude: 1, 'claude-yolo': 2 };
   const modeReverse: PaneMode[] = ['shell', 'claude', 'claude-yolo'];
+
+  let branchInterval: ReturnType<typeof setInterval> | null = null;
+  let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
+  let storeUnsubscribe: (() => void) | null = null;
 
   async function restoreSession(): Promise<boolean> {
     try {
@@ -140,7 +144,7 @@
 
     // Auto-save session periodically (debounced via store subscription)
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
-    tabStore.subscribe(() => {
+    storeUnsubscribe = tabStore.subscribe(() => {
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(saveSession, 1000);
     });
@@ -151,11 +155,19 @@
     // Update git branch and commit age periodically
     updateBranch();
     updateCommitAge();
-    setInterval(updateBranch, 10000);
-    setInterval(updateCommitAge, 30000);
+    branchInterval = setInterval(updateBranch, 10000);
+    commitAgeInterval = setInterval(updateCommitAge, 30000);
 
     // Keyboard shortcuts
     document.addEventListener('keydown', handleGlobalKeydown);
+  });
+
+  onDestroy(() => {
+    if (branchInterval) clearInterval(branchInterval);
+    if (commitAgeInterval) clearInterval(commitAgeInterval);
+    if (storeUnsubscribe) storeUnsubscribe();
+    window.removeEventListener('beforeunload', saveSession);
+    document.removeEventListener('keydown', handleGlobalKeydown);
   });
 
   async function updateBranch() {

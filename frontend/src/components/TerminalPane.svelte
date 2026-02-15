@@ -31,6 +31,7 @@
   let searchQuery = '';
   let searchInput: HTMLInputElement;
   let searchMatchCount = '';
+  let wheelHandler: ((e: WheelEvent) => void) | null = null;
 
   function openSearch() {
     showSearch = true;
@@ -150,7 +151,7 @@
     });
 
     // Ctrl+Mouse Wheel zoom per terminal pane (debounced)
-    containerEl.addEventListener('wheel', (e: WheelEvent) => {
+    wheelHandler = (e: WheelEvent) => {
       if (!e.ctrlKey || !termInstance) return;
       e.preventDefault();
       const current = termInstance.terminal.options.fontSize || 14;
@@ -170,7 +171,8 @@
           isZooming = false;
         }, 150);
       }
-    }, { passive: false });
+    };
+    containerEl.addEventListener('wheel', wheelHandler, { passive: false });
 
     // Auto-resize on container size change (debounced, skip during zoom)
     resizeObserver = new ResizeObserver(() => {
@@ -201,6 +203,9 @@
   onDestroy(() => {
     if (cleanupFn) cleanupFn();
     if (queueCleanup) queueCleanup();
+    if (wheelHandler && containerEl) {
+      containerEl.removeEventListener('wheel', wheelHandler);
+    }
     resizeObserver?.disconnect();
     termInstance?.dispose();
   });
