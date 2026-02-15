@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { createTerminal, getTerminalTheme } from '../lib/terminal';
+  import { sendNotification } from '../lib/notifications';
   import type { Pane } from '../stores/tabs';
   import { currentTheme } from '../stores/theme';
   import { config } from '../stores/config';
   import * as App from '../../wailsjs/go/backend/App';
   import { EventsOn, ClipboardGetText, ClipboardSetText } from '../../wailsjs/runtime/runtime';
   import QueuePanel from './QueuePanel.svelte';
+  import PaneTitlebar from './PaneTitlebar.svelte';
+  import TerminalSearch from './TerminalSearch.svelte';
 
   export let pane: Pane;
   export let paneIndex: number = 0;
@@ -18,9 +21,6 @@
   let resizeObserver: ResizeObserver | null = null;
   let cleanupFn: (() => void) | null = null;
 
-  let editing = false;
-  let editName = '';
-  let nameInput: HTMLInputElement;
   let zoomTimer: ReturnType<typeof setTimeout> | null = null;
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
   let isZooming = false;
@@ -28,129 +28,69 @@
   let queueCount = 0;
   let queueCleanup: (() => void) | null = null;
   let showSearch = false;
-  let searchQuery = '';
-  let searchInput: HTMLInputElement;
-  let searchMatchCount = '';
+  let searchRef: TerminalSearch;
   let wheelHandler: ((e: WheelEvent) => void) | null = null;
 
   function openSearch() {
     showSearch = true;
-    requestAnimationFrame(() => {
-      searchInput?.focus();
-      searchInput?.select();
-    });
+    requestAnimationFrame(() => searchRef?.open());
   }
 
   function closeSearch() {
     showSearch = false;
-    searchQuery = '';
-    searchMatchCount = '';
-    termInstance?.searchAddon.clearDecorations();
     termInstance?.terminal.focus();
-  }
-
-  function doSearch(direction: 'next' | 'prev' = 'next') {
-    if (!termInstance || !searchQuery) {
-      searchMatchCount = '';
-      return;
-    }
-    const opts = { regex: false, caseSensitive: false, wholeWord: false, decorations: { matchOverviewRuler: '#888', activeMatchColorOverviewRuler: '#ffaa00', matchBackground: '#44475a', activeMatchBackground: '#ffaa0066' } };
-    if (direction === 'prev') {
-      termInstance.searchAddon.findPrevious(searchQuery, opts);
-    } else {
-      termInstance.searchAddon.findNext(searchQuery, opts);
-    }
-  }
-
-  function handleSearchKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      closeSearch();
-    } else if (e.key === 'Enter' && e.shiftKey) {
-      e.preventDefault();
-      doSearch('prev');
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      doSearch('next');
-    }
   }
 
   onMount(() => {
     termInstance = createTerminal($currentTheme);
     termInstance.terminal.open(containerEl);
 
-    // Fit terminal to container
     requestAnimationFrame(() => {
       termInstance?.fitAddon.fit();
       const dims = termInstance?.fitAddon.proposeDimensions();
-      if (dims) {
-        App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
-      }
+      if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
     });
 
-    // Intercept keys that should NOT go to the PTY but to the app
     termInstance.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type !== 'keydown') return true;
-      // Ctrl+V → paste from clipboard into PTY (via Wails native clipboard)
       if (e.ctrlKey && e.key === 'v') {
         ClipboardGetText().then((text) => {
           if (text) {
             const encoder = new TextEncoder();
             const bytes = encoder.encode(text);
             let binary = '';
-            for (let i = 0; i < bytes.length; i++) {
-              binary += String.fromCharCode(bytes[i]);
-            }
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
             App.WriteToSession(pane.sessionId, btoa(binary));
           }
-        }).catch((err) => {
-          console.error('[TerminalPane] clipboard read failed:', err);
-        });
+        }).catch((err) => console.error('[TerminalPane] clipboard read failed:', err));
         return false;
       }
-      // Ctrl+C with selection → copy to clipboard
       if (e.ctrlKey && e.key === 'c' && termInstance?.terminal.hasSelection()) {
         ClipboardSetText(termInstance.terminal.getSelection());
         termInstance.terminal.clearSelection();
         return false;
       }
-      // Ctrl+F → open terminal search
-      if (e.ctrlKey && e.key === 'f') {
-        openSearch();
-        return false;
-      }
-      // Ctrl+Z, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+B → let app handle (don't send to PTY)
-      if (e.ctrlKey && ['z', 'n', 't', 'w', 'b'].includes(e.key)) {
-        return false;
-      }
-      // Ctrl+1-9 → let app handle pane switching
-      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
-        return false;
-      }
+      if (e.ctrlKey && e.key === 'f') { openSearch(); return false; }
+      if (e.ctrlKey && ['z', 'n', 't', 'w', 'b'].includes(e.key)) return false;
+      if (e.ctrlKey && e.key >= '1' && e.key <= '9') return false;
       return true;
     });
 
-    // Handle keyboard input → send to PTY
     termInstance.terminal.onData((data: string) => {
       const encoder = new TextEncoder();
       const bytes = encoder.encode(data);
-      const b64 = btoa(String.fromCharCode(...bytes));
-      App.WriteToSession(pane.sessionId, b64);
+      App.WriteToSession(pane.sessionId, btoa(String.fromCharCode(...bytes)));
     });
 
-    // Listen for PTY output from Go backend
     cleanupFn = EventsOn('terminal:output', (id: number, b64: string) => {
       if (id === pane.sessionId && termInstance) {
         const raw = atob(b64);
         const bytes = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) {
-          bytes[i] = raw.charCodeAt(i);
-        }
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
         termInstance.terminal.write(bytes);
       }
     });
 
-    // Ctrl+Mouse Wheel zoom per terminal pane (debounced)
     wheelHandler = (e: WheelEvent) => {
       if (!e.ctrlKey || !termInstance) return;
       e.preventDefault();
@@ -164,9 +104,7 @@
           if (termInstance) {
             termInstance.fitAddon.fit();
             const dims = termInstance.fitAddon.proposeDimensions();
-            if (dims) {
-              App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
-            }
+            if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
           }
           isZooming = false;
         }, 150);
@@ -174,7 +112,6 @@
     };
     containerEl.addEventListener('wheel', wheelHandler, { passive: false });
 
-    // Auto-resize on container size change (debounced, skip during zoom)
     resizeObserver = new ResizeObserver(() => {
       if (!termInstance || isZooming) return;
       if (resizeTimer) clearTimeout(resizeTimer);
@@ -182,15 +119,12 @@
         if (termInstance) {
           termInstance.fitAddon.fit();
           const dims = termInstance.fitAddon.proposeDimensions();
-          if (dims) {
-            App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
-          }
+          if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
         }
       }, 100);
     });
     resizeObserver.observe(containerEl);
 
-    // Listen for queue updates to show badge count
     queueCleanup = EventsOn('queue:update', (sid: number) => {
       if (sid === pane.sessionId) {
         App.GetQueue(pane.sessionId).then(items => {
@@ -203,14 +137,11 @@
   onDestroy(() => {
     if (cleanupFn) cleanupFn();
     if (queueCleanup) queueCleanup();
-    if (wheelHandler && containerEl) {
-      containerEl.removeEventListener('wheel', wheelHandler);
-    }
+    if (wheelHandler && containerEl) containerEl.removeEventListener('wheel', wheelHandler);
     resizeObserver?.disconnect();
     termInstance?.dispose();
   });
 
-  // Update theme reactively (including custom accent as cursor color)
   $: if (termInstance && $currentTheme) {
     const theme = getTerminalTheme($currentTheme);
     if ($config.terminal_color) {
@@ -218,74 +149,6 @@
       theme.cursorAccent = '#000000';
     }
     termInstance.terminal.options.theme = theme;
-  }
-
-  function handleClose() {
-    dispatch('close', { paneId: pane.id, sessionId: pane.sessionId });
-  }
-
-  function handleMaximize() {
-    dispatch('maximize', { paneId: pane.id });
-  }
-
-  function handleFocus() {
-    dispatch('focus', { paneId: pane.id });
-  }
-
-  function startRename() {
-    editName = pane.name;
-    editing = true;
-    requestAnimationFrame(() => {
-      nameInput?.focus();
-      nameInput?.select();
-    });
-  }
-
-  function finishRename() {
-    editing = false;
-    const trimmed = editName.trim();
-    if (trimmed && trimmed !== pane.name) {
-      dispatch('rename', { paneId: pane.id, name: trimmed });
-    }
-  }
-
-  function handleRenameKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      finishRename();
-    }
-    if (e.key === 'Escape') {
-      editing = false;
-    }
-  }
-
-  function getModeLabel(mode: string): string {
-    switch (mode) {
-      case 'claude': return 'Claude';
-      case 'claude-yolo': return 'YOLO';
-      default: return 'Shell';
-    }
-  }
-
-  function getModeBadgeClass(mode: string): string {
-    switch (mode) {
-      case 'claude': return 'badge-claude';
-      case 'claude-yolo': return 'badge-yolo';
-      default: return 'badge-shell';
-    }
-  }
-
-  function getActivityDot(activity: string): string {
-    switch (activity) {
-      case 'active': return 'dot-active';
-      case 'done': return 'dot-done';
-      case 'needsInput': return 'dot-needs-input';
-      default: return 'dot-idle';
-    }
-  }
-
-  function handleRestart() {
-    dispatch('restart', { paneId: pane.id, sessionId: pane.sessionId, mode: pane.mode, model: pane.model, name: pane.name });
   }
 
   // Desktop notifications when Claude state changes and window is not focused
@@ -301,17 +164,6 @@
       }
     }
   }
-
-  function sendNotification(title: string, body: string) {
-    if (!('Notification' in window)) return;
-    if (Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/wails.png' });
-    } else if (Notification.permission !== 'denied') {
-      Notification.requestPermission().then(p => {
-        if (p === 'granted') new Notification(title, { body, icon: '/wails.png' });
-      });
-    }
-  }
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -321,102 +173,51 @@
   class:focused={pane.focused}
   class:activity-done={pane.activity === 'done'}
   class:activity-needs-input={pane.activity === 'needsInput'}
-  on:click={handleFocus}
+  on:click={() => dispatch('focus', { paneId: pane.id })}
 >
-  <div class="pane-titlebar"
-    class:titlebar-done={pane.activity === 'done'}
-    class:titlebar-needs-input={pane.activity === 'needsInput'}
-  >
-    <div class="pane-title-left">
-      {#if paneIndex > 0}
-        <span class="pane-index" title="Ctrl+{paneIndex}">{paneIndex}</span>
-      {/if}
-      <span class="status-dot {getActivityDot(pane.activity)}"></span>
-      {#if editing}
-        <input
-          class="rename-input"
-          type="text"
-          bind:value={editName}
-          bind:this={nameInput}
-          on:blur={finishRename}
-          on:keydown={handleRenameKeydown}
-          on:click|stopPropagation
-        />
-      {:else}
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <span class="pane-name" on:dblclick|stopPropagation={startRename} title="Doppelklick zum Umbenennen">{pane.name}</span>
-      {/if}
-      <span class="mode-badge {getModeBadgeClass(pane.mode)}">{getModeLabel(pane.mode)}</span>
-      {#if pane.model}
-        <span class="model-label">{pane.model}</span>
-      {/if}
-    </div>
-    <div class="pane-title-right">
-      {#if pane.cost}
-        <span class="cost-label">{pane.cost}</span>
-      {/if}
-      <button class="pane-btn queue-toggle" class:queue-active={queueCount > 0} on:click|stopPropagation={() => (showQueue = !showQueue)} title="Pipeline Queue">
-        &#9654;{#if queueCount > 0}<span class="queue-badge">{queueCount}</span>{/if}
-      </button>
-      <button class="pane-btn" on:click|stopPropagation={handleMaximize} title="Maximize">
-        &#x26F6;
-      </button>
-      <button class="pane-btn close" on:click|stopPropagation={handleClose} title="Close">
-        &times;
-      </button>
-    </div>
-  </div>
+  <PaneTitlebar
+    {pane}
+    {paneIndex}
+    {queueCount}
+    on:close
+    on:maximize
+    on:rename
+    on:restart={() => dispatch('restart', { paneId: pane.id, sessionId: pane.sessionId, mode: pane.mode, model: pane.model, name: pane.name })}
+    on:toggleQueue={() => (showQueue = !showQueue)}
+  />
   <QueuePanel sessionId={pane.sessionId} visible={showQueue} />
   {#if showSearch}
-    <div class="search-bar">
-      <input
-        class="search-input"
-        type="text"
-        placeholder="Suchen... (Enter=weiter, Shift+Enter=zurück)"
-        bind:value={searchQuery}
-        bind:this={searchInput}
-        on:input={() => doSearch('next')}
-        on:keydown={handleSearchKeydown}
-        on:click|stopPropagation
-      />
-      <button class="search-btn" on:click|stopPropagation={() => doSearch('prev')} title="Vorheriger (Shift+Enter)">&#x25B2;</button>
-      <button class="search-btn" on:click|stopPropagation={() => doSearch('next')} title="Nächster (Enter)">&#x25BC;</button>
-      <button class="search-btn close" on:click|stopPropagation={closeSearch} title="Schließen (Esc)">&times;</button>
-    </div>
+    <TerminalSearch
+      bind:this={searchRef}
+      searchAddon={termInstance?.searchAddon ?? null}
+      on:close={closeSearch}
+    />
   {/if}
   <div class="terminal-container" bind:this={containerEl}></div>
   {#if !pane.running}
     <div class="exited-overlay">
       <div class="exited-msg">Prozess beendet</div>
-      <button class="restart-btn" on:click|stopPropagation={handleRestart}>Neu starten</button>
-      <button class="close-btn-overlay" on:click|stopPropagation={handleClose}>Schließen</button>
+      <button class="restart-btn" on:click|stopPropagation={() => dispatch('restart', { paneId: pane.id, sessionId: pane.sessionId, mode: pane.mode, model: pane.model, name: pane.name })}>Neu starten</button>
+      <button class="close-btn-overlay" on:click|stopPropagation={() => dispatch('close', { paneId: pane.id, sessionId: pane.sessionId })}>Schließen</button>
     </div>
   {/if}
 </div>
 
 <style>
   .terminal-pane {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    background: var(--pane-bg);
-    border: 2px solid var(--pane-border);
-    border-radius: 8px;
-    overflow: hidden;
+    position: relative; display: flex; flex-direction: column;
+    background: var(--pane-bg); border: 2px solid var(--pane-border);
+    border-radius: 8px; overflow: hidden;
     transition: border-color 0.3s, box-shadow 0.3s;
   }
 
-  .terminal-pane.focused {
-    border-color: var(--pane-border-focused);
-  }
+  .terminal-pane.focused { border-color: var(--pane-border-focused); }
 
-  /* Green glow — Claude finished */
   .terminal-pane.activity-done {
     border-color: #22c55e;
     box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), inset 0 0 4px rgba(34, 197, 94, 0.1);
   }
 
-  /* Red blink — user interaction needed */
   .terminal-pane.activity-needs-input {
     border-color: #ef4444;
     box-shadow: 0 0 14px rgba(239, 68, 68, 0.6), inset 0 0 4px rgba(239, 68, 68, 0.1);
@@ -434,253 +235,32 @@
     }
   }
 
-  .pane-titlebar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 8px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
-    height: 30px;
-    min-height: 30px;
-    transition: background 0.3s;
-  }
-
-  .titlebar-done {
-    background: rgba(34, 197, 94, 0.12);
-  }
-
-  .titlebar-needs-input {
-    background: rgba(239, 68, 68, 0.12);
-    animation: titlebar-blink 1.2s ease-in-out infinite;
-  }
-
-  @keyframes titlebar-blink {
-    0%, 100% { background: rgba(239, 68, 68, 0.12); }
-    50% { background: rgba(239, 68, 68, 0.25); }
-  }
-
-  .pane-title-left {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    overflow: hidden;
-  }
-
-  .pane-title-right {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    transition: background 0.3s;
-  }
-
-  .dot-idle { background: var(--fg-muted); }
-  .dot-active { background: var(--accent); animation: dot-spin 1s linear infinite; }
-  .dot-done { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.8); }
-  .dot-needs-input { background: #ef4444; animation: dot-blink 0.8s ease-in-out infinite; }
-
-  @keyframes dot-spin {
-    0% { opacity: 0.5; }
-    50% { opacity: 1; }
-    100% { opacity: 0.5; }
-  }
-
-  @keyframes dot-blink {
-    0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(239, 68, 68, 0.8); }
-    50% { opacity: 0.3; box-shadow: none; }
-  }
-
-  .pane-name {
-    font-size: 12px;
-    color: var(--fg);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    cursor: default;
-  }
-
-  .rename-input {
-    font-size: 12px;
-    color: var(--fg);
-    background: var(--bg-tertiary);
-    border: 1px solid var(--accent);
-    border-radius: 3px;
-    padding: 1px 4px;
-    outline: none;
-    width: 120px;
-  }
-
-  .mode-badge {
-    font-size: 10px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    white-space: nowrap;
-  }
-
-  .badge-shell { background: var(--bg-tertiary); color: var(--fg-muted); }
-  .badge-claude { background: #7c3aed33; color: #a78bfa; }
-  .badge-yolo { background: #dc262633; color: #f87171; }
-
-  .model-label { font-size: 10px; color: var(--fg-muted); }
-
-  .cost-label { font-size: 11px; color: var(--warning); font-weight: 500; }
-
-  .pane-btn {
-    background: none;
-    border: none;
-    color: var(--fg-muted);
-    cursor: pointer;
-    padding: 2px 4px;
-    font-size: 14px;
-    line-height: 1;
-    border-radius: 3px;
-  }
-
-  .pane-btn:hover { background: var(--bg-tertiary); color: var(--fg); }
-  .pane-btn.close:hover { background: var(--error); color: white; }
-
-  .queue-toggle { position: relative; font-size: 10px; }
-  .queue-toggle.queue-active { color: var(--accent); }
-  .queue-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    background: var(--accent);
-    color: var(--bg);
-    font-size: 9px;
-    font-weight: 700;
-    min-width: 14px;
-    height: 14px;
-    line-height: 14px;
-    text-align: center;
-    border-radius: 7px;
-    padding: 0 3px;
-  }
-
-  .search-bar {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    background: var(--bg-tertiary);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .search-input {
-    flex: 1;
-    padding: 4px 8px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--fg);
-    font-size: 12px;
-    outline: none;
-  }
-
-  .search-input:focus {
-    border-color: var(--accent);
-  }
-
-  .search-input::placeholder {
-    color: var(--fg-muted);
-  }
-
-  .search-btn {
-    background: none;
-    border: none;
-    color: var(--fg-muted);
-    cursor: pointer;
-    padding: 2px 6px;
-    font-size: 12px;
-    border-radius: 3px;
-  }
-
-  .search-btn:hover {
-    background: var(--bg-secondary);
-    color: var(--fg);
-  }
-
-  .search-btn.close:hover {
-    background: var(--error);
-    color: white;
-  }
-
-  .terminal-container {
-    flex: 1;
-    padding: 4px;
-    overflow: hidden;
-  }
-
-  .terminal-container :global(.xterm) {
-    height: 100%;
-  }
-
-  .pane-index {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--fg-muted);
-    background: var(--bg-tertiary);
-    width: 16px;
-    height: 16px;
-    line-height: 16px;
-    text-align: center;
-    border-radius: 3px;
-    flex-shrink: 0;
-  }
+  .terminal-container { flex: 1; padding: 4px; overflow: hidden; }
+  .terminal-container :global(.xterm) { height: 100%; }
 
   .exited-overlay {
-    position: absolute;
-    inset: 30px 0 0 0;
+    position: absolute; inset: 30px 0 0 0;
     background: rgba(0, 0, 0, 0.75);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    z-index: 10;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px; z-index: 10;
   }
 
-  .exited-msg {
-    color: var(--fg-muted);
-    font-size: 14px;
-    font-weight: 600;
-  }
+  .exited-msg { color: var(--fg-muted); font-size: 14px; font-weight: 600; }
 
   .restart-btn {
-    background: var(--accent);
-    color: var(--bg);
-    border: none;
-    padding: 6px 20px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
+    background: var(--accent); color: var(--bg); border: none;
+    padding: 6px 20px; border-radius: 5px; cursor: pointer;
+    font-size: 13px; font-weight: 600;
   }
 
-  .restart-btn:hover {
-    filter: brightness(1.2);
-  }
+  .restart-btn:hover { filter: brightness(1.2); }
 
   .close-btn-overlay {
-    background: none;
-    border: 1px solid var(--fg-muted);
-    color: var(--fg-muted);
-    padding: 4px 16px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 12px;
+    background: none; border: 1px solid var(--fg-muted);
+    color: var(--fg-muted); padding: 4px 16px;
+    border-radius: 5px; cursor: pointer; font-size: 12px;
   }
 
-  .close-btn-overlay:hover {
-    border-color: var(--fg);
-    color: var(--fg);
-  }
+  .close-btn-overlay:hover { border-color: var(--fg); color: var(--fg); }
 </style>
