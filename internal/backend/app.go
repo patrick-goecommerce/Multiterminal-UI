@@ -88,6 +88,11 @@ func (a *App) CreateSession(argv []string, dir string, rows int, cols int) int {
 
 	log.Printf("[CreateSession] id=%d argv=%v dir=%q rows=%d cols=%d", id, argv, dir, rows, cols)
 
+	// Use configured default shell when no command specified
+	if len(argv) == 0 && a.cfg.DefaultShell != "" {
+		argv = []string{a.cfg.DefaultShell}
+	}
+
 	sess := terminal.NewSession(id, rows, cols)
 	if err := sess.Start(argv, dir, nil); err != nil {
 		errMsg := fmt.Sprintf("Session start failed: %v", err)

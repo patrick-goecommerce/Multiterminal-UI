@@ -60,7 +60,6 @@ The binary is output to `build/bin/mtui.exe` (Windows) or `build/bin/mtui` (Linu
 | Ctrl+T           | New project tab (opens folder picker)         |
 | Ctrl+W           | Close tab                                     |
 | Ctrl+N           | New terminal pane (opens launch dialog)       |
-| Ctrl+X           | Close focused pane                            |
 | Ctrl+Z           | Maximise / restore focused pane               |
 | Ctrl+Scroll      | Zoom in/out (font size per terminal)          |
 | Ctrl+V           | Paste from clipboard                          |

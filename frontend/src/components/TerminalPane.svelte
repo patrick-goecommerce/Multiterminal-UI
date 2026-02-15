@@ -20,6 +20,7 @@
   let editName = '';
   let nameInput: HTMLInputElement;
   let zoomTimer: ReturnType<typeof setTimeout> | null = null;
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null;
   let isZooming = false;
 
   onMount(() => {
@@ -111,15 +112,19 @@
       }
     }, { passive: false });
 
-    // Auto-resize on container size change (skip during zoom)
+    // Auto-resize on container size change (debounced, skip during zoom)
     resizeObserver = new ResizeObserver(() => {
-      if (termInstance && !isZooming) {
-        termInstance.fitAddon.fit();
-        const dims = termInstance.fitAddon.proposeDimensions();
-        if (dims) {
-          App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
+      if (!termInstance || isZooming) return;
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (termInstance) {
+          termInstance.fitAddon.fit();
+          const dims = termInstance.fitAddon.proposeDimensions();
+          if (dims) {
+            App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
+          }
         }
-      }
+      }, 100);
     });
     resizeObserver.observe(containerEl);
   });
