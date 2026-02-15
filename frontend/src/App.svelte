@@ -8,6 +8,7 @@
   import LaunchDialog from './components/LaunchDialog.svelte';
   import ProjectDialog from './components/ProjectDialog.svelte';
   import SettingsDialog from './components/SettingsDialog.svelte';
+  import CommandPalette from './components/CommandPalette.svelte';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
@@ -18,6 +19,7 @@
   let showLaunchDialog = false;
   let showProjectDialog = false;
   let showSettingsDialog = false;
+  let showCommandPalette = false;
   let showSidebar = false;
   let branch = '';
   let commitAgeMinutes = -1;
@@ -266,6 +268,22 @@
     tabStore.renamePane(tab.id, e.detail.paneId, e.detail.name);
   }
 
+  function handleSendCommand(e: CustomEvent<{ text: string }>) {
+    const tab = $activeTab;
+    if (!tab) return;
+    const focusedPane = tab.panes.find((p) => p.focused);
+    if (focusedPane) {
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(e.detail.text + '\n');
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      App.WriteToSession(focusedPane.sessionId, btoa(binary));
+    }
+    showCommandPalette = false;
+  }
+
   function handleSidebarFile(e: CustomEvent<{ path: string }>) {
     const tab = $activeTab;
     if (!tab) return;
@@ -359,6 +377,7 @@
     on:toggleSidebar={() => (showSidebar = !showSidebar)}
     on:changeDir={handleChangeDir}
     on:openSettings={() => (showSettingsDialog = true)}
+    on:openCommands={() => (showCommandPalette = true)}
   />
 
   <div class="content">
@@ -399,6 +418,12 @@
   <SettingsDialog
     visible={showSettingsDialog}
     on:close={() => (showSettingsDialog = false)}
+  />
+
+  <CommandPalette
+    visible={showCommandPalette}
+    on:send={handleSendCommand}
+    on:close={() => (showCommandPalette = false)}
   />
 </div>
 

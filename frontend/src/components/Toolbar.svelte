@@ -24,6 +24,10 @@
     dispatch('openSettings');
   }
 
+  function openCommands() {
+    dispatch('openCommands');
+  }
+
   $: dirLabel = tabDir ? tabDir.replace(/\\/g, '/').split('/').pop() || tabDir : '(kein Verzeichnis)';
   $: atLimit = paneCount >= maxPanes;
 </script>
@@ -58,6 +62,9 @@
       title={atLimit ? `Max. ${maxPanes} Terminals erreicht` : 'Neues Terminal (Ctrl+N)'}
     >
       + New Terminal
+    </button>
+    <button class="toolbar-btn" on:click={openCommands} title="Befehlspalette">
+      <span class="icon">&#9889;</span> Befehle
     </button>
     <button class="toolbar-btn" on:click={toggleSidebar} title="Dateien (Ctrl+B)">
       <span class="icon">&#128193;</span> Files
