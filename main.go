@@ -6,7 +6,6 @@ package main
 import (
 	"embed"
 	"log"
-	"os"
 
 	"github.com/patrick-goecommerce/multiterminal/internal/backend"
 	"github.com/patrick-goecommerce/multiterminal/internal/config"
@@ -21,21 +20,18 @@ import (
 var assets embed.FS
 
 func main() {
-	// Log to file for debugging
-	f, err := os.OpenFile("mtui.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err == nil {
-		log.SetOutput(f)
-		defer f.Close()
-	}
 	log.Println("Starting Multiterminal UI...")
 
 	cfg := config.Load()
 	log.Println("Config loaded, theme:", cfg.Theme)
 
+	// Enable file logging if configured (persistent or auto-enabled after crashes)
+	backend.InitLoggingFromConfig(cfg)
+
 	app := backend.NewApp(cfg)
 	log.Println("App created, starting Wails...")
 
-	err = wails.Run(&options.App{
+	err := wails.Run(&options.App{
 		Title:            "Multiterminal UI",
 		Width:            1400,
 		Height:           900,

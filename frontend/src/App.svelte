@@ -9,6 +9,7 @@
   import ProjectDialog from './components/ProjectDialog.svelte';
   import SettingsDialog from './components/SettingsDialog.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
+  import CrashDialog from './components/CrashDialog.svelte';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
@@ -21,6 +22,7 @@
   let showSettingsDialog = false;
   let showCommandPalette = false;
   let showSidebar = false;
+  let showCrashDialog = false;
   let branch = '';
   let commitAgeMinutes = -1;
 
@@ -115,6 +117,14 @@
     } catch {
       applyTheme('dark');
     }
+
+    // Check for repeated crashes and suggest logging
+    try {
+      const health = await App.CheckHealth();
+      if (health.crash_detected && !health.logging_enabled) {
+        showCrashDialog = true;
+      }
+    } catch {}
 
     // Try restoring previous session, otherwise create default tab
     const restored = await restoreSession();
@@ -419,6 +429,12 @@
     const { name, dir } = e.detail;
     tabStore.addTab(name, dir);
   }
+
+  function handleCrashEnable() {
+    showCrashDialog = false;
+    App.EnableLogging(true);
+    config.update(c => ({ ...c, logging_enabled: true }));
+  }
 </script>
 
 <div class="app">
@@ -480,6 +496,12 @@
     visible={showCommandPalette}
     on:send={handleSendCommand}
     on:close={() => (showCommandPalette = false)}
+  />
+
+  <CrashDialog
+    visible={showCrashDialog}
+    on:enable={handleCrashEnable}
+    on:dismiss={() => (showCrashDialog = false)}
   />
 </div>
 
