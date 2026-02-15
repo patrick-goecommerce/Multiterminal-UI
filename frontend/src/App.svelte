@@ -325,6 +325,21 @@
       }
       return;
     }
+    // Ctrl+F → let terminal pane handle search (don't intercept here)
+    if (e.ctrlKey && e.key === 'f') {
+      return;
+    }
+    // Ctrl+1-9 → focus pane by index
+    if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+      e.preventDefault();
+      const tab = $activeTab;
+      if (!tab) return;
+      const idx = parseInt(e.key) - 1;
+      if (idx < tab.panes.length) {
+        tabStore.focusPane(tab.id, tab.panes[idx].id);
+      }
+      return;
+    }
   }
 
   $: totalCost = (() => {

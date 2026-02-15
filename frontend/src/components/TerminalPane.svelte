@@ -26,6 +26,52 @@
   let showQueue = false;
   let queueCount = 0;
   let queueCleanup: (() => void) | null = null;
+  let showSearch = false;
+  let searchQuery = '';
+  let searchInput: HTMLInputElement;
+  let searchMatchCount = '';
+
+  function openSearch() {
+    showSearch = true;
+    requestAnimationFrame(() => {
+      searchInput?.focus();
+      searchInput?.select();
+    });
+  }
+
+  function closeSearch() {
+    showSearch = false;
+    searchQuery = '';
+    searchMatchCount = '';
+    termInstance?.searchAddon.clearDecorations();
+    termInstance?.terminal.focus();
+  }
+
+  function doSearch(direction: 'next' | 'prev' = 'next') {
+    if (!termInstance || !searchQuery) {
+      searchMatchCount = '';
+      return;
+    }
+    const opts = { regex: false, caseSensitive: false, wholeWord: false, decorations: { matchOverviewRuler: '#888', activeMatchColorOverviewRuler: '#ffaa00', matchBackground: '#44475a', activeMatchBackground: '#ffaa0066' } };
+    if (direction === 'prev') {
+      termInstance.searchAddon.findPrevious(searchQuery, opts);
+    } else {
+      termInstance.searchAddon.findNext(searchQuery, opts);
+    }
+  }
+
+  function handleSearchKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeSearch();
+    } else if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      doSearch('prev');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      doSearch('next');
+    }
+  }
 
   onMount(() => {
     termInstance = createTerminal($currentTheme);
@@ -66,8 +112,17 @@
         termInstance.terminal.clearSelection();
         return false;
       }
+      // Ctrl+F → open terminal search
+      if (e.ctrlKey && e.key === 'f') {
+        openSearch();
+        return false;
+      }
       // Ctrl+Z, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+B → let app handle (don't send to PTY)
       if (e.ctrlKey && ['z', 'n', 't', 'w', 'b'].includes(e.key)) {
+        return false;
+      }
+      // Ctrl+1-9 → let app handle pane switching
+      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
         return false;
       }
       return true;
@@ -274,6 +329,23 @@
     </div>
   </div>
   <QueuePanel sessionId={pane.sessionId} visible={showQueue} />
+  {#if showSearch}
+    <div class="search-bar">
+      <input
+        class="search-input"
+        type="text"
+        placeholder="Suchen... (Enter=weiter, Shift+Enter=zurück)"
+        bind:value={searchQuery}
+        bind:this={searchInput}
+        on:input={() => doSearch('next')}
+        on:keydown={handleSearchKeydown}
+        on:click|stopPropagation
+      />
+      <button class="search-btn" on:click|stopPropagation={() => doSearch('prev')} title="Vorheriger (Shift+Enter)">&#x25B2;</button>
+      <button class="search-btn" on:click|stopPropagation={() => doSearch('next')} title="Nächster (Enter)">&#x25BC;</button>
+      <button class="search-btn close" on:click|stopPropagation={closeSearch} title="Schließen (Esc)">&times;</button>
+    </div>
+  {/if}
   <div class="terminal-container" bind:this={containerEl}></div>
 </div>
 
@@ -446,6 +518,54 @@
     text-align: center;
     border-radius: 7px;
     padding: 0 3px;
+  }
+
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .search-input {
+    flex: 1;
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--fg);
+    font-size: 12px;
+    outline: none;
+  }
+
+  .search-input:focus {
+    border-color: var(--accent);
+  }
+
+  .search-input::placeholder {
+    color: var(--fg-muted);
+  }
+
+  .search-btn {
+    background: none;
+    border: none;
+    color: var(--fg-muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 12px;
+    border-radius: 3px;
+  }
+
+  .search-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--fg);
+  }
+
+  .search-btn.close:hover {
+    background: var(--error);
+    color: white;
   }
 
   .terminal-container {
