@@ -8,6 +8,7 @@ require (
 	github.com/aymanbagabas/go-pty v0.2.2
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4
 	github.com/wailsapp/wails/v2 v2.11.0
+	golang.org/x/sys v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -40,6 +41,5 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
 )

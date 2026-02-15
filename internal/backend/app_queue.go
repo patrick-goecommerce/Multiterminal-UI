@@ -2,6 +2,7 @@ package backend
 
 import (
 	"log"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -160,11 +161,21 @@ func (a *App) processQueue(sessionId int) {
 	a.mu.Unlock()
 
 	if hasNext && sess != nil {
-		_, err := sess.Write([]byte(next.Prompt + "\r"))
+		// Write prompt text first, then Enter separately with a small delay.
+		// Claude Code's TUI needs time to process the pasted text before
+		// receiving the Enter key — writing everything in one chunk can cause
+		// the \r to be swallowed.
+		_, err := sess.Write([]byte(next.Prompt))
 		if err != nil {
 			log.Printf("[queue] session %d: write error for item %d: %v", sessionId, next.ID, err)
 		} else {
-			log.Printf("[queue] session %d: sent item %d: %q", sessionId, next.ID, truncateStr(next.Prompt, 60))
+			time.Sleep(100 * time.Millisecond)
+			_, err = sess.Write([]byte("\r"))
+			if err != nil {
+				log.Printf("[queue] session %d: enter error for item %d: %v", sessionId, next.ID, err)
+			} else {
+				log.Printf("[queue] session %d: sent item %d: %q", sessionId, next.ID, truncateStr(next.Prompt, 60))
+			}
 		}
 		// Reset activity so the next "done" transition is detected as a change.
 		// Without this, prevActivity might already be "done" from the previous
