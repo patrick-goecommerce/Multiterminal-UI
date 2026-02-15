@@ -367,6 +367,48 @@ func TestDetectActivity_RecentOutput_StaysActive(t *testing.T) {
 	}
 }
 
+func TestDetectActivity_RecentOutput_TransitionsDoneToActive(t *testing.T) {
+	sess := NewSession(1, 5, 80)
+	sess.Screen.Write([]byte("$ ")) // prompt on screen
+
+	// Simulate: Activity was Done (previous command finished), but new output
+	// just arrived (pipeline queue sent next prompt → PTY echo).
+	// This is the critical case for queue advancement.
+	sess.mu.Lock()
+	sess.LastOutputAt = time.Now()
+	sess.Activity = ActivityDone
+	sess.mu.Unlock()
+
+	state := sess.DetectActivity()
+	// Output is flowing → must transition to Active regardless of previous state
+	if state != ActivityActive {
+		t.Errorf("DetectActivity with Done + recent output = %d, want ActivityActive (%d)", state, ActivityActive)
+	}
+
+	// Verify the session's Activity field was also updated
+	sess.mu.Lock()
+	stored := sess.Activity
+	sess.mu.Unlock()
+	if stored != ActivityActive {
+		t.Errorf("Session.Activity after transition = %d, want ActivityActive (%d)", stored, ActivityActive)
+	}
+}
+
+func TestDetectActivity_RecentOutput_TransitionsIdleToActive(t *testing.T) {
+	sess := NewSession(1, 5, 80)
+
+	// Simulate: Activity was Idle, new output arrives
+	sess.mu.Lock()
+	sess.LastOutputAt = time.Now()
+	sess.Activity = ActivityIdle
+	sess.mu.Unlock()
+
+	state := sess.DetectActivity()
+	if state != ActivityActive {
+		t.Errorf("DetectActivity with Idle + recent output = %d, want ActivityActive (%d)", state, ActivityActive)
+	}
+}
+
 func TestDetectActivity_StaleOutput_ClassifiesDone(t *testing.T) {
 	sess := NewSession(1, 5, 80)
 	sess.Screen.Write([]byte("$ ")) // prompt on screen → should classify as Done

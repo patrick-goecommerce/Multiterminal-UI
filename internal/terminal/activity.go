@@ -74,9 +74,17 @@ func (s *Session) DetectActivity() ActivityState {
 
 	elapsed := time.Since(lastOutput)
 
-	// While actively producing output, stay in Active state
+	// While actively producing output, ensure state is Active.
+	// This is critical for pipeline queue advancement: after processQueue
+	// sends the next prompt, the PTY echo must transition the state from
+	// "done" to "active" so the next "done" is detected as a real change.
 	if elapsed < 1500*time.Millisecond {
-		return currentActivity
+		if currentActivity != ActivityActive {
+			s.mu.Lock()
+			s.Activity = ActivityActive
+			s.mu.Unlock()
+		}
+		return ActivityActive
 	}
 
 	// Output stopped for >1.5s — classify what's on screen

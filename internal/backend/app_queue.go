@@ -160,8 +160,19 @@ func (a *App) processQueue(sessionId int) {
 	a.mu.Unlock()
 
 	if hasNext && sess != nil {
-		sess.Write([]byte(next.Prompt + "\n"))
-		log.Printf("[queue] session %d: sent item %d: %q", sessionId, next.ID, truncateStr(next.Prompt, 60))
+		_, err := sess.Write([]byte(next.Prompt + "\n"))
+		if err != nil {
+			log.Printf("[queue] session %d: write error for item %d: %v", sessionId, next.ID, err)
+		} else {
+			log.Printf("[queue] session %d: sent item %d: %q", sessionId, next.ID, truncateStr(next.Prompt, 60))
+		}
+		// Reset activity so the next "done" transition is detected as a change.
+		// Without this, prevActivity might already be "done" from the previous
+		// item, causing the scan loop to miss the transition.
+		sess.ResetActivity()
+		prevActivityMu.Lock()
+		prevActivity[sessionId] = "idle"
+		prevActivityMu.Unlock()
 	}
 
 	a.emitQueueUpdate(sessionId)
