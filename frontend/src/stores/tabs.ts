@@ -13,6 +13,9 @@ export interface Pane {
   cost: string;
   running: boolean;
   maximized: boolean;
+  issueNumber: number | null;
+  issueTitle: string;
+  issueBranch: string;
 }
 
 export interface Tab {
@@ -103,7 +106,7 @@ function createTabStore() {
       });
     },
 
-    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string): string {
+    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string): string {
       const paneId = `pane-${nextPaneNum++}`;
       update((state) => {
         const tab = state.tabs.find((t) => t.id === tabId);
@@ -121,6 +124,9 @@ function createTabStore() {
           cost: '',
           running: true,
           maximized: false,
+          issueNumber: issueNumber ?? null,
+          issueTitle: issueTitle ?? '',
+          issueBranch: issueBranch ?? '',
         });
         tab.focusedPaneId = paneId;
         return state;

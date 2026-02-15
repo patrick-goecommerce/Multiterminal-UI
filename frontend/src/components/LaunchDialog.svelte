@@ -3,13 +3,14 @@
   import { config } from '../stores/config';
 
   export let visible: boolean = false;
+  export let issueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
 
   const dispatch = createEventDispatcher();
 
   let selectedModel = '';
 
   function launch(type: 'shell' | 'claude' | 'claude-yolo') {
-    dispatch('launch', { type, model: selectedModel });
+    dispatch('launch', { type, model: selectedModel, issue: issueContext });
     dispatch('close');
     selectedModel = '';
   }
@@ -21,9 +22,14 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') close();
-    if (e.key === '1') launch('shell');
-    if (e.key === '2') launch('claude');
-    if (e.key === '3') launch('claude-yolo');
+    if (issueContext) {
+      if (e.key === '1') launch('claude');
+      if (e.key === '2') launch('claude-yolo');
+    } else {
+      if (e.key === '1') launch('shell');
+      if (e.key === '2') launch('claude');
+      if (e.key === '3') launch('claude-yolo');
+    }
   }
 </script>
 
@@ -36,20 +42,28 @@
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="dialog" on:click|stopPropagation>
-      <h3>Neues Terminal</h3>
+      <h3>{issueContext ? `Claude für #${issueContext.number}` : 'Neues Terminal'}</h3>
+      {#if issueContext}
+        <div class="issue-context">
+          <span class="issue-ctx-num">#{issueContext.number}</span>
+          <span class="issue-ctx-title">{issueContext.title}</span>
+        </div>
+      {/if}
 
       <div class="options">
-        <button class="option" on:click={() => launch('shell')}>
-          <span class="option-key">1</span>
-          <span class="option-icon">&#9000;</span>
-          <div class="option-text">
-            <strong>Shell</strong>
-            <span>Standard-Terminal</span>
-          </div>
-        </button>
+        {#if !issueContext}
+          <button class="option" on:click={() => launch('shell')}>
+            <span class="option-key">1</span>
+            <span class="option-icon">&#9000;</span>
+            <div class="option-text">
+              <strong>Shell</strong>
+              <span>Standard-Terminal</span>
+            </div>
+          </button>
+        {/if}
 
         <button class="option" on:click={() => launch('claude')}>
-          <span class="option-key">2</span>
+          <span class="option-key">{issueContext ? '1' : '2'}</span>
           <span class="option-icon">&#10024;</span>
           <div class="option-text">
             <strong>Claude Code</strong>
@@ -58,7 +72,7 @@
         </button>
 
         <button class="option yolo" on:click={() => launch('claude-yolo')}>
-          <span class="option-key">3</span>
+          <span class="option-key">{issueContext ? '2' : '3'}</span>
           <span class="option-icon">&#9889;</span>
           <div class="option-text">
             <strong>Claude YOLO</strong>
@@ -110,6 +124,15 @@
     color: var(--fg);
     font-size: 16px;
   }
+
+  .issue-context {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; margin-bottom: 12px;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; font-size: 12px;
+  }
+  .issue-ctx-num { color: var(--fg-muted); font-weight: 600; }
+  .issue-ctx-title { color: var(--fg); font-weight: 500; }
 
   .options {
     display: flex;

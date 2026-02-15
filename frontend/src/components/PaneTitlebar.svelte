@@ -58,6 +58,13 @@
       default: return 'dot-idle';
     }
   }
+
+  let showIssueActions = false;
+
+  function issueAction(action: string) {
+    showIssueActions = false;
+    dispatch('issueAction', { paneId: pane.id, sessionId: pane.sessionId, issueNumber: pane.issueNumber, action });
+  }
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -86,11 +93,28 @@
       <span class="pane-name" on:dblclick|stopPropagation={startRename} title="Doppelklick zum Umbenennen">{pane.name}</span>
     {/if}
     <span class="mode-badge {getModeBadgeClass(pane.mode)}">{getModeLabel(pane.mode)}</span>
+    {#if pane.issueNumber}
+      <span class="issue-badge" title="Issue #{pane.issueNumber}: {pane.issueTitle}">#{pane.issueNumber}</span>
+    {/if}
     {#if pane.model}
       <span class="model-label">{pane.model}</span>
     {/if}
   </div>
   <div class="pane-title-right">
+    {#if pane.issueNumber}
+      <div class="issue-actions-wrap">
+        <button class="pane-btn issue-actions-btn" on:click|stopPropagation={() => (showIssueActions = !showIssueActions)} title="Issue-Aktionen">
+          &#8943;
+        </button>
+        {#if showIssueActions}
+          <div class="issue-actions-menu">
+            <button on:click|stopPropagation={() => issueAction('commit')}>Commit & Push</button>
+            <button on:click|stopPropagation={() => issueAction('pr')}>PR erstellen</button>
+            <button on:click|stopPropagation={() => issueAction('closeIssue')}>Issue schließen</button>
+          </div>
+        {/if}
+      </div>
+    {/if}
     {#if pane.cost}
       <span class="cost-label">{pane.cost}</span>
     {/if}
@@ -166,6 +190,12 @@
   .badge-claude { background: #7c3aed33; color: #a78bfa; }
   .badge-yolo { background: #dc262633; color: #f87171; }
 
+  .issue-badge {
+    font-size: 10px; padding: 1px 6px; border-radius: 4px;
+    background: #23863633; color: #22c55e; font-weight: 600; white-space: nowrap;
+    cursor: default;
+  }
+
   .model-label { font-size: 10px; color: var(--fg-muted); }
   .cost-label { font-size: 11px; color: var(--warning); font-weight: 500; }
 
@@ -193,4 +223,19 @@
     background: var(--bg-tertiary); width: 16px; height: 16px;
     line-height: 16px; text-align: center; border-radius: 3px; flex-shrink: 0;
   }
+
+  .issue-actions-wrap { position: relative; }
+  .issue-actions-btn { font-size: 16px !important; letter-spacing: 1px; }
+  .issue-actions-menu {
+    position: absolute; top: 100%; right: 0; z-index: 50;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); min-width: 140px;
+    padding: 4px 0; margin-top: 2px;
+  }
+  .issue-actions-menu button {
+    display: block; width: 100%; padding: 6px 12px; text-align: left;
+    background: none; border: none; color: var(--fg); font-size: 12px;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .issue-actions-menu button:hover { background: var(--bg-tertiary); }
 </style>

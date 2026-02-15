@@ -27,6 +27,10 @@
     dispatch('restartPane', e.detail);
   }
 
+  function handleIssueAction(e: CustomEvent) {
+    dispatch('issueAction', e.detail);
+  }
+
   $: maximizedPane = panes.find((p) => p.maximized);
   $: visiblePanes = maximizedPane ? [maximizedPane] : panes;
   $: gridCols = maximizedPane ? 1 : Math.min(Math.ceil(Math.sqrt(panes.length)), 3);
@@ -45,6 +49,7 @@
       on:focus={handleFocus}
       on:rename={handleRename}
       on:restart={handleRestart}
+      on:issueAction={handleIssueAction}
     />
   {/each}
 

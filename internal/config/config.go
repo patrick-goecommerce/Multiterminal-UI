@@ -24,7 +24,18 @@ type Config struct {
 	CommitReminderMinutes int            `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
 	RestoreSession        *bool          `yaml:"restore_session" json:"restore_session"`
 	LoggingEnabled        bool           `yaml:"logging_enabled" json:"logging_enabled"`
+	AutoBranchOnIssue     *bool          `yaml:"auto_branch_on_issue" json:"auto_branch_on_issue"`
+	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
+}
+
+// IssueTracking holds settings for automatic issue progress reporting.
+type IssueTracking struct {
+	AutoCommentOnStart  bool `yaml:"auto_comment_on_start" json:"auto_comment_on_start"`
+	AutoCommentOnDone   bool `yaml:"auto_comment_on_done" json:"auto_comment_on_done"`
+	AutoCommentOnClose  bool `yaml:"auto_comment_on_close" json:"auto_comment_on_close"`
+	AutoCloseIssue      bool `yaml:"auto_close_issue" json:"auto_close_issue"`
+	IncludeCostInReport bool `yaml:"include_cost_in_report" json:"include_cost_in_report"`
 }
 
 // ModelEntry represents a selectable Claude model in the launch dialog.
@@ -54,6 +65,14 @@ func DefaultConfig() Config {
 		ClaudeCommand:         "claude",
 		CommitReminderMinutes: 30,
 		RestoreSession:        boolPtr(true),
+		AutoBranchOnIssue:     boolPtr(true),
+		IssueTracking: IssueTracking{
+			AutoCommentOnStart:  true,
+			AutoCommentOnDone:   true,
+			AutoCommentOnClose:  true,
+			AutoCloseIssue:      false,
+			IncludeCostInReport: true,
+		},
 		ClaudeModels: []ModelEntry{
 			{Label: "Default", ID: ""},
 			{Label: "Opus 4.6", ID: "claude-opus-4-6"},
@@ -72,6 +91,14 @@ func (c Config) ShouldRestoreSession() bool {
 		return true
 	}
 	return *c.RestoreSession
+}
+
+// ShouldAutoBranch returns whether to auto-create branches for issues.
+func (c Config) ShouldAutoBranch() bool {
+	if c.AutoBranchOnIssue == nil {
+		return true
+	}
+	return *c.AutoBranchOnIssue
 }
 
 // configPath returns the path to ~/.multiterminal.yaml.

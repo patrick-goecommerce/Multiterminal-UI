@@ -108,5 +108,18 @@ func (a *App) scanAllSessions() {
 		if activityChanged && actStr == "done" {
 			a.processQueue(id)
 		}
+
+		// Report issue progress on activity transitions
+		if activityChanged {
+			a.onActivityChangeForIssue(id, actStr, costStr)
+		}
+	}
+}
+
+// onActivityChangeForIssue triggers issue progress reports when
+// a session linked to an issue changes activity state.
+func (a *App) onActivityChangeForIssue(sessionID int, newActivity string, cost string) {
+	if newActivity == "done" {
+		a.reportIssueProgress(sessionID, progressDone, cost)
 	}
 }

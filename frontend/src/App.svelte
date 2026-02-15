@@ -17,6 +17,7 @@
   import type { PaneMode } from './stores/tabs';
   import { MODE_TO_INDEX, INDEX_TO_MODE, buildClaudeArgv, getClaudeName, encodeForPty } from './lib/claude';
   import { createGlobalKeyHandler } from './lib/shortcuts';
+  import { sendNotification } from './lib/notifications';
   import * as App from '../wailsjs/go/backend/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -30,7 +31,9 @@
   let showCrashDialog = false;
   let showIssueDialog = false;
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
+  let launchIssueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
   let issueCount = 0;
+  let sidebarView: 'explorer' | 'source-control' | 'issues' = 'explorer';
   let branch = '';
   let commitAgeMinutes = -1;
 
@@ -52,7 +55,12 @@
           const argv = buildClaudeArgv(mode, savedPane.model || '', claudeCmd);
           try {
             const sessionId = await App.CreateSession(argv, savedTab.dir || '', 24, 80);
-            if (sessionId > 0) tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '');
+            if (sessionId > 0) {
+              const issueNum = (savedPane as any).issue_number || 0;
+              const issueBranch = (savedPane as any).issue_branch || '';
+              tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch);
+              if (issueNum) App.LinkSessionIssue(sessionId, issueNum, '', issueBranch, savedTab.dir || '');
+            }
           } catch (err) {
             console.error('[restoreSession] failed to create session:', err);
           }
@@ -82,6 +90,8 @@
         name: pane.name,
         mode: MODE_TO_INDEX[pane.mode] ?? 0,
         model: pane.model || '',
+        issue_number: pane.issueNumber || 0,
+        issue_branch: pane.issueBranch || '',
       })),
     }));
     App.SaveTabs({ active_tab: Math.max(activeIdx, 0), tabs });
@@ -92,6 +102,7 @@
     onNewTab: () => { showProjectDialog = true; },
     onCloseTab: () => { if ($activeTab) tabStore.closeTab($activeTab.id); },
     onToggleSidebar: () => { showSidebar = !showSidebar; },
+    onOpenIssues: () => { showSidebar = true; sidebarView = 'issues'; },
     onToggleMaximize: () => {
       const tab = $activeTab;
       if (tab?.focusedPaneId) tabStore.toggleMaximize(tab.id, tab.focusedPaneId);
@@ -123,7 +134,19 @@
       tabStore.addTab('Workspace', workDir);
     }
 
-    EventsOn('terminal:activity', (info: any) => tabStore.updateActivity(info.id, info.activity, info.cost));
+    EventsOn('terminal:activity', (info: any) => {
+      tabStore.updateActivity(info.id, info.activity, info.cost);
+      // Notify when an issue-linked agent finishes
+      if (info.activity === 'done') {
+        for (const tab of $allTabs) {
+          const pane = tab.panes.find(p => p.sessionId === info.id);
+          if (pane?.issueNumber) {
+            sendNotification(`Agent fertig – #${pane.issueNumber}`, pane.issueTitle || pane.name);
+            break;
+          }
+        }
+      }
+    });
     EventsOn('terminal:exit', (id: number) => tabStore.markExited(id));
     EventsOn('terminal:error', (id: number, msg: string) => {
       console.error('[terminal:error]', id, msg);
@@ -170,9 +193,22 @@
     } catch { commitAgeMinutes = -1; }
   }
 
-  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string }>) {
-    const { type, model } = e.detail;
+  function buildIssuePrompt(issue: { number: number; title: string; body: string; labels: string[] }): string {
+    let text = `Closes #${issue.number}: ${issue.title}`;
+    if (issue.labels.length > 0) text += `\nLabels: ${issue.labels.join(', ')}`;
+    if (issue.body) {
+      const desc = issue.body.length > 500 ? issue.body.slice(0, 500).trimEnd() + '...' : issue.body;
+      text += `\n\n${desc}`;
+    }
+    text += `\n\nRef: #${issue.number}`;
+    return text;
+  }
+
+  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null }>) {
+    const { type, model, issue } = e.detail;
     showLaunchDialog = false;
+    const issueCtx = issue || launchIssueContext;
+    launchIssueContext = null;
     const tab = $activeTab;
     if (!tab) return;
     if (tab.panes.length >= MAX_PANES_PER_TAB) {
@@ -181,11 +217,38 @@
     }
     const claudeCmd = $config.claude_command || 'claude';
     const argv = buildClaudeArgv(type, model, claudeCmd);
-    const name = getClaudeName(type, model);
+    const baseName = getClaudeName(type, model);
+    const name = issueCtx ? `${baseName} – #${issueCtx.number}` : baseName;
     try {
+      // Auto-create branch for issue if enabled
+      let issueBranch = '';
+      if (issueCtx && $config.auto_branch_on_issue !== false) {
+        try {
+          issueBranch = await App.GetOrCreateIssueBranch(tab.dir || '', issueCtx.number, issueCtx.title);
+        } catch (branchErr: any) {
+          const msg = branchErr?.message || String(branchErr);
+          if (!confirm(`Branch-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne eigenen Branch starten?`)) return;
+        }
+      }
+
       const sessionId = await App.CreateSession(argv, tab.dir || '', 24, 80);
-      if (sessionId > 0) tabStore.addPane(tab.id, sessionId, name, type, model);
+      if (sessionId > 0) {
+        tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx?.number, issueCtx?.title, issueBranch);
+        if (issueCtx) {
+          App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, tab.dir || '');
+          // Auto-send issue prompt after Claude starts up
+          setTimeout(() => {
+            const prompt = buildIssuePrompt(issueCtx);
+            App.WriteToSession(sessionId, encodeForPty(prompt + '\n'));
+          }, 1500);
+        }
+      }
     } catch (err) { console.error('[handleLaunch] CreateSession failed:', err); }
+  }
+
+  function handleLaunchForIssue(e: CustomEvent<{ number: number; title: string; body: string; labels: string[] }>) {
+    launchIssueContext = e.detail;
+    showLaunchDialog = true;
   }
 
   function handleClosePane(e: CustomEvent<{ paneId: string; sessionId: number }>) {
@@ -254,6 +317,19 @@
     return sum > 0 ? `$${sum.toFixed(2)}` : '';
   })();
 
+  // Build a map of issue number → activity/cost for all panes with linked issues
+  $: paneIssues = (() => {
+    const map: Record<number, { activity: string; cost: string }> = {};
+    for (const tab of $allTabs) {
+      for (const pane of tab.panes) {
+        if (pane.issueNumber && pane.running) {
+          map[pane.issueNumber] = { activity: pane.activity, cost: pane.cost };
+        }
+      }
+    }
+    return map;
+  })();
+
   $: totalPanes = $allTabs.reduce((sum, t) => sum + t.panes.length, 0);
   $: currentPanes = $activeTab?.panes.length ?? 0;
   $: canChangeDir = currentPanes === 0;
@@ -308,6 +384,25 @@
     editIssueData = null;
     updateIssueCount();
   }
+
+  async function handleIssueAction(e: CustomEvent<{ paneId: string; sessionId: number; issueNumber: number; action: string }>) {
+    const { sessionId, issueNumber, action } = e.detail;
+    const tab = $activeTab;
+    if (!tab) return;
+    const dir = tab.dir || '';
+
+    if (action === 'commit') {
+      const msg = `Closes #${issueNumber}`;
+      App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m '${msg}' && git push\n`));
+    } else if (action === 'pr') {
+      App.WriteToSession(sessionId, encodeForPty(`gh pr create --title "Closes #${issueNumber}" --body "Resolves #${issueNumber}" --fill\n`));
+    } else if (action === 'closeIssue') {
+      try {
+        await App.UpdateIssue(dir, issueNumber, '', '', 'closed');
+        updateIssueCount();
+      } catch (err) { console.error('[handleIssueAction] close failed:', err); }
+    }
+  }
 </script>
 
 <div class="app">
@@ -325,7 +420,7 @@
   />
 
   <div class="content">
-    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} on:close={() => (showSidebar = false)} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} />
+    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} initialView={sidebarView} on:close={() => (showSidebar = false)} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
     <PaneGrid
       panes={$activeTab?.panes ?? []}
       on:closePane={handleClosePane}
@@ -333,11 +428,12 @@
       on:focusPane={handleFocusPane}
       on:renamePane={handleRenamePane}
       on:restartPane={handleRestartPane}
+      on:issueAction={handleIssueAction}
     />
   </div>
 
   <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} />
-  <LaunchDialog visible={showLaunchDialog} on:launch={handleLaunch} on:close={() => (showLaunchDialog = false)} />
+  <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} on:launch={handleLaunch} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
   <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} />
   <CommandPalette visible={showCommandPalette} on:send={handleSendCommand} on:close={() => (showCommandPalette = false)} />
