@@ -1,5 +1,8 @@
 # Multiterminal UI (mtui)
 
+<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/4db36c31-1140-4cba-bab7-768a7a1eb65d" />
+
+
 A native GUI terminal multiplexer built for Claude Code power users. Run multiple Claude Code sessions side-by-side, track token costs, and get visual notifications when Claude needs your attention.
 
 ![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)
@@ -152,6 +155,7 @@ claude_models:
 | `dracula`   | Dracula color scheme         |
 | `nord`      | Nord color scheme            |
 | `solarized` | Solarized Dark               |
+
 
 ## Project Structure
 
