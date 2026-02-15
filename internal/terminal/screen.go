@@ -9,6 +9,7 @@ package terminal
 import (
 	"strings"
 	"sync"
+	"unicode/utf8"
 )
 
 // ---------------------------------------------------------------------------
@@ -76,6 +77,11 @@ type Screen struct {
 
 	// Title reported by OSC sequences (e.g. xterm window title).
 	Title string
+
+	// UTF-8 multi-byte decoder state
+	utf8Buf [4]byte // buffered UTF-8 bytes
+	utf8Len int     // total bytes expected (2, 3, or 4); 0 = not in sequence
+	utf8Got int     // bytes collected so far
 }
 
 // NewScreen allocates a Screen of the given dimensions.
@@ -185,6 +191,26 @@ func (s *Screen) processByte(b byte) {
 
 // processNormal handles bytes outside any escape sequence.
 func (s *Screen) processNormal(b byte) {
+	// If collecting a multi-byte UTF-8 sequence, handle continuation bytes.
+	if s.utf8Len > 0 {
+		if b >= 0x80 && b <= 0xBF { // valid continuation byte
+			s.utf8Buf[s.utf8Got] = b
+			s.utf8Got++
+			if s.utf8Got == s.utf8Len {
+				r, _ := utf8.DecodeRune(s.utf8Buf[:s.utf8Len])
+				s.utf8Len = 0
+				s.utf8Got = 0
+				if r != utf8.RuneError {
+					s.putChar(r)
+				}
+			}
+			return
+		}
+		// Invalid continuation — discard partial sequence, process b normally.
+		s.utf8Len = 0
+		s.utf8Got = 0
+	}
+
 	switch b {
 	case 0x1b: // ESC
 		s.state = stateESC
@@ -203,10 +229,21 @@ func (s *Screen) processNormal(b byte) {
 		}
 	case 0x07: // BEL – ignore
 	default:
-		if b >= 0x20 { // printable ASCII
+		if b >= 0x20 && b <= 0x7E { // printable ASCII
 			s.putChar(rune(b))
+		} else if b >= 0xC0 && b <= 0xF7 { // UTF-8 lead byte
+			s.utf8Buf[0] = b
+			s.utf8Got = 1
+			switch {
+			case b < 0xE0:
+				s.utf8Len = 2
+			case b < 0xF0:
+				s.utf8Len = 3
+			default:
+				s.utf8Len = 4
+			}
 		}
-		// Ignore other C0 controls
+		// Ignore C0 controls and invalid bytes (0x80-0xBF outside sequence)
 	}
 }
 

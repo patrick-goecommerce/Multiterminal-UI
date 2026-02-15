@@ -24,6 +24,7 @@ internal/
   backend/
     app.go                       Main Wails App struct, session management, bindings
     app_scan.go                  Periodic activity detection & token scanning
+    app_queue.go                 Pipeline queue (prompt batching per session)
     app_files.go                 Filesystem API (list dir, search files)
     app_git.go                   Git branch & commit info helpers
   terminal/
@@ -51,6 +52,7 @@ frontend/
       Toolbar.svelte             Action toolbar (new terminal, files, etc.)
       PaneGrid.svelte            Grid layout for terminal panes
       TerminalPane.svelte        xterm.js terminal wrapper with titlebar
+      QueuePanel.svelte          Pipeline queue panel (per-pane prompt batching)
       Sidebar.svelte             File browser with search
       Footer.svelte              Status bar (branch, cost, shortcuts)
       LaunchDialog.svelte        Shell/Claude/YOLO launch dialog

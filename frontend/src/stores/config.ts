@@ -5,6 +5,11 @@ export interface ModelEntry {
   id: string;
 }
 
+export interface CommandEntry {
+  name: string;
+  text: string;
+}
+
 export interface AppConfig {
   default_shell: string;
   default_dir: string;
@@ -16,6 +21,7 @@ export interface AppConfig {
   claude_models: ModelEntry[];
   commit_reminder_minutes: number;
   restore_session?: boolean;
+  commands: CommandEntry[];
 }
 
 export const config = writable<AppConfig>({
@@ -33,4 +39,7 @@ export const config = writable<AppConfig>({
     { label: 'Haiku 4.5', id: 'claude-haiku-4-5-20251001' },
   ],
   commit_reminder_minutes: 30,
+  commands: [
+    { name: 'Commit & Push', text: "git add -A && git commit -m 'update' && git push" },
+  ],
 });

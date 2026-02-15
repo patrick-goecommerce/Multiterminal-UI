@@ -60,7 +60,6 @@ The binary is output to `build/bin/mtui.exe` (Windows) or `build/bin/mtui` (Linu
 | Ctrl+T           | New project tab (opens folder picker)         |
 | Ctrl+W           | Close tab                                     |
 | Ctrl+N           | New terminal pane (opens launch dialog)       |
-| Ctrl+X           | Close focused pane                            |
 | Ctrl+Z           | Maximise / restore focused pane               |
 | Ctrl+Scroll      | Zoom in/out (font size per terminal)          |
 | Ctrl+V           | Paste from clipboard                          |
@@ -86,6 +85,17 @@ Pane borders change when Claude changes state:
 - **Pulsing dot** — Claude is actively working
 
 This works across all panes, so you can work in one terminal and see at a glance when another needs attention.
+
+### Pipeline Queue
+
+Queue up multiple prompts for a Claude pane. They execute sequentially — when Claude finishes one task, the next prompt is automatically sent.
+
+1. Click the **▶** button in any pane's title bar to open the queue panel
+2. Type a prompt and press **Enter** to add it to the queue
+3. If Claude is idle, the first prompt starts immediately
+4. When Claude finishes (activity → done), the next prompt is sent automatically
+
+Use this to plan a batch of tasks, queue them up, and walk away. The badge on the ▶ button shows how many items are pending.
 
 ### Commit Reminder
 

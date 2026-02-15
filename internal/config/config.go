@@ -21,14 +21,21 @@ type Config struct {
 	SidebarWidth          int          `yaml:"sidebar_width" json:"sidebar_width"`
 	ClaudeCommand         string       `yaml:"claude_command" json:"claude_command"`
 	ClaudeModels          []ModelEntry `yaml:"claude_models" json:"claude_models"`
-	CommitReminderMinutes int          `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
-	RestoreSession        *bool        `yaml:"restore_session" json:"restore_session"`
+	CommitReminderMinutes int            `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
+	RestoreSession        *bool          `yaml:"restore_session" json:"restore_session"`
+	Commands              []CommandEntry `yaml:"commands" json:"commands"`
 }
 
 // ModelEntry represents a selectable Claude model in the launch dialog.
 type ModelEntry struct {
 	Label string `yaml:"label" json:"label"`
 	ID    string `yaml:"id" json:"id"`
+}
+
+// CommandEntry represents a user-defined command in the command palette.
+type CommandEntry struct {
+	Name string `yaml:"name" json:"name"`
+	Text string `yaml:"text" json:"text"`
 }
 
 // DefaultConfig returns the built-in defaults.
@@ -51,6 +58,9 @@ func DefaultConfig() Config {
 			{Label: "Opus 4.6", ID: "claude-opus-4-6"},
 			{Label: "Sonnet 4.5", ID: "claude-sonnet-4-5-20250929"},
 			{Label: "Haiku 4.5", ID: "claude-haiku-4-5-20251001"},
+		},
+		Commands: []CommandEntry{
+			{Name: "Commit & Push", Text: "git add -A && git commit -m 'update' && git push"},
 		},
 	}
 }

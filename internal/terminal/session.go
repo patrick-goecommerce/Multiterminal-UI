@@ -183,6 +183,8 @@ func (s *Session) readLoop() {
 			break
 		}
 	}
+	// Sender closes the channel so receivers (streamOutput) detect completion.
+	close(s.RawOutputCh)
 }
 
 // waitLoop waits for the process to exit and updates the session status.

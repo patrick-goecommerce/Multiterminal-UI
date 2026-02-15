@@ -21,6 +21,7 @@ type App struct {
 	ctx       context.Context
 	cfg       config.Config
 	sessions  map[int]*terminal.Session
+	queues    map[int]*sessionQueue
 	mu        sync.Mutex
 	nextID    int
 	cancelAll context.CancelFunc
@@ -31,6 +32,7 @@ func NewApp(cfg config.Config) *App {
 	return &App{
 		cfg:      cfg,
 		sessions: make(map[int]*terminal.Session),
+		queues:   make(map[int]*sessionQueue),
 	}
 }
 
@@ -88,6 +90,11 @@ func (a *App) CreateSession(argv []string, dir string, rows int, cols int) int {
 
 	log.Printf("[CreateSession] id=%d argv=%v dir=%q rows=%d cols=%d", id, argv, dir, rows, cols)
 
+	// Use configured default shell when no command specified
+	if len(argv) == 0 && a.cfg.DefaultShell != "" {
+		argv = []string{a.cfg.DefaultShell}
+	}
+
 	sess := terminal.NewSession(id, rows, cols)
 	if err := sess.Start(argv, dir, nil); err != nil {
 		errMsg := fmt.Sprintf("Session start failed: %v", err)
@@ -137,14 +144,25 @@ func (a *App) ResizeSession(id int, rows int, cols int) {
 }
 
 // CloseSession terminates a session and removes it.
+// The session is closed asynchronously but removed from the map only
+// after Close() completes, ensuring streamOutput drains all buffered
+// data before the session is gone.
 func (a *App) CloseSession(id int) {
 	a.mu.Lock()
 	sess := a.sessions[id]
-	delete(a.sessions, id)
 	a.mu.Unlock()
-	if sess != nil {
-		go sess.Close()
+	if sess == nil {
+		return
 	}
+	go func() {
+		sess.Close() // blocks until process exits and readLoop closes RawOutputCh
+		a.mu.Lock()
+		delete(a.sessions, id)
+		delete(a.queues, id)
+		a.mu.Unlock()
+		// Clean up per-session activity tracking to prevent memory leak
+		cleanupActivityTracking(id)
+	}()
 }
 
 // GetConfig returns the current application configuration.
@@ -211,17 +229,16 @@ func (a *App) SelectDirectory(startDir string) string {
 
 // streamOutput reads raw PTY bytes from the session and emits them as
 // base64-encoded chunks to the frontend via Wails events.
+// It exits when RawOutputCh is closed (by readLoop) or the app context ends.
 func (a *App) streamOutput(id int, sess *terminal.Session) {
 	for {
 		select {
 		case data, ok := <-sess.RawOutputCh:
 			if !ok {
-				return
+				return // channel closed by readLoop — all data drained
 			}
 			b64 := base64.StdEncoding.EncodeToString(data)
 			runtime.EventsEmit(a.ctx, "terminal:output", id, b64)
-		case <-sess.Done():
-			return
 		case <-a.ctx.Done():
 			return
 		}

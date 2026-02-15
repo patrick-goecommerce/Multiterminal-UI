@@ -6,6 +6,7 @@
   import { config } from '../stores/config';
   import * as App from '../../wailsjs/go/backend/App';
   import { EventsOn, ClipboardGetText, ClipboardSetText } from '../../wailsjs/runtime/runtime';
+  import QueuePanel from './QueuePanel.svelte';
 
   export let pane: Pane;
 
@@ -20,7 +21,11 @@
   let editName = '';
   let nameInput: HTMLInputElement;
   let zoomTimer: ReturnType<typeof setTimeout> | null = null;
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null;
   let isZooming = false;
+  let showQueue = false;
+  let queueCount = 0;
+  let queueCleanup: (() => void) | null = null;
 
   onMount(() => {
     termInstance = createTerminal($currentTheme);
@@ -111,21 +116,35 @@
       }
     }, { passive: false });
 
-    // Auto-resize on container size change (skip during zoom)
+    // Auto-resize on container size change (debounced, skip during zoom)
     resizeObserver = new ResizeObserver(() => {
-      if (termInstance && !isZooming) {
-        termInstance.fitAddon.fit();
-        const dims = termInstance.fitAddon.proposeDimensions();
-        if (dims) {
-          App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
+      if (!termInstance || isZooming) return;
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (termInstance) {
+          termInstance.fitAddon.fit();
+          const dims = termInstance.fitAddon.proposeDimensions();
+          if (dims) {
+            App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
+          }
         }
-      }
+      }, 100);
     });
     resizeObserver.observe(containerEl);
+
+    // Listen for queue updates to show badge count
+    queueCleanup = EventsOn('queue:update', (sid: number) => {
+      if (sid === pane.sessionId) {
+        App.GetQueue(pane.sessionId).then(items => {
+          queueCount = items.filter((i: any) => i.status !== 'done').length;
+        });
+      }
+    });
   });
 
   onDestroy(() => {
     if (cleanupFn) cleanupFn();
+    if (queueCleanup) queueCleanup();
     resizeObserver?.disconnect();
     termInstance?.dispose();
   });
@@ -243,6 +262,9 @@
       {#if pane.cost}
         <span class="cost-label">{pane.cost}</span>
       {/if}
+      <button class="pane-btn queue-toggle" class:queue-active={queueCount > 0} on:click|stopPropagation={() => (showQueue = !showQueue)} title="Pipeline Queue">
+        &#9654;{#if queueCount > 0}<span class="queue-badge">{queueCount}</span>{/if}
+      </button>
       <button class="pane-btn" on:click|stopPropagation={handleMaximize} title="Maximize">
         &#x26F6;
       </button>
@@ -251,11 +273,13 @@
       </button>
     </div>
   </div>
+  <QueuePanel sessionId={pane.sessionId} visible={showQueue} />
   <div class="terminal-container" bind:this={containerEl}></div>
 </div>
 
 <style>
   .terminal-pane {
+    position: relative;
     display: flex;
     flex-direction: column;
     background: var(--pane-bg);
@@ -405,6 +429,24 @@
 
   .pane-btn:hover { background: var(--bg-tertiary); color: var(--fg); }
   .pane-btn.close:hover { background: var(--error); color: white; }
+
+  .queue-toggle { position: relative; font-size: 10px; }
+  .queue-toggle.queue-active { color: var(--accent); }
+  .queue-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 9px;
+    font-weight: 700;
+    min-width: 14px;
+    height: 14px;
+    line-height: 14px;
+    text-align: center;
+    border-radius: 7px;
+    padding: 0 3px;
+  }
 
   .terminal-container {
     flex: 1;

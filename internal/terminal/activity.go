@@ -126,8 +126,8 @@ func (s *Session) ResetActivity() {
 // Token/cost regex patterns
 var (
 	costPattern        = regexp.MustCompile(`\$(\d+\.\d+)`)
-	inputTokenPattern  = regexp.MustCompile(`(\d+\.?\d*)[kK]?\s*(?:input|in\b)`)
-	outputTokenPattern = regexp.MustCompile(`(\d+\.?\d*)[kK]?\s*(?:output|out\b)`)
+	inputTokenPattern  = regexp.MustCompile(`(\d+\.?\d*[kK]?)\s*(?:input|in\b)`)
+	outputTokenPattern = regexp.MustCompile(`(\d+\.?\d*[kK]?)\s*(?:output|out\b)`)
 
 	// Needs user input: permission prompts, Y/n confirmations, etc.
 	needsInputPattern = regexp.MustCompile(`(?i)` +
@@ -139,9 +139,11 @@ var (
 	// Prompt returned — Claude or shell is done and waiting for new input.
 	// Matches: ❯, >, $, %, # at end of line (with optional whitespace)
 	// Also matches Windows cmd.exe prompt like C:\path>
+	// Note: no whitespace requirement before $/%/# because real prompts like
+	// "user@host:~/project$" have path chars directly before the prompt char.
 	promptPattern = regexp.MustCompile(
 		`[❯›»]\s*$|` + // Claude Code prompt characters (U+276F, U+203A, U+00BB)
-		`(?:^|\s)[>$%#]\s*$|` + // Unix shell prompts
+		`[>$%#]\s*$|` + // Unix shell prompts (at end of line)
 		`^[A-Za-z]:\\[^>]*>\s*$`) // Windows cmd.exe prompt (C:\Users\x>)
 )
 

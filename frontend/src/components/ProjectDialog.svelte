@@ -26,7 +26,8 @@
       const name = prompt('Projektname:');
       if (!name) return;
       // Create directory via backend
-      const fullPath = parentDir + '\\' + name;
+      const sep = parentDir.includes('/') ? '/' : '\\';
+      const fullPath = parentDir + sep + name;
       await App.CreateDirectory(fullPath);
       dispatch('create', { name, dir: fullPath });
       dispatch('close');
