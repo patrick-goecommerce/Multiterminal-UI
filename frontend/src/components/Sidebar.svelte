@@ -2,6 +2,7 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import * as App from '../../wailsjs/go/backend/App';
   import { ClipboardSetText } from '../../wailsjs/runtime/runtime';
+  import FileTreeItem from './FileTreeItem.svelte';
 
   export let visible: boolean = false;
   export let dir: string = '';
@@ -55,49 +56,8 @@
     } catch {}
   }
 
-  async function toggleDir(entry: FileEntry) {
-    if (!entry.isDir) return;
-    if (entry.expanded) {
-      entry.expanded = false;
-      entries = entries;
-      return;
-    }
-    if (!entry.loaded) {
-      try {
-        const children = await App.ListDirectory(entry.path);
-        entry.children = (children || []).map((e: any) => ({ ...e, expanded: false, children: [], loaded: false }));
-        entry.loaded = true;
-      } catch {
-        entry.children = [];
-      }
-    }
-    entry.expanded = true;
-    entries = entries;
-  }
-
   let copiedPath = '';
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function handleFileClick(e: MouseEvent, entry: FileEntry) {
-    if (e.shiftKey) {
-      // Shift+Click → copy path to clipboard
-      e.preventDefault();
-      ClipboardSetText(entry.path);
-      copiedPath = entry.path;
-      if (copiedTimer) clearTimeout(copiedTimer);
-      copiedTimer = setTimeout(() => { copiedPath = ''; }, 1500);
-      return;
-    }
-    selectFile(entry);
-  }
-
-  function selectFile(entry: FileEntry) {
-    if (entry.isDir) {
-      toggleDir(entry);
-    } else {
-      dispatch('selectFile', { path: entry.path });
-    }
-  }
 
   async function search() {
     if (!searchQuery.trim()) {
@@ -119,41 +79,12 @@
     searching = false;
   }
 
-  function getGitStatus(path: string): string {
-    return gitStatuses[path] || '';
-  }
-
-  function getStatusLabel(status: string): string {
-    switch (status) {
-      case 'M': return 'M';
-      case '?': return 'N';
-      case 'A': return 'A';
-      case 'D': return 'D';
-      case 'R': return 'R';
-      default: return '';
-    }
-  }
-
-  function getStatusClass(status: string): string {
-    switch (status) {
-      case 'M': return 'git-modified';
-      case '?': return 'git-new';
-      case 'A': return 'git-added';
-      case 'D': return 'git-deleted';
-      case 'R': return 'git-renamed';
-      default: return '';
-    }
-  }
-
   function sortEntries(items: FileEntry[]): FileEntry[] {
     if (!sortModifiedFirst) return items;
     return [...items].sort((a, b) => {
-      const aStatus = getGitStatus(a.path);
-      const bStatus = getGitStatus(b.path);
-      const aChanged = aStatus !== '';
-      const bChanged = bStatus !== '';
+      const aChanged = (gitStatuses[a.path] || '') !== '';
+      const bChanged = (gitStatuses[b.path] || '') !== '';
       if (aChanged !== bChanged) return aChanged ? -1 : 1;
-      // Keep dirs-first within same group
       if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
       return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
@@ -197,52 +128,38 @@
     <div class="shift-hint">Shift+Click = Pfad kopieren</div>
     <div class="file-list">
       {#if searching && searchResults.length > 0}
-        {#each searchResults as entry}
-          {@const status = getGitStatus(entry.path)}
-          <button class="file-entry {getStatusClass(status)}" on:click={(e) => handleFileClick(e, entry)} title={entry.path}>
-            <span class="file-icon">{entry.isDir ? '\u{1F4C1}' : '\u{1F4C4}'}</span>
-            <span class="file-name">{entry.name}</span>
-            {#if copiedPath === entry.path}
-              <span class="copied-badge">kopiert!</span>
-            {:else if status}
-              <span class="git-badge {getStatusClass(status)}">{getStatusLabel(status)}</span>
-            {/if}
-          </button>
+        {#each searchResults as entry (entry.path)}
+          <FileTreeItem
+            {entry}
+            {gitStatuses}
+            {copiedPath}
+            {sortModifiedFirst}
+            on:selectFile
+            on:shiftclick={(e) => {
+              ClipboardSetText(e.detail.path);
+              copiedPath = e.detail.path;
+              if (copiedTimer) clearTimeout(copiedTimer);
+              copiedTimer = setTimeout(() => { copiedPath = ''; }, 1500);
+            }}
+          />
         {/each}
       {:else if searching && searchQuery}
         <div class="no-results">Keine Ergebnisse</div>
       {:else}
-        {#each sortedEntries as entry}
-          {@const status = getGitStatus(entry.path)}
-          <button class="file-entry {getStatusClass(status)}" on:click={(e) => handleFileClick(e, entry)} title={entry.path}>
-            <span class="file-icon">
-              {#if entry.isDir}
-                {entry.expanded ? '\u{1F4C2}' : '\u{1F4C1}'}
-              {:else}
-                {'\u{1F4C4}'}
-              {/if}
-            </span>
-            <span class="file-name">{entry.name}</span>
-            {#if copiedPath === entry.path}
-              <span class="copied-badge">kopiert!</span>
-            {:else if status}
-              <span class="git-badge {getStatusClass(status)}">{getStatusLabel(status)}</span>
-            {/if}
-          </button>
-          {#if entry.expanded && entry.children}
-            {#each sortEntries(entry.children) as child}
-              {@const childStatus = getGitStatus(child.path)}
-              <button class="file-entry nested {getStatusClass(childStatus)}" on:click={(e) => handleFileClick(e, child)} title={child.path}>
-                <span class="file-icon">{child.isDir ? '\u{1F4C1}' : '\u{1F4C4}'}</span>
-                <span class="file-name">{child.name}</span>
-                {#if copiedPath === child.path}
-                  <span class="copied-badge">kopiert!</span>
-                {:else if childStatus}
-                  <span class="git-badge {getStatusClass(childStatus)}">{getStatusLabel(childStatus)}</span>
-                {/if}
-              </button>
-            {/each}
-          {/if}
+        {#each sortedEntries as entry (entry.path)}
+          <FileTreeItem
+            {entry}
+            {gitStatuses}
+            {copiedPath}
+            {sortModifiedFirst}
+            on:selectFile
+            on:shiftclick={(e) => {
+              ClipboardSetText(e.detail.path);
+              copiedPath = e.detail.path;
+              if (copiedTimer) clearTimeout(copiedTimer);
+              copiedTimer = setTimeout(() => { copiedPath = ''; }, 1500);
+            }}
+          />
         {/each}
       {/if}
     </div>
@@ -303,35 +220,6 @@
 
   .file-list { flex: 1; overflow-y: auto; padding: 4px 0; }
 
-  .file-entry {
-    display: flex; align-items: center; gap: 6px; width: 100%;
-    padding: 3px 10px; background: none; border: none;
-    color: var(--fg); font-size: 12px; cursor: pointer; text-align: left;
-  }
-  .file-entry:hover { background: var(--bg-tertiary); }
-  .file-entry.nested { padding-left: 26px; }
-
-  /* Git status file name coloring */
-  .file-entry.git-modified { color: #e2b93d; }
-  .file-entry.git-new { color: #73c991; }
-  .file-entry.git-added { color: #73c991; }
-  .file-entry.git-deleted { color: #f87171; }
-  .file-entry.git-renamed { color: #6bc5d2; }
-
-  .file-icon { font-size: 12px; flex-shrink: 0; }
-
-  .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-
-  .git-badge {
-    font-size: 10px; font-weight: 700; padding: 0 4px;
-    border-radius: 3px; flex-shrink: 0; line-height: 16px;
-  }
-  .git-badge.git-modified { background: #e2b93d22; color: #e2b93d; }
-  .git-badge.git-new { background: #73c99122; color: #73c991; }
-  .git-badge.git-added { background: #73c99122; color: #73c991; }
-  .git-badge.git-deleted { background: #f8717122; color: #f87171; }
-  .git-badge.git-renamed { background: #6bc5d222; color: #6bc5d2; }
-
   .no-results { padding: 12px; text-align: center; color: var(--fg-muted); font-size: 12px; }
 
   .shift-hint {
@@ -340,17 +228,5 @@
     color: var(--fg-muted);
     border-bottom: 1px solid var(--border);
     opacity: 0.7;
-  }
-
-  .copied-badge {
-    font-size: 10px; font-weight: 600; padding: 0 4px;
-    border-radius: 3px; flex-shrink: 0; line-height: 16px;
-    background: #22c55e33; color: #22c55e;
-    animation: fade-in 0.15s ease;
-  }
-
-  @keyframes fade-in {
-    from { opacity: 0; transform: scale(0.8); }
-    to { opacity: 1; transform: scale(1); }
   }
 </style>
