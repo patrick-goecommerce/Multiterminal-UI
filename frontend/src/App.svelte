@@ -10,6 +10,7 @@
   import SettingsDialog from './components/SettingsDialog.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
   import CrashDialog from './components/CrashDialog.svelte';
+  import IssueDialog from './components/IssueDialog.svelte';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
@@ -27,6 +28,9 @@
   let showCommandPalette = false;
   let showSidebar = false;
   let showCrashDialog = false;
+  let showIssueDialog = false;
+  let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
+  let issueCount = 0;
   let branch = '';
   let commitAgeMinutes = -1;
 
@@ -135,6 +139,7 @@
     window.addEventListener('beforeunload', saveSession);
     updateBranch();
     updateCommitAge();
+    updateIssueCount();
     branchInterval = setInterval(updateBranch, 10000);
     commitAgeInterval = setInterval(updateCommitAge, 30000);
     document.addEventListener('keydown', handleGlobalKeydown);
@@ -154,7 +159,7 @@
     try { branch = await App.GetGitBranch(tab.dir || '.'); } catch { branch = ''; }
   }
 
-  $: if ($activeTab) { updateBranch(); updateCommitAge(); }
+  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); }
 
   async function updateCommitAge() {
     const tab = $activeTab;
@@ -272,6 +277,37 @@
     App.EnableLogging(true);
     config.update(c => ({ ...c, logging_enabled: true }));
   }
+
+  async function updateIssueCount() {
+    const tab = $activeTab;
+    if (!tab?.dir) return;
+    try {
+      const issues = await App.GetIssues(tab.dir, 'open');
+      issueCount = issues ? issues.length : 0;
+    } catch { issueCount = 0; }
+  }
+
+  function handleCreateIssue() {
+    editIssueData = null;
+    showIssueDialog = true;
+  }
+
+  function handleEditIssue(e: CustomEvent<any>) {
+    editIssueData = {
+      number: e.detail.number,
+      title: e.detail.title,
+      body: e.detail.body || '',
+      labels: e.detail.labels || [],
+      state: e.detail.state || 'OPEN',
+    };
+    showIssueDialog = true;
+  }
+
+  function handleIssueSaved() {
+    showIssueDialog = false;
+    editIssueData = null;
+    updateIssueCount();
+  }
 </script>
 
 <div class="app">
@@ -289,7 +325,7 @@
   />
 
   <div class="content">
-    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} on:close={() => (showSidebar = false)} on:selectFile={handleSidebarFile} />
+    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} on:close={() => (showSidebar = false)} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} />
     <PaneGrid
       panes={$activeTab?.panes ?? []}
       on:closePane={handleClosePane}
@@ -306,6 +342,7 @@
   <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} />
   <CommandPalette visible={showCommandPalette} on:send={handleSendCommand} on:close={() => (showCommandPalette = false)} />
   <CrashDialog visible={showCrashDialog} on:enable={handleCrashEnable} on:dismiss={() => (showCrashDialog = false)} />
+  <IssueDialog visible={showIssueDialog} dir={$activeTab?.dir ?? ''} editIssue={editIssueData} on:saved={handleIssueSaved} on:close={() => { showIssueDialog = false; editIssueData = null; }} />
 </div>
 
 <style>
