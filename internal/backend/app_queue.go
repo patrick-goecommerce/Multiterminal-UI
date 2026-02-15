@@ -160,7 +160,7 @@ func (a *App) processQueue(sessionId int) {
 	a.mu.Unlock()
 
 	if hasNext && sess != nil {
-		_, err := sess.Write([]byte(next.Prompt + "\n"))
+		_, err := sess.Write([]byte(next.Prompt + "\r"))
 		if err != nil {
 			log.Printf("[queue] session %d: write error for item %d: %v", sessionId, next.ID, err)
 		} else {
