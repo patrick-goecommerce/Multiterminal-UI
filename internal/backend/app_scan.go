@@ -86,7 +86,9 @@ func (a *App) scanAllSessions() {
 
 		// Only emit when state or cost actually changed
 		prevActivityMu.Lock()
-		changed := prevActivity[id] != actStr || prevCost[id] != costStr
+		activityChanged := prevActivity[id] != actStr
+		costChanged := prevCost[id] != costStr
+		changed := activityChanged || costChanged
 		if changed {
 			prevActivity[id] = actStr
 			prevCost[id] = costStr
@@ -100,6 +102,11 @@ func (a *App) scanAllSessions() {
 				Activity: actStr,
 				Cost:     costStr,
 			})
+		}
+
+		// Trigger pipeline queue on fresh "done" transition
+		if activityChanged && actStr == "done" {
+			a.processQueue(id)
 		}
 	}
 }

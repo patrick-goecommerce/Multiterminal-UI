@@ -86,6 +86,17 @@ Pane borders change when Claude changes state:
 
 This works across all panes, so you can work in one terminal and see at a glance when another needs attention.
 
+### Pipeline Queue
+
+Queue up multiple prompts for a Claude pane. They execute sequentially — when Claude finishes one task, the next prompt is automatically sent.
+
+1. Click the **▶** button in any pane's title bar to open the queue panel
+2. Type a prompt and press **Enter** to add it to the queue
+3. If Claude is idle, the first prompt starts immediately
+4. When Claude finishes (activity → done), the next prompt is sent automatically
+
+Use this to plan a batch of tasks, queue them up, and walk away. The badge on the ▶ button shows how many items are pending.
+
 ### Commit Reminder
 
 The footer shows how long ago the last git commit was, with color coding:

@@ -21,6 +21,7 @@ type App struct {
 	ctx       context.Context
 	cfg       config.Config
 	sessions  map[int]*terminal.Session
+	queues    map[int]*sessionQueue
 	mu        sync.Mutex
 	nextID    int
 	cancelAll context.CancelFunc
@@ -31,6 +32,7 @@ func NewApp(cfg config.Config) *App {
 	return &App{
 		cfg:      cfg,
 		sessions: make(map[int]*terminal.Session),
+		queues:   make(map[int]*sessionQueue),
 	}
 }
 
@@ -156,6 +158,7 @@ func (a *App) CloseSession(id int) {
 		sess.Close() // blocks until process exits and readLoop closes RawOutputCh
 		a.mu.Lock()
 		delete(a.sessions, id)
+		delete(a.queues, id)
 		a.mu.Unlock()
 		// Clean up per-session activity tracking to prevent memory leak
 		cleanupActivityTracking(id)
