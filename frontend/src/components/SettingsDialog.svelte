@@ -5,6 +5,7 @@
   import type { ThemeName } from '../stores/theme';
   import * as App from '../../wailsjs/go/backend/App';
   import ColorPicker from './ColorPicker.svelte';
+  import { playBell } from '../lib/audio';
 
   export let visible: boolean = false;
 
@@ -29,6 +30,13 @@
   let claudeStatus: 'unknown' | 'found' | 'notfound' = 'unknown';
   let claudeStatusPath = '';
 
+  let audioEnabled = $config.audio?.enabled ?? true;
+  let audioWhenFocused = $config.audio?.when_focused ?? true;
+  let audioVolume = $config.audio?.volume ?? 50;
+  let audioDoneSound = $config.audio?.done_sound || '';
+  let audioInputSound = $config.audio?.input_sound || '';
+  let audioErrorSound = $config.audio?.error_sound || '';
+
   $: if (visible) {
     colorValue = $config.terminal_color || '#39ff14';
     selectedTheme = ($config.theme as ThemeName) || 'dark';
@@ -36,6 +44,12 @@
     loggingEnabled = $config.logging_enabled || false;
     useWorktrees = $config.use_worktrees || false;
     claudeCommand = $config.claude_command || '';
+    audioEnabled = $config.audio?.enabled ?? true;
+    audioWhenFocused = $config.audio?.when_focused ?? true;
+    audioVolume = $config.audio?.volume ?? 50;
+    audioDoneSound = $config.audio?.done_sound || '';
+    audioInputSound = $config.audio?.input_sound || '';
+    audioErrorSound = $config.audio?.error_sound || '';
     App.GetLogPath().then(p => logPath = p).catch(() => {});
     detectClaude();
   }
@@ -87,8 +101,38 @@
     } catch {}
   }
 
+  async function browseAudioFile(target: 'done' | 'input' | 'error') {
+    try {
+      const path = await App.BrowseForAudioFile();
+      if (path) {
+        if (target === 'done') audioDoneSound = path;
+        else if (target === 'input') audioInputSound = path;
+        else audioErrorSound = path;
+      }
+    } catch {}
+  }
+
+  function previewAudio() {
+    playBell('done', audioVolume, audioDoneSound || undefined);
+  }
+
   async function save() {
-    const updated = { ...$config, terminal_color: colorValue, theme: selectedTheme, logging_enabled: loggingEnabled, use_worktrees: useWorktrees, claude_command: claudeCommand };
+    const updated = {
+      ...$config,
+      terminal_color: colorValue,
+      theme: selectedTheme,
+      logging_enabled: loggingEnabled,
+      use_worktrees: useWorktrees,
+      claude_command: claudeCommand,
+      audio: {
+        enabled: audioEnabled,
+        volume: audioVolume,
+        when_focused: audioWhenFocused,
+        done_sound: audioDoneSound,
+        input_sound: audioInputSound,
+        error_sound: audioErrorSound,
+      },
+    };
     config.set(updated);
     try { await App.SaveConfig(updated); } catch (err) { console.error('[SettingsDialog] SaveConfig failed:', err); }
     dispatch('saved');
@@ -104,6 +148,12 @@
     colorValue = '#39ff14';
     selectedTheme = 'dark';
     applyTheme('dark', '#39ff14');
+    audioEnabled = true;
+    audioWhenFocused = true;
+    audioVolume = 50;
+    audioDoneSound = '';
+    audioInputSound = '';
+    audioErrorSound = '';
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -188,6 +238,62 @@
         {/if}
       </div>
 
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Audio</label>
+        <p class="setting-desc">Akustische Benachrichtigungen wenn Claude fertig ist oder Eingabe braucht.</p>
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <button class="toggle-btn" class:toggle-on={audioEnabled} on:click={() => audioEnabled = !audioEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{audioEnabled ? 'Aktiv' : 'Inaktiv'}</span>
+        </div>
+        {#if audioEnabled}
+          <div class="toggle-row" style="margin-bottom: 12px;">
+            <button class="toggle-btn" class:toggle-on={audioWhenFocused} on:click={() => audioWhenFocused = !audioWhenFocused}>
+              <span class="toggle-knob"></span>
+            </button>
+            <span class="toggle-label">Auch bei fokussiertem Fenster</span>
+          </div>
+          <div class="volume-row">
+            <label class="volume-label" for="audio-volume">Lautstärke</label>
+            <input id="audio-volume" type="range" min="0" max="100" bind:value={audioVolume} class="volume-slider" />
+            <span class="volume-value">{audioVolume}%</span>
+            <button class="claude-btn" on:click={previewAudio} title="Vorschau">&#9654;</button>
+          </div>
+          <div class="sound-picker">
+            <span class="sound-label">Fertig-Sound</span>
+            <div class="claude-row">
+              <input type="text" class="claude-input" bind:value={audioDoneSound} placeholder="Standard (Synthesizer)" />
+              <button class="claude-btn" on:click={() => browseAudioFile('done')} title="Durchsuchen">&#128194;</button>
+              {#if audioDoneSound}
+                <button class="claude-btn" on:click={() => audioDoneSound = ''} title="Zurücksetzen">&times;</button>
+              {/if}
+            </div>
+          </div>
+          <div class="sound-picker">
+            <span class="sound-label">Eingabe-Sound</span>
+            <div class="claude-row">
+              <input type="text" class="claude-input" bind:value={audioInputSound} placeholder="Standard (Synthesizer)" />
+              <button class="claude-btn" on:click={() => browseAudioFile('input')} title="Durchsuchen">&#128194;</button>
+              {#if audioInputSound}
+                <button class="claude-btn" on:click={() => audioInputSound = ''} title="Zurücksetzen">&times;</button>
+              {/if}
+            </div>
+          </div>
+          <div class="sound-picker">
+            <span class="sound-label">Fehler-Sound</span>
+            <div class="claude-row">
+              <input type="text" class="claude-input" bind:value={audioErrorSound} placeholder="Standard (Synthesizer)" />
+              <button class="claude-btn" on:click={() => browseAudioFile('error')} title="Durchsuchen">&#128194;</button>
+              {#if audioErrorSound}
+                <button class="claude-btn" on:click={() => audioErrorSound = ''} title="Zurücksetzen">&times;</button>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+
       <div class="dialog-footer">
         <button class="btn-reset" on:click={resetDefault}>Standard</button>
         <div class="footer-right-btns">
@@ -208,6 +314,7 @@
   .dialog {
     background: var(--bg); border: 1px solid var(--border);
     border-radius: 12px; padding: 24px; min-width: 400px;
+    max-height: 85vh; overflow-y: auto;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   }
 
@@ -295,4 +402,26 @@
   }
   .claude-status.found { color: #a6e3a1; }
   .claude-status.notfound { color: #f38ba8; }
+
+  .volume-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  }
+
+  .volume-label {
+    font-size: 12px; color: var(--fg-muted); white-space: nowrap; min-width: 70px;
+  }
+
+  .volume-slider {
+    flex: 1; height: 4px; accent-color: var(--accent); cursor: pointer;
+  }
+
+  .volume-value {
+    font-size: 12px; color: var(--fg-muted); min-width: 36px; text-align: right;
+  }
+
+  .sound-picker { margin-bottom: 8px; }
+
+  .sound-label {
+    font-size: 12px; color: var(--fg-muted); display: block; margin-bottom: 4px;
+  }
 </style>

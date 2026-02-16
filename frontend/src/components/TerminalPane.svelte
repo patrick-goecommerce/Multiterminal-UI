@@ -3,6 +3,7 @@
   import { createTerminal, getTerminalTheme } from '../lib/terminal';
   import { pasteToSession, copySelection, writeTextToSession } from '../lib/clipboard';
   import { sendNotification } from '../lib/notifications';
+  import { playBell, audioMuted } from '../lib/audio';
   import type { Pane } from '../stores/tabs';
   import { currentTheme } from '../stores/theme';
   import { config } from '../stores/config';
@@ -113,6 +114,11 @@
 
     termInstance.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type !== 'keydown') return true;
+      if (e.ctrlKey && e.key === 'v') {
+        e.preventDefault();
+        pasteToSession(pane.sessionId);
+        return false;
+      }
       if (e.ctrlKey && e.key === 'c' && termInstance?.terminal.hasSelection()) {
         copySelection(termInstance.terminal);
         return false;
@@ -202,6 +208,11 @@
         }, 150);
       }
     };
+    // Prevent native paste – we handle Ctrl+V manually via attachCustomKeyEventHandler
+    // to use the Wails clipboard API. Without this, the browser paste event also fires,
+    // causing double-paste through xterm.js onData.
+    containerEl.addEventListener('paste', (e) => e.preventDefault(), true);
+
     containerEl.addEventListener('wheel', wheelHandler, { passive: false });
 
     resizeObserver = new ResizeObserver(() => {
@@ -274,11 +285,21 @@
   $: if (pane.activity !== lastNotifiedActivity) {
     const prev = lastNotifiedActivity;
     lastNotifiedActivity = pane.activity;
-    if (!document.hasFocus() && (pane.mode === 'claude' || pane.mode === 'claude-yolo')) {
+    if (pane.mode === 'claude' || pane.mode === 'claude-yolo') {
+      const audio = $config.audio;
+      const shouldPlayAudio = audio.enabled && !$audioMuted &&
+        (audio.when_focused || !document.hasFocus());
+
       if (pane.activity === 'done' && prev === 'active') {
-        sendNotification(`${pane.name} - Fertig`, 'Claude ist fertig. Prompt bereit.');
+        if (!document.hasFocus()) {
+          sendNotification(`${pane.name} - Fertig`, 'Claude ist fertig. Prompt bereit.');
+        }
+        if (shouldPlayAudio) playBell('done', audio.volume, audio.done_sound || undefined);
       } else if (pane.activity === 'needsInput') {
-        sendNotification(`${pane.name} - Eingabe nötig`, 'Claude wartet auf Bestätigung.');
+        if (!document.hasFocus()) {
+          sendNotification(`${pane.name} - Eingabe nötig`, 'Claude wartet auf Bestätigung.');
+        }
+        if (shouldPlayAudio) playBell('needsInput', audio.volume, audio.input_sound || undefined);
       }
     }
   }
