@@ -31,6 +31,10 @@
     dispatch('issueAction', e.detail);
   }
 
+  function handleNavigateFile(e: CustomEvent) {
+    dispatch('navigateFile', e.detail);
+  }
+
   function handleSplitPane() {
     dispatch('splitPane');
   }
@@ -54,6 +58,7 @@
       on:rename={handleRename}
       on:restart={handleRestart}
       on:issueAction={handleIssueAction}
+      on:navigateFile={handleNavigateFile}
       on:splitPane={handleSplitPane}
     />
   {/each}

@@ -339,6 +339,11 @@
     showCommandPalette = false;
   }
 
+  function handleNavigateFile(e: CustomEvent<{ path: string }>) {
+    showSidebar = true;
+    sidebarView = 'explorer';
+  }
+
   function handleSidebarFile(e: CustomEvent<{ path: string }>) {
     const tab = $activeTab;
     if (!tab) return;
@@ -471,6 +476,7 @@
       on:renamePane={handleRenamePane}
       on:restartPane={handleRestartPane}
       on:issueAction={handleIssueAction}
+      on:navigateFile={handleNavigateFile}
       on:splitPane={() => (showLaunchDialog = true)}
     />
   </div>
