@@ -10,10 +10,10 @@
     "name": "Patrick GoEcommerce"
   },
   "info": {
-    "companyName": "",
+    "companyName": "Patrick GoEcommerce",
     "productName": "Multiterminal UI",
-    "productVersion": "1.16.2",
-    "copyright": "",
+    "productVersion": "1.17.0",
+    "copyright": "© 2025-2026 Patrick GoEcommerce",
     "comments": "A terminal multiplexer for Claude Code power users"
   }
 }
