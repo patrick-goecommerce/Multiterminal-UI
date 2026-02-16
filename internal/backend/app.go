@@ -280,7 +280,7 @@ func (a *App) SelectDirectory(startDir string) string {
 // (which produce many small chunks) arrive as a single event, preventing
 // cursor flicker in xterm.js.
 func (a *App) streamOutput(id int, sess *terminal.Session) {
-	const coalesceDelay = 4 * time.Millisecond
+	const coalesceDelay = 8 * time.Millisecond
 	for {
 		select {
 		case data, ok := <-sess.RawOutputCh:
