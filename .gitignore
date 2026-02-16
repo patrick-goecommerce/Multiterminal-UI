@@ -24,6 +24,7 @@ installer-output/
 
 # Internal docs
 COMPETITOR_ANALYSIS.md
+FEATURE_IDEAS.md
 
 # IDE
 .claude/
