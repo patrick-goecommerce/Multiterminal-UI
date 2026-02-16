@@ -1,5 +1,21 @@
 export namespace backend {
-	
+
+	export class ClaudeDetectResult {
+	    path: string;
+	    source: string;
+	    valid: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new ClaudeDetectResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.source = source["source"];
+	        this.valid = source["valid"];
+	    }
+	}
 	export class FileEntry {
 	    name: string;
 	    path: string;

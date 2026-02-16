@@ -32,9 +32,11 @@ type App struct {
 	sessions      map[int]*terminal.Session
 	queues        map[int]*sessionQueue
 	sessionIssues map[int]*sessionIssue // issue linked to each session
-	mu            sync.Mutex
-	nextID        int
-	cancelAll     context.CancelFunc
+	mu                sync.Mutex
+	nextID            int
+	cancelAll         context.CancelFunc
+	resolvedClaudePath string
+	claudeDetected     bool
 }
 
 // NewApp creates a new App instance with the given configuration.
@@ -55,6 +57,9 @@ func (a *App) Startup(ctx context.Context) {
 	a.health = config.LoadHealth()
 	config.MarkStarting(&a.health)
 	_ = config.SaveHealth(a.health)
+
+	// Resolve Claude CLI path before anything else needs it
+	a.resolveClaudeOnStartup()
 
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
@@ -214,6 +219,8 @@ func (a *App) SaveConfig(cfg config.Config) error {
 		log.Printf("[SaveConfig] error: %v", err)
 		return fmt.Errorf("config save failed: %w", err)
 	}
+	// Re-detect Claude path in case claude_command changed
+	a.resolveClaudeOnStartup()
 	return nil
 }
 

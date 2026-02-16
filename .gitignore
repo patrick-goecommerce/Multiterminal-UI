@@ -22,5 +22,8 @@ frontend/package.json.md5
 # Installer output
 installer-output/
 
+# Internal docs
+COMPETITOR_ANALYSIS.md
+
 # IDE
 .claude/

@@ -7,6 +7,8 @@ export function AddIssueComment(arg1:string,arg2:number,arg3:string):Promise<voi
 
 export function AddToQueue(arg1:number,arg2:string):Promise<backend.QueueItem>;
 
+export function BrowseForClaude():Promise<string>;
+
 export function CheckForUpdates():Promise<backend.UpdateInfo>;
 
 export function CheckGitHubCLI():Promise<string>;
@@ -21,6 +23,8 @@ export function CloseSession(arg1:number):Promise<void>;
 
 export function CreateDirectory(arg1:string):Promise<string>;
 
+export function DetectClaudePath():Promise<backend.ClaudeDetectResult>;
+
 export function CreateIssue(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<backend.Issue>;
 
 export function CreateSession(arg1:Array<string>,arg2:string,arg3:number,arg4:number):Promise<number>;
@@ -34,6 +38,8 @@ export function EnableLogging(arg1:boolean):Promise<string>;
 export function GetAppVersion():Promise<string>;
 
 export function GetConfig():Promise<config.Config>;
+
+export function GetResolvedClaudePath():Promise<string>;
 
 export function GetGitBranch(arg1:string):Promise<string>;
 
@@ -58,6 +64,8 @@ export function GetSessionIssue(arg1:number):Promise<number>;
 export function GetWorkingDir():Promise<string>;
 
 export function HasCleanWorkingTree(arg1:string):Promise<boolean>;
+
+export function IsClaudeDetected():Promise<boolean>;
 
 export function IsGitRepo(arg1:string):Promise<boolean>;
 
@@ -86,5 +94,7 @@ export function SelectDirectory(arg1:string):Promise<string>;
 export function SendNotification(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateIssue(arg1:string,arg2:number,arg3:string,arg4:string,arg5:string):Promise<void>;
+
+export function ValidateClaudePath(arg1:string):Promise<boolean>;
 
 export function WriteToSession(arg1:number,arg2:string):Promise<void>;

@@ -10,6 +10,10 @@ export function AddToQueue(arg1, arg2) {
   return window['go']['backend']['App']['AddToQueue'](arg1, arg2);
 }
 
+export function BrowseForClaude() {
+  return window['go']['backend']['App']['BrowseForClaude']();
+}
+
 export function CheckForUpdates() {
   return window['go']['backend']['App']['CheckForUpdates']();
 }
@@ -38,6 +42,10 @@ export function CreateDirectory(arg1) {
   return window['go']['backend']['App']['CreateDirectory'](arg1);
 }
 
+export function DetectClaudePath() {
+  return window['go']['backend']['App']['DetectClaudePath']();
+}
+
 export function CreateIssue(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['CreateIssue'](arg1, arg2, arg3, arg4);
 }
@@ -64,6 +72,10 @@ export function GetAppVersion() {
 
 export function GetConfig() {
   return window['go']['backend']['App']['GetConfig']();
+}
+
+export function GetResolvedClaudePath() {
+  return window['go']['backend']['App']['GetResolvedClaudePath']();
 }
 
 export function GetGitBranch(arg1) {
@@ -112,6 +124,10 @@ export function GetWorkingDir() {
 
 export function HasCleanWorkingTree(arg1) {
   return window['go']['backend']['App']['HasCleanWorkingTree'](arg1);
+}
+
+export function IsClaudeDetected() {
+  return window['go']['backend']['App']['IsClaudeDetected']();
 }
 
 export function IsGitRepo(arg1) {
@@ -168,6 +184,10 @@ export function SendNotification(arg1, arg2) {
 
 export function UpdateIssue(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['backend']['App']['UpdateIssue'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function ValidateClaudePath(arg1) {
+  return window['go']['backend']['App']['ValidateClaudePath'](arg1);
 }
 
 export function WriteToSession(arg1, arg2) {
