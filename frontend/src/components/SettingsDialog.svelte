@@ -26,6 +26,8 @@
   let useWorktrees = $config.use_worktrees || false;
   let logPath = '';
 
+  let dialogEl: HTMLDivElement;
+
   let claudeCommand = $config.claude_command || '';
   let claudeStatus: 'unknown' | 'found' | 'notfound' = 'unknown';
   let claudeStatusPath = '';
@@ -38,6 +40,7 @@
   let audioErrorSound = $config.audio?.error_sound || '';
 
   $: if (visible) {
+    requestAnimationFrame(() => dialogEl?.focus());
     colorValue = $config.terminal_color || '#39ff14';
     selectedTheme = ($config.theme as ThemeName) || 'dark';
     savedTheme = selectedTheme;
@@ -162,15 +165,13 @@
   }
 </script>
 
-<svelte:window on:keydown={visible ? handleKeydown : undefined} />
-
 {#if visible}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="overlay" on:click={close}>
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="dialog" on:click|stopPropagation>
+    <div class="dialog" on:click|stopPropagation bind:this={dialogEl} tabindex="-1" on:keydown={handleKeydown}>
       <h3>Einstellungen</h3>
 
       <div class="setting-group">
@@ -316,6 +317,7 @@
     border-radius: 12px; padding: 24px; min-width: 400px;
     max-height: 85vh; overflow-y: auto;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    outline: none;
   }
 
   h3 { margin: 0 0 20px; color: var(--fg); font-size: 18px; }

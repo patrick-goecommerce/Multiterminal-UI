@@ -9,6 +9,11 @@
   const dispatch = createEventDispatcher();
 
   let selectedModel = '';
+  let dialogEl: HTMLDivElement;
+
+  $: if (visible) {
+    requestAnimationFrame(() => dialogEl?.focus());
+  }
 
   function launch(type: 'shell' | 'claude' | 'claude-yolo') {
     dispatch('launch', { type, model: selectedModel, issue: issueContext });
@@ -34,15 +39,13 @@
   }
 </script>
 
-<svelte:window on:keydown={visible ? handleKeydown : undefined} />
-
 {#if visible}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="overlay" on:click={close}>
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="dialog" on:click|stopPropagation>
+    <div class="dialog" on:click|stopPropagation bind:this={dialogEl} tabindex="-1" on:keydown={handleKeydown}>
       <h3>{issueContext ? `Claude für #${issueContext.number}` : 'Neues Terminal'}</h3>
       {#if issueContext}
         <div class="issue-context">
@@ -126,6 +129,7 @@
     padding: 20px;
     min-width: 360px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    outline: none;
   }
 
   h3 {
