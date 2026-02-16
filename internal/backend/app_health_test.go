@@ -82,6 +82,7 @@ func TestEnableLogging_Manual(t *testing.T) {
 	}
 	defer f.Close()
 	defer log.SetOutput(os.Stderr) // restore after test
+	defer closeLogFile()
 
 	// Enable logging manually (auto=false)
 	result := app.EnableLogging(false)
@@ -105,6 +106,7 @@ func TestEnableLogging_Auto(t *testing.T) {
 		health: config.HealthState{CleanSinceAuto: 5},
 	}
 	defer log.SetOutput(os.Stderr)
+	defer closeLogFile()
 
 	result := app.EnableLogging(true)
 
@@ -198,6 +200,7 @@ func TestSetupFileLogging_WritesToFile(t *testing.T) {
 	path := filepath.Join(dir, "test-setup.log")
 
 	defer log.SetOutput(os.Stderr)
+	defer closeLogFile()
 
 	err := setupFileLogging(path)
 	if err != nil {
@@ -255,6 +258,7 @@ func TestLoggingEnableDisableCycle(t *testing.T) {
 		health: config.HealthState{},
 	}
 	defer log.SetOutput(os.Stderr)
+	defer closeLogFile()
 
 	// Enable auto-logging
 	result := app.EnableLogging(true)
