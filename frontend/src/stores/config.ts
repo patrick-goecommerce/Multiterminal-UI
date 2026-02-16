@@ -10,6 +10,15 @@ export interface CommandEntry {
   text: string;
 }
 
+export interface AudioConfig {
+  enabled?: boolean;
+  volume: number;
+  when_focused?: boolean;
+  done_sound: string;
+  input_sound: string;
+  error_sound: string;
+}
+
 export interface AppConfig {
   default_shell: string;
   default_dir: string;
@@ -24,6 +33,7 @@ export interface AppConfig {
   logging_enabled?: boolean;
   use_worktrees?: boolean;
   commands: CommandEntry[];
+  audio: AudioConfig;
 }
 
 export const config = writable<AppConfig>({
@@ -44,4 +54,12 @@ export const config = writable<AppConfig>({
   commands: [
     { name: 'Commit & Push', text: "git add -A && git commit -m 'update' && git push" },
   ],
+  audio: {
+    enabled: true,
+    volume: 50,
+    when_focused: true,
+    done_sound: '',
+    input_sound: '',
+    error_sound: '',
+  },
 });

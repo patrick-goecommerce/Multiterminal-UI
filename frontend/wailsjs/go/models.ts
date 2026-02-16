@@ -158,6 +158,22 @@ export namespace backend {
 	        this.color = source["color"];
 	    }
 	}
+	export class MergeConflictInfo {
+	    files: string[];
+	    operation: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MergeConflictInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.files = source["files"];
+	        this.operation = source["operation"];
+	        this.count = source["count"];
+	    }
+	}
 	export class QueueItem {
 	    id: number;
 	    prompt: string;

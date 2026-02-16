@@ -28,6 +28,7 @@ type Config struct {
 	UseWorktrees          *bool          `yaml:"use_worktrees" json:"use_worktrees"`
 	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
+	Audio                 AudioSettings  `yaml:"audio" json:"audio"`
 }
 
 // IssueTracking holds settings for automatic issue progress reporting.
@@ -49,6 +50,16 @@ type ModelEntry struct {
 type CommandEntry struct {
 	Name string `yaml:"name" json:"name"`
 	Text string `yaml:"text" json:"text"`
+}
+
+// AudioSettings holds audio feedback configuration.
+type AudioSettings struct {
+	Enabled     *bool  `yaml:"enabled" json:"enabled"`
+	Volume      int    `yaml:"volume" json:"volume"`
+	WhenFocused *bool  `yaml:"when_focused" json:"when_focused"`
+	DoneSound   string `yaml:"done_sound" json:"done_sound"`
+	InputSound  string `yaml:"input_sound" json:"input_sound"`
+	ErrorSound  string `yaml:"error_sound" json:"error_sound"`
 }
 
 // DefaultConfig returns the built-in defaults.
@@ -83,6 +94,11 @@ func DefaultConfig() Config {
 		},
 		Commands: []CommandEntry{
 			{Name: "Commit & Push", Text: "git add -A && git commit -m 'update' && git push"},
+		},
+		Audio: AudioSettings{
+			Enabled:     boolPtr(true),
+			Volume:      50,
+			WhenFocused: boolPtr(true),
 		},
 	}
 }
@@ -160,6 +176,19 @@ func Load() Config {
 
 	if cfg.CommitReminderMinutes < 0 {
 		cfg.CommitReminderMinutes = 0
+	}
+
+	if cfg.Audio.Volume < 0 {
+		cfg.Audio.Volume = 0
+	}
+	if cfg.Audio.Volume > 100 {
+		cfg.Audio.Volume = 100
+	}
+	if cfg.Audio.Enabled == nil {
+		cfg.Audio.Enabled = boolPtr(true)
+	}
+	if cfg.Audio.WhenFocused == nil {
+		cfg.Audio.WhenFocused = boolPtr(true)
 	}
 
 	if cfg.RestoreSession == nil {

@@ -53,6 +53,8 @@ export function GetLastCommitTime(arg1:string):Promise<number>;
 
 export function GetLogPath():Promise<string>;
 
+export function GetMergeConflicts(arg1:string):Promise<backend.MergeConflictInfo>;
+
 export function GetOrCreateIssueBranch(arg1:string,arg2:number,arg3:string):Promise<string>;
 
 export function GetQueue(arg1:number):Promise<Array<backend.QueueItem>>;

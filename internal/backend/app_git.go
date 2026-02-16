@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -103,6 +104,9 @@ func classifyGitStatus(xy string) string {
 	if x == '?' || y == '?' {
 		return "?"
 	}
+	if x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D') {
+		return "U"
+	}
 	if x == 'A' || y == 'A' {
 		return "A"
 	}
@@ -112,10 +116,82 @@ func classifyGitStatus(xy string) string {
 	if x == 'R' || y == 'R' {
 		return "R"
 	}
-	if x == 'M' || y == 'M' || x == 'U' || y == 'U' {
+	if x == 'M' || y == 'M' {
 		return "M"
 	}
 	return ""
+}
+
+// MergeConflictInfo holds information about current merge conflicts.
+type MergeConflictInfo struct {
+	Files     []string `json:"files"`
+	Operation string   `json:"operation"` // "merge", "rebase", "cherry-pick", ""
+	Count     int      `json:"count"`
+}
+
+// GetMergeConflicts returns conflict information for the given directory.
+func (a *App) GetMergeConflicts(dir string) MergeConflictInfo {
+	info := MergeConflictInfo{Files: []string{}}
+	if dir == "" {
+		return info
+	}
+
+	cmd := exec.Command("git", "diff", "--name-only", "--diff-filter=U")
+	cmd.Dir = dir
+	hideConsole(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return info
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			info.Files = append(info.Files, line)
+		}
+	}
+	info.Count = len(info.Files)
+
+	if info.Count > 0 {
+		info.Operation = detectMergeOperation(dir)
+	}
+	return info
+}
+
+// detectMergeOperation checks git sentinel files to determine the active operation.
+func detectMergeOperation(dir string) string {
+	// Find .git directory
+	cmd := exec.Command("git", "rev-parse", "--git-dir")
+	cmd.Dir = dir
+	hideConsole(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	gitDir := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(dir, gitDir)
+	}
+
+	if fileExists(filepath.Join(gitDir, "CHERRY_PICK_HEAD")) {
+		return "cherry-pick"
+	}
+	if fileExists(filepath.Join(gitDir, "REBASE_HEAD")) || dirExists(filepath.Join(gitDir, "rebase-merge")) || dirExists(filepath.Join(gitDir, "rebase-apply")) {
+		return "rebase"
+	}
+	if fileExists(filepath.Join(gitDir, "MERGE_HEAD")) {
+		return "merge"
+	}
+	return ""
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 // markParentDirs marks all parent directories up to root as modified.
