@@ -215,6 +215,7 @@
     on:rename
     on:restart={() => dispatch('restart', { paneId: pane.id, sessionId: pane.sessionId, mode: pane.mode, model: pane.model, name: pane.name })}
     on:toggleQueue={() => (showQueue = !showQueue)}
+    on:issueAction
   />
   <QueuePanel sessionId={pane.sessionId} visible={showQueue} />
   {#if showSearch}

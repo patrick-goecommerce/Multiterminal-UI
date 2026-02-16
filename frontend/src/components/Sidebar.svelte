@@ -9,6 +9,8 @@
   export let dir: string = '';
   export let width: number = 260;
   export let issueCount: number = 0;
+  export let paneIssues: Record<number, { activity: string; cost: string }> = {};
+  export let initialView: 'explorer' | 'source-control' | 'issues' = 'explorer';
 
   const dispatch = createEventDispatcher();
 
@@ -27,7 +29,10 @@
   let searching = false;
   let gitStatuses: Record<string, string> = {};
   let gitPollTimer: ReturnType<typeof setInterval> | null = null;
-  let activeView: 'explorer' | 'source-control' | 'issues' = 'explorer';
+  let activeView: 'explorer' | 'source-control' | 'issues' = initialView || 'explorer';
+
+  // React to external view changes (e.g. Ctrl+I)
+  $: if (initialView && visible) activeView = initialView;
 
   let copiedPath = '';
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
@@ -250,7 +255,7 @@
       </div>
     {:else if activeView === 'issues'}
       <div class="file-list">
-        <IssuesView {dir} on:createIssue on:editIssue />
+        <IssuesView {dir} {paneIssues} on:createIssue on:editIssue on:launchForIssue />
       </div>
     {/if}
   </div>

@@ -5,6 +5,7 @@ export interface ShortcutCallbacks {
   onToggleSidebar: () => void;
   onToggleMaximize: () => void;
   onFocusPane: (index: number) => void;
+  onOpenIssues: () => void;
   canAddPane: () => boolean;
 }
 
@@ -33,6 +34,10 @@ export function createGlobalKeyHandler(cb: ShortcutCallbacks): (e: KeyboardEvent
       case 'z':
         e.preventDefault();
         cb.onToggleMaximize();
+        return;
+      case 'i':
+        e.preventDefault();
+        cb.onOpenIssues();
         return;
       case 'f':
         return; // let terminal pane handle search

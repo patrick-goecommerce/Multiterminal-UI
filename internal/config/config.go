@@ -13,18 +13,30 @@ import (
 
 // Config holds all user-configurable settings.
 type Config struct {
-	DefaultShell          string       `yaml:"default_shell" json:"default_shell"`
-	DefaultDir            string       `yaml:"default_dir" json:"default_dir"`
-	Theme                 string       `yaml:"theme" json:"theme"`
-	TerminalColor         string       `yaml:"terminal_color" json:"terminal_color"`
-	MaxPanesPerTab        int          `yaml:"max_panes_per_tab" json:"max_panes_per_tab"`
-	SidebarWidth          int          `yaml:"sidebar_width" json:"sidebar_width"`
-	ClaudeCommand         string       `yaml:"claude_command" json:"claude_command"`
-	ClaudeModels          []ModelEntry `yaml:"claude_models" json:"claude_models"`
+	DefaultShell          string         `yaml:"default_shell" json:"default_shell"`
+	DefaultDir            string         `yaml:"default_dir" json:"default_dir"`
+	Theme                 string         `yaml:"theme" json:"theme"`
+	TerminalColor         string         `yaml:"terminal_color" json:"terminal_color"`
+	MaxPanesPerTab        int            `yaml:"max_panes_per_tab" json:"max_panes_per_tab"`
+	SidebarWidth          int            `yaml:"sidebar_width" json:"sidebar_width"`
+	ClaudeCommand         string         `yaml:"claude_command" json:"claude_command"`
+	ClaudeModels          []ModelEntry   `yaml:"claude_models" json:"claude_models"`
 	CommitReminderMinutes int            `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
 	RestoreSession        *bool          `yaml:"restore_session" json:"restore_session"`
 	LoggingEnabled        bool           `yaml:"logging_enabled" json:"logging_enabled"`
+	AutoBranchOnIssue     *bool          `yaml:"auto_branch_on_issue" json:"auto_branch_on_issue"`
+	UseWorktrees          *bool          `yaml:"use_worktrees" json:"use_worktrees"`
+	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
+}
+
+// IssueTracking holds settings for automatic issue progress reporting.
+type IssueTracking struct {
+	AutoCommentOnStart  bool `yaml:"auto_comment_on_start" json:"auto_comment_on_start"`
+	AutoCommentOnDone   bool `yaml:"auto_comment_on_done" json:"auto_comment_on_done"`
+	AutoCommentOnClose  bool `yaml:"auto_comment_on_close" json:"auto_comment_on_close"`
+	AutoCloseIssue      bool `yaml:"auto_close_issue" json:"auto_close_issue"`
+	IncludeCostInReport bool `yaml:"include_cost_in_report" json:"include_cost_in_report"`
 }
 
 // ModelEntry represents a selectable Claude model in the launch dialog.
@@ -54,6 +66,15 @@ func DefaultConfig() Config {
 		ClaudeCommand:         "claude",
 		CommitReminderMinutes: 30,
 		RestoreSession:        boolPtr(true),
+		AutoBranchOnIssue:     boolPtr(true),
+		UseWorktrees:          boolPtr(false), // opt-in: parallel issue work via git worktrees
+		IssueTracking: IssueTracking{
+			AutoCommentOnStart:  true,
+			AutoCommentOnDone:   true,
+			AutoCommentOnClose:  true,
+			AutoCloseIssue:      false,
+			IncludeCostInReport: true,
+		},
 		ClaudeModels: []ModelEntry{
 			{Label: "Default", ID: ""},
 			{Label: "Opus 4.6", ID: "claude-opus-4-6"},
@@ -72,6 +93,22 @@ func (c Config) ShouldRestoreSession() bool {
 		return true
 	}
 	return *c.RestoreSession
+}
+
+// ShouldAutoBranch returns whether to auto-create branches for issues.
+func (c Config) ShouldAutoBranch() bool {
+	if c.AutoBranchOnIssue == nil {
+		return true
+	}
+	return *c.AutoBranchOnIssue
+}
+
+// ShouldUseWorktrees returns whether to create git worktrees for issues.
+func (c Config) ShouldUseWorktrees() bool {
+	if c.UseWorktrees == nil {
+		return false
+	}
+	return *c.UseWorktrees
 }
 
 // configPath returns the path to ~/.multiterminal.yaml.

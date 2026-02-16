@@ -127,11 +127,19 @@
     return text;
   }
 
+  // Issue-to-pane mapping: which issues have active panes and their activity state
+  export let paneIssues: Record<number, { activity: string; cost: string }> = {};
+
   function handleDragStart(e: DragEvent, issue: Issue) {
     if (!e.dataTransfer) return;
     e.dataTransfer.setData('text/plain', buildDragText(issue.number, issue.title, issue.body, issue.labels));
     e.dataTransfer.setData('application/x-issue-number', String(issue.number));
     e.dataTransfer.effectAllowed = 'copy';
+  }
+
+  function launchForIssue(e: MouseEvent, issue: Issue) {
+    e.stopPropagation();
+    dispatch('launchForIssue', { number: issue.number, title: issue.title, body: issue.body, labels: issue.labels });
   }
 </script>
 
@@ -254,7 +262,11 @@
         <!-- svelte-ignore a11y-no-static-element-interactions -->
         <div class="issue-item" draggable="true" on:dragstart={(e) => handleDragStart(e, issue)} on:click={() => openIssue(issue.number)}>
           <div class="issue-icon" class:open={issue.state === 'OPEN'} class:closed={issue.state !== 'OPEN'}>
-            {issue.state === 'OPEN' ? '●' : '✓'}
+            {#if paneIssues[issue.number]}
+              <span class="activity-dot" class:active={paneIssues[issue.number].activity === 'active'} class:done={paneIssues[issue.number].activity === 'done'} class:needs-input={paneIssues[issue.number].activity === 'needsInput'} title="Agent: {paneIssues[issue.number].activity}">●</span>
+            {:else}
+              {issue.state === 'OPEN' ? '●' : '✓'}
+            {/if}
           </div>
           <div class="issue-content">
             <div class="issue-title">
@@ -267,6 +279,9 @@
               {#if issue.comments > 0}
                 <span>💬 {issue.comments}</span>
               {/if}
+              {#if paneIssues[issue.number]?.cost}
+                <span class="issue-cost">{paneIssues[issue.number].cost}</span>
+              {/if}
             </div>
             {#if issue.labels.length > 0}
               <div class="issue-labels">
@@ -276,6 +291,9 @@
               </div>
             {/if}
           </div>
+          {#if issue.state === 'OPEN' && !paneIssues[issue.number]}
+            <button class="launch-btn" on:click={(e) => launchForIssue(e, issue)} title="Claude für dieses Issue starten">▶</button>
+          {/if}
         </div>
       {/each}
     {/if}
@@ -324,6 +342,25 @@
   .issue-item:hover { background: var(--bg-tertiary); }
   .issue-item[draggable="true"] { cursor: grab; }
   .issue-item[draggable="true"]:active { cursor: grabbing; }
+
+  .launch-btn {
+    opacity: 0; background: none; border: none; color: var(--accent); cursor: pointer;
+    font-size: 14px; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .issue-item:hover .launch-btn { opacity: 1; }
+  .launch-btn:hover { background: var(--bg-tertiary); }
+
+  .activity-dot { font-size: 12px; animation: pulse 2s infinite; }
+  .activity-dot.active { color: var(--accent); }
+  .activity-dot.done { color: var(--success); animation: none; }
+  .activity-dot.needs-input { color: var(--warning); }
+  .issue-cost { color: var(--warning); font-weight: 600; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
   .issue-icon { font-size: 12px; padding-top: 2px; flex-shrink: 0; }
   .issue-icon.open { color: var(--success); }
   .issue-icon.closed { color: #a371f7; }
