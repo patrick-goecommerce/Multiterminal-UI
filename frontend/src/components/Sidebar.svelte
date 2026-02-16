@@ -10,6 +10,8 @@
   export let width: number = 260;
   export let issueCount: number = 0;
   export let paneIssues: Record<number, { activity: string; cost: string }> = {};
+  export let conflictFiles: string[] = [];
+  export let conflictOperation: string = '';
   export let initialView: 'explorer' | 'source-control' | 'issues' = 'explorer';
 
   const dispatch = createEventDispatcher();
@@ -95,6 +97,7 @@
   interface ScGroup { label: string; code: string; entries: ScEntry[]; }
 
   const statusGroups = [
+    { label: 'Konflikte', code: 'U' },
     { label: 'Modified', code: 'M' },
     { label: 'Added', code: 'A' },
     { label: 'Untracked', code: '?' },
@@ -119,6 +122,7 @@
 
   function getStatusClass(status: string): string {
     switch (status) {
+      case 'U': return 'git-conflict';
       case 'M': return 'git-modified';
       case '?': return 'git-new';
       case 'A': return 'git-added';
@@ -222,6 +226,13 @@
       </div>
     {:else if activeView === 'source-control'}
       <div class="file-list">
+        {#if conflictFiles.length > 0 && conflictOperation}
+          <div class="sc-operation-banner">
+            {conflictOperation === 'merge' ? 'Merge' :
+             conflictOperation === 'rebase' ? 'Rebase' : 'Cherry-Pick'}
+            in Bearbeitung
+          </div>
+        {/if}
         {#if groupedChanges.length === 0}
           <div class="no-results">Keine Änderungen</div>
         {:else}
@@ -241,7 +252,7 @@
                 {#if copiedPath === entry.path}
                   <span class="copied-badge">kopiert!</span>
                 {:else}
-                  <span class="sc-badge {getStatusClass(entry.status)}">{entry.status === '?' ? 'N' : entry.status}</span>
+                  <span class="sc-badge {getStatusClass(entry.status)}">{entry.status === '?' ? 'N' : entry.status === 'U' ? 'C' : entry.status}</span>
                 {/if}
                 <button class="copy-btn" on:click={(e) => handleScCopy(e, entry.path)} title="Pfad kopieren">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
@@ -335,6 +346,12 @@
   .no-results { padding: 12px; text-align: center; color: var(--fg-muted); font-size: 12px; }
 
   /* Source Control View */
+  .sc-operation-banner {
+    padding: 6px 10px; font-size: 11px; font-weight: 600;
+    color: #f97316; background: rgba(249, 115, 22, 0.08);
+    border-bottom: 1px solid var(--border);
+  }
+
   .sc-group-header {
     font-size: 11px; font-weight: 600; color: var(--fg-muted);
     padding: 8px 10px 4px; text-transform: uppercase; letter-spacing: 0.5px;
@@ -346,6 +363,7 @@
   }
   .sc-entry:hover { background: var(--bg-tertiary); }
 
+  .sc-entry.git-conflict { color: #f97316; }
   .sc-entry.git-modified { color: #e2b93d; }
   .sc-entry.git-new { color: #73c991; }
   .sc-entry.git-added { color: #73c991; }
@@ -366,6 +384,7 @@
     font-size: 10px; font-weight: 700; padding: 0 4px;
     border-radius: 3px; flex-shrink: 0; line-height: 16px;
   }
+  .sc-badge.git-conflict { background: #f9731622; color: #f97316; }
   .sc-badge.git-modified { background: #e2b93d22; color: #e2b93d; }
   .sc-badge.git-new { background: #73c99122; color: #73c991; }
   .sc-badge.git-added { background: #73c99122; color: #73c991; }
