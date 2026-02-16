@@ -45,7 +45,7 @@ func main() {
 	log.Println("App created, starting Wails...")
 
 	err := wails.Run(&options.App{
-		Title:            "Multiterminal UI",
+		Title:            backend.VersionTitle(),
 		Width:            1400,
 		Height:           900,
 		MinWidth:         800,

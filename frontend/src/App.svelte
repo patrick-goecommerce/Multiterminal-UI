@@ -33,6 +33,9 @@
   let issueCount = 0;
   let branch = '';
   let commitAgeMinutes = -1;
+  let updateAvailable = false;
+  let latestVersion = '';
+  let downloadURL = '';
 
   let branchInterval: ReturnType<typeof setInterval> | null = null;
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
@@ -115,6 +118,14 @@
       const health = await App.CheckHealth();
       if (health.crash_detected && !health.logging_enabled) showCrashDialog = true;
     } catch {}
+
+    App.CheckForUpdates().then((info) => {
+      if (info.updateAvailable) {
+        updateAvailable = true;
+        latestVersion = info.latestVersion;
+        downloadURL = info.downloadURL;
+      }
+    }).catch(() => {});
 
     const restored = await restoreSession();
     if (!restored) {
@@ -336,7 +347,7 @@
     />
   </div>
 
-  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} />
+  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {updateAvailable} {latestVersion} {downloadURL} />
   <LaunchDialog visible={showLaunchDialog} on:launch={handleLaunch} on:close={() => (showLaunchDialog = false)} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
   <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} />

@@ -26,7 +26,10 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Windows amd64
-        run: wails build
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          wails build -ldflags "-X github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.Version=$VERSION"
 
       - name: Extract version from tag
         id: version
@@ -35,7 +38,7 @@ jobs:
 
       - name: Rename portable binary
         shell: bash
-        run: mv build/bin/mtui.exe "mtui-portable-${{ steps.version.outputs.version }}.exe"
+        run: mv build/bin/mtui-portable.exe "mtui-portable-${{ steps.version.outputs.version }}.exe"
 
       - name: Build installer
         run: iscc /DMyAppVersion=${{ steps.version.outputs.version }} installer.iss

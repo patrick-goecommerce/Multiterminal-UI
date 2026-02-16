@@ -3,6 +3,9 @@
   export let totalCost: string = '';
   export let tabInfo: string = '';
   export let commitAgeMinutes: number = -1;
+  export let updateAvailable: boolean = false;
+  export let latestVersion: string = '';
+  export let downloadURL: string = '';
 
   $: commitLabel = (() => {
     if (commitAgeMinutes < 0) return '';
@@ -38,6 +41,13 @@
   <div class="footer-center">
     {#if commitLabel}
       <span class="commit-age {commitClass}">{commitLabel}</span>
+    {/if}
+  </div>
+  <div class="footer-update">
+    {#if updateAvailable && downloadURL}
+      <a class="update-link" href={downloadURL} target="_blank" rel="noopener">
+        Update v{latestVersion} verfügbar
+      </a>
     {/if}
   </div>
   <div class="footer-right">
@@ -111,6 +121,28 @@
   @keyframes commit-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+  }
+
+  .footer-update {
+    display: flex;
+    align-items: center;
+  }
+
+  .update-link {
+    color: #22c55e;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 12px;
+    animation: update-pulse 2s ease-in-out infinite;
+  }
+
+  .update-link:hover {
+    text-decoration: underline;
+  }
+
+  @keyframes update-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
   }
 
   .shortcut {
