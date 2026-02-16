@@ -65,8 +65,9 @@ export async function setupIssueBranch(
   if (!autoBranch) return result;
 
   const branchInfo = await App.IsOnIssueBranch(sessionDir, issue.number);
+  const isDefaultBranch = ['main', 'master', 'develop'].includes(branchInfo.branch_name);
 
-  if (branchInfo.on_issue_branch && !branchInfo.is_same_issue) {
+  if (!isDefaultBranch && !branchInfo.is_same_issue) {
     const dirty = !(await App.HasCleanWorkingTree(sessionDir));
     result.conflict = {
       currentBranch: branchInfo.branch_name,
