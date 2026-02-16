@@ -189,9 +189,11 @@
 
       pendingChunks.push(bytes);
 
-      // Reset the flush timer on each chunk to coalesce bursts
-      if (flushTimer !== null) clearTimeout(flushTimer);
-      flushTimer = setTimeout(flushOutput, FLUSH_DELAY);
+      // Start flush timer on first chunk only (throttle, not debounce).
+      // This ensures regular screen updates during continuous output.
+      if (flushTimer === null) {
+        flushTimer = setTimeout(flushOutput, FLUSH_DELAY);
+      }
     });
 
     wheelHandler = (e: WheelEvent) => {
@@ -287,9 +289,12 @@
   }
 
   let lastNotifiedActivity = '';
+  let needsInputAlerted = false;
   $: if (pane.activity !== lastNotifiedActivity) {
     const prev = lastNotifiedActivity;
     lastNotifiedActivity = pane.activity;
+    // Reset alert flag when Claude finishes real work — allows next needsInput to fire
+    if (pane.activity === 'done') needsInputAlerted = false;
     if (pane.mode === 'claude' || pane.mode === 'claude-yolo') {
       const audio = $config.audio;
       const shouldPlayAudio = audio.enabled && !$audioMuted &&
@@ -300,7 +305,8 @@
           sendNotification(`${pane.name} - Fertig`, 'Claude ist fertig. Prompt bereit.');
         }
         if (shouldPlayAudio) playBell('done', audio.volume, audio.done_sound || undefined);
-      } else if (pane.activity === 'needsInput') {
+      } else if (pane.activity === 'needsInput' && !needsInputAlerted) {
+        needsInputAlerted = true;
         if (!document.hasFocus()) {
           sendNotification(`${pane.name} - Eingabe nötig`, 'Claude wartet auf Bestätigung.');
         }
