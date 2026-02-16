@@ -138,10 +138,14 @@
     // Batch PTY output writes with a short time window to avoid cursor flicker.
     // Claude Code (and other TUIs) rewrite status lines across multiple chunks
     // that can span several animation frames. We accumulate chunks for a brief
-    // period (8ms) then flush them in a single xterm.js write via rAF.
+    // period then flush them in a single xterm.js write via rAF.
+    // The write is wrapped in cursor hide/show escape sequences so the cursor
+    // is invisible while xterm.js processes intermediate cursor movements.
     let pendingChunks: Uint8Array[] = [];
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
-    const FLUSH_DELAY = 8; // ms — enough to coalesce TUI redraws
+    const FLUSH_DELAY = 16; // ms — one full frame at 60fps
+    const HIDE_CURSOR = new Uint8Array([0x1b, 0x5b, 0x3f, 0x32, 0x35, 0x6c]); // \x1b[?25l
+    const SHOW_CURSOR = new Uint8Array([0x1b, 0x5b, 0x3f, 0x32, 0x35, 0x68]); // \x1b[?25h
 
     function flushOutput() {
       flushTimer = null;
@@ -151,13 +155,16 @@
       requestAnimationFrame(() => {
         if (!termInstance) return;
         const total = chunks.reduce((sum, c) => sum + c.length, 0);
-        const merged = new Uint8Array(total);
-        let offset = 0;
+        // Wrap in cursor hide/show so intermediate positions are invisible
+        const buf = new Uint8Array(HIDE_CURSOR.length + total + SHOW_CURSOR.length);
+        buf.set(HIDE_CURSOR, 0);
+        let offset = HIDE_CURSOR.length;
         for (const chunk of chunks) {
-          merged.set(chunk, offset);
+          buf.set(chunk, offset);
           offset += chunk.length;
         }
-        termInstance.terminal.write(merged);
+        buf.set(SHOW_CURSOR, offset);
+        termInstance.terminal.write(buf);
       });
     }
 

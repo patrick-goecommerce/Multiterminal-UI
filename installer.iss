@@ -3,7 +3,7 @@
 
 #define MyAppName "Multiterminal UI"
 #define MyAppExeName "mtui.exe"
-#define MyAppPublisher "Patrick GoEcommerce"
+#define MyAppPublisher "go eCommerce GmbH"
 #define MyAppURL "https://github.com/patrick-goecommerce/Multiterminal-UI"
 #define MyAppDescription "A terminal multiplexer for Claude Code power users"
 
