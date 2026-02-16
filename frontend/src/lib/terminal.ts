@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
+import { createWebLinksAddon, type LinkHandler } from './links';
 
 export interface TerminalInstance {
   terminal: Terminal;
@@ -133,7 +134,7 @@ const terminalThemes: Record<string, import('@xterm/xterm').ITheme> = {
   },
 };
 
-export function createTerminal(theme: string = 'dark'): TerminalInstance {
+export function createTerminal(theme: string = 'dark', linkHandler?: LinkHandler): TerminalInstance {
   const terminal = new Terminal({
     ...baseOptions,
     theme: terminalThemes[theme] || terminalThemes.dark,
@@ -144,6 +145,10 @@ export function createTerminal(theme: string = 'dark'): TerminalInstance {
 
   const searchAddon = new SearchAddon();
   terminal.loadAddon(searchAddon);
+
+  if (linkHandler) {
+    terminal.loadAddon(createWebLinksAddon(linkHandler));
+  }
 
   return {
     terminal,
