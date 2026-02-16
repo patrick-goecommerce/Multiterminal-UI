@@ -3,7 +3,7 @@ package backend
 import (
 	"testing"
 
-	"github.com/patrick-goecommerce/multiterminal/internal/terminal"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 func newTestApp() *App {

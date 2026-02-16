@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/patrick-goecommerce/multiterminal/internal/backend"
-	"github.com/patrick-goecommerce/multiterminal/internal/config"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/backend"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/logger"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -45,7 +45,7 @@ func main() {
 	log.Println("App created, starting Wails...")
 
 	err := wails.Run(&options.App{
-		Title:            "Multiterminal UI",
+		Title:            backend.VersionTitle(),
 		Width:            1400,
 		Height:           900,
 		MinWidth:         800,

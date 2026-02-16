@@ -4,7 +4,7 @@
 #define MyAppName "Multiterminal UI"
 #define MyAppExeName "mtui.exe"
 #define MyAppPublisher "Patrick GoEcommerce"
-#define MyAppURL "https://github.com/patrick-goecommerce/multiterminal"
+#define MyAppURL "https://github.com/patrick-goecommerce/Multiterminal-UI"
 #define MyAppDescription "A terminal multiplexer for Claude Code power users"
 
 ; Version is passed via /DMyAppVersion=x.y.z on the command line.

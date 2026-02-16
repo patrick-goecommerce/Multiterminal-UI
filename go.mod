@@ -1,4 +1,4 @@
-module github.com/patrick-goecommerce/multiterminal
+module github.com/patrick-goecommerce/Multiterminal-UI
 
 go 1.24.0
 

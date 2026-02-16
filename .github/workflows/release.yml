@@ -26,19 +26,22 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Windows amd64
-        run: wails build
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          wails build -ldflags "-X github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.Version=$VERSION"
 
       - name: Extract version from tag
         id: version
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Rename portable binary
-        shell: bash
-        run: mv build/bin/mtui.exe "mtui-portable-${{ steps.version.outputs.version }}.exe"
-
       - name: Build installer
         run: iscc /DMyAppVersion=${{ steps.version.outputs.version }} installer.iss
+
+      - name: Rename portable binary
+        shell: bash
+        run: mv build/bin/mtui-portable.exe "mtui-portable-${{ steps.version.outputs.version }}.exe"
 
       - uses: actions/upload-artifact@v4
         with:

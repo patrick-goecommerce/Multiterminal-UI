@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/patrick-goecommerce/multiterminal/internal/config"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 )
 
 // HealthInfo is returned to the frontend on startup to indicate
@@ -58,6 +58,7 @@ func (a *App) DisableLogging() {
 	_ = config.SaveHealth(a.health)
 
 	log.SetOutput(os.Stderr)
+	closeLogFile()
 	log.Println("[DisableLogging] Logging disabled, output reset to stderr")
 }
 
@@ -77,16 +78,32 @@ func logFilePath() string {
 	return filepath.Join(dir, fmt.Sprintf("multiterminal-%s.log", ts))
 }
 
+// logFile holds the currently open log file so it can be closed when switching or disabling.
+var logFile *os.File
+
 // setupFileLogging redirects log output to the given file path.
 func setupFileLogging(path string) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
+	// Close previous log file if open
+	if logFile != nil {
+		logFile.Close()
+	}
+	logFile = f
 	// Write to both file and stderr for visibility
 	w := io.MultiWriter(os.Stderr, f)
 	log.SetOutput(w)
 	return nil
+}
+
+// closeLogFile closes the current log file handle if open.
+func closeLogFile() {
+	if logFile != nil {
+		logFile.Close()
+		logFile = nil
+	}
 }
 
 // InitLoggingFromConfig sets up file logging if the config says it's enabled.

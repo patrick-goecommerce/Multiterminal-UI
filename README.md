@@ -24,6 +24,7 @@ A native GUI terminal multiplexer built for Claude Code power users. Run multipl
 - **Session persistence** — Tabs, panes, and layout are saved automatically and restored on restart
 - **Clipboard support** — Ctrl+V paste, Ctrl+C copy (when text selected)
 - **Pane rename** — Double-click any pane name to rename it
+- **GitHub Issues** — View, create, and manage GitHub Issues directly from the sidebar (requires [GitHub CLI](https://cli.github.com/))
 - **Cross-platform** — Windows, Linux, macOS
 
 ## Tech Stack
@@ -37,6 +38,10 @@ A native GUI terminal multiplexer built for Claude Code power users. Run multipl
 
 ## Prerequisites
 
+**To run:**
+- [GitHub CLI](https://cli.github.com/) (`gh`) — required for GitHub Issues integration
+
+**To build from source:**
 - [Go 1.21+](https://go.dev/dl/)
 - [Node.js 18+](https://nodejs.org/)
 - [Wails CLI](https://wails.io/docs/gettingstarted/installation): `go install github.com/wailsapp/wails/v2/cmd/wails@latest`

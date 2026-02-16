@@ -59,7 +59,10 @@ func (a *App) GetGitFileStatuses(dir string) map[string]string {
 	if err != nil {
 		return result
 	}
-	repoRoot := strings.TrimSpace(string(rootOut))
+	repoRoot := filepath.FromSlash(strings.TrimSpace(string(rootOut)))
+	if resolved, err := filepath.EvalSymlinks(repoRoot); err == nil {
+		repoRoot = resolved
+	}
 
 	cmd := exec.Command("git", "status", "--porcelain", "-uall")
 	cmd.Dir = dir
@@ -118,7 +121,7 @@ func classifyGitStatus(xy string) string {
 // markParentDirs marks all parent directories up to root as modified.
 func markParentDirs(statuses map[string]string, filePath string, rootDir string) {
 	dir := filepath.Dir(filePath)
-	absRoot, _ := filepath.Abs(rootDir)
+	absRoot := filepath.Clean(rootDir)
 	for dir != absRoot && len(dir) > len(absRoot) {
 		if _, exists := statuses[dir]; !exists {
 			statuses[dir] = "M"
