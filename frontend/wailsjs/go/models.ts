@@ -334,6 +334,7 @@ export namespace config {
 	    issue_tracking: IssueTracking;
 	    commands: CommandEntry[];
 	    audio: AudioSettings;
+	    localhost_auto_open: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -357,6 +358,7 @@ export namespace config {
 	        this.issue_tracking = this.convertValues(source["issue_tracking"], IssueTracking);
 	        this.commands = this.convertValues(source["commands"], CommandEntry);
 	        this.audio = this.convertValues(source["audio"], AudioSettings);
+	        this.localhost_auto_open = source["localhost_auto_open"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

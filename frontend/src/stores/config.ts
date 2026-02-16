@@ -34,6 +34,7 @@ export interface AppConfig {
   use_worktrees?: boolean;
   commands: CommandEntry[];
   audio: AudioConfig;
+  localhost_auto_open: string;
 }
 
 export const config = writable<AppConfig>({
@@ -62,4 +63,5 @@ export const config = writable<AppConfig>({
     input_sound: '',
     error_sound: '',
   },
+  localhost_auto_open: 'notify',
 });

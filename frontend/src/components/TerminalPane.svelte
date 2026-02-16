@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { createTerminal, getTerminalTheme } from '../lib/terminal';
+  import { pasteToSession, copySelection, writeTextToSession } from '../lib/clipboard';
   import { sendNotification } from '../lib/notifications';
   import type { Pane } from '../stores/tabs';
   import { currentTheme } from '../stores/theme';
   import { config } from '../stores/config';
   import * as App from '../../wailsjs/go/backend/App';
-  import { EventsOn, ClipboardGetText, ClipboardSetText, BrowserOpenURL } from '../../wailsjs/runtime/runtime';
-  import { isUrl } from '../lib/links';
+  import { EventsOn, BrowserOpenURL } from '../../wailsjs/runtime/runtime';
+  import { isUrl, LOCALHOST_REGEX } from '../lib/links';
   import QueuePanel from './QueuePanel.svelte';
   import PaneTitlebar from './PaneTitlebar.svelte';
   import TerminalSearch from './TerminalSearch.svelte';
@@ -36,6 +37,7 @@
   let ctxMenuY = 0;
   let ctxHasSelection = false;
   let wheelHandler: ((e: WheelEvent) => void) | null = null;
+  const seenLocalhostUrls = new Set<string>();
 
   function handleLink(_event: MouseEvent, uri: string) {
     if (isUrl(uri)) {
@@ -77,21 +79,10 @@
 
     switch (action) {
       case 'copy':
-        if (termInstance.terminal.hasSelection()) {
-          ClipboardSetText(termInstance.terminal.getSelection());
-          termInstance.terminal.clearSelection();
-        }
+        copySelection(termInstance.terminal);
         break;
       case 'paste':
-        ClipboardGetText().then((text) => {
-          if (text) {
-            const encoder = new TextEncoder();
-            const bytes = encoder.encode(text);
-            let binary = '';
-            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-            App.WriteToSession(pane.sessionId, btoa(binary));
-          }
-        }).catch((err) => console.error('[ContextMenu] paste failed:', err));
+        pasteToSession(pane.sessionId);
         break;
       case 'selectAll':
         termInstance.terminal.selectAll();
@@ -122,21 +113,8 @@
 
     termInstance.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type !== 'keydown') return true;
-      if (e.ctrlKey && e.key === 'v') {
-        ClipboardGetText().then((text) => {
-          if (text) {
-            const encoder = new TextEncoder();
-            const bytes = encoder.encode(text);
-            let binary = '';
-            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-            App.WriteToSession(pane.sessionId, btoa(binary));
-          }
-        }).catch((err) => console.error('[TerminalPane] clipboard read failed:', err));
-        return false;
-      }
       if (e.ctrlKey && e.key === 'c' && termInstance?.terminal.hasSelection()) {
-        ClipboardSetText(termInstance.terminal.getSelection());
-        termInstance.terminal.clearSelection();
+        copySelection(termInstance.terminal);
         return false;
       }
       if (e.ctrlKey && e.key === 'f') { openSearch(); return false; }
@@ -162,6 +140,27 @@
       const raw = atob(b64);
       const bytes = new Uint8Array(raw.length);
       for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+      // Scan for localhost URLs
+      const mode = $config.localhost_auto_open;
+      if (mode !== 'off') {
+        const decoded = new TextDecoder().decode(bytes);
+        LOCALHOST_REGEX.lastIndex = 0;
+        let urlMatch;
+        while ((urlMatch = LOCALHOST_REGEX.exec(decoded)) !== null) {
+          const url = urlMatch[0];
+          if (!seenLocalhostUrls.has(url)) {
+            seenLocalhostUrls.add(url);
+            if (mode === 'auto') {
+              BrowserOpenURL(url);
+              sendNotification('Dev Server', url + ' geöffnet');
+            } else {
+              sendNotification('Dev Server', url + ' erkannt');
+            }
+          }
+        }
+      }
+
       pendingChunks.push(bytes);
 
       if (!rafPending) {
@@ -268,13 +267,7 @@
     dropHighlight = false;
     if (!e.dataTransfer) return;
     const text = e.dataTransfer.getData('text/plain');
-    if (text) {
-      const encoder = new TextEncoder();
-      const bytes = encoder.encode(text);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-      App.WriteToSession(pane.sessionId, btoa(binary));
-    }
+    if (text) writeTextToSession(pane.sessionId, text);
   }
 
   let lastNotifiedActivity = '';
