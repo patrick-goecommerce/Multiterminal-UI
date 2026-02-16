@@ -78,6 +78,24 @@ export namespace backend {
 	        this.url = source["url"];
 	    }
 	}
+	export class IssueBranchInfo {
+	    on_issue_branch: boolean;
+	    branch_name: string;
+	    issue_number: number;
+	    is_same_issue: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new IssueBranchInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.on_issue_branch = source["on_issue_branch"];
+	        this.branch_name = source["branch_name"];
+	        this.issue_number = source["issue_number"];
+	        this.is_same_issue = source["is_same_issue"];
+	    }
+	}
 	export class IssueComment {
 	    author: string;
 	    body: string;
@@ -229,6 +247,28 @@ export namespace backend {
 
 export namespace config {
 	
+	export class AudioSettings {
+	    enabled?: boolean;
+	    volume: number;
+	    when_focused?: boolean;
+	    done_sound: string;
+	    input_sound: string;
+	    error_sound: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AudioSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.volume = source["volume"];
+	        this.when_focused = source["when_focused"];
+	        this.done_sound = source["done_sound"];
+	        this.input_sound = source["input_sound"];
+	        this.error_sound = source["error_sound"];
+	    }
+	}
 	export class CommandEntry {
 	    name: string;
 	    text: string;
@@ -293,6 +333,7 @@ export namespace config {
 	    use_worktrees?: boolean;
 	    issue_tracking: IssueTracking;
 	    commands: CommandEntry[];
+	    audio: AudioSettings;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -315,6 +356,7 @@ export namespace config {
 	        this.use_worktrees = source["use_worktrees"];
 	        this.issue_tracking = this.convertValues(source["issue_tracking"], IssueTracking);
 	        this.commands = this.convertValues(source["commands"], CommandEntry);
+	        this.audio = this.convertValues(source["audio"], AudioSettings);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
