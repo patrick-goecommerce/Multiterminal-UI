@@ -40,6 +40,9 @@
   let latestVersion = '';
   let downloadURL = '';
 
+  let resolvedClaudePath = 'claude';
+  let claudeDetected = true;
+
   let branchInterval: ReturnType<typeof setInterval> | null = null;
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
   let storeUnsubscribe: (() => void) | null = null;
@@ -49,7 +52,7 @@
       const saved = await App.LoadTabs();
       if (!saved || !saved.tabs || saved.tabs.length === 0) return false;
 
-      const claudeCmd = $config.claude_command || 'claude';
+      const claudeCmd = resolvedClaudePath;
 
       for (const savedTab of saved.tabs) {
         const tabId = tabStore.addTab(savedTab.name, savedTab.dir);
@@ -124,6 +127,14 @@
       applyTheme(cfg.theme || 'dark');
       if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
     } catch { applyTheme('dark'); }
+
+    try {
+      resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude';
+      claudeDetected = await App.IsClaudeDetected();
+    } catch {
+      resolvedClaudePath = 'claude';
+      claudeDetected = false;
+    }
 
     try {
       const health = await App.CheckHealth();
@@ -226,7 +237,7 @@
       alert(`Max. ${MAX_PANES_PER_TAB} Terminals pro Tab erreicht.`);
       return;
     }
-    const claudeCmd = $config.claude_command || 'claude';
+    const claudeCmd = resolvedClaudePath;
     const argv = buildClaudeArgv(type, model, claudeCmd);
     const baseName = getClaudeName(type, model);
     const name = issueCtx ? `${baseName} – #${issueCtx.number}` : baseName;
@@ -312,7 +323,7 @@
     const { paneId, sessionId, mode, model, name } = e.detail;
     App.CloseSession(sessionId);
     tabStore.closePane(tab.id, paneId);
-    const claudeCmd = $config.claude_command || 'claude';
+    const claudeCmd = resolvedClaudePath;
     const argv = buildClaudeArgv(mode, model, claudeCmd);
     try {
       const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80);
@@ -464,9 +475,9 @@
   </div>
 
   <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} />
-  <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} on:launch={handleLaunch} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
+  <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
-  <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} />
+  <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} }} />
   <CommandPalette visible={showCommandPalette} on:send={handleSendCommand} on:close={() => (showCommandPalette = false)} />
   <CrashDialog visible={showCrashDialog} on:enable={handleCrashEnable} on:dismiss={() => (showCrashDialog = false)} />
   <IssueDialog visible={showIssueDialog} dir={$activeTab?.dir ?? ''} editIssue={editIssueData} on:saved={handleIssueSaved} on:close={() => { showIssueDialog = false; editIssueData = null; }} />
