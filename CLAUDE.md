@@ -37,8 +37,6 @@ internal/
   config/
     config.go                    YAML configuration loader
     session.go                   Session state persistence (JSON)
-  app/                           (legacy TUI code, to be removed)
-  ui/                            (legacy TUI code, to be removed)
 frontend/
   src/
     App.svelte                   Root application component

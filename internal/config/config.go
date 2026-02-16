@@ -30,6 +30,7 @@ type Config struct {
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
 	Audio                 AudioSettings  `yaml:"audio" json:"audio"`
 	LocalhostAutoOpen     string         `yaml:"localhost_auto_open" json:"localhost_auto_open"`
+	SidebarPinned         bool           `yaml:"sidebar_pinned" json:"sidebar_pinned"`
 }
 
 // IssueTracking holds settings for automatic issue progress reporting.

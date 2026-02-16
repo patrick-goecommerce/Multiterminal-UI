@@ -162,6 +162,14 @@ export function LoadTabs() {
   return window['go']['backend']['App']['LoadTabs']();
 }
 
+export function OpenFileInEditor(arg1) {
+  return window['go']['backend']['App']['OpenFileInEditor'](arg1);
+}
+
+export function ReadFile(arg1) {
+  return window['go']['backend']['App']['ReadFile'](arg1);
+}
+
 export function RemoveFromQueue(arg1, arg2) {
   return window['go']['backend']['App']['RemoveFromQueue'](arg1, arg2);
 }

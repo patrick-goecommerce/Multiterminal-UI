@@ -83,6 +83,10 @@ export function ListWorktrees(arg1:string):Promise<Array<backend.WorktreeInfo>>;
 
 export function LoadTabs():Promise<config.SessionState>;
 
+export function OpenFileInEditor(arg1:string):Promise<string>;
+
+export function ReadFile(arg1:string):Promise<backend.FileContent>;
+
 export function RemoveFromQueue(arg1:number,arg2:number):Promise<void>;
 
 export function RemoveWorktree(arg1:string,arg2:number):Promise<void>;

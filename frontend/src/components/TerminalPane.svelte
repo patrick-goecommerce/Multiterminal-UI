@@ -304,9 +304,18 @@
     termInstance.terminal.options.theme = theme;
   }
 
-  // Re-focus terminal when its tab becomes active again
+  // Re-focus terminal when its tab becomes active or pane gets focused.
+  // Guard: skip if an interactive element (input, textarea, select) already
+  // has focus — prevents stealing focus from sidebar search, pane rename,
+  // terminal search, queue panel, etc.
   $: if (active && pane.focused && termInstance) {
-    termInstance.terminal.focus();
+    const ae = document.activeElement;
+    const isInteractive = ae instanceof HTMLInputElement ||
+                          ae instanceof HTMLTextAreaElement ||
+                          ae instanceof HTMLSelectElement;
+    if (!isInteractive) {
+      termInstance.terminal.focus();
+    }
   }
 
   // Desktop notifications when Claude state changes and window is not focused

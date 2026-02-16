@@ -12,6 +12,7 @@
   import CrashDialog from './components/CrashDialog.svelte';
   import IssueDialog from './components/IssueDialog.svelte';
   import BranchConflictDialog from './components/BranchConflictDialog.svelte';
+  import FilePreview from './components/FilePreview.svelte';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
@@ -35,6 +36,7 @@
   let showSidebar = false;
   let showCrashDialog = false;
   let showIssueDialog = false;
+  let previewFilePath = '';
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
   let launchIssueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
   let issueCount = 0;
@@ -78,7 +80,7 @@
     onNewPane: () => { showLaunchDialog = true; },
     onNewTab: () => { showProjectDialog = true; },
     onCloseTab: () => { if ($activeTab) tabStore.closeTab($activeTab.id); },
-    onToggleSidebar: () => { showSidebar = !showSidebar; },
+    onToggleSidebar: () => { if ($config.sidebar_pinned && showSidebar) return; showSidebar = !showSidebar; },
     onOpenIssues: () => { showSidebar = true; sidebarView = 'issues'; },
     onToggleMaximize: () => {
       const tab = $activeTab;
@@ -97,6 +99,7 @@
       config.set(cfg);
       applyTheme(cfg.theme || 'dark');
       if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
+      if (cfg.sidebar_pinned) showSidebar = true;
     } catch { applyTheme('dark'); }
 
     try {
@@ -344,14 +347,16 @@
     sidebarView = 'explorer';
   }
 
+  async function handleTogglePin() {
+    const pinned = !$config.sidebar_pinned;
+    config.update(c => ({ ...c, sidebar_pinned: pinned }));
+    try { await App.SaveConfig({ ...$config, sidebar_pinned: pinned }); } catch {}
+    if (!pinned && !showSidebar) return;
+    if (pinned) showSidebar = true;
+  }
+
   function handleSidebarFile(e: CustomEvent<{ path: string }>) {
-    const tab = $activeTab;
-    if (!tab) return;
-    const focusedPane = tab.panes.find((p) => p.focused);
-    if (focusedPane) {
-      const pathStr = e.detail.path.includes(' ') ? `"${e.detail.path}"` : e.detail.path;
-      App.WriteToSession(focusedPane.sessionId, btoa(pathStr));
-    }
+    previewFilePath = e.detail.path;
   }
 
   $: totalCost = (() => {
@@ -456,14 +461,14 @@
     tabDir={$activeTab?.dir ?? ''}
     {canChangeDir}
     on:newTerminal={() => (showLaunchDialog = true)}
-    on:toggleSidebar={() => (showSidebar = !showSidebar)}
+    on:toggleSidebar={() => { if ($config.sidebar_pinned && showSidebar) return; showSidebar = !showSidebar; }}
     on:changeDir={handleChangeDir}
     on:openSettings={() => (showSettingsDialog = true)}
     on:openCommands={() => (showCommandPalette = true)}
   />
 
   <div class="content">
-    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} on:close={() => (showSidebar = false)} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
+    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} pinned={$config.sidebar_pinned} on:close={() => { if (!$config.sidebar_pinned) showSidebar = false; }} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
     <div class="tab-layers">
       {#each $allTabs as tab (tab.id)}
         <div class="tab-layer" class:active={tab.id === $activeTab?.id}>
@@ -501,6 +506,7 @@
     on:choose={handleBranchConflictChoice}
     on:close={() => { showBranchConflict = false; pendingLaunch = null; branchConflictData = null; }}
   />
+  <FilePreview visible={!!previewFilePath} filePath={previewFilePath} on:close={() => (previewFilePath = '')} />
 </div>
 
 <style>

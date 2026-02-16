@@ -145,6 +145,7 @@ function createTabStore() {
         tab.panes.splice(idx, 1);
         if (tab.focusedPaneId === paneId && tab.panes.length > 0) {
           const newIdx = Math.min(idx, tab.panes.length - 1);
+          tab.panes.forEach((p) => (p.focused = false));
           tab.panes[newIdx].focused = true;
           tab.focusedPaneId = tab.panes[newIdx].id;
         }
