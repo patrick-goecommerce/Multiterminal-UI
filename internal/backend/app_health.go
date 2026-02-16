@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/patrick-goecommerce/multiterminal/internal/config"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 )
 
 // HealthInfo is returned to the frontend on startup to indicate

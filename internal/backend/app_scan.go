@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/patrick-goecommerce/multiterminal/internal/terminal"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

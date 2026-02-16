@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/patrick-goecommerce/multiterminal/internal/config"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 )
 
 // ---------------------------------------------------------------------------
