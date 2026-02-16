@@ -16,6 +16,28 @@ export namespace backend {
 	        this.valid = source["valid"];
 	    }
 	}
+	export class FileContent {
+	    path: string;
+	    name: string;
+	    content: string;
+	    size: number;
+	    error: string;
+	    binary: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FileContent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.name = source["name"];
+	        this.content = source["content"];
+	        this.size = source["size"];
+	        this.error = source["error"];
+	        this.binary = source["binary"];
+	    }
+	}
 	export class FileEntry {
 	    name: string;
 	    path: string;
