@@ -30,9 +30,21 @@
     copiedTimer = setTimeout(() => { copiedPath = ''; }, 1500);
   }
 
+  // Filter out directory entries injected by markParentDirs — only show actual files
+  function isFilePath(path: string, allPaths: string[]): boolean {
+    const normalized = path.replace(/\\/g, '/').replace(/\/$/, '');
+    return !allPaths.some(p => {
+      if (p === path) return false;
+      const np = p.replace(/\\/g, '/');
+      return np.startsWith(normalized + '/');
+    });
+  }
+
   function getGroupedChanges(statuses: Record<string, string>): ScGroup[] {
     const groups: ScGroup[] = statusGroups.map(g => ({ ...g, entries: [] }));
+    const allPaths = Object.keys(statuses);
     for (const [path, status] of Object.entries(statuses)) {
+      if (!isFilePath(path, allPaths)) continue;
       const group = groups.find(g => g.code === status);
       if (!group) continue;
       const relPath = dir ? path.replace(dir.replace(/\\/g, '/'), '').replace(/^[\\/]/, '') : path;
