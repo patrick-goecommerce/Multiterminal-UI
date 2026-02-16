@@ -6,7 +6,8 @@
   import { currentTheme } from '../stores/theme';
   import { config } from '../stores/config';
   import * as App from '../../wailsjs/go/backend/App';
-  import { EventsOn, ClipboardGetText, ClipboardSetText } from '../../wailsjs/runtime/runtime';
+  import { EventsOn, ClipboardGetText, ClipboardSetText, BrowserOpenURL } from '../../wailsjs/runtime/runtime';
+  import { isUrl } from '../lib/links';
   import QueuePanel from './QueuePanel.svelte';
   import PaneTitlebar from './PaneTitlebar.svelte';
   import TerminalSearch from './TerminalSearch.svelte';
@@ -35,6 +36,14 @@
   let ctxMenuY = 0;
   let ctxHasSelection = false;
   let wheelHandler: ((e: WheelEvent) => void) | null = null;
+
+  function handleLink(_event: MouseEvent, uri: string) {
+    if (isUrl(uri)) {
+      BrowserOpenURL(uri);
+    } else {
+      dispatch('navigateFile', { path: uri });
+    }
+  }
 
   function openSearch() {
     showSearch = true;
@@ -100,7 +109,7 @@
   }
 
   onMount(() => {
-    termInstance = createTerminal($currentTheme);
+    termInstance = createTerminal($currentTheme, handleLink);
     termInstance.terminal.open(containerEl);
 
     requestAnimationFrame(() => {
