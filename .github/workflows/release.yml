@@ -36,12 +36,12 @@ jobs:
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Build installer
+        run: iscc /DMyAppVersion=${{ steps.version.outputs.version }} installer.iss
+
       - name: Rename portable binary
         shell: bash
         run: mv build/bin/mtui-portable.exe "mtui-portable-${{ steps.version.outputs.version }}.exe"
-
-      - name: Build installer
-        run: iscc /DMyAppVersion=${{ steps.version.outputs.version }} installer.iss
 
       - uses: actions/upload-artifact@v4
         with:
