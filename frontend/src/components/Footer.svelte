@@ -56,6 +56,7 @@
     <span class="shortcut">Ctrl+F:search</span>
     <span class="shortcut">Ctrl+Z:zoom</span>
     <span class="shortcut">Ctrl+B:files</span>
+    <span class="shortcut">Ctrl+I:issues</span>
   </div>
 </div>
 

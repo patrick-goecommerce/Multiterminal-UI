@@ -15,25 +15,35 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+// sessionIssue tracks which GitHub issue a session is working on.
+type sessionIssue struct {
+	Number int
+	Title  string
+	Branch string
+	Dir    string // working directory (for gh CLI calls)
+}
+
 // App is the main Wails application struct. All exported methods are
 // automatically available to the frontend via generated TypeScript bindings.
 type App struct {
-	ctx       context.Context
-	cfg       config.Config
-	health    config.HealthState
-	sessions  map[int]*terminal.Session
-	queues    map[int]*sessionQueue
-	mu        sync.Mutex
-	nextID    int
-	cancelAll context.CancelFunc
+	ctx           context.Context
+	cfg           config.Config
+	health        config.HealthState
+	sessions      map[int]*terminal.Session
+	queues        map[int]*sessionQueue
+	sessionIssues map[int]*sessionIssue // issue linked to each session
+	mu            sync.Mutex
+	nextID        int
+	cancelAll     context.CancelFunc
 }
 
 // NewApp creates a new App instance with the given configuration.
 func NewApp(cfg config.Config) *App {
 	return &App{
-		cfg:      cfg,
-		sessions: make(map[int]*terminal.Session),
-		queues:   make(map[int]*sessionQueue),
+		cfg:           cfg,
+		sessions:      make(map[int]*terminal.Session),
+		queues:        make(map[int]*sessionQueue),
+		sessionIssues: make(map[int]*sessionIssue),
 	}
 }
 
@@ -176,11 +186,15 @@ func (a *App) CloseSession(id int) {
 	if sess == nil {
 		return
 	}
+	// Report "close" progress before removing the issue link
+	a.reportIssueProgress(id, progressClose, a.getSessionCost(id))
+
 	go func() {
 		sess.Close() // blocks until process exits and readLoop closes RawOutputCh
 		a.mu.Lock()
 		delete(a.sessions, id)
 		delete(a.queues, id)
+		delete(a.sessionIssues, id)
 		a.mu.Unlock()
 		// Clean up per-session activity tracking to prevent memory leak
 		cleanupActivityTracking(id)
