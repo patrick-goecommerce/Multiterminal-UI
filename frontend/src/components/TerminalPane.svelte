@@ -82,12 +82,36 @@
       App.WriteToSession(pane.sessionId, btoa(String.fromCharCode(...bytes)));
     });
 
+    // Batch PTY output writes per animation frame to avoid cursor flicker.
+    // Claude Code (and other TUIs) rewrite status lines in multiple steps;
+    // without batching, xterm.js renders each intermediate cursor position.
+    let pendingChunks: Uint8Array[] = [];
+    let rafPending = false;
+
     cleanupFn = EventsOn('terminal:output', (id: number, b64: string) => {
-      if (id === pane.sessionId && termInstance) {
-        const raw = atob(b64);
-        const bytes = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-        termInstance.terminal.write(bytes);
+      if (id !== pane.sessionId || !termInstance) return;
+      const raw = atob(b64);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      pendingChunks.push(bytes);
+
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(() => {
+          if (termInstance && pendingChunks.length > 0) {
+            // Merge all pending chunks into a single write
+            const total = pendingChunks.reduce((sum, c) => sum + c.length, 0);
+            const merged = new Uint8Array(total);
+            let offset = 0;
+            for (const chunk of pendingChunks) {
+              merged.set(chunk, offset);
+              offset += chunk.length;
+            }
+            termInstance.terminal.write(merged);
+          }
+          pendingChunks = [];
+          rafPending = false;
+        });
       }
     });
 
@@ -146,7 +170,12 @@
     const theme = getTerminalTheme($currentTheme);
     if ($config.terminal_color) {
       theme.cursor = $config.terminal_color;
-      theme.cursorAccent = '#000000';
+      // Use contrast color so the character inside the block cursor is readable
+      const rgb = parseInt($config.terminal_color.slice(1), 16);
+      const brightness = ((rgb >> 16) & 0xff) * 0.299 +
+                         ((rgb >> 8) & 0xff) * 0.587 +
+                         (rgb & 0xff) * 0.114;
+      theme.cursorAccent = brightness > 128 ? '#000000' : '#ffffff';
     }
     termInstance.terminal.options.theme = theme;
   }
