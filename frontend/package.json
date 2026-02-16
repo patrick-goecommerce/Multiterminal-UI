@@ -1,7 +1,7 @@
 {
   "name": "mtui-frontend",
   "private": true,
-  "version": "1.16.2",
+  "version": "1.17.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
