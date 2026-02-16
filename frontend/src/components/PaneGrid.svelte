@@ -31,6 +31,10 @@
     dispatch('issueAction', e.detail);
   }
 
+  function handleSplitPane() {
+    dispatch('splitPane');
+  }
+
   $: maximizedPane = panes.find((p) => p.maximized);
   $: visiblePanes = maximizedPane ? [maximizedPane] : panes;
   $: gridCols = maximizedPane ? 1 : Math.min(Math.ceil(Math.sqrt(panes.length)), 3);
@@ -50,6 +54,7 @@
       on:rename={handleRename}
       on:restart={handleRestart}
       on:issueAction={handleIssueAction}
+      on:splitPane={handleSplitPane}
     />
   {/each}
 

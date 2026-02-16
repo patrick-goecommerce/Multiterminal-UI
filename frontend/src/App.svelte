@@ -471,6 +471,7 @@
       on:renamePane={handleRenamePane}
       on:restartPane={handleRestartPane}
       on:issueAction={handleIssueAction}
+      on:splitPane={() => (showLaunchDialog = true)}
     />
   </div>
 

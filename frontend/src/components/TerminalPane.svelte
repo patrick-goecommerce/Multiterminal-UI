@@ -10,6 +10,7 @@
   import QueuePanel from './QueuePanel.svelte';
   import PaneTitlebar from './PaneTitlebar.svelte';
   import TerminalSearch from './TerminalSearch.svelte';
+  import ContextMenu from './ContextMenu.svelte';
 
   export let pane: Pane;
   export let paneIndex: number = 0;
@@ -29,6 +30,10 @@
   let queueCleanup: (() => void) | null = null;
   let showSearch = false;
   let searchRef: TerminalSearch;
+  let ctxMenuVisible = false;
+  let ctxMenuX = 0;
+  let ctxMenuY = 0;
+  let ctxHasSelection = false;
   let wheelHandler: ((e: WheelEvent) => void) | null = null;
 
   function openSearch() {
@@ -39,6 +44,59 @@
   function closeSearch() {
     showSearch = false;
     termInstance?.terminal.focus();
+  }
+
+  function handleContextMenu(e: MouseEvent) {
+    e.preventDefault();
+    ctxMenuX = e.clientX;
+    ctxMenuY = e.clientY;
+    ctxHasSelection = termInstance?.terminal.hasSelection() ?? false;
+    ctxMenuVisible = true;
+  }
+
+  function closeContextMenu() {
+    ctxMenuVisible = false;
+  }
+
+  function handleContextAction(e: CustomEvent<{ action: string }>) {
+    const { action } = e.detail;
+    ctxMenuVisible = false;
+
+    if (!termInstance) return;
+
+    switch (action) {
+      case 'copy':
+        if (termInstance.terminal.hasSelection()) {
+          ClipboardSetText(termInstance.terminal.getSelection());
+          termInstance.terminal.clearSelection();
+        }
+        break;
+      case 'paste':
+        ClipboardGetText().then((text) => {
+          if (text) {
+            const encoder = new TextEncoder();
+            const bytes = encoder.encode(text);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            App.WriteToSession(pane.sessionId, btoa(binary));
+          }
+        }).catch((err) => console.error('[ContextMenu] paste failed:', err));
+        break;
+      case 'selectAll':
+        termInstance.terminal.selectAll();
+        break;
+      case 'search':
+        openSearch();
+        break;
+      case 'clear':
+        termInstance.terminal.clear();
+        break;
+      case 'splitPane':
+        dispatch('splitPane');
+        break;
+    }
+
+    termInstance.terminal.focus();
   }
 
   onMount(() => {
@@ -254,7 +312,7 @@
       on:close={closeSearch}
     />
   {/if}
-  <div class="terminal-container" bind:this={containerEl}></div>
+  <div class="terminal-container" bind:this={containerEl} on:contextmenu={handleContextMenu}></div>
   {#if !pane.running}
     <div class="exited-overlay">
       <div class="exited-msg">Prozess beendet</div>
@@ -262,6 +320,14 @@
       <button class="close-btn-overlay" on:click|stopPropagation={() => dispatch('close', { paneId: pane.id, sessionId: pane.sessionId })}>Schließen</button>
     </div>
   {/if}
+  <ContextMenu
+    visible={ctxMenuVisible}
+    x={ctxMenuX}
+    y={ctxMenuY}
+    hasSelection={ctxHasSelection}
+    on:action={handleContextAction}
+    on:close={closeContextMenu}
+  />
 </div>
 
 <style>

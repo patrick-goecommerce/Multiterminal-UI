@@ -46,10 +46,10 @@
 {#if visible}
   <div class="context-menu" bind:this={menuEl} style={style}>
     <button class="ctx-item" class:disabled={!hasSelection} on:click={() => handleAction('copy')} disabled={!hasSelection}>
-      <span class="ctx-icon">&#xe16f;</span> Kopieren <span class="ctx-shortcut">Ctrl+C</span>
+      <span class="ctx-icon">&#x2398;</span> Kopieren <span class="ctx-shortcut">Ctrl+C</span>
     </button>
     <button class="ctx-item" on:click={() => handleAction('paste')}>
-      <span class="ctx-icon">&#xe172;</span> Einfügen <span class="ctx-shortcut">Ctrl+V</span>
+      <span class="ctx-icon">&#x2399;</span> Einfügen <span class="ctx-shortcut">Ctrl+V</span>
     </button>
     <div class="ctx-separator"></div>
     <button class="ctx-item" on:click={() => handleAction('selectAll')}>
