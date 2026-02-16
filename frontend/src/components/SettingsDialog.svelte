@@ -22,6 +22,7 @@
   let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'dark';
   let savedTheme: ThemeName = selectedTheme;
   let loggingEnabled = $config.logging_enabled || false;
+  let useWorktrees = $config.use_worktrees || false;
   let logPath = '';
 
   $: if (visible) {
@@ -29,6 +30,7 @@
     selectedTheme = ($config.theme as ThemeName) || 'dark';
     savedTheme = selectedTheme;
     loggingEnabled = $config.logging_enabled || false;
+    useWorktrees = $config.use_worktrees || false;
     App.GetLogPath().then(p => logPath = p).catch(() => {});
   }
 
@@ -52,7 +54,7 @@
   }
 
   async function save() {
-    const updated = { ...$config, terminal_color: colorValue, theme: selectedTheme, logging_enabled: loggingEnabled };
+    const updated = { ...$config, terminal_color: colorValue, theme: selectedTheme, logging_enabled: loggingEnabled, use_worktrees: useWorktrees };
     config.set(updated);
     try { await App.SaveConfig(updated); } catch (err) { console.error('[SettingsDialog] SaveConfig failed:', err); }
     dispatch('close');
@@ -116,6 +118,18 @@
         {#if loggingEnabled && logPath}
           <p class="log-path">{logPath}</p>
         {/if}
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Git Worktrees</label>
+        <p class="setting-desc">Erstellt pro Issue ein isoliertes Arbeitsverzeichnis statt nur einen Branch zu wechseln.</p>
+        <div class="toggle-row">
+          <button class="toggle-btn" class:toggle-on={useWorktrees} on:click={() => useWorktrees = !useWorktrees}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{useWorktrees ? 'Aktiv' : 'Inaktiv'}</span>
+        </div>
       </div>
 
       <div class="dialog-footer">

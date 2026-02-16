@@ -22,6 +22,7 @@ export interface AppConfig {
   commit_reminder_minutes: number;
   restore_session?: boolean;
   logging_enabled?: boolean;
+  use_worktrees?: boolean;
   commands: CommandEntry[];
 }
 

@@ -8,11 +8,14 @@ mtui.exe
 
 # Wails build output
 build/bin/
+build/*.png
+build/*.jpeg
 
 # Frontend
 frontend/node_modules/
 frontend/dist/
 frontend/package-lock.json
+frontend/package.json.md5
 
 # Wails generated bindings
 frontend/wailsjs/

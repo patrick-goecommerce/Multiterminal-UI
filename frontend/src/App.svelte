@@ -236,7 +236,7 @@
       let sessionDir = tab.dir || '';
 
       if (issueCtx) {
-        const useWorktrees = ($config as any).use_worktrees === true;
+        const useWorktrees = $config.use_worktrees === true;
 
         if (useWorktrees) {
           // Worktree mode: create isolated directory per issue

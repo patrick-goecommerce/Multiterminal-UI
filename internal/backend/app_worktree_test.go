@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 )
@@ -13,16 +14,16 @@ func TestWorktreePath(t *testing.T) {
 	cases := []struct {
 		repoDir string
 		issue   int
-		want    string
 	}{
-		{"/home/user/project", 42, "/home/user/project/.mt-worktrees/issue-42"},
-		{"/tmp/repo", 1, "/tmp/repo/.mt-worktrees/issue-1"},
-		{"/repo", 100, "/repo/.mt-worktrees/issue-100"},
+		{"/home/user/project", 42},
+		{"/tmp/repo", 1},
+		{"/repo", 100},
 	}
 	for _, tc := range cases {
 		got := worktreePath(tc.repoDir, tc.issue)
-		if got != tc.want {
-			t.Errorf("worktreePath(%q, %d) = %q, want %q", tc.repoDir, tc.issue, got, tc.want)
+		want := filepath.Join(tc.repoDir, ".mt-worktrees", fmt.Sprintf("issue-%d", tc.issue))
+		if got != want {
+			t.Errorf("worktreePath(%q, %d) = %q, want %q", tc.repoDir, tc.issue, got, want)
 		}
 	}
 }

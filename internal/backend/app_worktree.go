@@ -36,7 +36,7 @@ func repoRoot(dir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("not a git repo: %w", err)
 	}
-	return strings.TrimSpace(string(out)), nil
+	return filepath.FromSlash(strings.TrimSpace(string(out))), nil
 }
 
 // CreateWorktree creates a git worktree for an issue with its own branch.
@@ -138,7 +138,7 @@ func parseWorktreeList(output string, root string) []WorktreeInfo {
 			continue
 		}
 		if strings.HasPrefix(line, "worktree ") {
-			current.Path = strings.TrimPrefix(line, "worktree ")
+			current.Path = filepath.FromSlash(strings.TrimPrefix(line, "worktree "))
 		}
 		if strings.HasPrefix(line, "branch refs/heads/") {
 			current.Branch = strings.TrimPrefix(line, "branch refs/heads/")
