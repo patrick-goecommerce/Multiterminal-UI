@@ -93,7 +93,13 @@
     searching = false;
   }
 
-  $: changeCount = Object.keys(gitStatuses).length;
+  $: changeCount = (() => {
+    const paths = Object.keys(gitStatuses);
+    return paths.filter(p => {
+      const normalized = p.replace(/\\/g, '/').replace(/\/$/, '');
+      return !paths.some(other => other !== p && other.replace(/\\/g, '/').startsWith(normalized + '/'));
+    }).length;
+  })();
 
   $: if (dir) {
     loadDir(dir);

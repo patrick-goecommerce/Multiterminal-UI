@@ -135,11 +135,31 @@
       App.WriteToSession(pane.sessionId, btoa(String.fromCharCode(...bytes)));
     });
 
-    // Batch PTY output writes per animation frame to avoid cursor flicker.
-    // Claude Code (and other TUIs) rewrite status lines in multiple steps;
-    // without batching, xterm.js renders each intermediate cursor position.
+    // Batch PTY output writes with a short time window to avoid cursor flicker.
+    // Claude Code (and other TUIs) rewrite status lines across multiple chunks
+    // that can span several animation frames. We accumulate chunks for a brief
+    // period (8ms) then flush them in a single xterm.js write via rAF.
     let pendingChunks: Uint8Array[] = [];
-    let rafPending = false;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const FLUSH_DELAY = 8; // ms — enough to coalesce TUI redraws
+
+    function flushOutput() {
+      flushTimer = null;
+      if (!termInstance || pendingChunks.length === 0) { pendingChunks = []; return; }
+      const chunks = pendingChunks;
+      pendingChunks = [];
+      requestAnimationFrame(() => {
+        if (!termInstance) return;
+        const total = chunks.reduce((sum, c) => sum + c.length, 0);
+        const merged = new Uint8Array(total);
+        let offset = 0;
+        for (const chunk of chunks) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
+        }
+        termInstance.terminal.write(merged);
+      });
+    }
 
     cleanupFn = EventsOn('terminal:output', (id: number, b64: string) => {
       if (id !== pane.sessionId || !termInstance) return;
@@ -169,24 +189,9 @@
 
       pendingChunks.push(bytes);
 
-      if (!rafPending) {
-        rafPending = true;
-        requestAnimationFrame(() => {
-          if (termInstance && pendingChunks.length > 0) {
-            // Merge all pending chunks into a single write
-            const total = pendingChunks.reduce((sum, c) => sum + c.length, 0);
-            const merged = new Uint8Array(total);
-            let offset = 0;
-            for (const chunk of pendingChunks) {
-              merged.set(chunk, offset);
-              offset += chunk.length;
-            }
-            termInstance.terminal.write(merged);
-          }
-          pendingChunks = [];
-          rafPending = false;
-        });
-      }
+      // Reset the flush timer on each chunk to coalesce bursts
+      if (flushTimer !== null) clearTimeout(flushTimer);
+      flushTimer = setTimeout(flushOutput, FLUSH_DELAY);
     });
 
     wheelHandler = (e: WheelEvent) => {
@@ -394,6 +399,11 @@
 
   .terminal-container { flex: 1; padding: 4px; overflow: hidden; }
   .terminal-container :global(.xterm) { height: 100%; }
+  .terminal-container :global(.xterm-helper-textarea) {
+    caret-color: transparent !important;
+    color: transparent !important;
+    opacity: 0 !important;
+  }
 
   .exited-overlay {
     position: absolute; inset: 30px 0 0 0;
