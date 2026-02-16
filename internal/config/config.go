@@ -29,6 +29,7 @@ type Config struct {
 	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
 	Audio                 AudioSettings  `yaml:"audio" json:"audio"`
+	LocalhostAutoOpen     string         `yaml:"localhost_auto_open" json:"localhost_auto_open"`
 }
 
 // IssueTracking holds settings for automatic issue progress reporting.
@@ -100,6 +101,7 @@ func DefaultConfig() Config {
 			Volume:      50,
 			WhenFocused: boolPtr(true),
 		},
+		LocalhostAutoOpen: "notify",
 	}
 }
 
@@ -193,6 +195,12 @@ func Load() Config {
 
 	if cfg.RestoreSession == nil {
 		cfg.RestoreSession = boolPtr(true)
+	}
+
+	// Validate localhost_auto_open
+	validAutoOpen := map[string]bool{"auto": true, "notify": true, "off": true}
+	if !validAutoOpen[cfg.LocalhostAutoOpen] {
+		cfg.LocalhostAutoOpen = "notify"
 	}
 
 	return cfg

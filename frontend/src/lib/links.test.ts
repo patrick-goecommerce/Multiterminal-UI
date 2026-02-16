@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LINK_REGEX, isUrl } from './links';
+import { LINK_REGEX, LOCALHOST_REGEX, isUrl } from './links';
 
 describe('LINK_REGEX', () => {
   const match = (text: string) => {
@@ -50,6 +50,54 @@ describe('LINK_REGEX', () => {
 
   it('does not match plain words', () => {
     expect(match('hello world')).toBeNull();
+  });
+});
+
+describe('LOCALHOST_REGEX', () => {
+  const matchAll = (text: string) => {
+    LOCALHOST_REGEX.lastIndex = 0;
+    return [...text.matchAll(LOCALHOST_REGEX)].map(m => m[0]);
+  };
+
+  it('matches http://localhost with port', () => {
+    expect(matchAll('Server at http://localhost:3000')).toEqual(['http://localhost:3000']);
+  });
+
+  it('matches http://127.0.0.1 with port', () => {
+    expect(matchAll('Running on http://127.0.0.1:8080')).toEqual(['http://127.0.0.1:8080']);
+  });
+
+  it('matches http://0.0.0.0 with port', () => {
+    expect(matchAll('Listening on http://0.0.0.0:5173')).toEqual(['http://0.0.0.0:5173']);
+  });
+
+  it('matches https://localhost with port', () => {
+    expect(matchAll('Secure at https://localhost:443')).toEqual(['https://localhost:443']);
+  });
+
+  it('matches localhost URL with path', () => {
+    expect(matchAll('API at http://localhost:3000/api/v1')).toEqual(['http://localhost:3000/api/v1']);
+  });
+
+  it('does not include trailing period', () => {
+    expect(matchAll('Visit http://localhost:3000.')).toEqual(['http://localhost:3000']);
+  });
+
+  it('does not include trailing comma', () => {
+    expect(matchAll('at http://localhost:3000, then')).toEqual(['http://localhost:3000']);
+  });
+
+  it('matches multiple localhost URLs', () => {
+    expect(matchAll('http://localhost:3000 and http://localhost:3001'))
+      .toEqual(['http://localhost:3000', 'http://localhost:3001']);
+  });
+
+  it('does not match localhost without port', () => {
+    expect(matchAll('http://localhost/path')).toEqual([]);
+  });
+
+  it('does not match non-localhost URLs', () => {
+    expect(matchAll('https://example.com:3000')).toEqual([]);
   });
 });
 
