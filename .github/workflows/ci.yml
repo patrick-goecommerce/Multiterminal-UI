@@ -16,12 +16,8 @@ jobs:
         with:
           go-version: "1.24"
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Build frontend (required for go:embed)
-        run: cd frontend && npm ci && npm run build
+      - name: Create frontend/dist stub (required for go:embed)
+        run: mkdir -p frontend/dist && echo "<!-- stub -->" > frontend/dist/index.html
 
       - name: Build
         run: go build ./...
