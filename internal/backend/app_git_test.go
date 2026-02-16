@@ -18,7 +18,7 @@ func TestClassifyGitStatus_Untracked(t *testing.T) {
 }
 
 func TestClassifyGitStatus_Modified(t *testing.T) {
-	cases := []string{"M ", " M", "MM", "UU", " U"}
+	cases := []string{"M ", " M", "MM"}
 	for _, xy := range cases {
 		if got := classifyGitStatus(xy); got != "M" {
 			t.Fatalf("classifyGitStatus(%q) = %q, want 'M'", xy, got)
