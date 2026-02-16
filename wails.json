@@ -7,13 +7,13 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "Patrick GoEcommerce"
+    "name": "go eCommerce GmbH"
   },
   "info": {
-    "companyName": "Patrick GoEcommerce",
+    "companyName": "go eCommerce GmbH",
     "productName": "Multiterminal UI",
     "productVersion": "1.17.0",
-    "copyright": "© 2025-2026 Patrick GoEcommerce",
+    "copyright": "© 2025-2026 go eCommerce GmbH",
     "comments": "A terminal multiplexer for Claude Code power users"
   }
 }
