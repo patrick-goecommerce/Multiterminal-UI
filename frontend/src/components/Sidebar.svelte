@@ -13,6 +13,7 @@
   export let conflictFiles: string[] = [];
   export let conflictOperation: string = '';
   export let initialView: 'explorer' | 'source-control' | 'issues' = 'explorer';
+  export let pinned: boolean = false;
 
   const dispatch = createEventDispatcher();
 
@@ -111,6 +112,15 @@
   <div class="sidebar" style="width: {width}px">
     <div class="sidebar-header">
       <span class="sidebar-title">Files</span>
+      <button class="sidebar-pin" class:active={pinned} title={pinned ? 'Sidebar lösen' : 'Sidebar anpinnen'} on:click={() => dispatch('togglePin')}>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+          {#if pinned}
+            <path d="M10 1.5l4.5 4.5-1 1-1-.5L10 9l-.5 3.5L8 14l-1.5-3L3 14.5 1.5 13 5 9.5 2 8l1.5-1.5L7 6l2.5-2.5-.5-1z"/>
+          {:else}
+            <path d="M10.5 2L14 5.5l-1 1-.5-.5-3 3-.5 3.5-1 1L6.5 12 4 14.5 1.5 12 4 9.5 2.5 8l1-1L7 7.5l3-3-.5-.5zm0 1.4L7.4 6.5l.1.5-3.5.5-.5.5 2 2L2 13.5 3.5 12 7 8.5l2 2 .5-.5.5-3.5.5.1 3.1-3.1z"/>
+          {/if}
+        </svg>
+      </button>
       <button class="sidebar-close" on:click={() => dispatch('close')}>&times;</button>
     </div>
 
@@ -212,6 +222,14 @@
   }
 
   .sidebar-title { font-size: 12px; font-weight: 600; color: var(--fg); flex: 1; }
+
+  .sidebar-pin {
+    background: none; border: none; color: var(--fg-muted);
+    cursor: pointer; padding: 2px 4px; display: flex; align-items: center;
+    border-radius: 3px; transition: color 0.15s, background 0.15s;
+  }
+  .sidebar-pin:hover { color: var(--fg); background: var(--bg-tertiary); }
+  .sidebar-pin.active { color: var(--accent); }
 
   .sidebar-close {
     background: none; border: none; color: var(--fg-muted);

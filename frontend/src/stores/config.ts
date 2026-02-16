@@ -35,6 +35,7 @@ export interface AppConfig {
   commands: CommandEntry[];
   audio: AudioConfig;
   localhost_auto_open: string;
+  sidebar_pinned: boolean;
 }
 
 export const config = writable<AppConfig>({
@@ -64,4 +65,5 @@ export const config = writable<AppConfig>({
     error_sound: '',
   },
   localhost_auto_open: 'notify',
+  sidebar_pinned: false,
 });
