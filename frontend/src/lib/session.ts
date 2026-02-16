@@ -25,6 +25,14 @@ export async function restoreSession(claudePath: string): Promise<boolean> {
           console.error('[restoreSession] failed to create session:', err);
         }
       }
+      // Restore focused pane (addPane always focuses the last-added pane)
+      if (savedTab.focus_idx >= 0) {
+        const curState = tabStore.getState();
+        const tab = curState.tabs.find(t => t.id === tabId);
+        if (tab && savedTab.focus_idx < tab.panes.length) {
+          tabStore.focusPane(tabId, tab.panes[savedTab.focus_idx].id);
+        }
+      }
     }
 
     const state = tabStore.getState();
