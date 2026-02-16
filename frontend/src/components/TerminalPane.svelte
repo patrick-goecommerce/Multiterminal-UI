@@ -41,7 +41,9 @@
     if (isUrl(uri)) {
       BrowserOpenURL(uri);
     } else {
-      dispatch('navigateFile', { path: uri });
+      // Strip :line:col suffix so the sidebar gets a clean file path
+      const path = uri.replace(/:\d+(:\d+)?$/, '');
+      dispatch('navigateFile', { path });
     }
   }
 

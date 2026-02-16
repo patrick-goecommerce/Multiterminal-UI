@@ -36,6 +36,18 @@ describe('LINK_REGEX', () => {
     expect(match('see ../lib/helper.go:99')).toBe('../lib/helper.go:99');
   });
 
+  it('matches absolute Unix paths', () => {
+    expect(match('at /usr/local/lib/foo.go:10')).toBe('/usr/local/lib/foo.go:10');
+  });
+
+  it('does not include trailing period in URL', () => {
+    expect(match('Visit https://example.com.')).toBe('https://example.com');
+  });
+
+  it('does not include trailing comma in URL', () => {
+    expect(match('see https://example.com, more')).toBe('https://example.com');
+  });
+
   it('does not match plain words', () => {
     expect(match('hello world')).toBeNull();
   });
