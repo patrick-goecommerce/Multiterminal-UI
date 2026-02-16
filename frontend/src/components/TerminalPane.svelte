@@ -138,6 +138,10 @@
       return true;
     });
 
+    termInstance.terminal.onFocus(() => {
+      dispatch('focus', { paneId: pane.id });
+    });
+
     termInstance.terminal.onData((data: string) => {
       const encoder = new TextEncoder();
       const bytes = encoder.encode(data);
@@ -376,7 +380,7 @@
   class:activity-done={pane.activity === 'done'}
   class:activity-needs-input={pane.activity === 'needsInput'}
   class:drop-target={dropHighlight}
-  on:click={() => dispatch('focus', { paneId: pane.id })}
+  on:mousedown={() => dispatch('focus', { paneId: pane.id })}
   on:dragover={handleDragOver}
   on:dragleave={handleDragLeave}
   on:drop={handleDrop}
