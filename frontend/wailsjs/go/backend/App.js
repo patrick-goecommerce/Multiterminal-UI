@@ -42,10 +42,6 @@ export function CreateDirectory(arg1) {
   return window['go']['backend']['App']['CreateDirectory'](arg1);
 }
 
-export function DetectClaudePath() {
-  return window['go']['backend']['App']['DetectClaudePath']();
-}
-
 export function CreateIssue(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['CreateIssue'](arg1, arg2, arg3, arg4);
 }
@@ -56,6 +52,10 @@ export function CreateSession(arg1, arg2, arg3, arg4) {
 
 export function CreateWorktree(arg1, arg2, arg3) {
   return window['go']['backend']['App']['CreateWorktree'](arg1, arg2, arg3);
+}
+
+export function DetectClaudePath() {
+  return window['go']['backend']['App']['DetectClaudePath']();
 }
 
 export function DisableLogging() {
@@ -72,10 +72,6 @@ export function GetAppVersion() {
 
 export function GetConfig() {
   return window['go']['backend']['App']['GetConfig']();
-}
-
-export function GetResolvedClaudePath() {
-  return window['go']['backend']['App']['GetResolvedClaudePath']();
 }
 
 export function GetGitBranch(arg1) {
@@ -112,6 +108,10 @@ export function GetOrCreateIssueBranch(arg1, arg2, arg3) {
 
 export function GetQueue(arg1) {
   return window['go']['backend']['App']['GetQueue'](arg1);
+}
+
+export function GetResolvedClaudePath() {
+  return window['go']['backend']['App']['GetResolvedClaudePath']();
 }
 
 export function GetSessionIssue(arg1) {
