@@ -10,6 +10,10 @@ export function AddToQueue(arg1, arg2) {
   return window['go']['backend']['App']['AddToQueue'](arg1, arg2);
 }
 
+export function BrowseForAudioFile() {
+  return window['go']['backend']['App']['BrowseForAudioFile']();
+}
+
 export function BrowseForClaude() {
   return window['go']['backend']['App']['BrowseForClaude']();
 }

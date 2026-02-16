@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { audioMuted } from '../lib/audio';
 
   const dispatch = createEventDispatcher();
 
@@ -68,6 +69,14 @@
     </button>
     <button class="toolbar-btn" on:click={toggleSidebar} title="Dateien (Ctrl+B)">
       <span class="icon">&#128193;</span> Files
+    </button>
+    <button
+      class="toolbar-btn mute-btn"
+      class:muted={$audioMuted}
+      on:click={() => $audioMuted = !$audioMuted}
+      title={$audioMuted ? 'Audio einschalten' : 'Audio stumm schalten'}
+    >
+      <span class="icon">{$audioMuted ? '🔇' : '🔊'}</span>
     </button>
     <button class="toolbar-btn" on:click={openSettings} title="Einstellungen">
       <span class="icon">&#9881;</span>
@@ -200,5 +209,9 @@
 
   .icon {
     font-size: 15px;
+  }
+
+  .mute-btn.muted {
+    opacity: 0.5;
   }
 </style>

@@ -7,6 +7,8 @@ export function AddIssueComment(arg1:string,arg2:number,arg3:string):Promise<voi
 
 export function AddToQueue(arg1:number,arg2:string):Promise<backend.QueueItem>;
 
+export function BrowseForAudioFile():Promise<string>;
+
 export function BrowseForClaude():Promise<string>;
 
 export function CheckForUpdates():Promise<backend.UpdateInfo>;

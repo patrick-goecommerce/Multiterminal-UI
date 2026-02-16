@@ -3,6 +3,7 @@
   import { createTerminal, getTerminalTheme } from '../lib/terminal';
   import { pasteToSession, copySelection, writeTextToSession } from '../lib/clipboard';
   import { sendNotification } from '../lib/notifications';
+  import { playBell, audioMuted } from '../lib/audio';
   import type { Pane } from '../stores/tabs';
   import { currentTheme } from '../stores/theme';
   import { config } from '../stores/config';
@@ -284,11 +285,21 @@
   $: if (pane.activity !== lastNotifiedActivity) {
     const prev = lastNotifiedActivity;
     lastNotifiedActivity = pane.activity;
-    if (!document.hasFocus() && (pane.mode === 'claude' || pane.mode === 'claude-yolo')) {
+    if (pane.mode === 'claude' || pane.mode === 'claude-yolo') {
+      const audio = $config.audio;
+      const shouldPlayAudio = audio.enabled && !$audioMuted &&
+        (audio.when_focused || !document.hasFocus());
+
       if (pane.activity === 'done' && prev === 'active') {
-        sendNotification(`${pane.name} - Fertig`, 'Claude ist fertig. Prompt bereit.');
+        if (!document.hasFocus()) {
+          sendNotification(`${pane.name} - Fertig`, 'Claude ist fertig. Prompt bereit.');
+        }
+        if (shouldPlayAudio) playBell('done', audio.volume, audio.done_sound || undefined);
       } else if (pane.activity === 'needsInput') {
-        sendNotification(`${pane.name} - Eingabe nötig`, 'Claude wartet auf Bestätigung.');
+        if (!document.hasFocus()) {
+          sendNotification(`${pane.name} - Eingabe nötig`, 'Claude wartet auf Bestätigung.');
+        }
+        if (shouldPlayAudio) playBell('needsInput', audio.volume, audio.input_sound || undefined);
       }
     }
   }
