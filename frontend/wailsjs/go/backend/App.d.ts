@@ -23,13 +23,13 @@ export function CloseSession(arg1:number):Promise<void>;
 
 export function CreateDirectory(arg1:string):Promise<string>;
 
-export function DetectClaudePath():Promise<backend.ClaudeDetectResult>;
-
 export function CreateIssue(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<backend.Issue>;
 
 export function CreateSession(arg1:Array<string>,arg2:string,arg3:number,arg4:number):Promise<number>;
 
 export function CreateWorktree(arg1:string,arg2:number,arg3:string):Promise<backend.WorktreeInfo>;
+
+export function DetectClaudePath():Promise<backend.ClaudeDetectResult>;
 
 export function DisableLogging():Promise<void>;
 
@@ -38,8 +38,6 @@ export function EnableLogging(arg1:boolean):Promise<string>;
 export function GetAppVersion():Promise<string>;
 
 export function GetConfig():Promise<config.Config>;
-
-export function GetResolvedClaudePath():Promise<string>;
 
 export function GetGitBranch(arg1:string):Promise<string>;
 
@@ -58,6 +56,8 @@ export function GetLogPath():Promise<string>;
 export function GetOrCreateIssueBranch(arg1:string,arg2:number,arg3:string):Promise<string>;
 
 export function GetQueue(arg1:number):Promise<Array<backend.QueueItem>>;
+
+export function GetResolvedClaudePath():Promise<string>;
 
 export function GetSessionIssue(arg1:number):Promise<number>;
 
