@@ -25,13 +25,19 @@
   let useWorktrees = $config.use_worktrees || false;
   let logPath = '';
 
+  let claudeCommand = $config.claude_command || '';
+  let claudeStatus: 'unknown' | 'found' | 'notfound' = 'unknown';
+  let claudeStatusPath = '';
+
   $: if (visible) {
     colorValue = $config.terminal_color || '#39ff14';
     selectedTheme = ($config.theme as ThemeName) || 'dark';
     savedTheme = selectedTheme;
     loggingEnabled = $config.logging_enabled || false;
     useWorktrees = $config.use_worktrees || false;
+    claudeCommand = $config.claude_command || '';
     App.GetLogPath().then(p => logPath = p).catch(() => {});
+    detectClaude();
   }
 
   function handleColorChange(e: CustomEvent<{ value: string }>) {
@@ -53,10 +59,39 @@
     }
   }
 
+  async function detectClaude() {
+    try {
+      const result = await App.DetectClaudePath();
+      if (result.valid) {
+        claudeStatus = 'found';
+        claudeStatusPath = result.path;
+      } else {
+        claudeStatus = 'notfound';
+        claudeStatusPath = '';
+      }
+    } catch {
+      claudeStatus = 'unknown';
+      claudeStatusPath = '';
+    }
+  }
+
+  async function browseClaude() {
+    try {
+      const path = await App.BrowseForClaude();
+      if (path) {
+        claudeCommand = path;
+        const valid = await App.ValidateClaudePath(path);
+        claudeStatus = valid ? 'found' : 'notfound';
+        claudeStatusPath = valid ? path : '';
+      }
+    } catch {}
+  }
+
   async function save() {
-    const updated = { ...$config, terminal_color: colorValue, theme: selectedTheme, logging_enabled: loggingEnabled, use_worktrees: useWorktrees };
+    const updated = { ...$config, terminal_color: colorValue, theme: selectedTheme, logging_enabled: loggingEnabled, use_worktrees: useWorktrees, claude_command: claudeCommand };
     config.set(updated);
     try { await App.SaveConfig(updated); } catch (err) { console.error('[SettingsDialog] SaveConfig failed:', err); }
+    dispatch('saved');
     dispatch('close');
   }
 
@@ -130,6 +165,27 @@
           </button>
           <span class="toggle-label">{useWorktrees ? 'Aktiv' : 'Inaktiv'}</span>
         </div>
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Claude CLI</label>
+        <p class="setting-desc">Pfad zur Claude Code CLI. Leer lassen für automatische Erkennung.</p>
+        <div class="claude-row">
+          <input
+            type="text"
+            class="claude-input"
+            bind:value={claudeCommand}
+            placeholder="claude (automatisch)"
+          />
+          <button class="claude-btn" on:click={browseClaude} title="Durchsuchen">&#128194;</button>
+          <button class="claude-btn" on:click={detectClaude} title="Erkennen">&#128269;</button>
+        </div>
+        {#if claudeStatus === 'found'}
+          <p class="claude-status found">Gefunden: {claudeStatusPath}</p>
+        {:else if claudeStatus === 'notfound'}
+          <p class="claude-status notfound">Nicht gefunden</p>
+        {/if}
       </div>
 
       <div class="dialog-footer">
@@ -213,4 +269,30 @@
     font-size: 11px; color: var(--fg-muted); margin: 8px 0 0;
     font-family: monospace; word-break: break-all; opacity: 0.7;
   }
+
+  .claude-row {
+    display: flex; gap: 6px; align-items: center;
+  }
+
+  .claude-input {
+    flex: 1; padding: 7px 10px; background: var(--bg-secondary);
+    color: var(--fg); border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12px; font-family: monospace; outline: none;
+  }
+  .claude-input:focus { border-color: var(--accent); }
+  .claude-input::placeholder { color: var(--fg-muted); opacity: 0.6; }
+
+  .claude-btn {
+    padding: 6px 10px; background: var(--bg-tertiary);
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--fg); cursor: pointer; font-size: 14px; line-height: 1;
+  }
+  .claude-btn:hover { border-color: var(--accent); }
+
+  .claude-status {
+    font-size: 11px; margin: 8px 0 0;
+    font-family: monospace; word-break: break-all;
+  }
+  .claude-status.found { color: #a6e3a1; }
+  .claude-status.notfound { color: #f38ba8; }
 </style>

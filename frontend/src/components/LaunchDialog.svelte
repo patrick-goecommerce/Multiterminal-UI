@@ -4,6 +4,7 @@
 
   export let visible: boolean = false;
   export let issueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
+  export let claudeDetected: boolean = true;
 
   const dispatch = createEventDispatcher();
 
@@ -47,6 +48,14 @@
         <div class="issue-context">
           <span class="issue-ctx-num">#{issueContext.number}</span>
           <span class="issue-ctx-title">{issueContext.title}</span>
+        </div>
+      {/if}
+
+      {#if !claudeDetected}
+        <div class="claude-warning">
+          <span class="warning-icon">&#9888;</span>
+          <span>Claude CLI nicht gefunden.</span>
+          <button class="warning-link" on:click={() => dispatch('openSettings')}>Einstellungen</button>
         </div>
       {/if}
 
@@ -231,4 +240,20 @@
   .cancel-btn:hover {
     color: var(--fg);
   }
+
+  .claude-warning {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; margin-bottom: 12px;
+    background: rgba(243, 139, 168, 0.1); border: 1px solid rgba(243, 139, 168, 0.4);
+    border-radius: 8px; font-size: 12px; color: #f38ba8;
+  }
+
+  .warning-icon { font-size: 16px; }
+
+  .warning-link {
+    background: none; border: none; color: var(--accent);
+    cursor: pointer; font-size: 12px; text-decoration: underline;
+    padding: 0;
+  }
+  .warning-link:hover { opacity: 0.8; }
 </style>

@@ -1,7 +1,7 @@
 {
   "name": "mtui-frontend",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.16.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-search": "^0.16.0",
+    "@xterm/addon-web-links": "^0.12.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0"
   },

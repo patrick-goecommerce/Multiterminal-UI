@@ -6,13 +6,48 @@ import (
 	"log"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"golang.org/x/text/unicode/norm"
 )
 
+// issueBranchPattern matches branch names like "issue/42-some-title" or "issue/42".
+var issueBranchPattern = regexp.MustCompile(`^issue/(\d+)`)
+
+// IssueBranchInfo describes whether the current branch is an issue branch.
+type IssueBranchInfo struct {
+	OnIssueBranch bool   `json:"on_issue_branch"`
+	BranchName    string `json:"branch_name"`
+	IssueNumber   int    `json:"issue_number"`
+	IsSameIssue   bool   `json:"is_same_issue"`
+}
+
+// IsOnIssueBranch checks if the current branch in dir is an issue branch.
+// targetIssue allows checking whether it's the same issue in one call.
+func (a *App) IsOnIssueBranch(dir string, targetIssue int) IssueBranchInfo {
+	if dir == "" || !isGitRepo(dir) {
+		return IssueBranchInfo{}
+	}
+	current := a.GetGitBranch(dir)
+	if current == "" {
+		return IssueBranchInfo{}
+	}
+	m := issueBranchPattern.FindStringSubmatch(current)
+	if m == nil {
+		return IssueBranchInfo{BranchName: current}
+	}
+	num, _ := strconv.Atoi(m[1])
+	return IssueBranchInfo{
+		OnIssueBranch: true,
+		BranchName:    current,
+		IssueNumber:   num,
+		IsSameIssue:   targetIssue > 0 && num == targetIssue,
+	}
+}
+
 // slugifyTitle converts an issue title to a URL-safe branch slug.
-// "Fix login bug!" → "fix-login-bug"
+// "Fix login bug!" -> "fix-login-bug"
 func slugifyTitle(title string) string {
 	// Normalize unicode and lowercase
 	s := strings.ToLower(norm.NFKD.String(title))

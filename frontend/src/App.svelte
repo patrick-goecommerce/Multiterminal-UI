@@ -11,6 +11,7 @@
   import CommandPalette from './components/CommandPalette.svelte';
   import CrashDialog from './components/CrashDialog.svelte';
   import IssueDialog from './components/IssueDialog.svelte';
+  import BranchConflictDialog from './components/BranchConflictDialog.svelte';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
@@ -40,6 +41,31 @@
   let latestVersion = '';
   let downloadURL = '';
 
+  let conflictCount = 0;
+  let conflictFiles: string[] = [];
+  let conflictOperation = '';
+  let prevConflictCount = 0;
+
+  let showBranchConflict = false;
+  let branchConflictData: {
+    currentBranch: string;
+    currentIssueNumber: number;
+    targetIssueNumber: number;
+    targetIssueTitle: string;
+    dirtyWorkingTree: boolean;
+  } | null = null;
+  let pendingLaunch: {
+    type: PaneMode;
+    model: string;
+    issueCtx: { number: number; title: string; body: string; labels: string[] };
+    name: string;
+    argv: string[];
+    sessionDir: string;
+  } | null = null;
+
+  let resolvedClaudePath = 'claude';
+  let claudeDetected = true;
+
   let branchInterval: ReturnType<typeof setInterval> | null = null;
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
   let storeUnsubscribe: (() => void) | null = null;
@@ -49,7 +75,7 @@
       const saved = await App.LoadTabs();
       if (!saved || !saved.tabs || saved.tabs.length === 0) return false;
 
-      const claudeCmd = $config.claude_command || 'claude';
+      const claudeCmd = resolvedClaudePath;
 
       for (const savedTab of saved.tabs) {
         const tabId = tabStore.addTab(savedTab.name, savedTab.dir);
@@ -126,6 +152,14 @@
     } catch { applyTheme('dark'); }
 
     try {
+      resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude';
+      claudeDetected = await App.IsClaudeDetected();
+    } catch {
+      resolvedClaudePath = 'claude';
+      claudeDetected = false;
+    }
+
+    try {
       const health = await App.CheckHealth();
       if (health.crash_detected && !health.logging_enabled) showCrashDialog = true;
     } catch {}
@@ -174,7 +208,8 @@
     updateBranch();
     updateCommitAge();
     updateIssueCount();
-    branchInterval = setInterval(updateBranch, 10000);
+    updateConflicts();
+    branchInterval = setInterval(() => { updateBranch(); updateConflicts(); }, 10000);
     commitAgeInterval = setInterval(updateCommitAge, 30000);
     document.addEventListener('keydown', handleGlobalKeydown);
   });
@@ -193,7 +228,7 @@
     try { branch = await App.GetGitBranch(tab.dir || '.'); } catch { branch = ''; }
   }
 
-  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); }
+  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); updateConflicts(); }
 
   async function updateCommitAge() {
     const tab = $activeTab;
@@ -202,6 +237,32 @@
       const ts = await App.GetLastCommitTime(tab.dir || '.');
       commitAgeMinutes = ts > 0 ? Math.floor((Math.floor(Date.now() / 1000) - ts) / 60) : -1;
     } catch { commitAgeMinutes = -1; }
+  }
+
+  async function updateConflicts() {
+    const tab = $activeTab;
+    if (!tab?.dir) {
+      conflictCount = 0; conflictFiles = []; conflictOperation = '';
+      return;
+    }
+    try {
+      const info = await App.GetMergeConflicts(tab.dir);
+      conflictCount = info.count;
+      conflictFiles = info.files || [];
+      conflictOperation = info.operation || '';
+      if (prevConflictCount === 0 && conflictCount > 0) {
+        const opLabel = conflictOperation
+          ? ` (${conflictOperation.charAt(0).toUpperCase() + conflictOperation.slice(1)})`
+          : '';
+        sendNotification(
+          `Merge-Konflikte erkannt${opLabel}`,
+          `${conflictCount} Datei${conflictCount > 1 ? 'en' : ''} mit Konflikten`
+        );
+      }
+      prevConflictCount = conflictCount;
+    } catch {
+      conflictCount = 0; conflictFiles = []; conflictOperation = '';
+    }
   }
 
   function buildIssuePrompt(issue: { number: number; title: string; body: string; labels: string[] }): string {
@@ -226,7 +287,7 @@
       alert(`Max. ${MAX_PANES_PER_TAB} Terminals pro Tab erreicht.`);
       return;
     }
-    const claudeCmd = $config.claude_command || 'claude';
+    const claudeCmd = resolvedClaudePath;
     const argv = buildClaudeArgv(type, model, claudeCmd);
     const baseName = getClaudeName(type, model);
     const name = issueCtx ? `${baseName} – #${issueCtx.number}` : baseName;
@@ -252,12 +313,33 @@
             if (!confirm(`Worktree-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne Worktree starten?`)) return;
           }
         } else if ($config.auto_branch_on_issue !== false) {
-          // Branch mode: switch branch in shared directory
-          try {
-            issueBranch = await App.GetOrCreateIssueBranch(sessionDir, issueCtx.number, issueCtx.title);
-          } catch (branchErr: any) {
-            const msg = branchErr?.message || String(branchErr);
-            if (!confirm(`Branch-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne eigenen Branch starten?`)) return;
+          // Branch mode: check for conflict before switching
+          const branchInfo = await App.IsOnIssueBranch(sessionDir, issueCtx.number);
+          if (branchInfo.on_issue_branch && !branchInfo.is_same_issue) {
+            // On a different issue branch — show conflict dialog
+            const dirty = !(await App.HasCleanWorkingTree(sessionDir));
+            branchConflictData = {
+              currentBranch: branchInfo.branch_name,
+              currentIssueNumber: branchInfo.issue_number,
+              targetIssueNumber: issueCtx.number,
+              targetIssueTitle: issueCtx.title,
+              dirtyWorkingTree: dirty,
+            };
+            pendingLaunch = { type, model, issueCtx, name, argv, sessionDir };
+            showBranchConflict = true;
+            return;
+          }
+          if (branchInfo.is_same_issue) {
+            // Already on the correct issue branch — use it directly
+            issueBranch = branchInfo.branch_name;
+          } else {
+            // Not on an issue branch — switch/create as before
+            try {
+              issueBranch = await App.GetOrCreateIssueBranch(sessionDir, issueCtx.number, issueCtx.title);
+            } catch (branchErr: any) {
+              const msg = branchErr?.message || String(branchErr);
+              if (!confirm(`Branch-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne eigenen Branch starten?`)) return;
+            }
           }
         }
       }
@@ -275,6 +357,55 @@
         }
       }
     } catch (err) { console.error('[handleLaunch] CreateSession failed:', err); }
+  }
+
+  async function handleBranchConflictChoice(e: CustomEvent<{ action: 'switch' | 'stay' | 'worktree' }>) {
+    showBranchConflict = false;
+    const launch = pendingLaunch;
+    pendingLaunch = null;
+    branchConflictData = null;
+    if (!launch) return;
+
+    const tab = $activeTab;
+    if (!tab) return;
+    const { type, model, issueCtx, name, argv } = launch;
+    let { sessionDir } = launch;
+    let issueBranch = '';
+    let worktreePath = '';
+
+    try {
+      if (e.detail.action === 'switch') {
+        try {
+          issueBranch = await App.GetOrCreateIssueBranch(sessionDir, issueCtx.number, issueCtx.title);
+        } catch (err: any) {
+          const msg = err?.message || String(err);
+          if (!confirm(`Branch-Wechsel fehlgeschlagen:\n${msg}\n\nTrotzdem ohne Branch starten?`)) return;
+        }
+      } else if (e.detail.action === 'worktree') {
+        try {
+          const wt = await App.CreateWorktree(sessionDir, issueCtx.number, issueCtx.title);
+          if (wt) {
+            sessionDir = wt.path;
+            issueBranch = wt.branch;
+            worktreePath = wt.path;
+          }
+        } catch (err: any) {
+          const msg = err?.message || String(err);
+          if (!confirm(`Worktree-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne Worktree starten?`)) return;
+        }
+      }
+      // 'stay' -> no branch switch, just start session in current dir
+
+      const sessionId = await App.CreateSession(argv, sessionDir, 24, 80);
+      if (sessionId > 0) {
+        tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx.number, issueCtx.title, issueBranch, worktreePath);
+        App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
+        setTimeout(() => {
+          const prompt = buildIssuePrompt(issueCtx);
+          App.WriteToSession(sessionId, encodeForPty(prompt + '\n'));
+        }, 1500);
+      }
+    } catch (err) { console.error('[handleBranchConflictChoice] failed:', err); }
   }
 
   function handleLaunchForIssue(e: CustomEvent<{ number: number; title: string; body: string; labels: string[] }>) {
@@ -312,7 +443,7 @@
     const { paneId, sessionId, mode, model, name } = e.detail;
     App.CloseSession(sessionId);
     tabStore.closePane(tab.id, paneId);
-    const claudeCmd = $config.claude_command || 'claude';
+    const claudeCmd = resolvedClaudePath;
     const argv = buildClaudeArgv(mode, model, claudeCmd);
     try {
       const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80);
@@ -326,6 +457,11 @@
     const focusedPane = tab.panes.find((p) => p.focused);
     if (focusedPane) App.WriteToSession(focusedPane.sessionId, encodeForPty(e.detail.text + '\n'));
     showCommandPalette = false;
+  }
+
+  function handleNavigateFile(e: CustomEvent<{ path: string }>) {
+    showSidebar = true;
+    sidebarView = 'explorer';
   }
 
   function handleSidebarFile(e: CustomEvent<{ path: string }>) {
@@ -348,7 +484,7 @@
     return sum > 0 ? `$${sum.toFixed(2)}` : '';
   })();
 
-  // Build a map of issue number → activity/cost for all panes with linked issues
+  // Build a map of issue number -> activity/cost for all panes with linked issues
   $: paneIssues = (() => {
     const map: Record<number, { activity: string; cost: string }> = {};
     for (const tab of $allTabs) {
@@ -451,7 +587,7 @@
   />
 
   <div class="content">
-    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} initialView={sidebarView} on:close={() => (showSidebar = false)} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
+    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} on:close={() => (showSidebar = false)} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
     <PaneGrid
       panes={$activeTab?.panes ?? []}
       on:closePane={handleClosePane}
@@ -460,16 +596,28 @@
       on:renamePane={handleRenamePane}
       on:restartPane={handleRestartPane}
       on:issueAction={handleIssueAction}
+      on:navigateFile={handleNavigateFile}
+      on:splitPane={() => (showLaunchDialog = true)}
     />
   </div>
 
-  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} />
-  <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} on:launch={handleLaunch} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
+  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} />
+  <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
-  <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} />
+  <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} }} />
   <CommandPalette visible={showCommandPalette} on:send={handleSendCommand} on:close={() => (showCommandPalette = false)} />
   <CrashDialog visible={showCrashDialog} on:enable={handleCrashEnable} on:dismiss={() => (showCrashDialog = false)} />
   <IssueDialog visible={showIssueDialog} dir={$activeTab?.dir ?? ''} editIssue={editIssueData} on:saved={handleIssueSaved} on:close={() => { showIssueDialog = false; editIssueData = null; }} />
+  <BranchConflictDialog
+    visible={showBranchConflict}
+    currentBranch={branchConflictData?.currentBranch ?? ''}
+    currentIssueNumber={branchConflictData?.currentIssueNumber ?? 0}
+    targetIssueNumber={branchConflictData?.targetIssueNumber ?? 0}
+    targetIssueTitle={branchConflictData?.targetIssueTitle ?? ''}
+    dirtyWorkingTree={branchConflictData?.dirtyWorkingTree ?? false}
+    on:choose={handleBranchConflictChoice}
+    on:close={() => { showBranchConflict = false; pendingLaunch = null; branchConflictData = null; }}
+  />
 </div>
 
 <style>

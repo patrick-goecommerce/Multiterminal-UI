@@ -16,6 +16,9 @@ jobs:
         with:
           go-version: "1.24"
 
+      - name: Create frontend/dist stub (required for go:embed)
+        run: mkdir -p frontend/dist && echo "<!-- stub -->" > frontend/dist/index.html
+
       - name: Build
         run: go build ./...
 
