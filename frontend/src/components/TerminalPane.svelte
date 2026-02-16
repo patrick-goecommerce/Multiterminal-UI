@@ -17,6 +17,7 @@
 
   export let pane: Pane;
   export let paneIndex: number = 0;
+  export let active: boolean = true;
 
   const dispatch = createEventDispatcher();
 
@@ -110,6 +111,14 @@
       termInstance?.fitAddon.fit();
       const dims = termInstance?.fitAddon.proposeDimensions();
       if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
+      // Give the shell time to process the resize before showing output.
+      // This prevents cursor-hopping from the initial 24x80 → real size transition.
+      setTimeout(() => {
+        isReady = true;
+        if (pendingChunks.length > 0 && flushTimer === null) {
+          flushTimer = setTimeout(flushOutput, 0);
+        }
+      }, 50);
     });
 
     termInstance.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
@@ -135,35 +144,56 @@
       App.WriteToSession(pane.sessionId, btoa(String.fromCharCode(...bytes)));
     });
 
-    // Batch PTY output writes with a short time window to avoid cursor flicker.
-    // Claude Code (and other TUIs) rewrite status lines across multiple chunks
-    // that can span several animation frames. We accumulate chunks for a brief
-    // period then flush them in a single xterm.js write via rAF.
-    // The write is wrapped in cursor hide/show escape sequences so the cursor
-    // is invisible while xterm.js processes intermediate cursor movements.
+    // Batch PTY output writes with a short time window to reduce render overhead.
+    // We accumulate chunks for one frame (~16ms) then flush them in a single
+    // xterm.js write via rAF. Output is buffered until xterm.js has been fitted
+    // to the actual pane size to avoid cursor-hopping from 24x80 → real size.
     let pendingChunks: Uint8Array[] = [];
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    let isReady = false;
+    let appCursorVisible = true; // track DECTCEM state across batches
     const FLUSH_DELAY = 16; // ms — one full frame at 60fps
     const HIDE_CURSOR = new Uint8Array([0x1b, 0x5b, 0x3f, 0x32, 0x35, 0x6c]); // \x1b[?25l
     const SHOW_CURSOR = new Uint8Array([0x1b, 0x5b, 0x3f, 0x32, 0x35, 0x68]); // \x1b[?25h
 
+    // Find the last DECTCEM cursor show/hide in the data.
+    // Returns true (show), false (hide), or null (no sequence found).
+    function lastCursorVisible(data: Uint8Array): boolean | null {
+      for (let i = data.length - 6; i >= 0; i--) {
+        if (data[i] === 0x1b && data[i+1] === 0x5b && data[i+2] === 0x3f &&
+            data[i+3] === 0x32 && data[i+4] === 0x35) {
+          if (data[i+5] === 0x68) return true;  // \x1b[?25h — show
+          if (data[i+5] === 0x6c) return false; // \x1b[?25l — hide
+        }
+      }
+      return null;
+    }
+
     function flushOutput() {
       flushTimer = null;
-      if (!termInstance || pendingChunks.length === 0) { pendingChunks = []; return; }
+      if (!termInstance || !isReady || pendingChunks.length === 0) { return; }
       const chunks = pendingChunks;
       pendingChunks = [];
       requestAnimationFrame(() => {
         if (!termInstance) return;
         const total = chunks.reduce((sum, c) => sum + c.length, 0);
-        // Wrap in cursor hide/show so intermediate positions are invisible
-        const buf = new Uint8Array(HIDE_CURSOR.length + total + SHOW_CURSOR.length);
-        buf.set(HIDE_CURSOR, 0);
-        let offset = HIDE_CURSOR.length;
+        const merged = new Uint8Array(total);
+        let offset = 0;
         for (const chunk of chunks) {
-          buf.set(chunk, offset);
+          merged.set(chunk, offset);
           offset += chunk.length;
         }
-        buf.set(SHOW_CURSOR, offset);
+        // Update persistent cursor state if this batch contains a DECTCEM sequence.
+        // If not, the previous state carries over — this prevents wrongly showing
+        // the cursor when the app hid it in an earlier batch.
+        const batchState = lastCursorVisible(merged);
+        if (batchState !== null) appCursorVisible = batchState;
+        const suffix = appCursorVisible ? SHOW_CURSOR : HIDE_CURSOR;
+        // Wrap: hide cursor → data → restore app's intended state
+        const buf = new Uint8Array(HIDE_CURSOR.length + total + suffix.length);
+        buf.set(HIDE_CURSOR, 0);
+        buf.set(merged, HIDE_CURSOR.length);
+        buf.set(suffix, HIDE_CURSOR.length + total);
         termInstance.terminal.write(buf);
       });
     }
@@ -198,7 +228,8 @@
 
       // Start flush timer on first chunk only (throttle, not debounce).
       // This ensures regular screen updates during continuous output.
-      if (flushTimer === null) {
+      // Only start flushing once xterm.js has been fitted to the real pane size.
+      if (isReady && flushTimer === null) {
         flushTimer = setTimeout(flushOutput, FLUSH_DELAY);
       }
     });
@@ -271,6 +302,11 @@
       theme.cursorAccent = brightness > 128 ? '#000000' : '#ffffff';
     }
     termInstance.terminal.options.theme = theme;
+  }
+
+  // Re-focus terminal when its tab becomes active again
+  $: if (active && pane.focused && termInstance) {
+    termInstance.terminal.focus();
   }
 
   // Desktop notifications when Claude state changes and window is not focused
@@ -416,6 +452,18 @@
     caret-color: transparent !important;
     color: transparent !important;
     opacity: 0 !important;
+  }
+  /* Force visible scrollbar in WebView2 — overlay scrollbars auto-hide on Windows 11 */
+  .terminal-container :global(.xterm-viewport)::-webkit-scrollbar {
+    width: 10px;
+    background: transparent;
+  }
+  .terminal-container :global(.xterm-viewport)::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+  }
+  .terminal-container :global(.xterm-viewport)::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
   }
 
   .exited-overlay {

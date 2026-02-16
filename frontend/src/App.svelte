@@ -464,17 +464,24 @@
 
   <div class="content">
     <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} on:close={() => (showSidebar = false)} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
-    <PaneGrid
-      panes={$activeTab?.panes ?? []}
-      on:closePane={handleClosePane}
-      on:maximizePane={handleMaximizePane}
-      on:focusPane={handleFocusPane}
-      on:renamePane={handleRenamePane}
-      on:restartPane={handleRestartPane}
-      on:issueAction={handleIssueAction}
-      on:navigateFile={handleNavigateFile}
-      on:splitPane={() => (showLaunchDialog = true)}
-    />
+    <div class="tab-layers">
+      {#each $allTabs as tab (tab.id)}
+        <div class="tab-layer" class:active={tab.id === $activeTab?.id}>
+          <PaneGrid
+            panes={tab.panes}
+            active={tab.id === $activeTab?.id}
+            on:closePane={handleClosePane}
+            on:maximizePane={handleMaximizePane}
+            on:focusPane={handleFocusPane}
+            on:renamePane={handleRenamePane}
+            on:restartPane={handleRestartPane}
+            on:issueAction={handleIssueAction}
+            on:navigateFile={handleNavigateFile}
+            on:splitPane={() => (showLaunchDialog = true)}
+          />
+        </div>
+      {/each}
+    </div>
   </div>
 
   <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} />
@@ -504,4 +511,11 @@
   }
   .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
   .content { display: flex; flex: 1; overflow: hidden; }
+  .tab-layers { position: relative; flex: 1; overflow: hidden; }
+  .tab-layer {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    visibility: hidden; pointer-events: none;
+  }
+  .tab-layer.active { visibility: visible; pointer-events: auto; }
 </style>

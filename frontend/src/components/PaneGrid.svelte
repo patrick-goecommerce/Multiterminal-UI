@@ -4,6 +4,7 @@
   import type { Pane } from '../stores/tabs';
 
   export let panes: Pane[] = [];
+  export let active: boolean = true;
 
   const dispatch = createEventDispatcher();
 
@@ -51,6 +52,7 @@
   {#each visiblePanes as pane (pane.id)}
     <TerminalPane
       {pane}
+      {active}
       paneIndex={panes.indexOf(pane) + 1}
       on:close={handleClose}
       on:maximize={handleMaximize}
