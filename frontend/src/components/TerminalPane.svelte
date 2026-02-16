@@ -113,6 +113,11 @@
 
     termInstance.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type !== 'keydown') return true;
+      if (e.ctrlKey && e.key === 'v') {
+        e.preventDefault();
+        pasteToSession(pane.sessionId);
+        return false;
+      }
       if (e.ctrlKey && e.key === 'c' && termInstance?.terminal.hasSelection()) {
         copySelection(termInstance.terminal);
         return false;
@@ -202,6 +207,11 @@
         }, 150);
       }
     };
+    // Prevent native paste – we handle Ctrl+V manually via attachCustomKeyEventHandler
+    // to use the Wails clipboard API. Without this, the browser paste event also fires,
+    // causing double-paste through xterm.js onData.
+    containerEl.addEventListener('paste', (e) => e.preventDefault(), true);
+
     containerEl.addEventListener('wheel', wheelHandler, { passive: false });
 
     resizeObserver = new ResizeObserver(() => {
