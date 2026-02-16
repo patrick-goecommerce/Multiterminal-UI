@@ -3,10 +3,12 @@
   import * as App from '../../wailsjs/go/backend/App';
   import { ClipboardSetText } from '../../wailsjs/runtime/runtime';
   import FileTreeItem from './FileTreeItem.svelte';
+  import IssuesView from './IssuesView.svelte';
 
   export let visible: boolean = false;
   export let dir: string = '';
   export let width: number = 260;
+  export let issueCount: number = 0;
 
   const dispatch = createEventDispatcher();
 
@@ -25,7 +27,7 @@
   let searching = false;
   let gitStatuses: Record<string, string> = {};
   let gitPollTimer: ReturnType<typeof setInterval> | null = null;
-  let activeView: 'explorer' | 'source-control' = 'explorer';
+  let activeView: 'explorer' | 'source-control' | 'issues' = 'explorer';
 
   let copiedPath = '';
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
@@ -163,6 +165,16 @@
           <span class="change-count">{changeCount}</span>
         {/if}
       </button>
+      <button
+        class="toggle-btn"
+        class:active={activeView === 'issues'}
+        on:click={() => (activeView = 'issues')}
+      >
+        Issues
+        {#if issueCount > 0}
+          <span class="change-count">{issueCount}</span>
+        {/if}
+      </button>
     </div>
 
     {#if activeView === 'explorer'}
@@ -203,7 +215,7 @@
           {/each}
         {/if}
       </div>
-    {:else}
+    {:else if activeView === 'source-control'}
       <div class="file-list">
         {#if groupedChanges.length === 0}
           <div class="no-results">Keine Änderungen</div>
@@ -235,6 +247,10 @@
             {/each}
           {/each}
         {/if}
+      </div>
+    {:else if activeView === 'issues'}
+      <div class="file-list">
+        <IssuesView {dir} on:createIssue on:editIssue />
       </div>
     {/if}
   </div>
