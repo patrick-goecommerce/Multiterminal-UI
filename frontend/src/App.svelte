@@ -16,9 +16,13 @@
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
   import type { PaneMode } from './stores/tabs';
-  import { MODE_TO_INDEX, INDEX_TO_MODE, buildClaudeArgv, getClaudeName, encodeForPty } from './lib/claude';
+  import { buildClaudeArgv, getClaudeName, encodeForPty } from './lib/claude';
   import { createGlobalKeyHandler } from './lib/shortcuts';
   import { sendNotification } from './lib/notifications';
+  import { restoreSession, saveSession } from './lib/session';
+  import { fetchBranch, fetchCommitAge, fetchConflicts, fetchIssueCount } from './lib/git-polling';
+  import { buildIssuePrompt, setupIssueBranch, resolveBranchConflict } from './lib/launch';
+  import type { IssueContext } from './lib/launch';
   import * as App from '../wailsjs/go/backend/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -70,62 +74,6 @@
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
   let storeUnsubscribe: (() => void) | null = null;
 
-  async function restoreSession(): Promise<boolean> {
-    try {
-      const saved = await App.LoadTabs();
-      if (!saved || !saved.tabs || saved.tabs.length === 0) return false;
-
-      const claudeCmd = resolvedClaudePath;
-
-      for (const savedTab of saved.tabs) {
-        const tabId = tabStore.addTab(savedTab.name, savedTab.dir);
-        for (const savedPane of savedTab.panes) {
-          const mode = INDEX_TO_MODE[savedPane.mode] || 'shell';
-          const argv = buildClaudeArgv(mode, savedPane.model || '', claudeCmd);
-          try {
-            const sessionId = await App.CreateSession(argv, savedTab.dir || '', 24, 80);
-            if (sessionId > 0) {
-              const issueNum = (savedPane as any).issue_number || 0;
-              const issueBranch = (savedPane as any).issue_branch || '';
-              tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch);
-              if (issueNum) App.LinkSessionIssue(sessionId, issueNum, '', issueBranch, savedTab.dir || '');
-            }
-          } catch (err) {
-            console.error('[restoreSession] failed to create session:', err);
-          }
-        }
-      }
-
-      const state = tabStore.getState();
-      if (saved.active_tab >= 0 && saved.active_tab < state.tabs.length) {
-        tabStore.setActiveTab(state.tabs[saved.active_tab].id);
-      }
-      return true;
-    } catch (err) {
-      console.error('[restoreSession]', err);
-      return false;
-    }
-  }
-
-  function saveSession() {
-    const state = tabStore.getState();
-    if (!state.tabs.length) return;
-    const activeIdx = state.tabs.findIndex((t) => t.id === state.activeTabId);
-    const tabs = state.tabs.map((tab) => ({
-      name: tab.name,
-      dir: tab.dir,
-      focus_idx: tab.panes.findIndex((p) => p.focused),
-      panes: tab.panes.map((pane) => ({
-        name: pane.name,
-        mode: MODE_TO_INDEX[pane.mode] ?? 0,
-        model: pane.model || '',
-        issue_number: pane.issueNumber || 0,
-        issue_branch: pane.issueBranch || '',
-      })),
-    }));
-    App.SaveTabs({ active_tab: Math.max(activeIdx, 0), tabs });
-  }
-
   const handleGlobalKeydown = createGlobalKeyHandler({
     onNewPane: () => { showLaunchDialog = true; },
     onNewTab: () => { showProjectDialog = true; },
@@ -172,7 +120,7 @@
       }
     }).catch(() => {});
 
-    const restored = await restoreSession();
+    const restored = await restoreSession(resolvedClaudePath);
     if (!restored) {
       let workDir = '';
       try { workDir = await App.GetWorkingDir(); } catch {}
@@ -181,8 +129,9 @@
 
     EventsOn('terminal:activity', (info: any) => {
       tabStore.updateActivity(info.id, info.activity, info.cost);
-      // Notify when an issue-linked agent finishes
-      if (info.activity === 'done') {
+      // Notify when an issue-linked agent finishes (only when window is focused,
+      // because TerminalPane already sends a notification when unfocused)
+      if (info.activity === 'done' && document.hasFocus()) {
         for (const tab of $allTabs) {
           const pane = tab.panes.find(p => p.sessionId === info.id);
           if (pane?.issueNumber) {
@@ -225,7 +174,7 @@
   async function updateBranch() {
     const tab = $activeTab;
     if (!tab) return;
-    try { branch = await App.GetGitBranch(tab.dir || '.'); } catch { branch = ''; }
+    branch = await fetchBranch(tab.dir || '.');
   }
 
   $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); updateConflicts(); }
@@ -233,47 +182,25 @@
   async function updateCommitAge() {
     const tab = $activeTab;
     if (!tab) return;
-    try {
-      const ts = await App.GetLastCommitTime(tab.dir || '.');
-      commitAgeMinutes = ts > 0 ? Math.floor((Math.floor(Date.now() / 1000) - ts) / 60) : -1;
-    } catch { commitAgeMinutes = -1; }
+    commitAgeMinutes = await fetchCommitAge(tab.dir || '.');
   }
 
   async function updateConflicts() {
     const tab = $activeTab;
-    if (!tab?.dir) {
-      conflictCount = 0; conflictFiles = []; conflictOperation = '';
-      return;
+    const info = await fetchConflicts(tab?.dir || '');
+    if (prevConflictCount === 0 && info.count > 0) {
+      const opLabel = info.operation
+        ? ` (${info.operation.charAt(0).toUpperCase() + info.operation.slice(1)})`
+        : '';
+      sendNotification(
+        `Merge-Konflikte erkannt${opLabel}`,
+        `${info.count} Datei${info.count > 1 ? 'en' : ''} mit Konflikten`
+      );
     }
-    try {
-      const info = await App.GetMergeConflicts(tab.dir);
-      conflictCount = info.count;
-      conflictFiles = info.files || [];
-      conflictOperation = info.operation || '';
-      if (prevConflictCount === 0 && conflictCount > 0) {
-        const opLabel = conflictOperation
-          ? ` (${conflictOperation.charAt(0).toUpperCase() + conflictOperation.slice(1)})`
-          : '';
-        sendNotification(
-          `Merge-Konflikte erkannt${opLabel}`,
-          `${conflictCount} Datei${conflictCount > 1 ? 'en' : ''} mit Konflikten`
-        );
-      }
-      prevConflictCount = conflictCount;
-    } catch {
-      conflictCount = 0; conflictFiles = []; conflictOperation = '';
-    }
-  }
-
-  function buildIssuePrompt(issue: { number: number; title: string; body: string; labels: string[] }): string {
-    let text = `Closes #${issue.number}: ${issue.title}`;
-    if (issue.labels.length > 0) text += `\nLabels: ${issue.labels.join(', ')}`;
-    if (issue.body) {
-      const desc = issue.body.length > 500 ? issue.body.slice(0, 500).trimEnd() + '...' : issue.body;
-      text += `\n\n${desc}`;
-    }
-    text += `\n\nRef: #${issue.number}`;
-    return text;
+    prevConflictCount = info.count;
+    conflictCount = info.count;
+    conflictFiles = info.files;
+    conflictOperation = info.operation;
   }
 
   async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null }>) {
@@ -297,51 +224,27 @@
       let sessionDir = tab.dir || '';
 
       if (issueCtx) {
-        const useWorktrees = $config.use_worktrees === true;
-
-        if (useWorktrees) {
-          // Worktree mode: create isolated directory per issue
-          try {
-            const wt = await App.CreateWorktree(sessionDir, issueCtx.number, issueCtx.title);
-            if (wt) {
-              sessionDir = wt.path;
-              issueBranch = wt.branch;
-              worktreePath = wt.path;
-            }
-          } catch (wtErr: any) {
-            const msg = wtErr?.message || String(wtErr);
-            if (!confirm(`Worktree-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne Worktree starten?`)) return;
-          }
-        } else if ($config.auto_branch_on_issue !== false) {
-          // Branch mode: check for conflict before switching
-          const branchInfo = await App.IsOnIssueBranch(sessionDir, issueCtx.number);
-          if (branchInfo.on_issue_branch && !branchInfo.is_same_issue) {
-            // On a different issue branch — show conflict dialog
-            const dirty = !(await App.HasCleanWorkingTree(sessionDir));
-            branchConflictData = {
-              currentBranch: branchInfo.branch_name,
-              currentIssueNumber: branchInfo.issue_number,
-              targetIssueNumber: issueCtx.number,
-              targetIssueTitle: issueCtx.title,
-              dirtyWorkingTree: dirty,
-            };
-            pendingLaunch = { type, model, issueCtx, name, argv, sessionDir };
-            showBranchConflict = true;
-            return;
-          }
-          if (branchInfo.is_same_issue) {
-            // Already on the correct issue branch — use it directly
-            issueBranch = branchInfo.branch_name;
-          } else {
-            // Not on an issue branch — switch/create as before
-            try {
-              issueBranch = await App.GetOrCreateIssueBranch(sessionDir, issueCtx.number, issueCtx.title);
-            } catch (branchErr: any) {
-              const msg = branchErr?.message || String(branchErr);
-              if (!confirm(`Branch-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne eigenen Branch starten?`)) return;
-            }
-          }
+        const result = await setupIssueBranch(
+          sessionDir, issueCtx,
+          $config.use_worktrees === true,
+          $config.auto_branch_on_issue !== false,
+        );
+        if (result.cancelled) return;
+        if (result.conflict) {
+          branchConflictData = {
+            currentBranch: result.conflict.currentBranch,
+            currentIssueNumber: result.conflict.currentIssueNumber,
+            targetIssueNumber: issueCtx.number,
+            targetIssueTitle: issueCtx.title,
+            dirtyWorkingTree: result.conflict.dirtyWorkingTree,
+          };
+          pendingLaunch = { type, model, issueCtx, name, argv, sessionDir };
+          showBranchConflict = true;
+          return;
         }
+        issueBranch = result.issueBranch;
+        worktreePath = result.worktreePath;
+        sessionDir = result.sessionDir;
       }
 
       const sessionId = await App.CreateSession(argv, sessionDir, 24, 80);
@@ -349,7 +252,6 @@
         tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx?.number, issueCtx?.title, issueBranch, worktreePath);
         if (issueCtx) {
           App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
-          // Auto-send issue prompt after Claude starts up
           setTimeout(() => {
             const prompt = buildIssuePrompt(issueCtx);
             App.WriteToSession(sessionId, encodeForPty(prompt + '\n'));
@@ -369,37 +271,15 @@
     const tab = $activeTab;
     if (!tab) return;
     const { type, model, issueCtx, name, argv } = launch;
-    let { sessionDir } = launch;
-    let issueBranch = '';
-    let worktreePath = '';
 
     try {
-      if (e.detail.action === 'switch') {
-        try {
-          issueBranch = await App.GetOrCreateIssueBranch(sessionDir, issueCtx.number, issueCtx.title);
-        } catch (err: any) {
-          const msg = err?.message || String(err);
-          if (!confirm(`Branch-Wechsel fehlgeschlagen:\n${msg}\n\nTrotzdem ohne Branch starten?`)) return;
-        }
-      } else if (e.detail.action === 'worktree') {
-        try {
-          const wt = await App.CreateWorktree(sessionDir, issueCtx.number, issueCtx.title);
-          if (wt) {
-            sessionDir = wt.path;
-            issueBranch = wt.branch;
-            worktreePath = wt.path;
-          }
-        } catch (err: any) {
-          const msg = err?.message || String(err);
-          if (!confirm(`Worktree-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne Worktree starten?`)) return;
-        }
-      }
-      // 'stay' -> no branch switch, just start session in current dir
+      const resolved = await resolveBranchConflict(e.detail.action, launch.sessionDir, issueCtx);
+      if (resolved.cancelled) return;
 
-      const sessionId = await App.CreateSession(argv, sessionDir, 24, 80);
+      const sessionId = await App.CreateSession(argv, resolved.sessionDir, 24, 80);
       if (sessionId > 0) {
-        tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx.number, issueCtx.title, issueBranch, worktreePath);
-        App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
+        tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.worktreePath);
+        App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.sessionDir);
         setTimeout(() => {
           const prompt = buildIssuePrompt(issueCtx);
           App.WriteToSession(sessionId, encodeForPty(prompt + '\n'));
@@ -523,11 +403,7 @@
 
   async function updateIssueCount() {
     const tab = $activeTab;
-    if (!tab?.dir) return;
-    try {
-      const issues = await App.GetIssues(tab.dir, 'open');
-      issueCount = issues ? issues.length : 0;
-    } catch { issueCount = 0; }
+    issueCount = await fetchIssueCount(tab?.dir || '');
   }
 
   function handleCreateIssue() {
