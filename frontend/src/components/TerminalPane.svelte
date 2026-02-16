@@ -138,10 +138,6 @@
       return true;
     });
 
-    termInstance.terminal.onFocus(() => {
-      dispatch('focus', { paneId: pane.id });
-    });
-
     termInstance.terminal.onData((data: string) => {
       const encoder = new TextEncoder();
       const bytes = encoder.encode(data);
@@ -316,7 +312,8 @@
     const ae = document.activeElement;
     const isInteractive = ae instanceof HTMLInputElement ||
                           ae instanceof HTMLTextAreaElement ||
-                          ae instanceof HTMLSelectElement;
+                          ae instanceof HTMLSelectElement ||
+                          ae instanceof HTMLButtonElement;
     if (!isInteractive) {
       termInstance.terminal.focus();
     }
