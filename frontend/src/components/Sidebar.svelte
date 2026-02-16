@@ -178,7 +178,9 @@
       <SourceControlView {dir} {gitStatuses} {conflictFiles} {conflictOperation} on:selectFile />
     {:else if activeView === 'issues'}
       <div class="file-list">
-        <IssuesView {dir} {paneIssues} on:createIssue on:editIssue on:launchForIssue />
+        {#key dir}
+          <IssuesView {dir} {paneIssues} on:createIssue on:editIssue on:launchForIssue />
+        {/key}
       </div>
     {/if}
   </div>
