@@ -78,6 +78,24 @@ export namespace backend {
 	        this.url = source["url"];
 	    }
 	}
+	export class IssueBranchInfo {
+	    on_issue_branch: boolean;
+	    branch_name: string;
+	    issue_number: number;
+	    is_same_issue: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new IssueBranchInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.on_issue_branch = source["on_issue_branch"];
+	        this.branch_name = source["branch_name"];
+	        this.issue_number = source["issue_number"];
+	        this.is_same_issue = source["is_same_issue"];
+	    }
+	}
 	export class IssueComment {
 	    author: string;
 	    body: string;

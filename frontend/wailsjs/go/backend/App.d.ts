@@ -71,6 +71,8 @@ export function IsClaudeDetected():Promise<boolean>;
 
 export function IsGitRepo(arg1:string):Promise<boolean>;
 
+export function IsOnIssueBranch(arg1:string,arg2:number):Promise<backend.IssueBranchInfo>;
+
 export function LinkSessionIssue(arg1:number,arg2:number,arg3:string,arg4:string,arg5:string):Promise<void>;
 
 export function ListDirectory(arg1:string):Promise<Array<backend.FileEntry>>;

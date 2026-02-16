@@ -138,6 +138,10 @@ export function IsGitRepo(arg1) {
   return window['go']['backend']['App']['IsGitRepo'](arg1);
 }
 
+export function IsOnIssueBranch(arg1, arg2) {
+  return window['go']['backend']['App']['IsOnIssueBranch'](arg1, arg2);
+}
+
 export function LinkSessionIssue(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['backend']['App']['LinkSessionIssue'](arg1, arg2, arg3, arg4, arg5);
 }
