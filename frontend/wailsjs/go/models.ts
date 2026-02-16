@@ -335,6 +335,7 @@ export namespace config {
 	    commands: CommandEntry[];
 	    audio: AudioSettings;
 	    localhost_auto_open: string;
+	    sidebar_pinned: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -359,6 +360,7 @@ export namespace config {
 	        this.commands = this.convertValues(source["commands"], CommandEntry);
 	        this.audio = this.convertValues(source["audio"], AudioSettings);
 	        this.localhost_auto_open = source["localhost_auto_open"];
+	        this.sidebar_pinned = source["sidebar_pinned"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
