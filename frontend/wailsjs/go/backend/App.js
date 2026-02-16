@@ -102,6 +102,10 @@ export function GetLogPath() {
   return window['go']['backend']['App']['GetLogPath']();
 }
 
+export function GetMergeConflicts(arg1) {
+  return window['go']['backend']['App']['GetMergeConflicts'](arg1);
+}
+
 export function GetOrCreateIssueBranch(arg1, arg2, arg3) {
   return window['go']['backend']['App']['GetOrCreateIssueBranch'](arg1, arg2, arg3);
 }

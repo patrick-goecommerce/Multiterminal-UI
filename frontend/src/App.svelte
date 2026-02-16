@@ -40,6 +40,11 @@
   let latestVersion = '';
   let downloadURL = '';
 
+  let conflictCount = 0;
+  let conflictFiles: string[] = [];
+  let conflictOperation = '';
+  let prevConflictCount = 0;
+
   let resolvedClaudePath = 'claude';
   let claudeDetected = true;
 
@@ -185,7 +190,8 @@
     updateBranch();
     updateCommitAge();
     updateIssueCount();
-    branchInterval = setInterval(updateBranch, 10000);
+    updateConflicts();
+    branchInterval = setInterval(() => { updateBranch(); updateConflicts(); }, 10000);
     commitAgeInterval = setInterval(updateCommitAge, 30000);
     document.addEventListener('keydown', handleGlobalKeydown);
   });
@@ -204,7 +210,7 @@
     try { branch = await App.GetGitBranch(tab.dir || '.'); } catch { branch = ''; }
   }
 
-  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); }
+  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); updateConflicts(); }
 
   async function updateCommitAge() {
     const tab = $activeTab;
@@ -213,6 +219,32 @@
       const ts = await App.GetLastCommitTime(tab.dir || '.');
       commitAgeMinutes = ts > 0 ? Math.floor((Math.floor(Date.now() / 1000) - ts) / 60) : -1;
     } catch { commitAgeMinutes = -1; }
+  }
+
+  async function updateConflicts() {
+    const tab = $activeTab;
+    if (!tab?.dir) {
+      conflictCount = 0; conflictFiles = []; conflictOperation = '';
+      return;
+    }
+    try {
+      const info = await App.GetMergeConflicts(tab.dir);
+      conflictCount = info.count;
+      conflictFiles = info.files || [];
+      conflictOperation = info.operation || '';
+      if (prevConflictCount === 0 && conflictCount > 0) {
+        const opLabel = conflictOperation
+          ? ` (${conflictOperation.charAt(0).toUpperCase() + conflictOperation.slice(1)})`
+          : '';
+        sendNotification(
+          `Merge-Konflikte erkannt${opLabel}`,
+          `${conflictCount} Datei${conflictCount > 1 ? 'en' : ''} mit Konflikten`
+        );
+      }
+      prevConflictCount = conflictCount;
+    } catch {
+      conflictCount = 0; conflictFiles = []; conflictOperation = '';
+    }
   }
 
   function buildIssuePrompt(issue: { number: number; title: string; body: string; labels: string[] }): string {
@@ -462,7 +494,7 @@
   />
 
   <div class="content">
-    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} initialView={sidebarView} on:close={() => (showSidebar = false)} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
+    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} on:close={() => (showSidebar = false)} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
     <PaneGrid
       panes={$activeTab?.panes ?? []}
       on:closePane={handleClosePane}
@@ -474,7 +506,7 @@
     />
   </div>
 
-  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} />
+  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} />
   <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
   <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} }} />

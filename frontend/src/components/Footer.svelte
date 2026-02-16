@@ -3,6 +3,8 @@
   export let totalCost: string = '';
   export let tabInfo: string = '';
   export let commitAgeMinutes: number = -1;
+  export let conflictCount: number = 0;
+  export let conflictOperation: string = '';
   export let updateAvailable: boolean = false;
   export let latestVersion: string = '';
   export let downloadURL: string = '';
@@ -14,6 +16,14 @@
     const h = Math.floor(commitAgeMinutes / 60);
     const m = commitAgeMinutes % 60;
     return `Letzter Commit: ${h}h ${m}m`;
+  })();
+
+  $: conflictLabel = (() => {
+    if (conflictCount <= 0) return '';
+    const op = conflictOperation
+      ? ` (${conflictOperation === 'cherry-pick' ? 'Cherry-Pick' : conflictOperation.charAt(0).toUpperCase() + conflictOperation.slice(1)})`
+      : '';
+    return `\u26A0 ${conflictCount} Konflikt${conflictCount > 1 ? 'e' : ''}${op}`;
   })();
 
   $: commitClass = (() => {
@@ -30,6 +40,9 @@
       <span class="footer-item branch">
         <span class="label">branch:</span> {branch}
       </span>
+    {/if}
+    {#if conflictLabel}
+      <span class="footer-item conflict-badge">{conflictLabel}</span>
     {/if}
     <span class="footer-item">{tabInfo}</span>
     {#if totalCost}
@@ -144,6 +157,12 @@
   @keyframes update-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
+  }
+
+  .conflict-badge {
+    color: var(--error, #ef4444);
+    font-weight: 600;
+    animation: commit-pulse 2s ease-in-out infinite;
   }
 
   .shortcut {
