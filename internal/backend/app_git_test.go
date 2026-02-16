@@ -70,14 +70,14 @@ func TestClassifyGitStatus_PriorityQuestionOverAdded(t *testing.T) {
 
 func TestMarkParentDirs_MarksAll(t *testing.T) {
 	statuses := make(map[string]string)
-	root := "/projects/myapp"
-	filePath := "/projects/myapp/src/components/Button.tsx"
+	root := filepath.FromSlash("/projects/myapp")
+	filePath := filepath.FromSlash("/projects/myapp/src/components/Button.tsx")
 
 	markParentDirs(statuses, filePath, root)
 
 	expected := []string{
-		"/projects/myapp/src/components",
-		"/projects/myapp/src",
+		filepath.FromSlash("/projects/myapp/src/components"),
+		filepath.FromSlash("/projects/myapp/src"),
 	}
 	for _, dir := range expected {
 		if statuses[dir] != "M" {
@@ -87,24 +87,25 @@ func TestMarkParentDirs_MarksAll(t *testing.T) {
 }
 
 func TestMarkParentDirs_DoesNotOverwrite(t *testing.T) {
+	srcDir := filepath.FromSlash("/projects/myapp/src")
 	statuses := map[string]string{
-		"/projects/myapp/src": "A",
+		srcDir: "A",
 	}
-	root := "/projects/myapp"
-	filePath := "/projects/myapp/src/index.ts"
+	root := filepath.FromSlash("/projects/myapp")
+	filePath := filepath.FromSlash("/projects/myapp/src/index.ts")
 
 	markParentDirs(statuses, filePath, root)
 
 	// Existing "A" status should not be overwritten
-	if statuses["/projects/myapp/src"] != "A" {
-		t.Fatalf("existing status should not be overwritten, got %q", statuses["/projects/myapp/src"])
+	if statuses[srcDir] != "A" {
+		t.Fatalf("existing status should not be overwritten, got %q", statuses[srcDir])
 	}
 }
 
 func TestMarkParentDirs_FileDirectlyInRoot(t *testing.T) {
 	statuses := make(map[string]string)
-	root := "/projects/myapp"
-	filePath := "/projects/myapp/README.md"
+	root := filepath.FromSlash("/projects/myapp")
+	filePath := filepath.FromSlash("/projects/myapp/README.md")
 
 	markParentDirs(statuses, filePath, root)
 
@@ -210,6 +211,10 @@ func TestGetGitFileStatuses_ValidRepo(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	// Resolve short names (e.g. PATRIC~1) to canonical long paths on Windows
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
 	run := func(args ...string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
