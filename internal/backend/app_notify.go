@@ -42,7 +42,9 @@ func (a *App) startFocusListener() {
 				return
 			}
 			conn.Close()
-			runtime.WindowUnminimise(a.ctx)
+			if runtime.WindowIsMinimised(a.ctx) {
+				runtime.WindowUnminimise(a.ctx)
+			}
 			runtime.WindowShow(a.ctx)
 			runtime.WindowSetAlwaysOnTop(a.ctx, true)
 			runtime.WindowSetAlwaysOnTop(a.ctx, false)
