@@ -75,6 +75,11 @@
     }
   }
 
+  function handleDragStart(e: DragEvent) {
+    const path = entry.path.includes(' ') ? `"${entry.path}"` : entry.path;
+    e.dataTransfer?.setData('text/plain', path);
+  }
+
   $: status = gitStatuses[entry.path] || '';
   $: children = entry.children || [];
 </script>
@@ -82,6 +87,8 @@
 <div
   class="file-entry {getStatusClass(status)}"
   style="padding-left: {10 + depth * 16}px"
+  draggable="true"
+  on:dragstart={handleDragStart}
   on:click={handleClick}
   on:keydown
   role="treeitem"
