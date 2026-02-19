@@ -31,6 +31,8 @@ type Config struct {
 	Audio                 AudioSettings  `yaml:"audio" json:"audio"`
 	LocalhostAutoOpen     string         `yaml:"localhost_auto_open" json:"localhost_auto_open"`
 	SidebarPinned         bool           `yaml:"sidebar_pinned" json:"sidebar_pinned"`
+	FontFamily            string         `yaml:"font_family" json:"font_family"`
+	FontSize              int            `yaml:"font_size"   json:"font_size"`
 }
 
 // IssueTracking holds settings for automatic issue progress reporting.
@@ -103,6 +105,8 @@ func DefaultConfig() Config {
 			WhenFocused: boolPtr(true),
 		},
 		LocalhostAutoOpen: "notify",
+		FontFamily:        "",
+		FontSize:          14,
 	}
 }
 
@@ -202,6 +206,13 @@ func Load() Config {
 	validAutoOpen := map[string]bool{"auto": true, "notify": true, "off": true}
 	if !validAutoOpen[cfg.LocalhostAutoOpen] {
 		cfg.LocalhostAutoOpen = "notify"
+	}
+
+	if cfg.FontSize < 8 {
+		cfg.FontSize = 8
+	}
+	if cfg.FontSize > 32 {
+		cfg.FontSize = 32
 	}
 
 	return cfg
