@@ -68,7 +68,7 @@ func NewSession(id, rows, cols int) *Session {
 		Screen:      NewScreen(rows, cols),
 		Status:      StatusRunning,
 		OutputCh:    make(chan struct{}, 1),
-		RawOutputCh: make(chan []byte, 64),
+		RawOutputCh: make(chan []byte, 256),
 		done:        make(chan struct{}),
 	}
 }
