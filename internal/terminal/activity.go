@@ -29,13 +29,14 @@ const (
 func (s *Session) ScanTokens() {
 	rows := s.Screen.Rows()
 	// Scan last 10 rows of the screen for cost/token patterns
-	var text strings.Builder
 	scanStart := rows - 10
 	if scanStart < 0 {
 		scanStart = 0
 	}
-	for r := scanStart; r < rows; r++ {
-		text.WriteString(s.Screen.PlainTextRow(r))
+	lines := s.Screen.PlainTextRows(scanStart, rows)
+	var text strings.Builder
+	for _, line := range lines {
+		text.WriteString(line)
 		text.WriteByte('\n')
 	}
 	content := text.String()
@@ -104,8 +105,10 @@ func (s *Session) classifyScreenState() ActivityState {
 	if scanFrom < 0 {
 		scanFrom = 0
 	}
-	for r := rows - 1; r >= scanFrom; r-- {
-		line := s.Screen.PlainTextRow(r)
+	lines := s.Screen.PlainTextRows(scanFrom, rows)
+	// Iterate in reverse (bottom-up) to find the most recent prompt/input
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
 		if line == "" {
 			continue
 		}

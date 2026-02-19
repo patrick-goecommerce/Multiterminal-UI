@@ -149,7 +149,7 @@ func (s *Session) Start(argv []string, dir string, env []string) error {
 
 // readLoop continuously reads from the PTY and writes to the Screen.
 func (s *Session) readLoop() {
-	buf := make([]byte, 4096)
+	buf := make([]byte, 65536)
 	for {
 		n, err := s.p.Read(buf)
 		if n > 0 {
@@ -167,10 +167,10 @@ func (s *Session) readLoop() {
 			s.Activity = ActivityActive
 			s.mu.Unlock()
 
-			// Send raw bytes to GUI frontend (non-blocking)
+			// Send raw bytes to GUI frontend (blocking with done-guard)
 			select {
 			case s.RawOutputCh <- chunk:
-			default:
+			case <-s.done:
 			}
 
 			// Signal for legacy TUI consumers (non-blocking)

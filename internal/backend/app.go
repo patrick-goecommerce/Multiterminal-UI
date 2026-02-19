@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
@@ -274,48 +273,3 @@ func (a *App) SelectDirectory(startDir string) string {
 	return dir
 }
 
-// streamOutput reads raw PTY bytes from the session and emits them as
-// base64-encoded chunks to the frontend via Wails events.
-// It coalesces rapid output over a short time window so that TUI redraws
-// (which produce many small chunks) arrive as a single event, preventing
-// cursor flicker in xterm.js.
-func (a *App) streamOutput(id int, sess *terminal.Session) {
-	const coalesceDelay = 8 * time.Millisecond
-	for {
-		select {
-		case data, ok := <-sess.RawOutputCh:
-			if !ok {
-				return
-			}
-			buf := append([]byte(nil), data...)
-			// Wait briefly for more chunks — TUI apps redraw in bursts
-			deadline := time.After(coalesceDelay)
-		collect:
-			for {
-				select {
-				case more, ok := <-sess.RawOutputCh:
-					if !ok {
-						b64 := base64.StdEncoding.EncodeToString(buf)
-						runtime.EventsEmit(a.ctx, "terminal:output", id, b64)
-						return
-					}
-					buf = append(buf, more...)
-				case <-deadline:
-					break collect
-				case <-a.ctx.Done():
-					return
-				}
-			}
-			b64 := base64.StdEncoding.EncodeToString(buf)
-			runtime.EventsEmit(a.ctx, "terminal:output", id, b64)
-		case <-a.ctx.Done():
-			return
-		}
-	}
-}
-
-// watchExit waits for a session to exit and notifies the frontend.
-func (a *App) watchExit(id int, sess *terminal.Session) {
-	<-sess.Done()
-	runtime.EventsEmit(a.ctx, "terminal:exit", id, sess.ExitCode)
-}

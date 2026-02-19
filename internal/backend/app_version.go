@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -59,7 +60,7 @@ func (a *App) CheckForUpdates() UpdateInfo {
 	latest := strings.TrimPrefix(release.TagName, "v")
 	info.LatestVersion = latest
 	info.DownloadURL = release.HTMLURL
-	info.UpdateAvailable = latest != "" && normalizeVersion(latest) != normalizeVersion(Version)
+	info.UpdateAvailable = isNewerVersion(Version, latest)
 
 	return info
 }
@@ -67,6 +68,44 @@ func (a *App) CheckForUpdates() UpdateInfo {
 // normalizeVersion strips a leading "v" and returns the bare semver string.
 func normalizeVersion(v string) string {
 	return strings.TrimPrefix(strings.TrimSpace(v), "v")
+}
+
+// isNewerVersion returns true if latest is a higher semver than current.
+func isNewerVersion(current, latest string) bool {
+	if latest == "" {
+		return false
+	}
+	cur := parseSemver(normalizeVersion(current))
+	lat := parseSemver(normalizeVersion(latest))
+	if cur == nil || lat == nil {
+		return false
+	}
+	for i := 0; i < 3; i++ {
+		if lat[i] > cur[i] {
+			return true
+		}
+		if lat[i] < cur[i] {
+			return false
+		}
+	}
+	return false
+}
+
+// parseSemver splits "1.2.3" into [1, 2, 3]. Returns nil on failure.
+func parseSemver(v string) []int {
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) != 3 {
+		return nil
+	}
+	nums := make([]int, 3)
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return nil
+		}
+		nums[i] = n
+	}
+	return nums
 }
 
 // VersionTitle returns the window title including the version.

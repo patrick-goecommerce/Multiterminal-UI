@@ -91,6 +91,34 @@ func (s *Screen) PlainTextRow(row int) string {
 	return strings.TrimRight(b.String(), " ")
 }
 
+// PlainTextRows returns plain text for rows [startRow, endRow) under a single
+// lock acquisition. This dramatically reduces lock contention compared to
+// calling PlainTextRow in a loop.
+func (s *Screen) PlainTextRows(startRow, endRow int) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if startRow < 0 {
+		startRow = 0
+	}
+	if endRow > s.rows {
+		endRow = s.rows
+	}
+	result := make([]string, 0, endRow-startRow)
+	var b strings.Builder
+	for r := startRow; r < endRow; r++ {
+		b.Reset()
+		for _, c := range s.cells[r] {
+			ch := c.Char
+			if ch == 0 {
+				ch = ' '
+			}
+			b.WriteRune(ch)
+		}
+		result = append(result, strings.TrimRight(b.String(), " "))
+	}
+	return result
+}
+
 // PlainText returns the full screen content as plain text (no ANSI).
 func (s *Screen) PlainText() string {
 	s.mu.Lock()

@@ -80,12 +80,26 @@ type Screen struct {
 	utf8Buf [4]byte // buffered UTF-8 bytes
 	utf8Len int     // total bytes expected (2, 3, or 4); 0 = not in sequence
 	utf8Got int     // bytes collected so far
+
+	// Pre-allocated blank line template for fast scroll operations.
+	// Copied via copy() instead of allocating + initialising each time.
+	blankLine []Cell
+}
+
+// makeBlankLine allocates a single row of blank cells.
+func makeBlankLine(cols int) []Cell {
+	line := make([]Cell, cols)
+	for i := range line {
+		line[i] = Cell{Char: ' '}
+	}
+	return line
 }
 
 // NewScreen allocates a Screen of the given dimensions.
 func NewScreen(rows, cols int) *Screen {
 	s := &Screen{rows: rows, cols: cols}
 	s.cells = makeGrid(rows, cols)
+	s.blankLine = makeBlankLine(cols)
 	return s
 }
 
@@ -116,6 +130,7 @@ func (s *Screen) Resize(rows, cols int) {
 	s.cells = ng
 	s.rows = rows
 	s.cols = cols
+	s.blankLine = makeBlankLine(cols)
 	// Clamp cursor
 	if s.curRow >= rows {
 		s.curRow = rows - 1

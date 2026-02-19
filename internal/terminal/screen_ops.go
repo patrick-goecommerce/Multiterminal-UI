@@ -65,11 +65,9 @@ func (s *Screen) scrollUp() {
 	for r := top; r < bottom; r++ {
 		s.cells[r] = s.cells[r+1]
 	}
-	// Blank the bottom row
+	// Blank the bottom row (fast copy from pre-allocated template)
 	s.cells[bottom] = make([]Cell, s.cols)
-	for c := range s.cells[bottom] {
-		s.cells[bottom][c] = Cell{Char: ' '}
-	}
+	copy(s.cells[bottom], s.blankLine)
 }
 
 // scrollDown scrolls the scroll region down by one line (content moves down,
@@ -84,9 +82,7 @@ func (s *Screen) scrollDown() {
 		s.cells[r] = s.cells[r-1]
 	}
 	s.cells[top] = make([]Cell, s.cols)
-	for c := range s.cells[top] {
-		s.cells[top][c] = Cell{Char: ' '}
-	}
+	copy(s.cells[top], s.blankLine)
 }
 
 // eraseDisplay clears part of the screen.
@@ -159,9 +155,7 @@ func (s *Screen) insertLines(n int) {
 			s.cells[r] = s.cells[r-1]
 		}
 		s.cells[s.curRow] = make([]Cell, s.cols)
-		for c := range s.cells[s.curRow] {
-			s.cells[s.curRow][c] = Cell{Char: ' '}
-		}
+		copy(s.cells[s.curRow], s.blankLine)
 	}
 }
 
@@ -176,9 +170,7 @@ func (s *Screen) deleteLines(n int) {
 			s.cells[r] = s.cells[r+1]
 		}
 		s.cells[bottom] = make([]Cell, s.cols)
-		for c := range s.cells[bottom] {
-			s.cells[bottom][c] = Cell{Char: ' '}
-		}
+		copy(s.cells[bottom], s.blankLine)
 	}
 }
 
