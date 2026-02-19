@@ -18,7 +18,11 @@ export async function restoreSession(claudePath: string): Promise<boolean> {
           if (sessionId > 0) {
             const issueNum = (savedPane as any).issue_number || 0;
             const issueBranch = (savedPane as any).issue_branch || '';
-            tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch);
+            const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch);
+            const zd = (savedPane as any).zoom_delta || 0;
+            if (zd !== 0) {
+              tabStore.setZoomDelta(tabId, paneId, zd);
+            }
             if (issueNum) App.LinkSessionIssue(sessionId, issueNum, '', issueBranch, savedTab.dir || '');
           }
         } catch (err) {
@@ -61,6 +65,7 @@ export function saveSession(): void {
       model: pane.model || '',
       issue_number: pane.issueNumber || 0,
       issue_branch: pane.issueBranch || '',
+      zoom_delta: pane.zoomDelta || 0,
     })),
   }));
   App.SaveTabs({ active_tab: Math.max(activeIdx, 0), tabs } as any);
