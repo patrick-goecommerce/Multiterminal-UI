@@ -343,3 +343,50 @@ func TestSaveSession_WriteAndRead(t *testing.T) {
 		t.Errorf("Loaded tab name = %q, want 'Main'", loaded.Tabs[0].Name)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Favorites
+// ---------------------------------------------------------------------------
+
+func TestConfig_FavoritesRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test-config.yaml")
+
+	original := DefaultConfig()
+	original.Favorites = map[string][]string{
+		"/home/user/project": {"/home/user/project/main.go", "/home/user/project/src"},
+	}
+
+	err := writeDefaults(path, original)
+	if err != nil {
+		t.Fatalf("writeDefaults failed: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+
+	var loaded Config
+	if err := yaml.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	favs, ok := loaded.Favorites["/home/user/project"]
+	if !ok {
+		t.Fatal("expected favorites for /home/user/project")
+	}
+	if len(favs) != 2 {
+		t.Fatalf("expected 2 favorites, got %d", len(favs))
+	}
+	if favs[0] != "/home/user/project/main.go" {
+		t.Errorf("fav[0] = %q, want '/home/user/project/main.go'", favs[0])
+	}
+}
+
+func TestConfig_FavoritesDefaultNil(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Favorites != nil {
+		t.Errorf("DefaultConfig should have nil Favorites, got %v", cfg.Favorites)
+	}
+}
