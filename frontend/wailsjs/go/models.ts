@@ -358,6 +358,9 @@ export namespace config {
 	    audio: AudioSettings;
 	    localhost_auto_open: string;
 	    sidebar_pinned: boolean;
+	    favorites?: Record<string, Array<string>>;
+	    font_family: string;
+	    font_size: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -383,6 +386,9 @@ export namespace config {
 	        this.audio = this.convertValues(source["audio"], AudioSettings);
 	        this.localhost_auto_open = source["localhost_auto_open"];
 	        this.sidebar_pinned = source["sidebar_pinned"];
+	        this.favorites = source["favorites"];
+	        this.font_family = source["font_family"];
+	        this.font_size = source["font_size"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -411,6 +417,7 @@ export namespace config {
 	    model: string;
 	    issue_number?: number;
 	    issue_branch?: string;
+	    zoom_delta?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SavedPane(source);
@@ -423,6 +430,7 @@ export namespace config {
 	        this.model = source["model"];
 	        this.issue_number = source["issue_number"];
 	        this.issue_branch = source["issue_branch"];
+	        this.zoom_delta = source["zoom_delta"];
 	    }
 	}
 	export class SavedTab {
