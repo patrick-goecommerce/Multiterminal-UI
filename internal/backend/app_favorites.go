@@ -13,10 +13,13 @@ func (a *App) GetFavorites(dir string) []string {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.cfg.Favorites == nil {
+	src := a.cfg.Favorites[dir]
+	if len(src) == 0 {
 		return nil
 	}
-	return a.cfg.Favorites[dir]
+	result := make([]string, len(src))
+	copy(result, src)
+	return result
 }
 
 // AddFavorite adds a path to the favorites for the given directory
@@ -58,11 +61,16 @@ func (a *App) RemoveFavorite(dir string, path string) error {
 	}
 
 	favs := a.cfg.Favorites[dir]
+	found := false
 	for i, f := range favs {
 		if f == path {
 			a.cfg.Favorites[dir] = append(favs[:i], favs[i+1:]...)
+			found = true
 			break
 		}
+	}
+	if !found {
+		return nil
 	}
 
 	// Clean up empty entries

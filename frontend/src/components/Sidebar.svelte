@@ -100,32 +100,32 @@
 
   async function loadFavorites() {
     if (!dir) {
-        favorites = [];
-        return;
+      favorites = [];
+      return;
     }
     try {
-        favorites = (await App.GetFavorites(dir)) || [];
+      favorites = (await App.GetFavorites(dir)) || [];
     } catch {
-        favorites = [];
+      favorites = [];
     }
   }
 
   async function handleToggleFavorite(e: CustomEvent<{ path: string; isFavorite: boolean }>) {
     const { path, isFavorite } = e.detail;
     try {
-        if (isFavorite) {
-            await App.RemoveFavorite(dir, path);
-        } else {
-            await App.AddFavorite(dir, path);
-        }
-        await loadFavorites();
+      if (isFavorite) {
+        await App.RemoveFavorite(dir, path);
+      } else {
+        await App.AddFavorite(dir, path);
+      }
+      await loadFavorites();
     } catch {}
   }
 
   async function handleRemoveFavorite(e: CustomEvent<{ path: string }>) {
     try {
-        await App.RemoveFavorite(dir, e.detail.path);
-        await loadFavorites();
+      await App.RemoveFavorite(dir, e.detail.path);
+      await loadFavorites();
     } catch {}
   }
 
