@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
-  import { createTerminal, getTerminalTheme } from '../lib/terminal';
+  import { createTerminal, getTerminalTheme, buildFontFamily } from '../lib/terminal';
   import { pasteToSession, copySelection, writeTextToSession } from '../lib/clipboard';
   import { sendNotification } from '../lib/notifications';
   import { playBell, audioMuted } from '../lib/audio';
-  import type { Pane } from '../stores/tabs';
+  import { tabStore, type Pane } from '../stores/tabs';
   import { currentTheme } from '../stores/theme';
   import { config } from '../stores/config';
   import * as App from '../../wailsjs/go/backend/App';
@@ -18,6 +18,7 @@
   export let pane: Pane;
   export let paneIndex: number = 0;
   export let active: boolean = true;
+  export let tabId: string = '';
 
   const dispatch = createEventDispatcher();
 
@@ -104,7 +105,7 @@
   }
 
   onMount(() => {
-    termInstance = createTerminal($currentTheme, handleLink);
+    termInstance = createTerminal($currentTheme, handleLink, $config.font_family, ($config.font_size || 14) + (pane.zoomDelta || 0));
     termInstance.terminal.open(containerEl);
 
     requestAnimationFrame(() => {
@@ -269,11 +270,14 @@
     wheelHandler = (e: WheelEvent) => {
       if (!e.ctrlKey || !termInstance) return;
       e.preventDefault();
-      const current = termInstance.terminal.options.fontSize || 14;
-      const newSize = e.deltaY < 0 ? current + 1 : current - 1;
-      if (newSize >= 8 && newSize <= 32) {
+      const baseSize = $config.font_size || 14;
+      const currentDelta = pane.zoomDelta || 0;
+      const newDelta = e.deltaY < 0 ? currentDelta + 1 : currentDelta - 1;
+      const effectiveSize = baseSize + newDelta;
+      if (effectiveSize >= 8 && effectiveSize <= 32) {
         isZooming = true;
-        termInstance.terminal.options.fontSize = newSize;
+        termInstance.terminal.options.fontSize = effectiveSize;
+        if (tabId) tabStore.setZoomDelta(tabId, pane.id, newDelta);
         if (zoomTimer) clearTimeout(zoomTimer);
         zoomTimer = setTimeout(() => {
           if (termInstance) {
@@ -334,6 +338,27 @@
       theme.cursorAccent = brightness > 128 ? '#000000' : '#ffffff';
     }
     termInstance.terminal.options.theme = theme;
+  }
+
+  $: if (termInstance && $config) {
+    const effectiveSize = ($config.font_size || 14) + (pane.zoomDelta || 0);
+    const clampedSize = Math.max(8, Math.min(32, effectiveSize));
+    const newFamily = buildFontFamily($config.font_family);
+
+    let needsFit = false;
+    if (termInstance.terminal.options.fontFamily !== newFamily) {
+      termInstance.terminal.options.fontFamily = newFamily;
+      needsFit = true;
+    }
+    if (termInstance.terminal.options.fontSize !== clampedSize) {
+      termInstance.terminal.options.fontSize = clampedSize;
+      needsFit = true;
+    }
+    if (needsFit) {
+      termInstance.fitAddon.fit();
+      const dims = termInstance.fitAddon.proposeDimensions();
+      if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
+    }
   }
 
   // Re-focus terminal when its tab becomes active or pane gets focused.

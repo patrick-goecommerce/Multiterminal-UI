@@ -2,6 +2,7 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import * as App from '../../wailsjs/go/backend/App';
   import FileTreeItem from './FileTreeItem.svelte';
+  import FavoritesSection from './FavoritesSection.svelte';
   import IssuesView from './IssuesView.svelte';
   import SourceControlView from './SourceControlView.svelte';
 
@@ -33,6 +34,8 @@
   let gitStatuses: Record<string, string> = {};
   let gitPollTimer: ReturnType<typeof setInterval> | null = null;
   let activeView: 'explorer' | 'source-control' | 'issues' = initialView || 'explorer';
+  let favorites: string[] = [];
+  $: favoritePaths = new Set(favorites);
 
   // React to external view changes (e.g. Ctrl+I)
   $: if (initialView && visible) activeView = initialView;
@@ -50,6 +53,7 @@
     if (dir) {
       loadDir(dir);
       refreshGitStatus();
+      loadFavorites();
     }
     gitPollTimer = setInterval(refreshGitStatus, 5000);
   });
@@ -94,6 +98,37 @@
     searching = false;
   }
 
+  async function loadFavorites() {
+    if (!dir) {
+      favorites = [];
+      return;
+    }
+    try {
+      favorites = (await App.GetFavorites(dir)) || [];
+    } catch {
+      favorites = [];
+    }
+  }
+
+  async function handleToggleFavorite(e: CustomEvent<{ path: string; isFavorite: boolean }>) {
+    const { path, isFavorite } = e.detail;
+    try {
+      if (isFavorite) {
+        await App.RemoveFavorite(dir, path);
+      } else {
+        await App.AddFavorite(dir, path);
+      }
+      await loadFavorites();
+    } catch {}
+  }
+
+  async function handleRemoveFavorite(e: CustomEvent<{ path: string }>) {
+    try {
+      await App.RemoveFavorite(dir, e.detail.path);
+      await loadFavorites();
+    } catch {}
+  }
+
   $: changeCount = (() => {
     const paths = Object.keys(gitStatuses);
     return paths.filter(p => {
@@ -105,6 +140,7 @@
   $: if (dir) {
     loadDir(dir);
     refreshGitStatus();
+    loadFavorites();
   }
 </script>
 
@@ -153,6 +189,12 @@
     </div>
 
     {#if activeView === 'explorer'}
+      <FavoritesSection
+        {favorites}
+        on:selectFile
+        on:removeFavorite={handleRemoveFavorite}
+      />
+
       <div class="search-box">
         <input
           type="text"
@@ -172,8 +214,10 @@
               {entry}
               {gitStatuses}
               {copiedPath}
+              {favoritePaths}
               on:selectFile
               on:copied={(e) => setCopied(e.detail.path)}
+              on:toggleFavorite={handleToggleFavorite}
             />
           {/each}
         {:else if searching && searchQuery}
@@ -184,8 +228,10 @@
               {entry}
               {gitStatuses}
               {copiedPath}
+              {favoritePaths}
               on:selectFile
               on:copied={(e) => setCopied(e.detail.path)}
+              on:toggleFavorite={handleToggleFavorite}
             />
           {/each}
         {/if}

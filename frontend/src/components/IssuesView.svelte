@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import * as App from '../../wailsjs/go/backend/App';
+  import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
   import IssueDetailComponent from './IssueDetail.svelte';
 
   export let dir: string = '';
@@ -220,9 +221,14 @@
               </div>
             {/if}
           </div>
-          {#if issue.state === 'OPEN' && !paneIssues[issue.number]}
-            <button class="launch-btn" on:click={(e) => launchForIssue(e, issue)} title="Claude für dieses Issue starten">▶</button>
-          {/if}
+          <div class="issue-actions">
+            {#if issue.url}
+              <button class="action-btn open-btn" on:click|stopPropagation={() => BrowserOpenURL(issue.url)} title="Im Browser öffnen">&#8599;</button>
+            {/if}
+            {#if issue.state === 'OPEN' && !paneIssues[issue.number]}
+              <button class="action-btn launch-btn" on:click={(e) => launchForIssue(e, issue)} title="Claude für dieses Issue starten">▶</button>
+            {/if}
+          </div>
         </div>
       {/each}
     {/if}
@@ -272,13 +278,16 @@
   .issue-item[draggable="true"] { cursor: grab; }
   .issue-item[draggable="true"]:active { cursor: grabbing; }
 
-  .launch-btn {
-    opacity: 0; background: none; border: none; color: var(--accent); cursor: pointer;
-    font-size: 14px; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
-    transition: opacity 0.15s, background 0.15s;
+  .issue-actions { display: flex; gap: 2px; flex-shrink: 0; align-items: center; }
+  .action-btn {
+    opacity: 0; background: none; border: none; color: var(--fg-muted); cursor: pointer;
+    font-size: 14px; padding: 2px 6px; border-radius: 4px;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
   }
-  .issue-item:hover .launch-btn { opacity: 1; }
-  .launch-btn:hover { background: var(--bg-tertiary); }
+  .issue-item:hover .action-btn { opacity: 1; }
+  .action-btn:hover { background: var(--bg-tertiary); color: var(--fg); }
+  .action-btn.launch-btn { color: var(--accent); }
+  .action-btn.open-btn { font-size: 13px; }
 
   .activity-dot { font-size: 12px; animation: pulse 2s infinite; }
   .activity-dot.active { color: var(--accent); }

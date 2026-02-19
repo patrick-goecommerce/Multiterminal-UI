@@ -473,6 +473,7 @@
       {#each $allTabs as tab (tab.id)}
         <div class="tab-layer" class:active={tab.id === $activeTab?.id}>
           <PaneGrid
+            tabId={tab.id}
             panes={tab.panes}
             active={tab.id === $activeTab?.id}
             on:closePane={handleClosePane}

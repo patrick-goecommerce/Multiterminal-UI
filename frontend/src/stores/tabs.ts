@@ -17,6 +17,7 @@ export interface Pane {
   issueTitle: string;
   issueBranch: string;
   worktreePath: string;
+  zoomDelta: number;
 }
 
 export interface Tab {
@@ -129,6 +130,7 @@ function createTabStore() {
           issueTitle: issueTitle ?? '',
           issueBranch: issueBranch ?? '',
           worktreePath: worktreePath ?? '',
+          zoomDelta: 0,
         });
         tab.focusedPaneId = paneId;
         return state;
@@ -169,6 +171,16 @@ function createTabStore() {
         if (!tab) return state;
         const pane = tab.panes.find((p) => p.id === paneId);
         if (pane) pane.maximized = !pane.maximized;
+        return state;
+      });
+    },
+
+    setZoomDelta(tabId: string, paneId: string, delta: number) {
+      update((state) => {
+        const tab = state.tabs.find((t) => t.id === tabId);
+        if (!tab) return state;
+        const pane = tab.panes.find((p) => p.id === paneId);
+        if (pane) pane.zoomDelta = delta;
         return state;
       });
     },

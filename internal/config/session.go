@@ -31,6 +31,7 @@ type SavedPane struct {
 	Model       string `json:"model"`                  // model label (empty for shell)
 	IssueNumber int    `json:"issue_number,omitempty"` // linked GitHub issue number
 	IssueBranch string `json:"issue_branch,omitempty"` // branch created for issue
+	ZoomDelta   int    `json:"zoom_delta,omitempty"`   // per-pane font zoom offset
 }
 
 // sessionPath returns the path to ~/.multiterminal-session.json.

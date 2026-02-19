@@ -3,6 +3,8 @@
 import {backend} from '../models';
 import {config} from '../models';
 
+export function AddFavorite(arg1:string,arg2:string):Promise<void>;
+
 export function AddIssueComment(arg1:string,arg2:number,arg3:string):Promise<void>;
 
 export function AddToQueue(arg1:number,arg2:string):Promise<backend.QueueItem>;
@@ -40,6 +42,8 @@ export function EnableLogging(arg1:boolean):Promise<string>;
 export function GetAppVersion():Promise<string>;
 
 export function GetConfig():Promise<config.Config>;
+
+export function GetFavorites(arg1:string):Promise<Array<string>>;
 
 export function GetGitBranch(arg1:string):Promise<string>;
 
@@ -86,6 +90,8 @@ export function LoadTabs():Promise<config.SessionState>;
 export function OpenFileInEditor(arg1:string):Promise<string>;
 
 export function ReadFile(arg1:string):Promise<backend.FileContent>;
+
+export function RemoveFavorite(arg1:string,arg2:string):Promise<void>;
 
 export function RemoveFromQueue(arg1:number,arg2:number):Promise<void>;
 

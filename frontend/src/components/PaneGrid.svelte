@@ -5,6 +5,7 @@
 
   export let panes: Pane[] = [];
   export let active: boolean = true;
+  export let tabId: string = '';
 
   const dispatch = createEventDispatcher();
 
@@ -53,6 +54,7 @@
     <TerminalPane
       {pane}
       {active}
+      {tabId}
       paneIndex={panes.indexOf(pane) + 1}
       on:close={handleClose}
       on:maximize={handleMaximize}

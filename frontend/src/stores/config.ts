@@ -36,6 +36,9 @@ export interface AppConfig {
   audio: AudioConfig;
   localhost_auto_open: string;
   sidebar_pinned: boolean;
+  font_family: string;
+  font_size: number;
+  favorites: Record<string, string[]>;
 }
 
 export const config = writable<AppConfig>({
@@ -66,4 +69,7 @@ export const config = writable<AppConfig>({
   },
   localhost_auto_open: 'notify',
   sidebar_pinned: false,
+  font_family: '',
+  font_size: 14,
+  favorites: {},
 });

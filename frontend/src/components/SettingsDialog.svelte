@@ -6,6 +6,7 @@
   import * as App from '../../wailsjs/go/backend/App';
   import ColorPicker from './ColorPicker.svelte';
   import { playBell } from '../lib/audio';
+  import { MONOSPACE_FONTS, isFontAvailable } from '../lib/terminal';
 
   export let visible: boolean = false;
 
@@ -39,6 +40,12 @@
   let audioInputSound = $config.audio?.input_sound || '';
   let audioErrorSound = $config.audio?.error_sound || '';
 
+  let fontFamily = $config.font_family || '';
+  let fontSize = $config.font_size || 14;
+  let savedFontFamily = fontFamily;
+  let savedFontSize = fontSize;
+  let availableFonts: { name: string; available: boolean }[] = [];
+
   $: if (visible) {
     requestAnimationFrame(() => dialogEl?.focus());
     colorValue = $config.terminal_color || '#39ff14';
@@ -53,6 +60,14 @@
     audioDoneSound = $config.audio?.done_sound || '';
     audioInputSound = $config.audio?.input_sound || '';
     audioErrorSound = $config.audio?.error_sound || '';
+    fontFamily = $config.font_family || '';
+    fontSize = $config.font_size || 14;
+    savedFontFamily = fontFamily;
+    savedFontSize = fontSize;
+    availableFonts = MONOSPACE_FONTS.map(name => ({
+      name,
+      available: isFontAvailable(name),
+    }));
     App.GetLogPath().then(p => logPath = p).catch(() => {});
     detectClaude();
   }
@@ -74,6 +89,15 @@
     } else {
       App.DisableLogging();
     }
+  }
+
+  function handleFontFamilyChange(e: Event) {
+    fontFamily = (e.target as HTMLSelectElement).value;
+    config.update(c => ({ ...c, font_family: fontFamily }));
+  }
+
+  function handleFontSizeChange() {
+    config.update(c => ({ ...c, font_size: fontSize }));
   }
 
   async function detectClaude() {
@@ -127,6 +151,8 @@
       logging_enabled: loggingEnabled,
       use_worktrees: useWorktrees,
       claude_command: claudeCommand,
+      font_family: fontFamily,
+      font_size: fontSize,
       audio: {
         enabled: audioEnabled,
         volume: audioVolume,
@@ -144,6 +170,7 @@
 
   function close() {
     applyTheme(savedTheme, $config.terminal_color || '#39ff14');
+    config.update(c => ({ ...c, font_family: savedFontFamily, font_size: savedFontSize }));
     dispatch('close');
   }
 
@@ -151,6 +178,9 @@
     colorValue = '#39ff14';
     selectedTheme = 'dark';
     applyTheme('dark', '#39ff14');
+    fontFamily = '';
+    fontSize = 14;
+    config.update(c => ({ ...c, font_family: '', font_size: 14 }));
     audioEnabled = true;
     audioWhenFocused = true;
     audioVolume = 50;
@@ -189,6 +219,28 @@
         <label class="setting-label">Terminal-Farbe</label>
         <p class="setting-desc">Bestimmt Akzentfarbe, Cursor und fokussierte Rahmen.</p>
         <ColorPicker value={colorValue} on:change={handleColorChange} />
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="font-select">Schriftart</label>
+        <p class="setting-desc">Monospace-Schriftart für alle Terminals.</p>
+        <select id="font-select" class="theme-select" value={fontFamily} on:change={handleFontFamilyChange}>
+          <option value="">Standard (Cascadia Code, Fira Code, ...)</option>
+          {#each availableFonts as font}
+            <option value={font.name} disabled={!font.available} style={font.available ? `font-family: '${font.name}', monospace` : ''}>
+              {font.name}{font.available ? '' : ' (nicht installiert)'}
+            </option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="font-size">Schriftgröße</label>
+        <p class="setting-desc">Basis-Schriftgröße in Pixel (8–32). Ctrl+Scroll zum Zoomen pro Pane.</p>
+        <div class="volume-row">
+          <input id="font-size" type="range" min="8" max="32" step="1" bind:value={fontSize} on:input={handleFontSizeChange} class="volume-slider" />
+          <span class="volume-value">{fontSize}px</span>
+        </div>
       </div>
 
       <div class="setting-group">
