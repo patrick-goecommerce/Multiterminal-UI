@@ -25,9 +25,27 @@ var (
 	prevCost       = make(map[int]string)
 )
 
+// scanInterval returns the scan tick duration based on the number of active sessions.
+// More sessions → slower ticks to reduce overhead.
+func (a *App) scanInterval() time.Duration {
+	a.mu.Lock()
+	n := len(a.sessions)
+	a.mu.Unlock()
+	switch {
+	case n <= 3:
+		return 500 * time.Millisecond
+	case n <= 6:
+		return 600 * time.Millisecond
+	default:
+		return 750 * time.Millisecond
+	}
+}
+
 // scanLoop periodically scans all sessions for activity changes and token info.
+// The interval adapts to the number of active sessions.
 func (a *App) scanLoop(ctx context.Context) {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	interval := a.scanInterval()
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -36,6 +54,11 @@ func (a *App) scanLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			a.scanAllSessions()
+			// Re-check if interval should change
+			if newInterval := a.scanInterval(); newInterval != interval {
+				interval = newInterval
+				ticker.Reset(interval)
+			}
 		}
 	}
 }

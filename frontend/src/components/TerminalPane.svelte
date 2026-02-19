@@ -215,11 +215,32 @@
       setTimeout(flushOutput, FLUSH_DELAY);
     }
 
+    // Pre-built lookup table for fast base64 decoding (avoids intermediate string from atob)
+    const B64 = new Uint8Array(128);
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.split('').forEach((c, i) => B64[c.charCodeAt(0)] = i);
+
+    function decodeBase64(b64: string): Uint8Array {
+      // Strip trailing padding
+      let len = b64.length;
+      while (len > 0 && b64[len - 1] === '=') len--;
+      const outLen = (len * 3 >>> 2);
+      const out = new Uint8Array(outLen);
+      let j = 0;
+      for (let i = 0; i < len; i += 4) {
+        const a = B64[b64.charCodeAt(i)];
+        const b = B64[b64.charCodeAt(i + 1)];
+        const c = i + 2 < len ? B64[b64.charCodeAt(i + 2)] : 0;
+        const d = i + 3 < len ? B64[b64.charCodeAt(i + 3)] : 0;
+        out[j++] = (a << 2) | (b >> 4);
+        if (j < outLen) out[j++] = ((b & 0xF) << 4) | (c >> 2);
+        if (j < outLen) out[j++] = ((c & 0x3) << 6) | d;
+      }
+      return out;
+    }
+
     cleanupFn = EventsOn('terminal:output', (id: number, b64: string) => {
       if (id !== pane.sessionId || !termInstance) return;
-      const raw = atob(b64);
-      const bytes = new Uint8Array(raw.length);
-      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      const bytes = decodeBase64(b64);
 
       // Scan for localhost URLs
       const mode = $config.localhost_auto_open;
