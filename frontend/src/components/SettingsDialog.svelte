@@ -96,10 +96,6 @@
     config.update(c => ({ ...c, font_family: fontFamily }));
   }
 
-  function handleFontSizeChange() {
-    config.update(c => ({ ...c, font_size: fontSize }));
-  }
-
   async function detectClaude() {
     try {
       const result = await App.DetectClaudePath();
@@ -238,7 +234,7 @@
         <label class="setting-label" for="font-size">Schriftgröße</label>
         <p class="setting-desc">Basis-Schriftgröße in Pixel (8–32). Ctrl+Scroll zum Zoomen pro Pane.</p>
         <div class="volume-row">
-          <input id="font-size" type="range" min="8" max="32" step="1" bind:value={fontSize} on:input={handleFontSizeChange} class="volume-slider" />
+          <input id="font-size" type="range" min="8" max="32" step="1" bind:value={fontSize} class="volume-slider" />
           <span class="volume-value">{fontSize}px</span>
         </div>
       </div>
