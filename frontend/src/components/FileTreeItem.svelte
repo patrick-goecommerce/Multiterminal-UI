@@ -16,6 +16,7 @@
   export let depth: number = 0;
   export let gitStatuses: Record<string, string> = {};
   export let copiedPath: string = '';
+  export let favoritePaths: Set<string> = new Set();
 
   const dispatch = createEventDispatcher();
 
@@ -53,6 +54,11 @@
     dispatch('copied', { path: entry.path });
   }
 
+  function handleToggleFavorite(e: MouseEvent) {
+    e.stopPropagation();
+    dispatch('toggleFavorite', { path: entry.path, isFavorite });
+  }
+
   function getStatusLabel(status: string): string {
     switch (status) {
       case 'M': return 'M';
@@ -82,6 +88,7 @@
 
   $: status = gitStatuses[entry.path] || '';
   $: children = entry.children || [];
+  $: isFavorite = favoritePaths.has(entry.path);
 </script>
 
 <div
@@ -113,6 +120,15 @@
       <path d="M4 4v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2v2a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2zm2-2v2h2a2 2 0 0 1 2 2v2h2V2H6zM2 6v6h6V6H2z"/>
     </svg>
   </button>
+  <button class="star-btn" class:active={isFavorite} on:click={handleToggleFavorite} title={isFavorite ? 'Favorit entfernen' : 'Als Favorit markieren'}>
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+      {#if isFavorite}
+        <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25z"/>
+      {:else}
+        <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694z"/>
+      {/if}
+    </svg>
+  </button>
 </div>
 
 {#if entry.expanded && entry.children}
@@ -122,8 +138,10 @@
       depth={depth + 1}
       {gitStatuses}
       {copiedPath}
+      {favoritePaths}
       on:selectFile
       on:copied
+      on:toggleFavorite
     />
   {/each}
 {/if}
@@ -152,6 +170,15 @@
   }
   .file-entry:hover .copy-btn { opacity: 1; }
   .copy-btn:hover { color: var(--fg); background: var(--bg-secondary); }
+
+  .star-btn {
+    opacity: 0; background: none; border: none; color: var(--fg-muted);
+    cursor: pointer; padding: 1px 3px; border-radius: 3px; flex-shrink: 0;
+    display: flex; align-items: center; transition: opacity 0.15s, color 0.15s;
+  }
+  .file-entry:hover .star-btn { opacity: 1; }
+  .star-btn:hover { color: #eab308; background: var(--bg-secondary); }
+  .star-btn.active { opacity: 1; color: #eab308; }
 
   .git-badge {
     font-size: 10px; font-weight: 700; padding: 0 4px;
