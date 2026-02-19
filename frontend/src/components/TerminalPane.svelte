@@ -2,6 +2,7 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { createTerminal, getTerminalTheme, buildFontFamily } from '../lib/terminal';
   import { pasteToSession, copySelection, writeTextToSession } from '../lib/clipboard';
+  import { encodeForPty } from '../lib/claude';
   import { sendNotification } from '../lib/notifications';
   import { playBell, audioMuted } from '../lib/audio';
   import { tabStore, type Pane } from '../stores/tabs';
@@ -140,9 +141,7 @@
     });
 
     termInstance.terminal.onData((data: string) => {
-      const encoder = new TextEncoder();
-      const bytes = encoder.encode(data);
-      App.WriteToSession(pane.sessionId, btoa(String.fromCharCode(...bytes)));
+      App.WriteToSession(pane.sessionId, encodeForPty(data));
     });
 
     // Batch PTY output writes with a short time window to reduce render overhead.

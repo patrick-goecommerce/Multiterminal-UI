@@ -68,7 +68,7 @@ func NewSession(id, rows, cols int) *Session {
 		Screen:      NewScreen(rows, cols),
 		Status:      StatusRunning,
 		OutputCh:    make(chan struct{}, 1),
-		RawOutputCh: make(chan []byte, 64),
+		RawOutputCh: make(chan []byte, 256),
 		done:        make(chan struct{}),
 	}
 }
@@ -206,6 +206,9 @@ func (s *Session) waitLoop() {
 }
 
 // Write sends raw bytes to the PTY (i.e. keyboard input from the user).
+// Large inputs are written in chunks to avoid overflowing the PTY kernel
+// buffer (especially on Windows ConPTY). Partial writes are retried until
+// all bytes have been delivered.
 func (s *Session) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	pty := s.p
@@ -213,7 +216,26 @@ func (s *Session) Write(p []byte) (int, error) {
 	if pty == nil {
 		return 0, io.ErrClosedPipe
 	}
-	return pty.Write(p)
+
+	const chunkSize = 1024
+	total := 0
+	for len(p) > 0 {
+		chunk := p
+		if len(chunk) > chunkSize {
+			chunk = p[:chunkSize]
+		}
+		n, err := pty.Write(chunk)
+		total += n
+		if err != nil {
+			return total, err
+		}
+		p = p[n:]
+		// Yield briefly between chunks so the PTY can drain its buffer.
+		if len(p) > 0 {
+			time.Sleep(time.Millisecond)
+		}
+	}
+	return total, nil
 }
 
 // Resize updates the PTY and Screen dimensions.
