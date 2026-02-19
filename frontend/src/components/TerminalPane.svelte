@@ -311,11 +311,18 @@
   $: if (termInstance && $config) {
     const effectiveSize = ($config.font_size || 14) + (pane.zoomDelta || 0);
     const clampedSize = Math.max(8, Math.min(32, effectiveSize));
-    const family = $config.font_family;
+    const newFamily = buildFontFamily($config.font_family);
 
-    termInstance.terminal.options.fontFamily = buildFontFamily(family);
+    let needsFit = false;
+    if (termInstance.terminal.options.fontFamily !== newFamily) {
+      termInstance.terminal.options.fontFamily = newFamily;
+      needsFit = true;
+    }
     if (termInstance.terminal.options.fontSize !== clampedSize) {
       termInstance.terminal.options.fontSize = clampedSize;
+      needsFit = true;
+    }
+    if (needsFit) {
       termInstance.fitAddon.fit();
       const dims = termInstance.fitAddon.proposeDimensions();
       if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
