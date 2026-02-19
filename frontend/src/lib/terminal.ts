@@ -3,6 +3,43 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { createWebLinksAddon, registerFileLinkProvider, type LinkHandler } from './links';
 
+/** Curated list of monospace fonts. Order = priority for fallback chain. */
+export const MONOSPACE_FONTS = [
+  'Cascadia Code',
+  'Cascadia Mono',
+  'Fira Code',
+  'JetBrains Mono',
+  'Source Code Pro',
+  'IBM Plex Mono',
+  'Ubuntu Mono',
+  'Hack',
+  'Inconsolata',
+  'Consolas',
+  'Courier New',
+] as const;
+
+/** Default fallback chain used when no font is configured. */
+export const DEFAULT_FONT_FAMILY = MONOSPACE_FONTS.map(f => `'${f}'`).join(', ') + ', monospace';
+
+/**
+ * Check if a font is available in the browser.
+ * Uses document.fonts.check() with a test string at 16px.
+ */
+export function isFontAvailable(fontName: string): boolean {
+  if (fontName === 'monospace') return true;
+  try {
+    return document.fonts.check(`16px "${fontName}"`);
+  } catch {
+    return false;
+  }
+}
+
+/** Build a CSS font-family string from a configured font name. */
+export function buildFontFamily(configuredFont: string): string {
+  if (!configuredFont) return DEFAULT_FONT_FAMILY;
+  return `'${configuredFont}', monospace`;
+}
+
 export interface TerminalInstance {
   terminal: Terminal;
   fitAddon: FitAddon;
@@ -10,10 +47,7 @@ export interface TerminalInstance {
   dispose: () => void;
 }
 
-// Theme-aware terminal options
 const baseOptions: Partial<import('@xterm/xterm').ITerminalOptions> = {
-  fontSize: 14,
-  fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace",
   cursorBlink: true,
   cursorStyle: 'block',
   scrollback: 10000,
@@ -134,9 +168,16 @@ const terminalThemes: Record<string, import('@xterm/xterm').ITheme> = {
   },
 };
 
-export function createTerminal(theme: string = 'dark', linkHandler?: LinkHandler): TerminalInstance {
+export function createTerminal(
+  theme: string = 'dark',
+  linkHandler?: LinkHandler,
+  fontFamily?: string,
+  fontSize?: number,
+): TerminalInstance {
   const terminal = new Terminal({
     ...baseOptions,
+    fontFamily: buildFontFamily(fontFamily || ''),
+    fontSize: fontSize || 14,
     theme: terminalThemes[theme] || terminalThemes.dark,
   });
 
