@@ -31,6 +31,7 @@ type Config struct {
 	Audio                 AudioSettings  `yaml:"audio" json:"audio"`
 	LocalhostAutoOpen     string         `yaml:"localhost_auto_open" json:"localhost_auto_open"`
 	SidebarPinned         bool           `yaml:"sidebar_pinned" json:"sidebar_pinned"`
+	Favorites             map[string][]string `yaml:"favorites,omitempty" json:"favorites,omitempty"`
 	FontFamily            string         `yaml:"font_family" json:"font_family"`
 	FontSize              int            `yaml:"font_size"   json:"font_size"`
 }
@@ -213,6 +214,10 @@ func Load() Config {
 	}
 	if cfg.FontSize > 32 {
 		cfg.FontSize = 32
+	}
+
+	if cfg.Favorites == nil {
+		cfg.Favorites = make(map[string][]string)
 	}
 
 	return cfg
