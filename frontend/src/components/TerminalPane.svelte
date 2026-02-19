@@ -115,8 +115,8 @@
       // This prevents cursor-hopping from the initial 24x80 → real size transition.
       setTimeout(() => {
         isReady = true;
-        if (pendingChunks.length > 0 && flushTimer === null) {
-          flushTimer = setTimeout(flushOutput, 0);
+        if (pendingChunks.length > 0) {
+          scheduleFlush();
         }
       }, 50);
     });
@@ -145,11 +145,14 @@
     });
 
     // Batch PTY output writes with a short time window to reduce render overhead.
-    // We accumulate chunks for one frame (~16ms) then flush them in a single
-    // xterm.js write via rAF. Output is buffered until xterm.js has been fitted
-    // to the actual pane size to avoid cursor-hopping from 24x80 → real size.
+    // We accumulate chunks then flush them in a single xterm.js write call.
+    // xterm.js handles frame-synced rendering internally (via its own rAF loop),
+    // so we do NOT wrap in requestAnimationFrame — that would add an extra frame
+    // of latency and cause overlapping flush cycles that produce flicker.
+    // Output is buffered until xterm.js has been fitted to the actual pane size
+    // to avoid cursor-hopping from 24x80 → real size.
     let pendingChunks: Uint8Array[] = [];
-    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    let flushScheduled = false;
     let isReady = false;
     let appCursorVisible = true; // track DECTCEM state across batches
     const FLUSH_DELAY = 16; // ms — one full frame at 60fps
@@ -170,32 +173,46 @@
     }
 
     function flushOutput() {
-      flushTimer = null;
-      if (!termInstance || !isReady || pendingChunks.length === 0) { return; }
+      if (!termInstance || !isReady || pendingChunks.length === 0) {
+        flushScheduled = false;
+        return;
+      }
       const chunks = pendingChunks;
       pendingChunks = [];
-      requestAnimationFrame(() => {
-        if (!termInstance) return;
-        const total = chunks.reduce((sum, c) => sum + c.length, 0);
-        const merged = new Uint8Array(total);
-        let offset = 0;
-        for (const chunk of chunks) {
-          merged.set(chunk, offset);
-          offset += chunk.length;
-        }
-        // Update persistent cursor state if this batch contains a DECTCEM sequence.
-        // If not, the previous state carries over — this prevents wrongly showing
-        // the cursor when the app hid it in an earlier batch.
-        const batchState = lastCursorVisible(merged);
-        if (batchState !== null) appCursorVisible = batchState;
-        const suffix = appCursorVisible ? SHOW_CURSOR : HIDE_CURSOR;
-        // Wrap: hide cursor → data → restore app's intended state
-        const buf = new Uint8Array(HIDE_CURSOR.length + total + suffix.length);
-        buf.set(HIDE_CURSOR, 0);
-        buf.set(merged, HIDE_CURSOR.length);
-        buf.set(suffix, HIDE_CURSOR.length + total);
-        termInstance.terminal.write(buf);
-      });
+
+      const total = chunks.reduce((sum, c) => sum + c.length, 0);
+      const merged = new Uint8Array(total);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      // Update persistent cursor state if this batch contains a DECTCEM sequence.
+      // If not, the previous state carries over — this prevents wrongly showing
+      // the cursor when the app hid it in an earlier batch.
+      const batchState = lastCursorVisible(merged);
+      if (batchState !== null) appCursorVisible = batchState;
+      const suffix = appCursorVisible ? SHOW_CURSOR : HIDE_CURSOR;
+      // Wrap: hide cursor → data → restore app's intended state
+      const buf = new Uint8Array(HIDE_CURSOR.length + total + suffix.length);
+      buf.set(HIDE_CURSOR, 0);
+      buf.set(merged, HIDE_CURSOR.length);
+      buf.set(suffix, HIDE_CURSOR.length + total);
+      termInstance.terminal.write(buf);
+
+      // Check if more data arrived while we were processing.
+      // Schedule another flush if so, otherwise release the flag.
+      if (pendingChunks.length > 0) {
+        setTimeout(flushOutput, FLUSH_DELAY);
+      } else {
+        flushScheduled = false;
+      }
+    }
+
+    function scheduleFlush() {
+      if (!isReady || flushScheduled) return;
+      flushScheduled = true;
+      setTimeout(flushOutput, FLUSH_DELAY);
     }
 
     cleanupFn = EventsOn('terminal:output', (id: number, b64: string) => {
@@ -225,13 +242,7 @@
       }
 
       pendingChunks.push(bytes);
-
-      // Start flush timer on first chunk only (throttle, not debounce).
-      // This ensures regular screen updates during continuous output.
-      // Only start flushing once xterm.js has been fitted to the real pane size.
-      if (isReady && flushTimer === null) {
-        flushTimer = setTimeout(flushOutput, FLUSH_DELAY);
-      }
+      scheduleFlush();
     });
 
     wheelHandler = (e: WheelEvent) => {
