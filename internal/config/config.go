@@ -107,7 +107,7 @@ func DefaultConfig() Config {
 		},
 		LocalhostAutoOpen: "notify",
 		FontFamily:        "",
-		FontSize:          14,
+		FontSize:          10,
 	}
 }
 
@@ -209,11 +209,9 @@ func Load() Config {
 		cfg.LocalhostAutoOpen = "notify"
 	}
 
-	if cfg.FontSize < 8 {
-		cfg.FontSize = 8
-	}
-	if cfg.FontSize > 32 {
-		cfg.FontSize = 32
+	validFontSizes := map[int]bool{8: true, 10: true, 12: true, 14: true, 16: true, 18: true, 20: true}
+	if !validFontSizes[cfg.FontSize] {
+		cfg.FontSize = 10
 	}
 
 	if cfg.Favorites == nil {

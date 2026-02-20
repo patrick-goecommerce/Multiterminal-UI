@@ -106,7 +106,7 @@
   }
 
   onMount(() => {
-    termInstance = createTerminal($currentTheme, handleLink, $config.font_family, ($config.font_size || 14) + (pane.zoomDelta || 0));
+    termInstance = createTerminal($currentTheme, handleLink, $config.font_family, ($config.font_size || 10) + (pane.zoomDelta || 0));
     termInstance.terminal.open(containerEl);
 
     requestAnimationFrame(() => {
@@ -269,7 +269,7 @@
     wheelHandler = (e: WheelEvent) => {
       if (!e.ctrlKey || !termInstance) return;
       e.preventDefault();
-      const baseSize = $config.font_size || 14;
+      const baseSize = $config.font_size || 10;
       const currentDelta = pane.zoomDelta || 0;
       const newDelta = e.deltaY < 0 ? currentDelta + 1 : currentDelta - 1;
       const effectiveSize = baseSize + newDelta;
@@ -340,7 +340,7 @@
   }
 
   $: if (termInstance && $config) {
-    const effectiveSize = ($config.font_size || 14) + (pane.zoomDelta || 0);
+    const effectiveSize = ($config.font_size || 10) + (pane.zoomDelta || 0);
     const clampedSize = Math.max(8, Math.min(32, effectiveSize));
     const newFamily = buildFontFamily($config.font_family);
 
