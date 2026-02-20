@@ -70,6 +70,6 @@ export const config = writable<AppConfig>({
   localhost_auto_open: 'notify',
   sidebar_pinned: false,
   font_family: '',
-  font_size: 14,
+  font_size: 10,
   favorites: {},
 });

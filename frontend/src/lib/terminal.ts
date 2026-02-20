@@ -177,7 +177,7 @@ export function createTerminal(
   const terminal = new Terminal({
     ...baseOptions,
     fontFamily: buildFontFamily(fontFamily || ''),
-    fontSize: fontSize || 14,
+    fontSize: fontSize || 10,
     theme: terminalThemes[theme] || terminalThemes.dark,
   });
 

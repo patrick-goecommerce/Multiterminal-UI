@@ -41,7 +41,7 @@
   let audioErrorSound = $config.audio?.error_sound || '';
 
   let fontFamily = $config.font_family || '';
-  let fontSize = $config.font_size || 14;
+  let fontSize = $config.font_size || 10;
   let savedFontFamily = fontFamily;
   let savedFontSize = fontSize;
   let availableFonts: { name: string; available: boolean }[] = [];
@@ -61,7 +61,7 @@
     audioInputSound = $config.audio?.input_sound || '';
     audioErrorSound = $config.audio?.error_sound || '';
     fontFamily = $config.font_family || '';
-    fontSize = $config.font_size || 14;
+    fontSize = $config.font_size || 10;
     savedFontFamily = fontFamily;
     savedFontSize = fontSize;
     availableFonts = MONOSPACE_FONTS.map(name => ({
@@ -166,7 +166,7 @@
 
   function close() {
     applyTheme(savedTheme, $config.terminal_color || '#39ff14');
-    config.update(c => ({ ...c, font_family: savedFontFamily, font_size: savedFontSize }));
+    config.update(c => ({ ...c, font_family: savedFontFamily, font_size: savedFontSize || 10 }));
     dispatch('close');
   }
 
@@ -175,8 +175,8 @@
     selectedTheme = 'dark';
     applyTheme('dark', '#39ff14');
     fontFamily = '';
-    fontSize = 14;
-    config.update(c => ({ ...c, font_family: '', font_size: 14 }));
+    fontSize = 10;
+    config.update(c => ({ ...c, font_family: '', font_size: 10 }));
     audioEnabled = true;
     audioWhenFocused = true;
     audioVolume = 50;
@@ -232,11 +232,12 @@
 
       <div class="setting-group">
         <label class="setting-label" for="font-size">Schriftgröße</label>
-        <p class="setting-desc">Basis-Schriftgröße in Pixel (8–32). Ctrl+Scroll zum Zoomen pro Pane.</p>
-        <div class="volume-row">
-          <input id="font-size" type="range" min="8" max="32" step="1" bind:value={fontSize} class="volume-slider" />
-          <span class="volume-value">{fontSize}px</span>
-        </div>
+        <p class="setting-desc">Basis-Schriftgröße in Pixel. Ctrl+Scroll zum Zoomen pro Pane.</p>
+        <select id="font-size" class="theme-select" bind:value={fontSize}>
+          {#each [8, 10, 12, 14, 16, 18, 20] as size}
+            <option value={size}>{size}px</option>
+          {/each}
+        </select>
       </div>
 
       <div class="setting-group">
