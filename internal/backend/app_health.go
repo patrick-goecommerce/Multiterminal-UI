@@ -5,7 +5,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
@@ -67,15 +69,49 @@ func (a *App) GetLogPath() string {
 	return logFilePath()
 }
 
-// logFilePath returns the path for the log file in the executable's directory.
-func logFilePath() string {
+// isPortableLocation returns true if the directory is the user's Downloads or Desktop folder.
+func isPortableLocation(dir string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	norm := strings.ToLower(filepath.Clean(dir))
+	for _, folder := range []string{"Downloads", "Desktop"} {
+		target := strings.ToLower(filepath.Clean(filepath.Join(home, folder)))
+		if norm == target {
+			return true
+		}
+	}
+	return false
+}
+
+// logDir returns the directory where log files are stored.
+// Portable locations (Downloads/Desktop) use the exe directory directly.
+// Installed locations use a logs/ subdirectory.
+func logDir() string {
 	exe, err := os.Executable()
 	if err != nil {
-		return "multiterminal.log"
+		return "."
 	}
 	dir := filepath.Dir(exe)
+	if isPortableLocation(dir) {
+		return dir
+	}
+	logsDir := filepath.Join(dir, "logs")
+	_ = os.MkdirAll(logsDir, 0755)
+	return logsDir
+}
+
+// logFilePath returns the path for today's log file.
+func logFilePath() string {
 	ts := time.Now().Format("2006-01-02")
-	return filepath.Join(dir, fmt.Sprintf("multiterminal-%s.log", ts))
+	return filepath.Join(logDir(), fmt.Sprintf("multiterminal-%s.log", ts))
+}
+
+// OpenLogDir opens the log directory in the system file explorer.
+func (a *App) OpenLogDir() {
+	dir := logDir()
+	exec.Command("cmd", "/c", "start", "", dir).Start() //nolint:errcheck
 }
 
 // logFile holds the currently open log file so it can be closed when switching or disabling.

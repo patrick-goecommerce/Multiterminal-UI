@@ -251,7 +251,10 @@
           <span class="toggle-label">{loggingEnabled ? 'Aktiv' : 'Inaktiv'}</span>
         </div>
         {#if loggingEnabled && logPath}
-          <p class="log-path">{logPath}</p>
+          <div class="log-path-row">
+            <p class="log-path">{logPath}</p>
+            <button class="claude-btn" on:click={() => App.OpenLogDir()} title="Log-Ordner öffnen">&#128194;</button>
+          </div>
         {/if}
       </div>
 
@@ -423,9 +426,14 @@
 
   .toggle-label { font-size: 13px; color: var(--fg-muted); }
 
+  .log-path-row {
+    display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  }
+
   .log-path {
-    font-size: 11px; color: var(--fg-muted); margin: 8px 0 0;
+    font-size: 11px; color: var(--fg-muted); margin: 0;
     font-family: monospace; word-break: break-all; opacity: 0.7;
+    flex: 1;
   }
 
   .claude-row {

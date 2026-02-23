@@ -217,7 +217,13 @@ func (s *Session) Write(p []byte) (int, error) {
 		return 0, io.ErrClosedPipe
 	}
 
-	const chunkSize = 1024
+	const chunkSize = 512
+	// Use longer delay for large writes (e.g. pastes) to avoid
+	// overwhelming ConPTY's input buffer on Windows.
+	delay := time.Millisecond
+	if len(p) > 4096 {
+		delay = 5 * time.Millisecond
+	}
 	total := 0
 	for len(p) > 0 {
 		chunk := p
@@ -230,9 +236,9 @@ func (s *Session) Write(p []byte) (int, error) {
 			return total, err
 		}
 		p = p[n:]
-		// Yield briefly between chunks so the PTY can drain its buffer.
+		// Yield between chunks so the PTY can drain its buffer.
 		if len(p) > 0 {
-			time.Sleep(time.Millisecond)
+			time.Sleep(delay)
 		}
 	}
 	return total, nil
