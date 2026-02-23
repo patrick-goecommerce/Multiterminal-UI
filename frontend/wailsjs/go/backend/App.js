@@ -174,6 +174,10 @@ export function OpenFileInEditor(arg1) {
   return window['go']['backend']['App']['OpenFileInEditor'](arg1);
 }
 
+export function OpenLogDir() {
+  return window['go']['backend']['App']['OpenLogDir']();
+}
+
 export function ReadFile(arg1) {
   return window['go']['backend']['App']['ReadFile'](arg1);
 }
