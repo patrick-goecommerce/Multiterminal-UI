@@ -86,7 +86,7 @@
         copySelection(termInstance.terminal);
         break;
       case 'paste':
-        pasteToSession(pane.sessionId);
+        pasteToSession(pane.sessionId, termInstance?.terminal ?? null);
         break;
       case 'selectAll':
         termInstance.terminal.selectAll();
@@ -127,7 +127,7 @@
       if (e.type !== 'keydown') return true;
       if (e.ctrlKey && e.key === 'v') {
         e.preventDefault();
-        pasteToSession(pane.sessionId);
+        pasteToSession(pane.sessionId, termInstance?.terminal ?? null);
         return false;
       }
       if (e.ctrlKey && e.key === 'c' && termInstance?.terminal.hasSelection()) {
