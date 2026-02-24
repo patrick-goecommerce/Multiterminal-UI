@@ -1,16 +1,38 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { Pane } from '../stores/tabs';
+  import WorktreeDropdown from './WorktreeDropdown.svelte';
+  import WorktreeCreateDialog from './WorktreeCreateDialog.svelte';
 
   export let pane: Pane;
   export let paneIndex: number = 0;
   export let queueCount: number = 0;
+  export let worktrees: any[] = [];
+  export let tabDir: string = '';
 
   const dispatch = createEventDispatcher();
 
   let editing = false;
   let editName = '';
   let nameInput: HTMLInputElement;
+
+  let showWorktreeDropdown = false;
+  let showWorktreeCreate = false;
+
+  function toggleWorktreeDropdown() {
+    showWorktreeDropdown = !showWorktreeDropdown;
+  }
+
+  function handleWorktreeSelect(e: CustomEvent) {
+    showWorktreeDropdown = false;
+    dispatch('openWorktreePane', { worktree: e.detail });
+  }
+
+  function handleWorktreeCreated(e: CustomEvent) {
+    dispatch('openWorktreePane', { worktree: e.detail });
+  }
+
+  $: displayBranch = pane.branch || pane.issueBranch || '';
 
   function startRename() {
     editName = pane.name;
@@ -96,9 +118,29 @@
     {#if pane.issueNumber}
       <span class="issue-badge" title="Issue #{pane.issueNumber}: {pane.issueTitle}">#{pane.issueNumber}</span>
     {/if}
-    {#if pane.worktreePath}
-      <span class="worktree-badge" title="Worktree: {pane.worktreePath}">worktree</span>
-    {/if}
+    <div class="worktree-wrap">
+      <button
+        class="branch-btn"
+        class:has-worktree={!!pane.worktreePath}
+        on:click|stopPropagation={toggleWorktreeDropdown}
+        title={pane.worktreePath ? `Worktree: ${pane.worktreePath}` : 'Worktree auswählen'}
+      >
+        <span class="branch-icon">⎇</span>
+        {displayBranch || '—'}
+        <span class="dropdown-arrow">▾</span>
+      </button>
+      {#if showWorktreeDropdown}
+        <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+        <div class="dropdown-backdrop" on:click={() => showWorktreeDropdown = false}></div>
+        <WorktreeDropdown
+          {worktrees}
+          currentBranch={displayBranch}
+          on:select={handleWorktreeSelect}
+          on:createNew={() => { showWorktreeDropdown = false; showWorktreeCreate = true; }}
+          on:close={() => showWorktreeDropdown = false}
+        />
+      {/if}
+    </div>
     {#if pane.model}
       <span class="model-label">{pane.model}</span>
     {/if}
@@ -132,6 +174,13 @@
     </button>
   </div>
 </div>
+
+<WorktreeCreateDialog
+  visible={showWorktreeCreate}
+  dir={tabDir}
+  on:created={handleWorktreeCreated}
+  on:close={() => showWorktreeCreate = false}
+/>
 
 <style>
   .pane-titlebar {
@@ -199,10 +248,23 @@
     cursor: default;
   }
 
-  .worktree-badge {
-    font-size: 9px; padding: 1px 5px; border-radius: 4px;
-    background: #2563eb22; color: #60a5fa; white-space: nowrap;
-    cursor: default; font-style: italic;
+  .worktree-wrap { position: relative; }
+
+  .branch-btn {
+    display: flex; align-items: center; gap: 3px;
+    font-size: 10px; padding: 1px 6px; border-radius: 4px;
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    color: var(--fg-muted); cursor: pointer; white-space: nowrap;
+    transition: border-color 0.15s;
+  }
+  .branch-btn:hover { border-color: var(--accent); color: var(--fg); }
+  .branch-btn.has-worktree { color: #60a5fa; border-color: #2563eb44; }
+
+  .branch-icon { font-size: 9px; }
+  .dropdown-arrow { font-size: 8px; opacity: 0.6; }
+
+  .dropdown-backdrop {
+    position: fixed; inset: 0; z-index: 199;
   }
 
   .model-label { font-size: 10px; color: var(--fg-muted); }
