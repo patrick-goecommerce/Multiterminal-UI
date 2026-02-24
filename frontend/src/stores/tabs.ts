@@ -17,6 +17,7 @@ export interface Pane {
   issueTitle: string;
   issueBranch: string;
   worktreePath: string;
+  branch: string;
   zoomDelta: number;
 }
 
@@ -108,7 +109,7 @@ function createTabStore() {
       });
     },
 
-    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string): string {
+    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string): string {
       const paneId = `pane-${nextPaneNum++}`;
       update((state) => {
         const tab = state.tabs.find((t) => t.id === tabId);
@@ -130,6 +131,7 @@ function createTabStore() {
           issueTitle: issueTitle ?? '',
           issueBranch: issueBranch ?? '',
           worktreePath: worktreePath ?? '',
+          branch: branch ?? issueBranch ?? '',
           zoomDelta: 0,
         });
         tab.focusedPaneId = paneId;
