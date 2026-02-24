@@ -453,6 +453,7 @@
     on:toggleQueue={() => (showQueue = !showQueue)}
     on:issueAction
     on:openWorktreePane
+    on:worktreeListChanged
   />
   <QueuePanel sessionId={pane.sessionId} visible={showQueue} />
   {#if showSearch}

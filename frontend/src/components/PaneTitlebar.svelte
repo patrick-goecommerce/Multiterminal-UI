@@ -30,6 +30,7 @@
 
   function handleWorktreeCreated(e: CustomEvent) {
     dispatch('openWorktreePane', { worktree: e.detail });
+    dispatch('worktreeListChanged');
   }
 
   $: displayBranch = pane.branch || pane.issueBranch || '';

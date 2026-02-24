@@ -69,6 +69,7 @@
       on:navigateFile={handleNavigateFile}
       on:splitPane={handleSplitPane}
       on:openWorktreePane
+      on:worktreeListChanged
     />
   {/each}
 

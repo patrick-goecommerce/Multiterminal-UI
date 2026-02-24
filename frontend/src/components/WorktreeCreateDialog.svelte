@@ -85,7 +85,7 @@
         <div class="branch-preview">Branch: <code>{branchPreview}</code></div>
       {/if}
 
-      <label class="field-label">Base Branch</label>
+      <label class="field-label">Basis-Branch</label>
       {#if branches.length > 0}
         <select class="field-input" bind:value={baseBranch}>
           {#each branches as b}

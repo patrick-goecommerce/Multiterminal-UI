@@ -522,6 +522,7 @@
             on:navigateFile={handleNavigateFile}
             on:splitPane={() => (showLaunchDialog = true)}
             on:openWorktreePane={handleOpenWorktreePane}
+            on:worktreeListChanged={loadWorktrees}
           />
         </div>
       {/each}

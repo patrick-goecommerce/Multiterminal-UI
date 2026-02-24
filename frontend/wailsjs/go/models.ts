@@ -356,7 +356,6 @@ export namespace config {
 	    restore_session?: boolean;
 	    logging_enabled: boolean;
 	    auto_branch_on_issue?: boolean;
-	    use_worktrees?: boolean;
 	    issue_tracking: IssueTracking;
 	    commands: CommandEntry[];
 	    audio: AudioSettings;
@@ -384,7 +383,6 @@ export namespace config {
 	        this.restore_session = source["restore_session"];
 	        this.logging_enabled = source["logging_enabled"];
 	        this.auto_branch_on_issue = source["auto_branch_on_issue"];
-	        this.use_worktrees = source["use_worktrees"];
 	        this.issue_tracking = this.convertValues(source["issue_tracking"], IssueTracking);
 	        this.commands = this.convertValues(source["commands"], CommandEntry);
 	        this.audio = this.convertValues(source["audio"], AudioSettings);

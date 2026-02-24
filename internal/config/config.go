@@ -25,7 +25,6 @@ type Config struct {
 	RestoreSession        *bool          `yaml:"restore_session" json:"restore_session"`
 	LoggingEnabled        bool           `yaml:"logging_enabled" json:"logging_enabled"`
 	AutoBranchOnIssue     *bool          `yaml:"auto_branch_on_issue" json:"auto_branch_on_issue"`
-	UseWorktrees          *bool          `yaml:"use_worktrees" json:"use_worktrees"`
 	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
 	Audio                 AudioSettings  `yaml:"audio" json:"audio"`
@@ -83,7 +82,6 @@ func DefaultConfig() Config {
 		CommitReminderMinutes: 30,
 		RestoreSession:        boolPtr(true),
 		AutoBranchOnIssue:     boolPtr(true),
-		UseWorktrees:          boolPtr(false), // opt-in: parallel issue work via git worktrees
 		IssueTracking: IssueTracking{
 			AutoCommentOnStart:  true,
 			AutoCommentOnDone:   true,
@@ -125,14 +123,6 @@ func (c Config) ShouldAutoBranch() bool {
 		return true
 	}
 	return *c.AutoBranchOnIssue
-}
-
-// ShouldUseWorktrees returns whether to create git worktrees for issues.
-func (c Config) ShouldUseWorktrees() bool {
-	if c.UseWorktrees == nil {
-		return false
-	}
-	return *c.UseWorktrees
 }
 
 // configPath returns the path to ~/.multiterminal.yaml.
