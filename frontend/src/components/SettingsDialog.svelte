@@ -24,7 +24,6 @@
   let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'dark';
   let savedTheme: ThemeName = selectedTheme;
   let loggingEnabled = $config.logging_enabled || false;
-  let useWorktrees = $config.use_worktrees || false;
   let logPath = '';
 
   let dialogEl: HTMLDivElement;
@@ -52,7 +51,6 @@
     selectedTheme = ($config.theme as ThemeName) || 'dark';
     savedTheme = selectedTheme;
     loggingEnabled = $config.logging_enabled || false;
-    useWorktrees = $config.use_worktrees || false;
     claudeCommand = $config.claude_command || '';
     audioEnabled = $config.audio?.enabled ?? true;
     audioWhenFocused = $config.audio?.when_focused ?? true;
@@ -145,7 +143,6 @@
       terminal_color: colorValue,
       theme: selectedTheme,
       logging_enabled: loggingEnabled,
-      use_worktrees: useWorktrees,
       claude_command: claudeCommand,
       font_family: fontFamily,
       font_size: fontSize,
@@ -256,18 +253,6 @@
             <button class="claude-btn" on:click={() => App.OpenLogDir()} title="Log-Ordner öffnen">&#128194;</button>
           </div>
         {/if}
-      </div>
-
-      <div class="setting-group">
-        <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="setting-label">Git Worktrees</label>
-        <p class="setting-desc">Erstellt pro Issue ein isoliertes Arbeitsverzeichnis statt nur einen Branch zu wechseln.</p>
-        <div class="toggle-row">
-          <button class="toggle-btn" class:toggle-on={useWorktrees} on:click={() => useWorktrees = !useWorktrees}>
-            <span class="toggle-knob"></span>
-          </button>
-          <span class="toggle-label">{useWorktrees ? 'Aktiv' : 'Inaktiv'}</span>
-        </div>
       </div>
 
       <div class="setting-group">

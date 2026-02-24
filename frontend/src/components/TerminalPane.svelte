@@ -20,6 +20,8 @@
   export let paneIndex: number = 0;
   export let active: boolean = true;
   export let tabId: string = '';
+  export let worktrees: any[] = [];
+  export let tabDir: string = '';
 
   const dispatch = createEventDispatcher();
 
@@ -442,12 +444,16 @@
     {pane}
     {paneIndex}
     {queueCount}
+    {worktrees}
+    {tabDir}
     on:close
     on:maximize
     on:rename
     on:restart={() => dispatch('restart', { paneId: pane.id, sessionId: pane.sessionId, mode: pane.mode, model: pane.model, name: pane.name })}
     on:toggleQueue={() => (showQueue = !showQueue)}
     on:issueAction
+    on:openWorktreePane
+    on:worktreeListChanged
   />
   <QueuePanel sessionId={pane.sessionId} visible={showQueue} />
   {#if showSearch}

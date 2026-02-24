@@ -29,6 +29,8 @@ export function CreateDirectory(arg1:string):Promise<string>;
 
 export function CreateIssue(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<backend.Issue>;
 
+export function CreateNamedWorktree(arg1:string,arg2:string,arg3:string):Promise<backend.WorktreeInfo>;
+
 export function CreateSession(arg1:Array<string>,arg2:string,arg3:number,arg4:number):Promise<number>;
 
 export function CreateWorktree(arg1:string,arg2:number,arg3:string):Promise<backend.WorktreeInfo>;
@@ -57,6 +59,8 @@ export function GetIssues(arg1:string,arg2:string):Promise<Array<backend.Issue>>
 
 export function GetLastCommitTime(arg1:string):Promise<number>;
 
+export function GetLocalBranches(arg1:string):Promise<Array<string>>;
+
 export function GetLogPath():Promise<string>;
 
 export function GetMergeConflicts(arg1:string):Promise<backend.MergeConflictInfo>;
@@ -80,6 +84,8 @@ export function IsGitRepo(arg1:string):Promise<boolean>;
 export function IsOnIssueBranch(arg1:string,arg2:number):Promise<backend.IssueBranchInfo>;
 
 export function LinkSessionIssue(arg1:number,arg2:number,arg3:string,arg4:string,arg5:string):Promise<void>;
+
+export function ListAllWorktrees(arg1:string):Promise<Array<backend.WorktreeInfo>>;
 
 export function ListDirectory(arg1:string):Promise<Array<backend.FileEntry>>;
 
