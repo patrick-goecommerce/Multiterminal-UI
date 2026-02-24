@@ -81,6 +81,8 @@ export function IsOnIssueBranch(arg1:string,arg2:number):Promise<backend.IssueBr
 
 export function LinkSessionIssue(arg1:number,arg2:number,arg3:string,arg4:string,arg5:string):Promise<void>;
 
+export function ListAllWorktrees(arg1:string):Promise<Array<backend.WorktreeInfo>>;
+
 export function ListDirectory(arg1:string):Promise<Array<backend.FileEntry>>;
 
 export function ListWorktrees(arg1:string):Promise<Array<backend.WorktreeInfo>>;

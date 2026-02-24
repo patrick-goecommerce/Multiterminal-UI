@@ -15,11 +15,13 @@ import (
 
 const worktreeDir = ".mt-worktrees"
 
-// WorktreeInfo describes an active git worktree for an issue.
+// WorktreeInfo describes an active git worktree.
 type WorktreeInfo struct {
-	Path   string `json:"path"`
-	Branch string `json:"branch"`
-	Issue  int    `json:"issue"`
+	Path     string `json:"path" yaml:"path"`
+	Branch   string `json:"branch" yaml:"branch"`
+	Issue    int    `json:"issue" yaml:"issue"`
+	Category string `json:"category" yaml:"category"`
+	Name     string `json:"name" yaml:"name"`
 }
 
 // worktreePath returns the directory for an issue worktree.
@@ -159,4 +161,79 @@ func parseWorktreeList(output string, root string) []WorktreeInfo {
 	}
 
 	return result
+}
+
+// ListAllWorktrees returns ALL git worktrees categorized as "main", "terminal", or "issue".
+func (a *App) ListAllWorktrees(dir string) []WorktreeInfo {
+	root, err := repoRoot(dir)
+	if err != nil {
+		return nil
+	}
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd.Dir = root
+	hideConsole(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		log.Printf("[ListAllWorktrees] error: %v", err)
+		return nil
+	}
+	return parseAllWorktreeList(string(out), root)
+}
+
+// parseAllWorktreeList parses ALL worktrees without filtering.
+// root is expected in OS-native path format (as returned by repoRoot).
+func parseAllWorktreeList(output string, root string) []WorktreeInfo {
+	// Normalize root to OS path separators so comparisons work cross-platform.
+	root = filepath.FromSlash(root)
+	mtPrefix := filepath.Join(root, worktreeDir) + string(filepath.Separator)
+
+	var result []WorktreeInfo
+	var current WorktreeInfo
+
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			if current.Path != "" {
+				categorizeWorktree(&current, root, mtPrefix)
+				result = append(result, current)
+			}
+			current = WorktreeInfo{}
+			continue
+		}
+		if strings.HasPrefix(line, "worktree ") {
+			current.Path = filepath.FromSlash(strings.TrimPrefix(line, "worktree "))
+		}
+		if strings.HasPrefix(line, "branch refs/heads/") {
+			current.Branch = strings.TrimPrefix(line, "branch refs/heads/")
+		}
+	}
+	if current.Path != "" {
+		categorizeWorktree(&current, root, mtPrefix)
+		result = append(result, current)
+	}
+	return result
+}
+
+// categorizeWorktree fills Category, Name, Issue based on path.
+func categorizeWorktree(wt *WorktreeInfo, root, mtPrefix string) {
+	if wt.Path == root {
+		wt.Category = "main"
+		wt.Name = "main"
+		return
+	}
+	if strings.HasPrefix(wt.Path, mtPrefix) {
+		base := filepath.Base(wt.Path)
+		if strings.HasPrefix(base, "issue-") {
+			wt.Category = "issue"
+			num, _ := strconv.Atoi(strings.TrimPrefix(base, "issue-"))
+			wt.Issue = num
+			wt.Name = base
+		} else {
+			wt.Category = "terminal"
+			wt.Name = base
+		}
+		return
+	}
+	wt.Category = "terminal"
+	wt.Name = filepath.Base(wt.Path)
 }

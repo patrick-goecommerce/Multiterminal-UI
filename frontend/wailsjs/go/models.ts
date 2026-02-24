@@ -252,6 +252,8 @@ export namespace backend {
 	    path: string;
 	    branch: string;
 	    issue: number;
+	    category: string;
+	    name: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new WorktreeInfo(source);
@@ -262,6 +264,8 @@ export namespace backend {
 	        this.path = source["path"];
 	        this.branch = source["branch"];
 	        this.issue = source["issue"];
+	        this.category = source["category"];
+	        this.name = source["name"];
 	    }
 	}
 

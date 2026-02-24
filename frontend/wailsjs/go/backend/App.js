@@ -158,6 +158,10 @@ export function LinkSessionIssue(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['backend']['App']['LinkSessionIssue'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function ListAllWorktrees(arg1) {
+  return window['go']['backend']['App']['ListAllWorktrees'](arg1);
+}
+
 export function ListDirectory(arg1) {
   return window['go']['backend']['App']['ListDirectory'](arg1);
 }
