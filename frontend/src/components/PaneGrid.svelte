@@ -6,6 +6,8 @@
   export let panes: Pane[] = [];
   export let active: boolean = true;
   export let tabId: string = '';
+  export let worktrees: any[] = [];
+  export let tabDir: string = '';
 
   const dispatch = createEventDispatcher();
 
@@ -55,6 +57,8 @@
       {pane}
       {active}
       {tabId}
+      {worktrees}
+      {tabDir}
       paneIndex={panes.indexOf(pane) + 1}
       on:close={handleClose}
       on:maximize={handleMaximize}
@@ -64,6 +68,7 @@
       on:issueAction={handleIssueAction}
       on:navigateFile={handleNavigateFile}
       on:splitPane={handleSplitPane}
+      on:openWorktreePane
     />
   {/each}
 

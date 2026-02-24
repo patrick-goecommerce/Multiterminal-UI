@@ -34,33 +34,15 @@ export interface BranchSetupResult {
 }
 
 /**
- * Set up branch/worktree for an issue before launching a session.
- * Returns conflict info if a branch conflict dialog is needed.
+ * Set up branch for an issue before launching a session.
+ * Worktrees are now managed explicitly via the WorktreeDropdown, not automatically.
  */
 export async function setupIssueBranch(
   sessionDir: string,
   issue: IssueContext,
-  useWorktrees: boolean,
   autoBranch: boolean,
 ): Promise<BranchSetupResult> {
   const result: BranchSetupResult = { issueBranch: '', worktreePath: '', sessionDir };
-
-  if (useWorktrees) {
-    try {
-      const wt = await App.CreateWorktree(sessionDir, issue.number, issue.title);
-      if (wt) {
-        result.sessionDir = wt.path;
-        result.issueBranch = wt.branch;
-        result.worktreePath = wt.path;
-      }
-    } catch (err: any) {
-      const msg = err?.message || String(err);
-      if (!confirm(`Worktree-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne Worktree starten?`)) {
-        result.cancelled = true;
-      }
-    }
-    return result;
-  }
 
   if (!autoBranch) return result;
 

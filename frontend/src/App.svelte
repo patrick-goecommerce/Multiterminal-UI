@@ -42,6 +42,7 @@
   let issueCount = 0;
   let sidebarView: 'explorer' | 'source-control' | 'issues' = 'explorer';
   let branch = '';
+  let allWorktrees: any[] = [];
   let commitAgeMinutes = -1;
   let updateAvailable = false;
   let latestVersion = '';
@@ -180,7 +181,13 @@
     branch = await fetchBranch(tab.dir || '.');
   }
 
-  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); updateConflicts(); }
+  async function loadWorktrees() {
+    const tab = $activeTab;
+    if (!tab?.dir) return;
+    try { allWorktrees = await App.ListAllWorktrees(tab.dir); } catch {}
+  }
+
+  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); updateConflicts(); loadWorktrees(); }
 
   async function updateCommitAge() {
     const tab = $activeTab;
@@ -206,6 +213,25 @@
     conflictOperation = info.operation;
   }
 
+  async function handleOpenWorktreePane(e: CustomEvent<{ worktree: any }>) {
+    const tab = $activeTab;
+    if (!tab) return;
+    const wt = e.detail.worktree;
+    if (tab.panes.length >= MAX_PANES_PER_TAB) {
+      alert(`Max. ${MAX_PANES_PER_TAB} Terminals pro Tab erreicht.`);
+      return;
+    }
+    const claudeCmd = resolvedClaudePath;
+    const argv = buildClaudeArgv('claude', '', claudeCmd);
+    const name = `Claude – ⎇ ${wt.branch}`;
+    try {
+      const sessionId = await App.CreateSession(argv, wt.path, 24, 80);
+      if (sessionId > 0) {
+        tabStore.addPane(tab.id, sessionId, name, 'claude', '', null, '', wt.branch, wt.path, wt.branch);
+      }
+    } catch (err) { console.error('[handleOpenWorktreePane] failed:', err); }
+  }
+
   async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null }>) {
     const { type, model, issue } = e.detail;
     showLaunchDialog = false;
@@ -229,7 +255,6 @@
       if (issueCtx) {
         const result = await setupIssueBranch(
           sessionDir, issueCtx,
-          $config.use_worktrees === true,
           $config.auto_branch_on_issue !== false,
         );
         if (result.cancelled) return;
@@ -252,7 +277,12 @@
 
       const sessionId = await App.CreateSession(argv, sessionDir, 24, 80);
       if (sessionId > 0) {
-        tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx?.number, issueCtx?.title, issueBranch, worktreePath);
+        let paneBranch = issueBranch;
+        if (!paneBranch) {
+          try { paneBranch = await App.GetGitBranch(sessionDir); } catch {}
+        }
+        tabStore.addPane(tab.id, sessionId, name, type, model,
+          issueCtx?.number, issueCtx?.title, issueBranch, worktreePath, paneBranch);
         if (issueCtx) {
           App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
           setTimeout(() => {
@@ -281,7 +311,12 @@
 
       const sessionId = await App.CreateSession(argv, resolved.sessionDir, 24, 80);
       if (sessionId > 0) {
-        tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.worktreePath);
+        let paneBranch = resolved.issueBranch;
+        if (!paneBranch) {
+          try { paneBranch = await App.GetGitBranch(resolved.sessionDir); } catch {}
+        }
+        tabStore.addPane(tab.id, sessionId, name, type, model,
+          issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.worktreePath, paneBranch);
         App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.sessionDir);
         setTimeout(() => {
           const prompt = buildIssuePrompt(issueCtx);
@@ -476,6 +511,8 @@
             tabId={tab.id}
             panes={tab.panes}
             active={tab.id === $activeTab?.id}
+            worktrees={allWorktrees}
+            tabDir={$activeTab?.dir || ''}
             on:closePane={handleClosePane}
             on:maximizePane={handleMaximizePane}
             on:focusPane={handleFocusPane}
@@ -484,6 +521,7 @@
             on:issueAction={handleIssueAction}
             on:navigateFile={handleNavigateFile}
             on:splitPane={() => (showLaunchDialog = true)}
+            on:openWorktreePane={handleOpenWorktreePane}
           />
         </div>
       {/each}
