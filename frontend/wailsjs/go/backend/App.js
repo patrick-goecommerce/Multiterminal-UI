@@ -54,6 +54,10 @@ export function CreateIssue(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['CreateIssue'](arg1, arg2, arg3, arg4);
 }
 
+export function CreateNamedWorktree(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['CreateNamedWorktree'](arg1, arg2, arg3);
+}
+
 export function CreateSession(arg1, arg2, arg3, arg4) {
   return window['go']['backend']['App']['CreateSession'](arg1, arg2, arg3, arg4);
 }
@@ -108,6 +112,10 @@ export function GetIssues(arg1, arg2) {
 
 export function GetLastCommitTime(arg1) {
   return window['go']['backend']['App']['GetLastCommitTime'](arg1);
+}
+
+export function GetLocalBranches(arg1) {
+  return window['go']['backend']['App']['GetLocalBranches'](arg1);
 }
 
 export function GetLogPath() {

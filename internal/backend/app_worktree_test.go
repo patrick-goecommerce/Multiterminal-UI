@@ -48,3 +48,21 @@ func TestParseWorktreePorcelainDetachedHead(t *testing.T) {
 		t.Errorf("expected (detached), got %q", result[0].Branch)
 	}
 }
+
+func TestSanitizeWorktreeName(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"my feature", "my-feature"},
+		{"Fix/Bug 42", "fix-bug-42"},
+		{"hello--world", "hello-world"},
+		{"-start", "start"},
+		{"end-", "end"},
+		{"", "worktree"},
+		{"___", "___"},
+	}
+	for _, c := range cases {
+		got := sanitizeWorktreeName(c.in)
+		if got != c.want {
+			t.Errorf("sanitize(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

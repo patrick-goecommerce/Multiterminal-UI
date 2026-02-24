@@ -205,3 +205,21 @@ func markParentDirs(statuses map[string]string, filePath string, rootDir string)
 		dir = filepath.Dir(dir)
 	}
 }
+
+// GetLocalBranches returns local branch names for the repo containing dir.
+func (a *App) GetLocalBranches(dir string) []string {
+	cmd := exec.Command("git", "branch", "--format=%(refname:short)")
+	cmd.Dir = dir
+	hideConsole(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	var branches []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches
+}

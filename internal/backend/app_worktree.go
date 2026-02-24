@@ -229,3 +229,65 @@ func categorizeWorktree(wt *WorktreeInfo, root, mtPrefix string) {
 	wt.Category = "terminal"
 	wt.Name = filepath.Base(wt.Path)
 }
+
+// sanitizeWorktreeName converts a display name to a safe directory/branch segment.
+func sanitizeWorktreeName(name string) string {
+	s := strings.ToLower(name)
+	s = strings.NewReplacer(" ", "-", "/", "-", "\\", "-").Replace(s)
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	s = b.String()
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	s = strings.Trim(s, "-")
+	if s == "" {
+		s = "worktree"
+	}
+	return s
+}
+
+// CreateNamedWorktree creates a general-purpose worktree not tied to an issue.
+// name is a display name, baseBranch is the branch to fork from.
+// Creates at .mt-worktrees/<sanitized-name>/ with branch "terminal/<sanitized-name>".
+func (a *App) CreateNamedWorktree(dir, name, baseBranch string) (*WorktreeInfo, error) {
+	root, err := repoRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	safeName := sanitizeWorktreeName(name)
+	branch := "terminal/" + safeName
+	wtPath := filepath.Join(root, worktreeDir, safeName)
+
+	if info, err := os.Stat(wtPath); err == nil && info.IsDir() {
+		log.Printf("[CreateNamedWorktree] worktree already exists at %s", wtPath)
+		return &WorktreeInfo{Path: wtPath, Branch: branch, Category: "terminal", Name: safeName}, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(wtPath), 0755); err != nil {
+		return nil, fmt.Errorf("mkdir failed: %w", err)
+	}
+
+	var cmd *exec.Cmd
+	if branchExists(root, branch) {
+		cmd = exec.Command("git", "worktree", "add", wtPath, branch)
+	} else if baseBranch != "" && baseBranch != "HEAD" {
+		cmd = exec.Command("git", "worktree", "add", "-b", branch, wtPath, baseBranch)
+	} else {
+		cmd = exec.Command("git", "worktree", "add", "-b", branch, wtPath)
+	}
+	cmd.Dir = root
+	hideConsole(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("worktree add failed: %s – %w", strings.TrimSpace(string(out)), err)
+	}
+
+	log.Printf("[CreateNamedWorktree] created %s on branch %s", wtPath, branch)
+	return &WorktreeInfo{Path: wtPath, Branch: branch, Category: "terminal", Name: safeName}, nil
+}
