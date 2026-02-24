@@ -124,16 +124,15 @@ func (a *App) ListWorktrees(dir string) []WorktreeInfo {
 	return parseWorktreeList(string(out), root)
 }
 
-// parseWorktreeList extracts Multiterminal worktrees from git worktree list output.
-func parseWorktreeList(output string, root string) []WorktreeInfo {
+// parseWorktreePorcelain returns raw WorktreeInfo entries from git --porcelain output.
+// Only Path and Branch are populated.
+func parseWorktreePorcelain(output string) []WorktreeInfo {
 	var result []WorktreeInfo
 	var current WorktreeInfo
-	wtPrefix := filepath.Join(root, worktreeDir, "issue-")
-
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
-			if current.Path != "" && strings.HasPrefix(current.Path, wtPrefix) {
+			if current.Path != "" {
 				result = append(result, current)
 			}
 			current = WorktreeInfo{}
@@ -145,21 +144,28 @@ func parseWorktreeList(output string, root string) []WorktreeInfo {
 		if strings.HasPrefix(line, "branch refs/heads/") {
 			current.Branch = strings.TrimPrefix(line, "branch refs/heads/")
 		}
-	}
-	// Don't forget last entry
-	if current.Path != "" && strings.HasPrefix(current.Path, wtPrefix) {
-		result = append(result, current)
-	}
-
-	// Extract issue numbers from paths
-	for i := range result {
-		base := filepath.Base(result[i].Path)
-		if strings.HasPrefix(base, "issue-") {
-			num, _ := strconv.Atoi(strings.TrimPrefix(base, "issue-"))
-			result[i].Issue = num
+		if line == "detached" {
+			current.Branch = "(detached)"
 		}
 	}
+	if current.Path != "" {
+		result = append(result, current)
+	}
+	return result
+}
 
+// parseWorktreeList extracts Multiterminal issue worktrees from git worktree list output.
+func parseWorktreeList(output string, root string) []WorktreeInfo {
+	var result []WorktreeInfo
+	wtPrefix := filepath.Join(root, worktreeDir, "issue-")
+	for _, wt := range parseWorktreePorcelain(output) {
+		if strings.HasPrefix(strings.ToLower(wt.Path), strings.ToLower(wtPrefix)) {
+			base := filepath.Base(wt.Path)
+			num, _ := strconv.Atoi(strings.TrimPrefix(base, "issue-"))
+			wt.Issue = num
+			result = append(result, wt)
+		}
+	}
 	return result
 }
 
@@ -183,45 +189,31 @@ func (a *App) ListAllWorktrees(dir string) []WorktreeInfo {
 // parseAllWorktreeList parses ALL worktrees without filtering.
 // root is expected in OS-native path format (as returned by repoRoot).
 func parseAllWorktreeList(output string, root string) []WorktreeInfo {
-	// Normalize root to OS path separators so comparisons work cross-platform.
 	root = filepath.FromSlash(root)
 	mtPrefix := filepath.Join(root, worktreeDir) + string(filepath.Separator)
-
-	var result []WorktreeInfo
-	var current WorktreeInfo
-
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			if current.Path != "" {
-				categorizeWorktree(&current, root, mtPrefix)
-				result = append(result, current)
-			}
-			current = WorktreeInfo{}
-			continue
-		}
-		if strings.HasPrefix(line, "worktree ") {
-			current.Path = filepath.FromSlash(strings.TrimPrefix(line, "worktree "))
-		}
-		if strings.HasPrefix(line, "branch refs/heads/") {
-			current.Branch = strings.TrimPrefix(line, "branch refs/heads/")
-		}
-	}
-	if current.Path != "" {
-		categorizeWorktree(&current, root, mtPrefix)
-		result = append(result, current)
+	entries := parseWorktreePorcelain(output)
+	result := make([]WorktreeInfo, 0, len(entries))
+	for i := range entries {
+		categorizeWorktree(&entries[i], root, mtPrefix)
+		result = append(result, entries[i])
 	}
 	return result
 }
 
 // categorizeWorktree fills Category, Name, Issue based on path.
+// Uses case-insensitive path comparison for Windows compatibility.
 func categorizeWorktree(wt *WorktreeInfo, root, mtPrefix string) {
-	if wt.Path == root {
+	// Normalize for case-insensitive comparison on Windows
+	wtPathNorm := strings.ToLower(filepath.Clean(wt.Path))
+	rootNorm := strings.ToLower(filepath.Clean(root))
+	mtPrefixNorm := strings.ToLower(mtPrefix)
+
+	if wtPathNorm == rootNorm {
 		wt.Category = "main"
 		wt.Name = "main"
 		return
 	}
-	if strings.HasPrefix(wt.Path, mtPrefix) {
+	if strings.HasPrefix(wtPathNorm, mtPrefixNorm) {
 		base := filepath.Base(wt.Path)
 		if strings.HasPrefix(base, "issue-") {
 			wt.Category = "issue"
