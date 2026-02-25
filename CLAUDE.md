@@ -20,9 +20,22 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **`App.mu`** — sessions map, queues map, nextID.
 - **Never allocate under lock** — use pre-allocated templates (e.g. `blankLine` in scroll ops).
 
+## Alpha Branch: `wails-v3-alpha`
+> **Active while this branch exists.** Delete this section when `wails-v3-alpha` is merged to `main`.
+
+- This branch migrates from **Wails v2 → Wails v3** and adds **multi-window support** (tab drag & drop).
+- `go.mod` uses `github.com/wailsapp/wails/v3` (alpha) — API may change.
+- `App` struct renamed to `AppService` (Wails v3 service pattern, no `ctx` field).
+- Events: `runtime.EventsEmit(ctx, ...)` → `s.app.Event.Emit(...)`.
+- Frontend bindings in `wailsjs/` are v3-generated — import from `backend/AppService` not `backend/App`.
+- **Bug fixes:** apply to `main` first, then `git cherry-pick <sha>` onto this branch.
+- **Builds:** tagged as `v2.0.0-alpha.X` via separate GitHub Actions workflow.
+- Design doc: `docs/plans/2026-02-25-wails-v3-multiwindow-design.md`
+- Tracking issue: https://github.com/patrick-goecommerce/Multiterminal-UI/issues/89
+
 ## Tech Stack
 - **Language:** Go 1.21+ (backend) + TypeScript/Svelte (frontend)
-- **GUI framework:** Wails v2 (Go ↔ WebView bridge)
+- **GUI framework:** Wails v3 alpha (Go ↔ WebView bridge, multi-window)
 - **Frontend:** Svelte 4 + Vite + xterm.js
 - **Terminal emulation:** xterm.js (frontend) + VT100 screen buffer for activity scanning (backend)
 - **PTY management:** go-pty (cross-platform: Unix PTY + Windows ConPTY)
