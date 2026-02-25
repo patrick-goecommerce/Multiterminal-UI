@@ -59,7 +59,7 @@ jobs:
         run: |
           wails3 generate syso \
             -arch amd64 \
-            -icon build/appicon.png \
+            -icon build/windows/icon.ico \
             -manifest build/windows/wails.exe.manifest \
             -info build/windows/info.json \
             -out wails_windows_amd64.syso
