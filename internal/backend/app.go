@@ -26,12 +26,14 @@ type sessionIssue struct {
 // App is the main Wails application struct. All exported methods are
 // automatically available to the frontend via generated TypeScript bindings.
 type App struct {
-	ctx           context.Context
-	cfg           config.Config
-	health        config.HealthState
-	sessions      map[int]*terminal.Session
-	queues        map[int]*sessionQueue
-	sessionIssues map[int]*sessionIssue // issue linked to each session
+	app            *application.App           // Wails v3 application instance
+	mainWindow     *application.WebviewWindow  // main window reference for dialogs
+	serviceCtx     context.Context             // context from ServiceStartup
+	cfg            config.Config
+	health         config.HealthState
+	sessions       map[int]*terminal.Session
+	queues         map[int]*sessionQueue
+	sessionIssues  map[int]*sessionIssue // issue linked to each session
 	mu                sync.Mutex
 	nextID            int
 	cancelAll         context.CancelFunc
@@ -40,6 +42,7 @@ type App struct {
 }
 
 // NewApp creates a new App instance with the given configuration.
+// Kept for backwards compatibility during v3 migration.
 func NewApp(cfg config.Config) *App {
 	return &App{
 		cfg:           cfg,
@@ -49,9 +52,25 @@ func NewApp(cfg config.Config) *App {
 	}
 }
 
-// Startup is called when the Wails app starts. It receives the app context.
-func (a *App) Startup(ctx context.Context) {
-	a.ctx = ctx
+// NewAppService creates a new App instance for Wails v3 service pattern.
+func NewAppService(app *application.App, cfg config.Config) *App {
+	return &App{
+		app:           app,
+		cfg:           cfg,
+		sessions:      make(map[int]*terminal.Session),
+		queues:        make(map[int]*sessionQueue),
+		sessionIssues: make(map[int]*sessionIssue),
+	}
+}
+
+// SetMainWindow stores the main window reference for dialog and focus operations.
+func (a *App) SetMainWindow(w *application.WebviewWindow) {
+	a.mainWindow = w
+}
+
+// ServiceStartup implements the Wails v3 Service interface.
+func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	a.serviceCtx = ctx
 
 	// Load health state and mark this session as started (dirty)
 	a.health = config.LoadHealth()
@@ -69,10 +88,11 @@ func (a *App) Startup(ctx context.Context) {
 	// Start focus listener and register custom protocol for notification clicks
 	a.startFocusListener()
 	registerProtocol()
+	return nil
 }
 
-// Shutdown is called when the Wails app is closing. Clean up all sessions.
-func (a *App) Shutdown(ctx context.Context) {
+// ServiceShutdown implements the Wails v3 Service interface.
+func (a *App) ServiceShutdown() error {
 	if a.cancelAll != nil {
 		a.cancelAll()
 	}
@@ -97,6 +117,7 @@ func (a *App) Shutdown(ctx context.Context) {
 	}
 	_ = config.SaveHealth(a.health)
 	log.Println("[Shutdown] Clean shutdown recorded")
+	return nil
 }
 
 // SessionInfo is the JSON-serialisable session metadata sent to the frontend.
@@ -135,8 +156,7 @@ func (a *App) CreateSession(argv []string, dir string, rows int, cols int) int {
 	sess := terminal.NewSession(id, rows, cols)
 	if err := sess.Start(argv, dir, nil); err != nil {
 		errMsg := fmt.Sprintf("Session start failed: %v", err)
-		log.Printf("[CreateSession] ERROR: %s", errMsg)
-		runtime.EventsEmit(a.ctx, "terminal:error", id, errMsg)
+		log.Printf("[CreateSession] ERROR (TODO Task 4: emit terminal:error event): %s", errMsg)
 		return -1
 	}
 	log.Printf("[CreateSession] session %d started successfully", id)
@@ -146,7 +166,7 @@ func (a *App) CreateSession(argv []string, dir string, rows int, cols int) int {
 	a.mu.Unlock()
 
 	// Stream PTY output to frontend
-	go a.streamOutput(id, sess)
+	go a.streamOutput(id, sess, a.serviceCtx)
 
 	// Watch for process exit
 	go a.watchExit(id, sess)
@@ -263,13 +283,20 @@ func (a *App) SelectDirectory(startDir string) string {
 	if startDir == "" {
 		startDir = a.GetWorkingDir()
 	}
-	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title:            "Arbeitsverzeichnis wählen",
-		DefaultDirectory: startDir,
-	})
-	if err != nil {
+	if a.app == nil {
 		return ""
 	}
-	return dir
+	dlg := a.app.Dialog.OpenFile().
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		SetTitle("Arbeitsverzeichnis wählen").
+		SetDirectory(startDir)
+	if a.mainWindow != nil {
+		dlg = dlg.AttachToWindow(a.mainWindow)
+	}
+	result, err := dlg.PromptForSingleSelection()
+	if err != nil || result == "" {
+		return ""
+	}
+	return result
 }
-

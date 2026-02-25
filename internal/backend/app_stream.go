@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"encoding/base64"
 	"time"
 
@@ -31,7 +32,7 @@ func (a *App) coalesceDelay() time.Duration {
 // It coalesces rapid output over a short time window so that TUI redraws
 // (which produce many small chunks) arrive as a single event, preventing
 // cursor flicker in xterm.js.
-func (a *App) streamOutput(id int, sess *terminal.Session) {
+func (a *App) streamOutput(id int, sess *terminal.Session, ctx context.Context) {
 	for {
 		select {
 		case data, ok := <-sess.RawOutputCh:
@@ -53,13 +54,13 @@ func (a *App) streamOutput(id int, sess *terminal.Session) {
 					buf = append(buf, more...)
 				case <-deadline:
 					break collect
-				case <-a.ctx.Done():
+				case <-ctx.Done():
 					return
 				}
 			}
 			b64 := base64.StdEncoding.EncodeToString(buf)
 			runtime.EventsEmit(a.ctx, "terminal:output", id, b64)
-		case <-a.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}

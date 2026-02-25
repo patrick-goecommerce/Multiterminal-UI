@@ -37,17 +37,15 @@ func main() {
 	// Enable file logging if configured (persistent or auto-enabled after crashes)
 	backend.InitLoggingFromConfig(cfg)
 
-	// TODO(Task 3): replace backend.NewApp(cfg) with backend.NewAppService(app, cfg)
-	// once AppService is introduced and accepts a *application.App reference.
-	svc := backend.NewApp(cfg)
-	log.Println("App created, starting Wails...")
-
 	app := application.New(application.Options{
 		Name: "Multiterminal",
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
 	})
+
+	svc := backend.NewAppService(app, cfg)
+	log.Println("AppService created, starting Wails...")
 
 	app.RegisterService(application.NewService(svc))
 
@@ -63,7 +61,7 @@ func main() {
 	mainWindow.Center()
 	mainWindow.Maximise()
 
-	// TODO(Task 3): call svc.SetMainWindow(mainWindow) once the method is added to AppService.
+	svc.SetMainWindow(mainWindow)
 
 	if err := app.Run(); err != nil {
 		log.Println("Wails error:", err)
