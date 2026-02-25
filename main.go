@@ -37,33 +37,36 @@ func main() {
 	// Enable file logging if configured (persistent or auto-enabled after crashes)
 	backend.InitLoggingFromConfig(cfg)
 
-	app := backend.NewApp(cfg)
+	// TODO(Task 3): replace backend.NewApp(cfg) with backend.NewAppService(app, cfg)
+	// once AppService is introduced and accepts a *application.App reference.
+	svc := backend.NewApp(cfg)
 	log.Println("App created, starting Wails...")
 
-	err := wails.Run(&options.App{
+	app := application.New(application.Options{
+		Name: "Multiterminal",
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(assets),
+		},
+	})
+
+	app.RegisterService(application.NewService(svc))
+
+	mainWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            backend.VersionTitle(),
 		Width:            1400,
 		Height:           900,
 		MinWidth:         800,
 		MinHeight:        600,
-		WindowStartState: options.Maximised,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		OnStartup:  app.Startup,
-		OnShutdown: app.Shutdown,
-		Bind: []interface{}{
-			app,
-		},
-		LogLevel: logger.DEBUG,
-		Windows: &windows.Options{
-			WebviewIsTransparent: false,
-			WindowIsTranslucent:  false,
-		},
+		URL:              "/",
+		BackgroundColour: application.NewRGBA(30, 30, 30, 255),
 	})
-	if err != nil {
+	mainWindow.Center()
+	mainWindow.Maximise()
+
+	// TODO(Task 3): call svc.SetMainWindow(mainWindow) once the method is added to AppService.
+
+	if err := app.Run(); err != nil {
 		log.Println("Wails error:", err)
-		println("Error:", err.Error())
 	}
 	log.Println("Multiterminal UI exited")
 }
