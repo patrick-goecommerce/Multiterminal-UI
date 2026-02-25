@@ -173,15 +173,12 @@ func (a *AppService) SelectDirectory(startDir string) string {
 	if a.app == nil {
 		return ""
 	}
-	dlg := a.app.Dialog.OpenFile().
+	result, err := a.app.Dialog.OpenFile().
 		CanChooseDirectories(true).
 		CanChooseFiles(false).
 		SetTitle("Arbeitsverzeichnis wählen").
-		SetDirectory(startDir)
-	if a.mainWindow != nil {
-		dlg = dlg.AttachToWindow(a.mainWindow)
-	}
-	result, err := dlg.PromptForSingleSelection()
+		SetDirectory(startDir).
+		PromptForSingleSelection()
 	if err != nil || result == "" {
 		return ""
 	}
