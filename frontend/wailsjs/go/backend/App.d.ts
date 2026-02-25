@@ -36,6 +36,8 @@ export function CreateSession(arg1:Array<string>,arg2:string,arg3:number,arg4:nu
 
 export function CreateWorktree(arg1:string,arg2:number,arg3:string):Promise<backend.WorktreeInfo>;
 
+export function DetachTab(arg1:string,arg2:string):Promise<[string, Error]>;
+
 export function DetectClaudePath():Promise<backend.ClaudeDetectResult>;
 
 export function DisableLogging():Promise<void>;
@@ -66,6 +68,8 @@ export function GetLogPath():Promise<string>;
 
 export function GetMergeConflicts(arg1:string):Promise<backend.MergeConflictInfo>;
 
+export function GetOpenWindows():Promise<Array<{id: string, tabIds: string[]}>>;
+
 export function GetOrCreateIssueBranch(arg1:string,arg2:number,arg3:string):Promise<string>;
 
 export function GetQueue(arg1:number):Promise<Array<backend.QueueItem>>;
@@ -91,6 +95,8 @@ export function ListAllWorktrees(arg1:string):Promise<Array<backend.WorktreeInfo
 export function ListDirectory(arg1:string):Promise<Array<backend.FileEntry>>;
 
 export function ListWorktrees(arg1:string):Promise<Array<backend.WorktreeInfo>>;
+
+export function MergeWindowToMain(arg1:string,arg2:string):Promise<void>;
 
 export function LoadTabs():Promise<config.SessionState>;
 

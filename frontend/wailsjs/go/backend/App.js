@@ -71,6 +71,10 @@ export function CreateWorktree(arg1, arg2, arg3) {
   return $Call.ByID(51192822, arg1, arg2, arg3);
 }
 
+export function DetachTab(arg1, arg2) {
+  return $Call.ByID(3406932983, arg1, arg2);
+}
+
 export function DetectClaudePath() {
   return $Call.ByID(3544275289);
 }
@@ -131,6 +135,10 @@ export function GetMergeConflicts(arg1) {
   return $Call.ByID(3682275398, arg1);
 }
 
+export function GetOpenWindows() {
+  return $Call.ByID(678709378);
+}
+
 export function GetOrCreateIssueBranch(arg1, arg2, arg3) {
   return $Call.ByID(3998065247, arg1, arg2, arg3);
 }
@@ -181,6 +189,10 @@ export function ListDirectory(arg1) {
 
 export function ListWorktrees(arg1) {
   return $Call.ByID(1397013567, arg1);
+}
+
+export function MergeWindowToMain(arg1, arg2) {
+  return $Call.ByID(1541318433, arg1, arg2);
 }
 
 export function LoadTabs() {

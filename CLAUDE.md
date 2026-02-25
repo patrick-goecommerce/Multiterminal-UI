@@ -62,6 +62,8 @@ internal/
     app_health.go                Crash detection & health tracking
     app_audio.go                 Audio notification playback
     app_version.go               Version info
+    app_window.go                Window manager, DetachTab, MergeWindowToMain
+    app_events.go                Event payload types (TerminalOutputEvent, etc.)
   terminal/
     session.go                   PTY session lifecycle (start, read, close)
     session_helpers.go           Default shell, PTY console helpers
@@ -103,6 +105,7 @@ frontend/src/
     notifications.ts             Desktop notification wrapper
     audio.ts                     Audio playback (done/input sounds)
     git-polling.ts               Git status polling
+    window.ts                    Window identity helpers (getWindowId, isMainWindow)
 ```
 
 ## Build & Run
