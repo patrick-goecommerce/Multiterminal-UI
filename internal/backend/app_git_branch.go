@@ -25,7 +25,7 @@ type IssueBranchInfo struct {
 
 // IsOnIssueBranch checks if the current branch in dir is an issue branch.
 // targetIssue allows checking whether it's the same issue in one call.
-func (a *App) IsOnIssueBranch(dir string, targetIssue int) IssueBranchInfo {
+func (a *AppService) IsOnIssueBranch(dir string, targetIssue int) IssueBranchInfo {
 	if dir == "" || !isGitRepo(dir) {
 		return IssueBranchInfo{}
 	}
@@ -116,7 +116,7 @@ func branchExists(dir string, branch string) bool {
 // GetOrCreateIssueBranch checks if an issue branch exists, creates it if not,
 // and switches to it. Returns the branch name or an error.
 // If the working tree is dirty, it returns an error rather than risking data loss.
-func (a *App) GetOrCreateIssueBranch(dir string, number int, title string) (string, error) {
+func (a *AppService) GetOrCreateIssueBranch(dir string, number int, title string) (string, error) {
 	if dir == "" || !isGitRepo(dir) {
 		return "", fmt.Errorf("not a git repository")
 	}
@@ -158,11 +158,11 @@ func (a *App) GetOrCreateIssueBranch(dir string, number int, title string) (stri
 }
 
 // IsGitRepo checks if the given directory is a git repository (exported for frontend).
-func (a *App) IsGitRepo(dir string) bool {
+func (a *AppService) IsGitRepo(dir string) bool {
 	return isGitRepo(dir)
 }
 
 // HasCleanWorkingTree checks for uncommitted changes (exported for frontend).
-func (a *App) HasCleanWorkingTree(dir string) bool {
+func (a *AppService) HasCleanWorkingTree(dir string) bool {
 	return hasCleanWorkingTree(dir)
 }

@@ -54,7 +54,7 @@ type IssueLabel struct {
 
 // CheckGitHubCLI checks if the gh CLI is installed and authenticated.
 // Returns "ok", "not_installed", or "not_authenticated".
-func (a *App) CheckGitHubCLI() string {
+func (a *AppService) CheckGitHubCLI() string {
 	if _, err := exec.LookPath("gh"); err != nil {
 		return "not_installed"
 	}
@@ -68,7 +68,7 @@ func (a *App) CheckGitHubCLI() string {
 
 // GetIssues returns a list of GitHub issues for the repo in dir.
 // state can be "open", "closed", or "all".
-func (a *App) GetIssues(dir string, state string) []Issue {
+func (a *AppService) GetIssues(dir string, state string) []Issue {
 	if dir == "" {
 		return nil
 	}
@@ -94,7 +94,7 @@ func (a *App) GetIssues(dir string, state string) []Issue {
 }
 
 // GetIssueDetail returns the full details of a single issue including comments.
-func (a *App) GetIssueDetail(dir string, number int) *IssueDetail {
+func (a *AppService) GetIssueDetail(dir string, number int) *IssueDetail {
 	if dir == "" || number <= 0 {
 		return nil
 	}
@@ -116,7 +116,7 @@ func (a *App) GetIssueDetail(dir string, number int) *IssueDetail {
 }
 
 // CreateIssue creates a new GitHub issue and returns it.
-func (a *App) CreateIssue(dir string, title string, body string, labels []string) *Issue {
+func (a *AppService) CreateIssue(dir string, title string, body string, labels []string) *Issue {
 	if dir == "" || title == "" {
 		return nil
 	}
@@ -162,7 +162,7 @@ func (a *App) CreateIssue(dir string, title string, body string, labels []string
 }
 
 // UpdateIssue updates an existing issue's title, body, and/or state.
-func (a *App) UpdateIssue(dir string, number int, title string, body string, state string) error {
+func (a *AppService) UpdateIssue(dir string, number int, title string, body string, state string) error {
 	if dir == "" || number <= 0 {
 		return fmt.Errorf("invalid parameters")
 	}
@@ -208,7 +208,7 @@ func (a *App) UpdateIssue(dir string, number int, title string, body string, sta
 }
 
 // AddIssueComment adds a comment to an existing issue.
-func (a *App) AddIssueComment(dir string, number int, body string) error {
+func (a *AppService) AddIssueComment(dir string, number int, body string) error {
 	if dir == "" || number <= 0 || body == "" {
 		return fmt.Errorf("invalid parameters")
 	}
@@ -227,7 +227,7 @@ func (a *App) AddIssueComment(dir string, number int, body string) error {
 }
 
 // GetIssueLabels returns all available labels for the repo in dir.
-func (a *App) GetIssueLabels(dir string) []IssueLabel {
+func (a *AppService) GetIssueLabels(dir string) []IssueLabel {
 	if dir == "" {
 		return nil
 	}

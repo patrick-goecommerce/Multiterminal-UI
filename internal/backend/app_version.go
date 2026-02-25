@@ -25,13 +25,13 @@ type UpdateInfo struct {
 }
 
 // GetAppVersion returns the current application version string.
-func (a *App) GetAppVersion() string {
+func (a *AppService) GetAppVersion() string {
 	return Version
 }
 
 // CheckForUpdates queries the GitHub releases API and compares the latest
 // release tag with the current version.
-func (a *App) CheckForUpdates() UpdateInfo {
+func (a *AppService) CheckForUpdates() UpdateInfo {
 	info := UpdateInfo{CurrentVersion: Version}
 
 	if Version == "dev" {

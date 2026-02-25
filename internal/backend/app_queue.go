@@ -36,7 +36,7 @@ func truncateStr(s string, max int) string {
 
 // AddToQueue adds a prompt to a session's pipeline queue.
 // If the session is idle/done and nothing is in-flight, it triggers immediately.
-func (a *App) AddToQueue(sessionId int, prompt string) QueueItem {
+func (a *AppService) AddToQueue(sessionId int, prompt string) QueueItem {
 	a.mu.Lock()
 	q := a.queues[sessionId]
 	if q == nil {
@@ -59,7 +59,7 @@ func (a *App) AddToQueue(sessionId int, prompt string) QueueItem {
 }
 
 // GetQueue returns the current pipeline queue for a session.
-func (a *App) GetQueue(sessionId int) []QueueItem {
+func (a *AppService) GetQueue(sessionId int) []QueueItem {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	q := a.queues[sessionId]
@@ -73,7 +73,7 @@ func (a *App) GetQueue(sessionId int) []QueueItem {
 
 // RemoveFromQueue removes a single item by ID.
 // Items with status "sent" (currently executing) cannot be removed.
-func (a *App) RemoveFromQueue(sessionId int, itemId int) {
+func (a *AppService) RemoveFromQueue(sessionId int, itemId int) {
 	a.mu.Lock()
 	q := a.queues[sessionId]
 	if q != nil {
@@ -90,7 +90,7 @@ func (a *App) RemoveFromQueue(sessionId int, itemId int) {
 }
 
 // ClearDoneFromQueue removes all completed items from the queue.
-func (a *App) ClearDoneFromQueue(sessionId int) {
+func (a *AppService) ClearDoneFromQueue(sessionId int) {
 	a.mu.Lock()
 	q := a.queues[sessionId]
 	if q != nil {
@@ -107,7 +107,7 @@ func (a *App) ClearDoneFromQueue(sessionId int) {
 }
 
 // ClearQueue removes all items from a session's queue.
-func (a *App) ClearQueue(sessionId int) {
+func (a *AppService) ClearQueue(sessionId int) {
 	a.mu.Lock()
 	delete(a.queues, sessionId)
 	a.mu.Unlock()
@@ -115,7 +115,7 @@ func (a *App) ClearQueue(sessionId int) {
 }
 
 // tryProcessQueue sends the next pending item if the session is ready.
-func (a *App) tryProcessQueue(sessionId int) {
+func (a *AppService) tryProcessQueue(sessionId int) {
 	prevActivityMu.Lock()
 	act := prevActivity[sessionId]
 	prevActivityMu.Unlock()
@@ -127,7 +127,7 @@ func (a *App) tryProcessQueue(sessionId int) {
 
 // processQueue advances the queue: marks "sent" as "done", sends next "pending".
 // Called on activity→done transitions and when new items are added to idle sessions.
-func (a *App) processQueue(sessionId int) {
+func (a *AppService) processQueue(sessionId int) {
 	a.mu.Lock()
 	q := a.queues[sessionId]
 	if q == nil || len(q.items) == 0 {
@@ -188,7 +188,7 @@ func (a *App) processQueue(sessionId int) {
 }
 
 // emitQueueUpdate notifies the frontend that a session's queue changed.
-func (a *App) emitQueueUpdate(sessionId int) {
+func (a *AppService) emitQueueUpdate(sessionId int) {
 	if a.app == nil {
 		return
 	}

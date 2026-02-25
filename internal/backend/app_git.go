@@ -9,7 +9,7 @@ import (
 )
 
 // GetGitBranch returns the current git branch for the given directory.
-func (a *App) GetGitBranch(dir string) string {
+func (a *AppService) GetGitBranch(dir string) string {
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Dir = dir
 	hideConsole(cmd)
@@ -21,7 +21,7 @@ func (a *App) GetGitBranch(dir string) string {
 }
 
 // GetLastCommitTime returns the Unix timestamp (seconds) of the last git commit.
-func (a *App) GetLastCommitTime(dir string) int64 {
+func (a *AppService) GetLastCommitTime(dir string) int64 {
 	cmd := exec.Command("git", "log", "-1", "--format=%ct")
 	cmd.Dir = dir
 	hideConsole(cmd)
@@ -46,7 +46,7 @@ type GitFileStatus struct {
 
 // GetGitFileStatuses returns a map of relative file paths to their git status
 // for the given directory. Uses `git status --porcelain` for parsing.
-func (a *App) GetGitFileStatuses(dir string) map[string]string {
+func (a *AppService) GetGitFileStatuses(dir string) map[string]string {
 	result := make(map[string]string)
 	if dir == "" {
 		return result
@@ -130,7 +130,7 @@ type MergeConflictInfo struct {
 }
 
 // GetMergeConflicts returns conflict information for the given directory.
-func (a *App) GetMergeConflicts(dir string) MergeConflictInfo {
+func (a *AppService) GetMergeConflicts(dir string) MergeConflictInfo {
 	info := MergeConflictInfo{Files: []string{}}
 	if dir == "" {
 		return info
@@ -207,7 +207,7 @@ func markParentDirs(statuses map[string]string, filePath string, rootDir string)
 }
 
 // GetLocalBranches returns local branch names for the repo containing dir.
-func (a *App) GetLocalBranches(dir string) []string {
+func (a *AppService) GetLocalBranches(dir string) []string {
 	cmd := exec.Command("git", "branch", "--format=%(refname:short)")
 	cmd.Dir = dir
 	hideConsole(cmd)

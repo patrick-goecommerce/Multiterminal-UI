@@ -18,7 +18,7 @@ type ClaudeDetectResult struct {
 
 // DetectClaudePath tries to locate the Claude CLI binary.
 // Priority: absolute config path → PATH lookup → known install locations.
-func (a *App) DetectClaudePath() ClaudeDetectResult {
+func (a *AppService) DetectClaudePath() ClaudeDetectResult {
 	cmd := a.cfg.ClaudeCommand
 	if cmd == "" {
 		cmd = "claude"
@@ -52,12 +52,12 @@ func (a *App) DetectClaudePath() ClaudeDetectResult {
 }
 
 // GetResolvedClaudePath returns the cached resolved path (set at startup).
-func (a *App) GetResolvedClaudePath() string {
+func (a *AppService) GetResolvedClaudePath() string {
 	return a.resolvedClaudePath
 }
 
 // ValidateClaudePath checks whether the given path points to an executable.
-func (a *App) ValidateClaudePath(path string) bool {
+func (a *AppService) ValidateClaudePath(path string) bool {
 	if path == "" {
 		return false
 	}
@@ -69,18 +69,18 @@ func (a *App) ValidateClaudePath(path string) bool {
 }
 
 // BrowseForClaude opens a native file picker filtered for executables.
-func (a *App) BrowseForClaude() string {
+func (a *AppService) BrowseForClaude() string {
 	// TODO(wails-v3): migrate to v3 dialog API (app_window.go Task 6)
 	return ""
 }
 
 // IsClaudeDetected returns whether Claude CLI was found during detection.
-func (a *App) IsClaudeDetected() bool {
+func (a *AppService) IsClaudeDetected() bool {
 	return a.claudeDetected
 }
 
 // resolveClaudeOnStartup runs detection and caches the result.
-func (a *App) resolveClaudeOnStartup() {
+func (a *AppService) resolveClaudeOnStartup() {
 	result := a.DetectClaudePath()
 	if result.Valid {
 		a.resolvedClaudePath = result.Path

@@ -23,9 +23,9 @@ type sessionIssue struct {
 	Dir    string // working directory (for gh CLI calls)
 }
 
-// App is the main Wails application struct. All exported methods are
+// AppService is the main Wails application struct. All exported methods are
 // automatically available to the frontend via generated TypeScript bindings.
-type App struct {
+type AppService struct {
 	app            *application.App           // Wails v3 application instance
 	mainWindow     *application.WebviewWindow  // main window reference for dialogs
 	serviceCtx     context.Context             // context from ServiceStartup
@@ -41,10 +41,10 @@ type App struct {
 	claudeDetected     bool
 }
 
-// NewApp creates a new App instance with the given configuration.
+// NewApp creates a new AppService instance with the given configuration.
 // Kept for backwards compatibility during v3 migration.
-func NewApp(cfg config.Config) *App {
-	return &App{
+func NewApp(cfg config.Config) *AppService {
+	return &AppService{
 		cfg:           cfg,
 		sessions:      make(map[int]*terminal.Session),
 		queues:        make(map[int]*sessionQueue),
@@ -52,9 +52,9 @@ func NewApp(cfg config.Config) *App {
 	}
 }
 
-// NewAppService creates a new App instance for Wails v3 service pattern.
-func NewAppService(app *application.App, cfg config.Config) *App {
-	return &App{
+// NewAppService creates a new AppService instance for Wails v3 service pattern.
+func NewAppService(app *application.App, cfg config.Config) *AppService {
+	return &AppService{
 		app:           app,
 		cfg:           cfg,
 		sessions:      make(map[int]*terminal.Session),
@@ -64,12 +64,12 @@ func NewAppService(app *application.App, cfg config.Config) *App {
 }
 
 // SetMainWindow stores the main window reference for dialog and focus operations.
-func (a *App) SetMainWindow(w *application.WebviewWindow) {
+func (a *AppService) SetMainWindow(w *application.WebviewWindow) {
 	a.mainWindow = w
 }
 
 // ServiceStartup implements the Wails v3 Service interface.
-func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+func (a *AppService) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
 	a.serviceCtx = ctx
 
 	// Load health state and mark this session as started (dirty)
@@ -92,7 +92,7 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 }
 
 // ServiceShutdown implements the Wails v3 Service interface.
-func (a *App) ServiceShutdown() error {
+func (a *AppService) ServiceShutdown() error {
 	if a.cancelAll != nil {
 		a.cancelAll()
 	}
@@ -130,7 +130,7 @@ type SessionInfo struct {
 
 // CreateSession spawns a new PTY session and starts streaming its output
 // to the frontend. Returns the session ID.
-func (a *App) CreateSession(argv []string, dir string, rows int, cols int) int {
+func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int) int {
 	a.mu.Lock()
 	a.nextID++
 	id := a.nextID
@@ -175,7 +175,7 @@ func (a *App) CreateSession(argv []string, dir string, rows int, cols int) int {
 }
 
 // WriteToSession sends raw input data (base64-encoded) to a session's PTY.
-func (a *App) WriteToSession(id int, b64data string) {
+func (a *AppService) WriteToSession(id int, b64data string) {
 	a.mu.Lock()
 	sess := a.sessions[id]
 	a.mu.Unlock()
@@ -190,7 +190,7 @@ func (a *App) WriteToSession(id int, b64data string) {
 }
 
 // ResizeSession updates the PTY and screen buffer dimensions.
-func (a *App) ResizeSession(id int, rows int, cols int) {
+func (a *AppService) ResizeSession(id int, rows int, cols int) {
 	a.mu.Lock()
 	sess := a.sessions[id]
 	a.mu.Unlock()
@@ -204,7 +204,7 @@ func (a *App) ResizeSession(id int, rows int, cols int) {
 // The session is closed asynchronously but removed from the map only
 // after Close() completes, ensuring streamOutput drains all buffered
 // data before the session is gone.
-func (a *App) CloseSession(id int) {
+func (a *AppService) CloseSession(id int) {
 	a.mu.Lock()
 	sess := a.sessions[id]
 	a.mu.Unlock()
@@ -227,12 +227,12 @@ func (a *App) CloseSession(id int) {
 }
 
 // GetConfig returns the current application configuration.
-func (a *App) GetConfig() config.Config {
+func (a *AppService) GetConfig() config.Config {
 	return a.cfg
 }
 
 // SaveConfig saves the given config to disk and updates the in-memory copy.
-func (a *App) SaveConfig(cfg config.Config) error {
+func (a *AppService) SaveConfig(cfg config.Config) error {
 	log.Printf("[SaveConfig] theme=%q terminal_color=%q", cfg.Theme, cfg.TerminalColor)
 	a.cfg = cfg
 	if err := config.Save(cfg); err != nil {
@@ -246,7 +246,7 @@ func (a *App) SaveConfig(cfg config.Config) error {
 
 // SaveTabs persists the current tab/pane layout to disk so it can be
 // restored on next startup.
-func (a *App) SaveTabs(state config.SessionState) {
+func (a *AppService) SaveTabs(state config.SessionState) {
 	log.Printf("[SaveTabs] saving %d tabs", len(state.Tabs))
 	if err := config.SaveSession(state); err != nil {
 		log.Printf("[SaveTabs] error: %v", err)
@@ -254,7 +254,7 @@ func (a *App) SaveTabs(state config.SessionState) {
 }
 
 // LoadTabs returns the previously saved tab/pane layout, or nil.
-func (a *App) LoadTabs() *config.SessionState {
+func (a *AppService) LoadTabs() *config.SessionState {
 	if !a.cfg.ShouldRestoreSession() {
 		log.Printf("[LoadTabs] restore_session disabled")
 		return nil
@@ -269,7 +269,7 @@ func (a *App) LoadTabs() *config.SessionState {
 }
 
 // GetWorkingDir returns the effective working directory (from config or cwd).
-func (a *App) GetWorkingDir() string {
+func (a *AppService) GetWorkingDir() string {
 	if a.cfg.DefaultDir != "" {
 		return a.cfg.DefaultDir
 	}
@@ -279,7 +279,7 @@ func (a *App) GetWorkingDir() string {
 
 // SelectDirectory opens a native directory picker dialog and returns the
 // selected path, or an empty string if the user cancelled.
-func (a *App) SelectDirectory(startDir string) string {
+func (a *AppService) SelectDirectory(startDir string) string {
 	if startDir == "" {
 		startDir = a.GetWorkingDir()
 	}

@@ -12,7 +12,7 @@ const focusAddr = "127.0.0.1:41987"
 // SendNotification shows a native Windows toast notification with
 // "Multiterminal" as the application name. Clicking it brings the
 // window to the foreground via the multiterminal: custom protocol.
-func (a *App) SendNotification(title string, body string) {
+func (a *AppService) SendNotification(title string, body string) {
 	n := toast.Notification{
 		AppID:               "Multiterminal",
 		Title:               title,
@@ -27,7 +27,7 @@ func (a *App) SendNotification(title string, body string) {
 
 // startFocusListener starts a TCP listener that brings the window to
 // the foreground when a signal is received (triggered by notification click).
-func (a *App) startFocusListener() {
+func (a *AppService) startFocusListener() {
 	ln, err := net.Listen("tcp", focusAddr)
 	if err != nil {
 		log.Printf("[focusListener] could not listen on %s: %v", focusAddr, err)

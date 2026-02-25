@@ -10,7 +10,7 @@ import (
 
 // coalesceDelay returns the output coalescing delay based on the number
 // of active sessions. More sessions → longer delay to reduce event load.
-func (a *App) coalesceDelay() time.Duration {
+func (a *AppService) coalesceDelay() time.Duration {
 	a.mu.Lock()
 	n := len(a.sessions)
 	a.mu.Unlock()
@@ -31,7 +31,7 @@ func (a *App) coalesceDelay() time.Duration {
 // It coalesces rapid output over a short time window so that TUI redraws
 // (which produce many small chunks) arrive as a single event, preventing
 // cursor flicker in xterm.js.
-func (a *App) streamOutput(id int, sess *terminal.Session, ctx context.Context) {
+func (a *AppService) streamOutput(id int, sess *terminal.Session, ctx context.Context) {
 	for {
 		select {
 		case data, ok := <-sess.RawOutputCh:
@@ -66,7 +66,7 @@ func (a *App) streamOutput(id int, sess *terminal.Session, ctx context.Context) 
 }
 
 // watchExit waits for a session to exit and notifies the frontend.
-func (a *App) watchExit(id int, sess *terminal.Session) {
+func (a *AppService) watchExit(id int, sess *terminal.Session) {
 	<-sess.Done()
 	a.app.Event.Emit("terminal:exit", TerminalExitEvent{ID: id, ExitCode: sess.ExitCode})
 }

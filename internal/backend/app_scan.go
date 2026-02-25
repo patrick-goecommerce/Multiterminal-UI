@@ -26,7 +26,7 @@ var (
 
 // scanInterval returns the scan tick duration based on the number of active sessions.
 // More sessions → slower ticks to reduce overhead.
-func (a *App) scanInterval() time.Duration {
+func (a *AppService) scanInterval() time.Duration {
 	a.mu.Lock()
 	n := len(a.sessions)
 	a.mu.Unlock()
@@ -42,7 +42,7 @@ func (a *App) scanInterval() time.Duration {
 
 // scanLoop periodically scans all sessions for activity changes and token info.
 // The interval adapts to the number of active sessions.
-func (a *App) scanLoop(ctx context.Context) {
+func (a *AppService) scanLoop(ctx context.Context) {
 	interval := a.scanInterval()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -84,7 +84,7 @@ func cleanupActivityTracking(id int) {
 }
 
 // scanAllSessions checks each session for activity and token updates.
-func (a *App) scanAllSessions() {
+func (a *AppService) scanAllSessions() {
 	a.mu.Lock()
 	ids := make([]int, 0, len(a.sessions))
 	sessions := make([]*terminal.Session, 0, len(a.sessions))
@@ -140,7 +140,7 @@ func (a *App) scanAllSessions() {
 
 // onActivityChangeForIssue triggers issue progress reports when
 // a session linked to an issue changes activity state.
-func (a *App) onActivityChangeForIssue(sessionID int, newActivity string, cost string) {
+func (a *AppService) onActivityChangeForIssue(sessionID int, newActivity string, cost string) {
 	if newActivity == "done" {
 		a.reportIssueProgress(sessionID, progressDone, cost)
 	}

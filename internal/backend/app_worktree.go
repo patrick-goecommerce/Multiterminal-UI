@@ -43,7 +43,7 @@ func repoRoot(dir string) (string, error) {
 
 // CreateWorktree creates a git worktree for an issue with its own branch.
 // Returns the worktree path and branch name.
-func (a *App) CreateWorktree(dir string, issueNumber int, title string) (*WorktreeInfo, error) {
+func (a *AppService) CreateWorktree(dir string, issueNumber int, title string) (*WorktreeInfo, error) {
 	root, err := repoRoot(dir)
 	if err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func (a *App) CreateWorktree(dir string, issueNumber int, title string) (*Worktr
 }
 
 // RemoveWorktree removes a worktree for an issue and optionally its branch.
-func (a *App) RemoveWorktree(dir string, issueNumber int) error {
+func (a *AppService) RemoveWorktree(dir string, issueNumber int) error {
 	root, err := repoRoot(dir)
 	if err != nil {
 		return err
@@ -106,7 +106,7 @@ func (a *App) RemoveWorktree(dir string, issueNumber int) error {
 }
 
 // ListWorktrees returns all active worktrees that belong to Multiterminal.
-func (a *App) ListWorktrees(dir string) []WorktreeInfo {
+func (a *AppService) ListWorktrees(dir string) []WorktreeInfo {
 	root, err := repoRoot(dir)
 	if err != nil {
 		return nil
@@ -170,7 +170,7 @@ func parseWorktreeList(output string, root string) []WorktreeInfo {
 }
 
 // ListAllWorktrees returns ALL git worktrees categorized as "main", "terminal", or "issue".
-func (a *App) ListAllWorktrees(dir string) []WorktreeInfo {
+func (a *AppService) ListAllWorktrees(dir string) []WorktreeInfo {
 	root, err := repoRoot(dir)
 	if err != nil {
 		return nil
@@ -254,7 +254,7 @@ func sanitizeWorktreeName(name string) string {
 // CreateNamedWorktree creates a general-purpose worktree not tied to an issue.
 // name is a display name, baseBranch is the branch to fork from.
 // Creates at .mt-worktrees/<sanitized-name>/ with branch "terminal/<sanitized-name>".
-func (a *App) CreateNamedWorktree(dir, name, baseBranch string) (*WorktreeInfo, error) {
+func (a *AppService) CreateNamedWorktree(dir, name, baseBranch string) (*WorktreeInfo, error) {
 	root, err := repoRoot(dir)
 	if err != nil {
 		return nil, err

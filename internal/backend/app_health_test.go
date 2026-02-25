@@ -17,7 +17,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestCheckHealth_NoCrash(t *testing.T) {
-	app := &App{
+	app := &AppService{
 		cfg:    config.Config{LoggingEnabled: false},
 		health: config.HealthState{Shutdowns: []bool{true, true, false}},
 	}
@@ -35,7 +35,7 @@ func TestCheckHealth_NoCrash(t *testing.T) {
 }
 
 func TestCheckHealth_CrashDetected(t *testing.T) {
-	app := &App{
+	app := &AppService{
 		cfg: config.Config{LoggingEnabled: false},
 		health: config.HealthState{
 			Shutdowns: []bool{false, false, false}, // 2 prior dirty + current
@@ -49,7 +49,7 @@ func TestCheckHealth_CrashDetected(t *testing.T) {
 }
 
 func TestCheckHealth_LoggingState(t *testing.T) {
-	app := &App{
+	app := &AppService{
 		cfg:    config.Config{LoggingEnabled: true},
 		health: config.HealthState{LoggingAuto: true, Shutdowns: []bool{true, false}},
 	}
@@ -69,7 +69,7 @@ func TestCheckHealth_LoggingState(t *testing.T) {
 
 func TestEnableLogging_Manual(t *testing.T) {
 	dir := t.TempDir()
-	app := &App{
+	app := &AppService{
 		cfg:    config.Config{},
 		health: config.HealthState{},
 	}
@@ -101,7 +101,7 @@ func TestEnableLogging_Manual(t *testing.T) {
 }
 
 func TestEnableLogging_Auto(t *testing.T) {
-	app := &App{
+	app := &AppService{
 		cfg:    config.Config{},
 		health: config.HealthState{CleanSinceAuto: 5},
 	}
@@ -130,7 +130,7 @@ func TestEnableLogging_Auto(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDisableLogging(t *testing.T) {
-	app := &App{
+	app := &AppService{
 		cfg:    config.Config{LoggingEnabled: true},
 		health: config.HealthState{LoggingAuto: true, CleanSinceAuto: 2},
 	}
@@ -154,7 +154,7 @@ func TestDisableLogging(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGetLogPath_ContainsDate(t *testing.T) {
-	app := &App{}
+	app := &AppService{}
 	path := app.GetLogPath()
 
 	today := time.Now().Format("2006-01-02")
@@ -164,7 +164,7 @@ func TestGetLogPath_ContainsDate(t *testing.T) {
 }
 
 func TestGetLogPath_ContainsPrefix(t *testing.T) {
-	app := &App{}
+	app := &AppService{}
 	path := app.GetLogPath()
 
 	base := filepath.Base(path)
@@ -253,7 +253,7 @@ func TestInitLoggingFromConfig_Enabled(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoggingEnableDisableCycle(t *testing.T) {
-	app := &App{
+	app := &AppService{
 		cfg:    config.Config{},
 		health: config.HealthState{},
 	}
