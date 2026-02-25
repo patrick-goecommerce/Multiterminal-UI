@@ -33,6 +33,7 @@
 
   const _windowId = getWindowId();
   const _isMain = isMainWindow();
+  // TODO: use _initialTabs to populate secondary window tabs (pending implementation)
   const _initialTabs = getInitialTabs();
 
   let showLaunchDialog = false;

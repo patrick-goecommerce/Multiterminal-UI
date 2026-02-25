@@ -41,41 +41,10 @@ func (wm *windowManager) unregister(id string) {
 	delete(wm.windows, id)
 }
 
-func (wm *windowManager) getWindowForTab(tabID string) string {
-	wm.mu.Lock()
-	defer wm.mu.Unlock()
-	for id, entry := range wm.windows {
-		for _, t := range entry.TabIDs {
-			if t == tabID {
-				return id
-			}
-		}
-	}
-	return ""
-}
-
-func (wm *windowManager) moveTab(tabID, targetWindowID string) {
-	wm.mu.Lock()
-	defer wm.mu.Unlock()
-	// Remove from current window
-	for _, entry := range wm.windows {
-		for i, t := range entry.TabIDs {
-			if t == tabID {
-				entry.TabIDs = append(entry.TabIDs[:i], entry.TabIDs[i+1:]...)
-				break
-			}
-		}
-	}
-	// Add to target
-	if target, ok := wm.windows[targetWindowID]; ok {
-		target.TabIDs = append(target.TabIDs, tabID)
-	}
-}
-
 // WindowInfo is returned to the frontend.
 type WindowInfo struct {
-	ID     string   `json:"id"`
-	TabIDs []string `json:"tabIds"`
+	ID     string   `json:"id"     yaml:"id"`
+	TabIDs []string `json:"tabIds" yaml:"tab_ids"`
 }
 
 // DetachTab creates a new Wails window for the given tab.
@@ -103,6 +72,11 @@ func (a *AppService) DetachTab(tabID string, sourceWindowID string) (string, err
 
 	a.winMgr.register(newID, win, []string{tabID})
 
+	// NOTE(alpha): window:before-close is fire-and-forget — the IPC round-trip to
+	// MergeWindowToMain is not awaited before the window is destroyed. This is an
+	// inherent limitation of Wails v3 alpha (no reliable beforeunload on WebView2).
+	// In the worst case, tabs from a rapidly-closed secondary window may be lost.
+	// Tracked in issue #89.
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		a.app.Event.Emit("window:before-close", map[string]string{"windowId": newID})
 		a.winMgr.unregister(newID)
