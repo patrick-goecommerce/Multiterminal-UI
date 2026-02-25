@@ -1,16 +1,15 @@
-name: Release
+name: Release Alpha
 
 on:
   push:
     tags:
-      - "v*"
+      - "v*-alpha*"
 
 permissions:
   contents: write
 
 jobs:
   build-windows:
-    if: ${{ !contains(github.ref_name, '-alpha') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,8 +22,8 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install Wails v3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
       - name: Stamp version into PE metadata
         shell: bash
@@ -36,28 +35,22 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          wails build -ldflags "-X github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.Version=$VERSION"
+          wails3 build -ldflags "-X github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.Version=$VERSION"
 
       - name: Extract version from tag
         id: version
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Build installer
-        run: iscc /DMyAppVersion=${{ steps.version.outputs.version }} installer.iss
-
-      - name: Stage release artifacts
+      - name: Stage release artifact
         shell: bash
         run: |
           mv build/bin/mtui-portable.exe "mtui-portable-${{ steps.version.outputs.version }}.exe"
-          mv installer-output/mtui-setup-${{ steps.version.outputs.version }}.exe .
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mtui-windows
-          path: |
-            mtui-portable-*.exe
-            mtui-setup-*.exe
+          name: mtui-windows-alpha
+          path: mtui-portable-*.exe
 
   release:
     needs: [build-windows]
@@ -68,10 +61,10 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Create Release
+      - name: Create Pre-Release
         uses: softprops/action-gh-release@v2
         with:
+          prerelease: true
           generate_release_notes: true
           files: |
             artifacts/mtui-portable-*.exe
-            artifacts/mtui-setup-*.exe
