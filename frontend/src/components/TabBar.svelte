@@ -1,10 +1,20 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { tabStore, allTabs } from '../stores/tabs';
+  import * as App from '../../wailsjs/go/backend/App';
+  import { getWindowId, isMainWindow } from '../lib/window';
 
   export let activeTabId: string;
 
   const dispatch = createEventDispatcher();
+
+  const _isMain = isMainWindow();
+  const _windowId = getWindowId();
+
+  // Context menu state
+  let contextMenuTabId: string | null = null;
+  let contextMenuX = 0;
+  let contextMenuY = 0;
 
   function handleTabClick(e: MouseEvent, tabId: string) {
     (e.currentTarget as HTMLElement).blur();
@@ -24,6 +34,41 @@
     const name = prompt('Tab umbenennen:');
     if (name) tabStore.renameTab(tabId, name);
   }
+
+  function handleDragStart(e: DragEvent, tabId: string) {
+    e.dataTransfer?.setData('text/plain', tabId);
+  }
+
+  async function handleDragEnd(e: DragEvent, tabId: string) {
+    // Detect drop outside window bounds
+    const outside = e.clientX < 0 || e.clientX > window.innerWidth
+                  || e.clientY < 0 || e.clientY > window.innerHeight;
+    if (outside) {
+      await detachTab(tabId);
+    }
+  }
+
+  async function detachTab(tabId: string) {
+    try {
+      await App.DetachTab(tabId, _windowId);
+      tabStore.closeTab(tabId);
+    } catch (err) {
+      console.error('[DetachTab] failed', err);
+    }
+  }
+
+  function handleContextMenu(e: MouseEvent, tabId: string) {
+    if (!_isMain) return; // no "new window" on secondary windows
+    e.preventDefault();
+    e.stopPropagation();
+    contextMenuTabId = tabId;
+    contextMenuX = e.clientX;
+    contextMenuY = e.clientY;
+  }
+
+  function closeContextMenu() {
+    contextMenuTabId = null;
+  }
 </script>
 
 <div class="tab-bar">
@@ -32,8 +77,12 @@
       <button
         class="tab"
         class:active={tab.id === activeTabId}
+        draggable="true"
         on:click={(e) => handleTabClick(e, tab.id)}
         on:dblclick={() => handleTabDblClick(tab.id)}
+        on:dragstart={(e) => handleDragStart(e, tab.id)}
+        on:dragend={(e) => handleDragEnd(e, tab.id)}
+        on:contextmenu={(e) => handleContextMenu(e, tab.id)}
       >
         <span class="tab-name">{tab.name}</span>
         {#if tab.panes.length > 0}
@@ -49,6 +98,25 @@
     +
   </button>
 </div>
+
+{#if contextMenuTabId && _isMain}
+  {@const _ctxTabId = contextMenuTabId}
+  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+  <div class="ctx-overlay" on:click={closeContextMenu}>
+    <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+    <div class="ctx-menu" style="left:{contextMenuX}px; top:{contextMenuY}px"
+         on:click|stopPropagation>
+      <button class="ctx-item" on:click={() => { detachTab(_ctxTabId); closeContextMenu(); }}>
+        In neuem Fenster öffnen
+      </button>
+      <div class="ctx-separator"></div>
+      <button class="ctx-item ctx-item-danger"
+              on:click={() => { tabStore.closeTab(_ctxTabId); closeContextMenu(); }}>
+        Tab schließen
+      </button>
+    </div>
+  </div>
+{/if}
 
 <style>
   .tab-bar {
@@ -142,4 +210,33 @@
     background: var(--bg-tertiary);
     color: var(--fg);
   }
+
+  .ctx-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+  }
+
+  .ctx-menu {
+    position: fixed;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px;
+    min-width: 180px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    z-index: 1001;
+  }
+
+  .ctx-item {
+    display: block; width: 100%;
+    padding: 7px 12px; text-align: left;
+    background: none; border: none;
+    color: var(--fg); font-size: 13px;
+    border-radius: 4px; cursor: pointer;
+  }
+
+  .ctx-item:hover { background: var(--bg-tertiary); }
+
+  .ctx-item-danger { color: #f87171; }
+
+  .ctx-separator { height: 1px; background: var(--border); margin: 4px 0; }
 </style>
