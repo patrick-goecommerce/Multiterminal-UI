@@ -226,6 +226,16 @@ function createTabStore() {
       return get({ subscribe });
     },
 
+    forceCloseTab(tabId: string) {
+      update((state) => {
+        const tabs = state.tabs.filter(t => t.id !== tabId);
+        const activeTabId = state.activeTabId === tabId
+          ? (tabs.length > 0 ? tabs[tabs.length - 1].id : '')
+          : state.activeTabId;
+        return { ...state, tabs, activeTabId };
+      });
+    },
+
     importTab(tab: Tab) {
       update((s) => ({
         ...s,

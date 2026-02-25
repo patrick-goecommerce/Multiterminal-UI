@@ -55,7 +55,7 @@ func main() {
 		Height:           900,
 		MinWidth:         800,
 		MinHeight:        600,
-		URL:              "/",
+		URL:              "/?windowId=main",
 		BackgroundColour: application.NewRGBA(30, 30, 30, 255),
 	})
 	mainWindow.Center()

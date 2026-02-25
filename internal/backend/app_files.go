@@ -163,3 +163,27 @@ func (a *AppService) OpenFileInEditor(path string) string {
 	}
 	return ""
 }
+
+// SelectDirectory opens a native directory picker dialog and returns the
+// selected path, or an empty string if the user cancelled.
+func (a *AppService) SelectDirectory(startDir string) string {
+	if startDir == "" {
+		startDir = a.GetWorkingDir()
+	}
+	if a.app == nil {
+		return ""
+	}
+	dlg := a.app.Dialog.OpenFile().
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		SetTitle("Arbeitsverzeichnis wählen").
+		SetDirectory(startDir)
+	if a.mainWindow != nil {
+		dlg = dlg.AttachToWindow(a.mainWindow)
+	}
+	result, err := dlg.PromptForSingleSelection()
+	if err != nil || result == "" {
+		return ""
+	}
+	return result
+}

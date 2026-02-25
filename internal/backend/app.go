@@ -43,17 +43,6 @@ type AppService struct {
 	detachCount       int            // monotonic counter for detached window IDs
 }
 
-// NewApp creates a new AppService instance with the given configuration.
-// Kept for backwards compatibility during v3 migration.
-func NewApp(cfg config.Config) *AppService {
-	return &AppService{
-		cfg:           cfg,
-		sessions:      make(map[int]*terminal.Session),
-		queues:        make(map[int]*sessionQueue),
-		sessionIssues: make(map[int]*sessionIssue),
-	}
-}
-
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
 func NewAppService(app *application.App, cfg config.Config) *AppService {
 	return &AppService{
@@ -160,7 +149,8 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 	sess := terminal.NewSession(id, rows, cols)
 	if err := sess.Start(argv, dir, nil); err != nil {
 		errMsg := fmt.Sprintf("Session start failed: %v", err)
-		log.Printf("[CreateSession] ERROR (TODO Task 4: emit terminal:error event): %s", errMsg)
+		log.Printf("[CreateSession] ERROR: %s", errMsg)
+		a.app.Event.Emit("terminal:error", TerminalErrorEvent{ID: id, Message: errMsg})
 		return -1
 	}
 	log.Printf("[CreateSession] session %d started successfully", id)
@@ -281,26 +271,3 @@ func (a *AppService) GetWorkingDir() string {
 	return dir
 }
 
-// SelectDirectory opens a native directory picker dialog and returns the
-// selected path, or an empty string if the user cancelled.
-func (a *AppService) SelectDirectory(startDir string) string {
-	if startDir == "" {
-		startDir = a.GetWorkingDir()
-	}
-	if a.app == nil {
-		return ""
-	}
-	dlg := a.app.Dialog.OpenFile().
-		CanChooseDirectories(true).
-		CanChooseFiles(false).
-		SetTitle("Arbeitsverzeichnis wählen").
-		SetDirectory(startDir)
-	if a.mainWindow != nil {
-		dlg = dlg.AttachToWindow(a.mainWindow)
-	}
-	result, err := dlg.PromptForSingleSelection()
-	if err != nil || result == "" {
-		return ""
-	}
-	return result
-}

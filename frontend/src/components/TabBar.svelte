@@ -51,7 +51,7 @@
   async function detachTab(tabId: string) {
     try {
       await App.DetachTab(tabId, _windowId);
-      tabStore.closeTab(tabId);
+      tabStore.forceCloseTab(tabId); // bypasses single-tab guard
     } catch (err) {
       console.error('[DetachTab] failed', err);
     }
@@ -77,6 +77,7 @@
       <button
         class="tab"
         class:active={tab.id === activeTabId}
+        class:highlight={tab._highlight}
         draggable="true"
         on:click={(e) => handleTabClick(e, tab.id)}
         on:dblclick={() => handleTabDblClick(tab.id)}
@@ -163,6 +164,14 @@
     background: var(--bg);
     color: var(--tab-active-fg);
     border-bottom: 2px solid var(--accent);
+  }
+
+  .tab.highlight {
+    animation: tab-arrive 0.5s ease-out;
+  }
+  @keyframes tab-arrive {
+    from { background: var(--accent); color: var(--bg); }
+    to   { background: transparent; }
   }
 
   .tab-name {

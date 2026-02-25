@@ -103,15 +103,10 @@ func (a *AppService) DetachTab(tabID string, sourceWindowID string) (string, err
 
 	a.winMgr.register(newID, win, []string{tabID})
 
-	win.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
-		log.Printf("[WindowManager] window %s closing", newID)
-		a.winMgr.unregister(newID)
-	})
-
-	// Also emit a before-close event to the frontend so it can save tab state
-	// before the window is destroyed.
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		a.app.Event.Emit("window:before-close", map[string]string{"windowId": newID})
+		a.winMgr.unregister(newID)
+		log.Printf("[WindowManager] window %s closing", newID)
 	})
 
 	win.Show()
