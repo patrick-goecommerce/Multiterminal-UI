@@ -6,10 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // ClaudeDetectResult describes the outcome of a Claude CLI detection attempt.
@@ -73,20 +70,8 @@ func (a *App) ValidateClaudePath(path string) bool {
 
 // BrowseForClaude opens a native file picker filtered for executables.
 func (a *App) BrowseForClaude() string {
-	filters := []wailsrt.FileFilter{
-		{DisplayName: "Executables", Pattern: "*"},
-	}
-	if runtime.GOOS == "windows" {
-		filters[0].Pattern = "*.exe;*.cmd;*.bat"
-	}
-	path, err := wailsrt.OpenFileDialog(a.ctx, wailsrt.OpenDialogOptions{
-		Title:   "Claude CLI auswählen",
-		Filters: filters,
-	})
-	if err != nil || path == "" {
-		return ""
-	}
-	return path
+	// TODO(wails-v3): migrate to v3 dialog API (app_window.go Task 6)
+	return ""
 }
 
 // IsClaudeDetected returns whether Claude CLI was found during detection.
