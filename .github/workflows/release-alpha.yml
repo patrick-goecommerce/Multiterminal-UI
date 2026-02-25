@@ -25,18 +25,54 @@ jobs:
       - name: Install Wails v3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
-      - name: Stamp version into PE metadata
+      - name: Build frontend
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          sed -i "s/\"productVersion\": \".*\"/\"productVersion\": \"$VERSION\"/" wails.json
+          cd frontend
+          npm install
+          npm run build
 
-      - name: Build Windows amd64
+      - name: Stamp version into Windows resources
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          export GOFLAGS="-ldflags=-X github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.Version=$VERSION"
-          wails3 build
+          cat > build/windows/info.json << EOF
+          {
+            "fixed": {
+              "file_version": "$VERSION"
+            },
+            "info": {
+              "0000": {
+                "ProductVersion": "$VERSION",
+                "CompanyName": "go eCommerce GmbH",
+                "FileDescription": "Multiterminal UI",
+                "LegalCopyright": "Copyright 2025-2026 go eCommerce GmbH",
+                "ProductName": "Multiterminal UI",
+                "Comments": "A terminal multiplexer for Claude Code power users"
+              }
+            }
+          }
+          EOF
+
+      - name: Generate Windows resources (.syso)
+        shell: bash
+        run: |
+          wails3 generate syso \
+            -arch amd64 \
+            -icon build/appicon.png \
+            -manifest build/windows/wails.exe.manifest \
+            -info build/windows/info.json \
+            -out wails_windows_amd64.syso
+
+      - name: Build Go binary
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          go build \
+            -tags desktop,production \
+            -ldflags "-s -w -H windowsgui -X github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.Version=$VERSION" \
+            -o build/bin/mtui-portable.exe \
+            .
 
       - name: Extract version from tag
         id: version
