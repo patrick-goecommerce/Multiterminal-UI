@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"strings"
 
-	wailsrt "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // ClaudeDetectResult describes the outcome of a Claude CLI detection attempt.

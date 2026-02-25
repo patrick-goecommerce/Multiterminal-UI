@@ -1,7 +1,7 @@
 package backend
 
 import (
-	wailsrt "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // BrowseForAudioFile opens a native file picker for audio files.

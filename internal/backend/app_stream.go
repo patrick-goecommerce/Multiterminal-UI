@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // coalesceDelay returns the output coalescing delay based on the number

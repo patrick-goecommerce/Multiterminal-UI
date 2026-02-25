@@ -5,7 +5,7 @@ import (
 	"net"
 
 	"github.com/go-toast/toast"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 const focusAddr = "127.0.0.1:41987"

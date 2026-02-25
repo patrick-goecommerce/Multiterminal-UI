@@ -12,7 +12,7 @@ import (
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // sessionIssue tracks which GitHub issue a session is working on.

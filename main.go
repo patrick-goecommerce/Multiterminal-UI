@@ -13,11 +13,7 @@ import (
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/backend"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/logger"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 //go:embed all:frontend/dist
