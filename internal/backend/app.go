@@ -39,6 +39,8 @@ type AppService struct {
 	cancelAll         context.CancelFunc
 	resolvedClaudePath string
 	claudeDetected     bool
+	winMgr            *windowManager // tracks all open windows for multi-window support
+	detachCount       int            // monotonic counter for detached window IDs
 }
 
 // NewApp creates a new AppService instance with the given configuration.
@@ -60,12 +62,14 @@ func NewAppService(app *application.App, cfg config.Config) *AppService {
 		sessions:      make(map[int]*terminal.Session),
 		queues:        make(map[int]*sessionQueue),
 		sessionIssues: make(map[int]*sessionIssue),
+		winMgr:        newWindowManager(app),
 	}
 }
 
 // SetMainWindow stores the main window reference for dialog and focus operations.
 func (a *AppService) SetMainWindow(w *application.WebviewWindow) {
 	a.mainWindow = w
+	a.winMgr.register("main", w, nil)
 }
 
 // ServiceStartup implements the Wails v3 Service interface.
