@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // ActivityInfo is sent to the frontend when a session's activity state changes.
@@ -120,7 +119,7 @@ func (a *App) scanAllSessions() {
 
 		if changed {
 			log.Printf("[scan] session %d: activity=%s cost=%s", id, actStr, costStr)
-			runtime.EventsEmit(a.ctx, "terminal:activity", ActivityInfo{
+			a.app.Event.Emit("terminal:activity", ActivityInfo{
 				ID:       id,
 				Activity: actStr,
 				Cost:     costStr,

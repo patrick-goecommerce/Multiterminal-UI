@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // coalesceDelay returns the output coalescing delay based on the number
@@ -48,7 +47,7 @@ func (a *App) streamOutput(id int, sess *terminal.Session, ctx context.Context) 
 				case more, ok := <-sess.RawOutputCh:
 					if !ok {
 						b64 := base64.StdEncoding.EncodeToString(buf)
-						runtime.EventsEmit(a.ctx, "terminal:output", id, b64)
+						a.app.Event.Emit("terminal:output", TerminalOutputEvent{ID: id, Data: b64})
 						return
 					}
 					buf = append(buf, more...)
@@ -59,7 +58,7 @@ func (a *App) streamOutput(id int, sess *terminal.Session, ctx context.Context) 
 				}
 			}
 			b64 := base64.StdEncoding.EncodeToString(buf)
-			runtime.EventsEmit(a.ctx, "terminal:output", id, b64)
+			a.app.Event.Emit("terminal:output", TerminalOutputEvent{ID: id, Data: b64})
 		case <-ctx.Done():
 			return
 		}
@@ -69,5 +68,5 @@ func (a *App) streamOutput(id int, sess *terminal.Session, ctx context.Context) 
 // watchExit waits for a session to exit and notifies the frontend.
 func (a *App) watchExit(id int, sess *terminal.Session) {
 	<-sess.Done()
-	runtime.EventsEmit(a.ctx, "terminal:exit", id, sess.ExitCode)
+	a.app.Event.Emit("terminal:exit", TerminalExitEvent{ID: id, ExitCode: sess.ExitCode})
 }

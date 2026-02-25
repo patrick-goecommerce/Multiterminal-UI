@@ -5,7 +5,6 @@ import (
 	"net"
 
 	"github.com/go-toast/toast"
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 const focusAddr = "127.0.0.1:41987"
@@ -42,12 +41,14 @@ func (a *App) startFocusListener() {
 				return
 			}
 			conn.Close()
-			if runtime.WindowIsMinimised(a.ctx) {
-				runtime.WindowUnminimise(a.ctx)
+			if a.mainWindow != nil {
+				if a.mainWindow.IsMinimised() {
+					a.mainWindow.UnMinimise()
+				}
+				a.mainWindow.Show()
+				a.mainWindow.SetAlwaysOnTop(true)
+				a.mainWindow.SetAlwaysOnTop(false)
 			}
-			runtime.WindowShow(a.ctx)
-			runtime.WindowSetAlwaysOnTop(a.ctx, true)
-			runtime.WindowSetAlwaysOnTop(a.ctx, false)
 		}
 	}()
 }

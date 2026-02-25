@@ -3,8 +3,6 @@ package backend
 import (
 	"log"
 	"time"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // QueueItem represents a single prompt in a session's pipeline queue.
@@ -191,8 +189,8 @@ func (a *App) processQueue(sessionId int) {
 
 // emitQueueUpdate notifies the frontend that a session's queue changed.
 func (a *App) emitQueueUpdate(sessionId int) {
-	if a.ctx == nil {
+	if a.app == nil {
 		return
 	}
-	runtime.EventsEmit(a.ctx, "queue:update", sessionId)
+	a.app.Event.Emit("queue:update", sessionId)
 }
