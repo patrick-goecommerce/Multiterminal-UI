@@ -61,7 +61,9 @@
 
   onMount(() => {
     loadQueue();
-    cleanupFn = EventsOn('queue:update', (sid: number) => {
+    // Wails v3: queue:update payload is the session ID in event.data
+    cleanupFn = EventsOn('queue:update', (event: any) => {
+      const sid: number = event.data;
       if (sid === sessionId) loadQueue();
     });
   });

@@ -6,7 +6,8 @@
 
   const dispatch = createEventDispatcher();
 
-  function handleTabClick(tabId: string) {
+  function handleTabClick(e: MouseEvent, tabId: string) {
+    (e.currentTarget as HTMLElement).blur();
     tabStore.setActiveTab(tabId);
   }
 
@@ -31,7 +32,7 @@
       <button
         class="tab"
         class:active={tab.id === activeTabId}
-        on:click={() => handleTabClick(tab.id)}
+        on:click={(e) => handleTabClick(e, tab.id)}
         on:dblclick={() => handleTabDblClick(tab.id)}
       >
         <span class="tab-name">{tab.name}</span>

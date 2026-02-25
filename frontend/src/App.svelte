@@ -131,13 +131,15 @@
       tabStore.addTab('Workspace', workDir);
     }
 
-    EventsOn('terminal:activity', (info: any) => {
+    // Wails v3: event handlers receive a WailsEvent object; payload is in event.data
+    EventsOn('terminal:activity', (event: any) => {
+      const info = event.data; // ActivityInfo { id, activity, cost }
       tabStore.updateActivity(info.id, info.activity, info.cost);
       // Notify when an issue-linked agent finishes (only when window is focused,
       // because TerminalPane already sends a notification when unfocused)
       if (info.activity === 'done' && document.hasFocus()) {
         for (const tab of $allTabs) {
-          const pane = tab.panes.find(p => p.sessionId === info.id);
+          const pane = tab.panes.find((p: any) => p.sessionId === info.id);
           if (pane?.issueNumber) {
             sendNotification(`Agent fertig – #${pane.issueNumber}`, pane.issueTitle || pane.name);
             break;
@@ -145,8 +147,13 @@
         }
       }
     });
-    EventsOn('terminal:exit', (id: number) => tabStore.markExited(id));
-    EventsOn('terminal:error', (id: number, msg: string) => {
+    EventsOn('terminal:exit', (event: any) => {
+      const id: number = event.data.id;
+      tabStore.markExited(id);
+    });
+    EventsOn('terminal:error', (event: any) => {
+      const id: number = event.data.id;
+      const msg: string = event.data.message;
       console.error('[terminal:error]', id, msg);
       alert(`Terminal-Fehler (Session ${id}): ${msg}`);
     });

@@ -240,7 +240,10 @@
       return out;
     }
 
-    cleanupFn = EventsOn('terminal:output', (id: number, b64: string) => {
+    // Wails v3: payload is in event.data (TerminalOutputEvent { id, data })
+    cleanupFn = EventsOn('terminal:output', (event: any) => {
+      const id: number = event.data.id;
+      const b64: string = event.data.data;
       if (id !== pane.sessionId || !termInstance) return;
       const bytes = decodeBase64(b64);
 
@@ -310,7 +313,9 @@
     });
     resizeObserver.observe(containerEl);
 
-    queueCleanup = EventsOn('queue:update', (sid: number) => {
+    // Wails v3: queue:update payload is the session ID directly in event.data
+    queueCleanup = EventsOn('queue:update', (event: any) => {
+      const sid: number = event.data;
       if (sid === pane.sessionId) {
         App.GetQueue(pane.sessionId).then(items => {
           queueCount = items.filter((i: any) => i.status !== 'done').length;
@@ -518,7 +523,7 @@
     }
   }
 
-  .terminal-container { flex: 1; padding: 4px; overflow: hidden; }
+  .terminal-container { flex: 1; padding: 4px 14px 4px 4px; overflow: hidden; }
   .terminal-container :global(.xterm) { height: 100%; }
   .terminal-container :global(.xterm-helper-textarea) {
     caret-color: transparent !important;
