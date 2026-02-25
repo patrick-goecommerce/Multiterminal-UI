@@ -35,7 +35,8 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          wails3 build -ldflags "-X github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.Version=$VERSION"
+          export GOFLAGS="-ldflags=-X github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.Version=$VERSION"
+          wails3 build
 
       - name: Extract version from tag
         id: version
