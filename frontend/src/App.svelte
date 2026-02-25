@@ -13,11 +13,13 @@
   import IssueDialog from './components/IssueDialog.svelte';
   import BranchConflictDialog from './components/BranchConflictDialog.svelte';
   import FilePreview from './components/FilePreview.svelte';
+  import { get } from 'svelte/store';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
   import type { PaneMode } from './stores/tabs';
   import { buildClaudeArgv, getClaudeName, encodeForPty } from './lib/claude';
+  import { getWindowId, isMainWindow, getInitialTabs } from './lib/window';
   import { createGlobalKeyHandler } from './lib/shortcuts';
   import { sendNotification } from './lib/notifications';
   import { restoreSession, saveSession } from './lib/session';
@@ -28,6 +30,10 @@
   import { EventsOn } from '../wailsjs/runtime/runtime';
 
   const MAX_PANES_PER_TAB = 10;
+
+  const _windowId = getWindowId();
+  const _isMain = isMainWindow();
+  const _initialTabs = getInitialTabs();
 
   let showLaunchDialog = false;
   let showProjectDialog = false;
@@ -95,6 +101,17 @@
   });
 
   onMount(async () => {
+    // Secondary window: skip normal session restore, set up merge-on-close
+    if (!_isMain) {
+      // Listen for close signal from backend
+      EventsOn('window:before-close', (event: any) => {
+        if (event.data?.windowId !== _windowId) return;
+        const state = JSON.stringify({ tabs: get(allTabs) });
+        App.MergeWindowToMain(_windowId, state).catch(console.error);
+      });
+      return; // skip rest of onMount for secondary windows
+    }
+
     try {
       const cfg = await App.GetConfig();
       config.set(cfg);
@@ -130,6 +147,20 @@
       try { workDir = await App.GetWorkingDir(); } catch {}
       tabStore.addTab('Workspace', workDir);
     }
+
+    // Listen for tabs merging back from secondary windows
+    EventsOn('window:tabs-merged', (event: any) => {
+      try {
+        const incoming = JSON.parse(event.data?.tabState ?? '{}');
+        if (Array.isArray(incoming?.tabs)) {
+          for (const tab of incoming.tabs) {
+            tabStore.importTab(tab);
+          }
+        }
+      } catch (e) {
+        console.error('[window:tabs-merged] parse error', e);
+      }
+    });
 
     // Wails v3: event handlers receive a WailsEvent object; payload is in event.data
     EventsOn('terminal:activity', (event: any) => {

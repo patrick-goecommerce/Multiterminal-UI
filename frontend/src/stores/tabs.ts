@@ -27,6 +27,7 @@ export interface Tab {
   dir: string;
   panes: Pane[];
   focusedPaneId: string;
+  _highlight?: boolean;
 }
 
 function createTabStore() {
@@ -223,6 +224,20 @@ function createTabStore() {
 
     getState() {
       return get({ subscribe });
+    },
+
+    importTab(tab: Tab) {
+      update((s) => ({
+        ...s,
+        tabs: [...s.tabs, { ...tab, _highlight: true }],
+        activeTabId: tab.id,
+      }));
+      setTimeout(() => {
+        update((s) => ({
+          ...s,
+          tabs: s.tabs.map((t) => (t.id === tab.id ? { ...t, _highlight: false } : t)),
+        }));
+      }, 2000);
     },
   };
 }
