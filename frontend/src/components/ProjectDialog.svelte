@@ -5,8 +5,11 @@
   export let visible: boolean = false;
 
   const dispatch = createEventDispatcher();
+  let busy = false;
 
   async function openExisting() {
+    if (busy) return;
+    busy = true;
     try {
       const dir = await App.SelectDirectory('');
       if (dir) {
@@ -16,10 +19,14 @@
       }
     } catch (err) {
       console.error('[ProjectDialog] SelectDirectory failed:', err);
+    } finally {
+      busy = false;
     }
   }
 
   async function createNew() {
+    if (busy) return;
+    busy = true;
     try {
       const parentDir = await App.SelectDirectory('');
       if (!parentDir) return;
@@ -33,6 +40,8 @@
       dispatch('close');
     } catch (err) {
       console.error('[ProjectDialog] CreateNew failed:', err);
+    } finally {
+      busy = false;
     }
   }
 

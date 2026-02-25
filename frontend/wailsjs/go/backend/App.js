@@ -71,8 +71,12 @@ export function CreateWorktree(arg1, arg2, arg3) {
   return $Call.ByID(51192822, arg1, arg2, arg3);
 }
 
-export function DetachTab(arg1, arg2) {
-  return $Call.ByID(3406932983, arg1, arg2);
+export function DetachTab(arg1, arg2, arg3) {
+  return $Call.ByID(3406932983, arg1, arg2, arg3);
+}
+
+export function GetDetachedTabState(arg1) {
+  return $Call.ByID(3336299475, arg1);
 }
 
 export function DetectClaudePath() {
@@ -229,6 +233,22 @@ export function ResizeSession(arg1, arg2, arg3) {
 
 export function SaveConfig(arg1) {
   return $Call.ByID(2393674620, arg1);
+}
+
+export function SaveWindowTabs(arg1, arg2) {
+  return $Call.ByID(1191563946, arg1, arg2);
+}
+
+export function SetDraggingTab(arg1, arg2, arg3) {
+  return $Call.ByID(3912872371, arg1, arg2, arg3);
+}
+
+export function ClaimDraggedTab(arg1) {
+  return $Call.ByID(3555450600, arg1);
+}
+
+export function ClearDraggingTab() {
+  return $Call.ByID(1716946648);
 }
 
 export function SaveTabs(arg1) {

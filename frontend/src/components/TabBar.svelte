@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { tabStore, allTabs } from '../stores/tabs';
   import * as App from '../../wailsjs/go/backend/App';
+  import { EventsOn } from '../../wailsjs/runtime/runtime';
   import { getWindowId, isMainWindow } from '../lib/window';
 
   export let activeTabId: string;
@@ -15,6 +16,22 @@
   let contextMenuTabId: string | null = null;
   let contextMenuX = 0;
   let contextMenuY = 0;
+
+  // Cross-window drag state
+  let dropIndicator = false; // show drop zone highlight
+  const claimedTabs = new Set<string>(); // tabs claimed by another window's drop
+
+  onMount(() => {
+    // Listen for our tabs being claimed by another window's drop
+    EventsOn('window:tab-claimed', (event: any) => {
+      if (event.data?.windowId !== _windowId) return;
+      const tabId: string = event.data?.tabId;
+      if (tabId) {
+        claimedTabs.add(tabId);
+        tabStore.forceCloseTab(tabId);
+      }
+    });
+  });
 
   function handleTabClick(e: MouseEvent, tabId: string) {
     (e.currentTarget as HTMLElement).blur();
@@ -37,28 +54,77 @@
 
   function handleDragStart(e: DragEvent, tabId: string) {
     e.dataTransfer?.setData('text/plain', tabId);
+    // Tell backend so another window's drop handler can claim it
+    const tab = $allTabs.find(t => t.id === tabId);
+    App.SetDraggingTab(tabId, _windowId, tab ? JSON.stringify(tab) : '');
   }
 
   async function handleDragEnd(e: DragEvent, tabId: string) {
-    // Detect drop outside window bounds
+    // dropEffect 'move' = successfully dropped on a valid target (any window)
+    // This is the fast path and avoids a race condition with cross-window events.
+    if (e.dataTransfer?.dropEffect === 'move') {
+      App.ClearDraggingTab();
+      return;
+    }
     const outside = e.clientX < 0 || e.clientX > window.innerWidth
                   || e.clientY < 0 || e.clientY > window.innerHeight;
-    if (outside) {
-      await detachTab(tabId);
+    if (!outside) {
+      App.ClearDraggingTab();
+      return;
     }
+    // Outside window: wait briefly for a cross-window claim event to arrive
+    // before deciding to open a new window (IPC round-trip guard).
+    await new Promise(r => setTimeout(r, 150));
+    App.ClearDraggingTab();
+    if (claimedTabs.has(tabId)) {
+      claimedTabs.delete(tabId);
+      return;
+    }
+    await detachTab(tabId);
   }
 
   async function detachTab(tabId: string) {
     try {
-      await App.DetachTab(tabId, _windowId);
+      const tab = $allTabs.find(t => t.id === tabId);
+      const tabStateJSON = tab ? JSON.stringify(tab) : '';
+      await App.DetachTab(tabId, _windowId, tabStateJSON);
       tabStore.forceCloseTab(tabId); // bypasses single-tab guard
     } catch (err) {
       console.error('[DetachTab] failed', err);
     }
   }
 
+  // Drop zone: accept tabs dragged from other windows
+  function handleTabBarDragOver(e: DragEvent) {
+    if (e.dataTransfer?.types.includes('text/plain')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      dropIndicator = true;
+    }
+  }
+
+  function handleTabBarDragLeave() {
+    dropIndicator = false;
+  }
+
+  async function handleTabBarDrop(e: DragEvent) {
+    e.preventDefault();
+    dropIndicator = false;
+    const tabId = e.dataTransfer?.getData('text/plain') ?? '';
+    // Skip same-window drops (tab is already in this window)
+    if ($allTabs.some(t => t.id === tabId)) return;
+    const tabStateJSON = await App.ClaimDraggedTab(tabId);
+    if (tabStateJSON) {
+      try {
+        const tab = JSON.parse(tabStateJSON);
+        tabStore.importTab(tab);
+      } catch (err) {
+        console.error('[TabBar drop] parse failed', err);
+      }
+    }
+  }
+
   function handleContextMenu(e: MouseEvent, tabId: string) {
-    if (!_isMain) return; // no "new window" on secondary windows
     e.preventDefault();
     e.stopPropagation();
     contextMenuTabId = tabId;
@@ -72,7 +138,14 @@
 </script>
 
 <div class="tab-bar">
-  <div class="tabs">
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div
+    class="tabs"
+    class:drop-target={dropIndicator}
+    on:dragover={handleTabBarDragOver}
+    on:dragleave={handleTabBarDragLeave}
+    on:drop={handleTabBarDrop}
+  >
     {#each $allTabs as tab (tab.id)}
       <button
         class="tab"
@@ -100,7 +173,7 @@
   </button>
 </div>
 
-{#if contextMenuTabId && _isMain}
+{#if contextMenuTabId}
   {@const _ctxTabId = contextMenuTabId}
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
   <div class="ctx-overlay" on:click={closeContextMenu}>
@@ -137,6 +210,14 @@
     overflow-x: auto;
     flex: 1;
     -webkit-app-region: no-drag;
+    border-radius: 6px 6px 0 0;
+    transition: background 0.15s, outline 0.15s;
+  }
+
+  .tabs.drop-target {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
   }
 
   .tab {

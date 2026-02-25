@@ -102,13 +102,35 @@
   });
 
   onMount(async () => {
-    // Secondary window: skip normal session restore, set up merge-on-close
+    // Secondary window: load config (theme), restore detached tab, set up merge-on-close
     if (!_isMain) {
-      // Listen for close signal from backend
-      EventsOn('window:before-close', (event: any) => {
-        if (event.data?.windowId !== _windowId) return;
-        const state = JSON.stringify({ tabs: get(allTabs) });
-        App.MergeWindowToMain(_windowId, state).catch(console.error);
+      // Apply theme from config
+      try {
+        const cfg = await App.GetConfig();
+        config.set(cfg);
+        applyTheme(cfg.theme || 'dark');
+        if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
+      } catch { applyTheme('dark'); }
+
+      // Restore the tab that was detached into this window
+      try {
+        const stateJSON = await App.GetDetachedTabState(_windowId);
+        if (stateJSON) {
+          const tab = JSON.parse(stateJSON);
+          tabStore.importTab(tab);
+        }
+      } catch (e) {
+        console.error('[secondary] GetDetachedTabState failed', e);
+      }
+
+      // Push tab state to backend on every change so WindowClosing hook can
+      // emit window:tabs-merged reliably (no IPC race on close).
+      let saveTabsTimer: ReturnType<typeof setTimeout> | null = null;
+      allTabs.subscribe(tabs => {
+        if (saveTabsTimer) clearTimeout(saveTabsTimer);
+        saveTabsTimer = setTimeout(() => {
+          App.SaveWindowTabs(_windowId, JSON.stringify({ tabs })).catch(() => {});
+        }, 300);
       });
       return; // skip rest of onMount for secondary windows
     }
