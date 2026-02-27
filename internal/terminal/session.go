@@ -58,6 +58,10 @@ type Session struct {
 
 	// Tokens holds parsed token usage / cost information.
 	Tokens TokenInfo
+	// hookSessionID / hasHookData: set by Claude Code hook events.
+	// hasHookData=true means the scan loop skips DetectActivity() for this session.
+	hookSessionID string
+	hasHookData   bool
 }
 
 // NewSession creates a Session with the given screen dimensions but does not
@@ -294,4 +298,3 @@ func (s *Session) GetTokens() TokenInfo {
 	defer s.mu.Unlock()
 	return s.Tokens
 }
-

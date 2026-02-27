@@ -124,3 +124,44 @@ func TestClassifyScreenState_NeedsInputTakesPriority(t *testing.T) {
 		t.Errorf("classifyScreenState = %d, want ActivityWaitingAnswer (%d)", state, ActivityWaitingAnswer)
 	}
 }
+
+func TestSession_HookData(t *testing.T) {
+	s := NewSession(1, 24, 80)
+
+	// Initially no hook data
+	if s.HasHookData() {
+		t.Fatal("new session should not have hook data")
+	}
+
+	// Set hook activity
+	s.SetHookActivity(ActivityWaitingPermission)
+	if !s.HasHookData() {
+		t.Fatal("session should have hook data after SetHookActivity")
+	}
+
+	s.mu.Lock()
+	got := s.Activity
+	s.mu.Unlock()
+	if got != ActivityWaitingPermission {
+		t.Errorf("Activity = %d, want ActivityWaitingPermission (%d)", got, ActivityWaitingPermission)
+	}
+
+	// ClearHookData resets flag
+	s.ClearHookData()
+	if s.HasHookData() {
+		t.Fatal("session should not have hook data after ClearHookData")
+	}
+}
+
+func TestSession_HookSessionID(t *testing.T) {
+	s := NewSession(2, 24, 80)
+
+	if id := s.HookSessionID(); id != "" {
+		t.Fatalf("new session HookSessionID should be empty, got %q", id)
+	}
+
+	s.SetHookSessionID("claude-uuid-abc123")
+	if id := s.HookSessionID(); id != "claude-uuid-abc123" {
+		t.Errorf("HookSessionID = %q, want %q", id, "claude-uuid-abc123")
+	}
+}
