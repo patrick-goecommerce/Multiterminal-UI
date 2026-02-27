@@ -304,3 +304,74 @@ describe('tabStore', () => {
     });
   });
 });
+
+describe('computeTabActivity', () => {
+  it('returns null for all-idle panes', () => {
+    expect(computeTabActivity([])).toBeNull();
+  });
+
+  it('returns done when all panes are done', () => {
+    const panes = [
+      { activity: 'done' } as any,
+      { activity: 'idle' } as any,
+    ];
+    expect(computeTabActivity(panes)).toBe('done');
+  });
+
+  it('returns active when any pane is active', () => {
+    const panes = [
+      { activity: 'done' } as any,
+      { activity: 'active' } as any,
+    ];
+    expect(computeTabActivity(panes)).toBe('active');
+  });
+
+  it('returns needsInput when any pane needs input (highest priority)', () => {
+    const panes = [
+      { activity: 'active' } as any,
+      { activity: 'needsInput' } as any,
+      { activity: 'done' } as any,
+    ];
+    expect(computeTabActivity(panes)).toBe('needsInput');
+  });
+});
+
+describe('updateActivity — tab unreadActivity', () => {
+  it('sets unreadActivity on non-active tab when pane becomes done', () => {
+    const tab1 = tabStore.addTab('UAActive');
+    const tab2 = tabStore.addTab('UABackground');
+    tabStore.setActiveTab(tab1);
+
+    tabStore.addPane(tab2, 3001, 'Claude', 'claude', '');
+    tabStore.updateActivity(3001, 'done', '$0.10');
+
+    const t2 = tabStore.getState().tabs.find((t) => t.id === tab2);
+    expect(t2!.unreadActivity).toBe('done');
+  });
+
+  it('does not set unreadActivity on the currently active tab', () => {
+    const tabId = tabStore.addTab('UAActiveTab');
+    tabStore.setActiveTab(tabId);
+    tabStore.addPane(tabId, 3002, 'Claude', 'claude', '');
+
+    tabStore.updateActivity(3002, 'done', '');
+
+    const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
+    expect(tab!.unreadActivity).toBeNull();
+  });
+
+  it('escalates to needsInput when one pane needs input', () => {
+    const bgTab = tabStore.addTab('UAEscalate');
+    const fgTab = tabStore.addTab('UAForeground');
+    tabStore.setActiveTab(fgTab);
+
+    tabStore.addPane(bgTab, 3003, 'C1', 'claude', '');
+    tabStore.addPane(bgTab, 3004, 'C2', 'claude', '');
+
+    tabStore.updateActivity(3003, 'done', '');
+    tabStore.updateActivity(3004, 'needsInput', '');
+
+    const tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
+    expect(tab!.unreadActivity).toBe('needsInput');
+  });
+});

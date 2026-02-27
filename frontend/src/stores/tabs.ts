@@ -207,6 +207,9 @@ function createTabStore() {
             if (pane.sessionId === sessionId) {
               pane.activity = activity as Pane['activity'];
               if (cost) pane.cost = cost;
+              if (tab.id !== state.activeTabId) {
+                tab.unreadActivity = computeTabActivity(tab.panes);
+              }
               return state;
             }
           }
