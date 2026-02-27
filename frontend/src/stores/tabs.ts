@@ -90,6 +90,8 @@ function createTabStore() {
     setActiveTab(tabId: string) {
       update((state) => {
         state.activeTabId = tabId;
+        const tab = state.tabs.find((t) => t.id === tabId);
+        if (tab) tab.unreadActivity = null;
         return state;
       });
     },

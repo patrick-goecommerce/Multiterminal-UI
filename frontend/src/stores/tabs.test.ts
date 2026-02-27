@@ -96,6 +96,22 @@ describe('tabStore', () => {
       tabStore.setActiveTab(id2);
       expect(tabStore.getState().activeTabId).toBe(id2);
     });
+
+    it('clears unreadActivity when tab becomes active', () => {
+      const bgTab = tabStore.addTab('ClearBg');
+      const fgTab = tabStore.addTab('ClearFg');
+      tabStore.setActiveTab(fgTab);
+
+      tabStore.addPane(bgTab, 4001, 'Claude', 'claude', '');
+      tabStore.updateActivity(4001, 'needsInput', '');
+
+      let tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
+      expect(tab!.unreadActivity).toBe('needsInput');
+
+      tabStore.setActiveTab(bgTab);
+      tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
+      expect(tab!.unreadActivity).toBeNull();
+    });
   });
 
   describe('renameTab', () => {
