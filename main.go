@@ -103,7 +103,7 @@ func runListTabs() {
 	state := config.LoadSession()
 	if state == nil {
 		fmt.Fprintln(os.Stderr, "No session file found.")
-		return
+		os.Exit(1)
 	}
 	for _, tab := range state.Tabs {
 		fmt.Println(tab.Name)
