@@ -110,7 +110,6 @@ func (a *AppService) ServiceShutdown() error {
 	for _, s := range sessions {
 		s.Close()
 	}
-
 	// Mark clean shutdown and auto-disable logging if stable
 	config.MarkCleanShutdown(&a.health)
 	if config.ShouldAutoDisableLogging(&a.health) {
@@ -122,19 +121,13 @@ func (a *AppService) ServiceShutdown() error {
 	_ = config.SaveHealth(a.health)
 	log.Println("[Shutdown] Clean shutdown recorded")
 
-	// In safe-mode, restore the original session file so the next normal
-	// start resumes where the user left off before this safe-mode run.
 	if a.safeMode {
 		if a.sessionBackup != nil {
 			if err := config.SaveSession(*a.sessionBackup); err != nil {
 				log.Printf("[SafeMode] failed to restore session backup: %v", err)
-			} else {
-				log.Printf("[SafeMode] session backup restored (%d tabs)", len(a.sessionBackup.Tabs))
 			}
 		} else {
-			// No session existed before — remove whatever the frontend may have written
 			config.ClearSession()
-			log.Printf("[SafeMode] no backup to restore; session cleared")
 		}
 	}
 	return nil
@@ -269,7 +262,7 @@ func (a *AppService) SaveConfig(cfg config.Config) error {
 // restored on next startup.
 func (a *AppService) SaveTabs(state config.SessionState) {
 	if a.safeMode {
-		log.Printf("[SaveTabs] skipped (safe-mode)")
+		log.Println("[SaveTabs] skipped (safe-mode)")
 		return
 	}
 	log.Printf("[SaveTabs] saving %d tabs", len(state.Tabs))
@@ -281,7 +274,7 @@ func (a *AppService) SaveTabs(state config.SessionState) {
 // LoadTabs returns the previously saved tab/pane layout, or nil.
 func (a *AppService) LoadTabs() *config.SessionState {
 	if a.safeMode {
-		log.Printf("[LoadTabs] skipped (safe-mode)")
+		log.Println("[LoadTabs] skipped (safe-mode)")
 		return nil
 	}
 	if !a.cfg.ShouldRestoreSession() {
@@ -305,4 +298,3 @@ func (a *AppService) GetWorkingDir() string {
 	dir, _ := os.Getwd()
 	return dir
 }
-
