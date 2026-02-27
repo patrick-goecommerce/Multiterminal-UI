@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { tabStore, activeTab, allTabs } from './tabs';
+import { tabStore, activeTab, allTabs, computeTabActivity } from './tabs';
 
 // Note: tabStore uses internal counters that persist across tests.
 // We work with that by testing behavior rather than exact IDs.
@@ -36,6 +36,12 @@ describe('tabStore', () => {
       const state = tabStore.getState();
       const tab = state.tabs.find((t) => t.id === id);
       expect(tab!.dir).toBe('');
+    });
+
+    it('initializes unreadActivity as null', () => {
+      const id = tabStore.addTab('ActivityInit');
+      const tab = tabStore.getState().tabs.find((t) => t.id === id);
+      expect(tab!.unreadActivity).toBeNull();
     });
   });
 

@@ -28,6 +28,17 @@ export interface Tab {
   panes: Pane[];
   focusedPaneId: string;
   _highlight?: boolean;
+  unreadActivity: 'needsInput' | 'active' | 'done' | null;
+}
+
+export function computeTabActivity(panes: Pane[]): Tab['unreadActivity'] {
+  let result: Tab['unreadActivity'] = null;
+  for (const pane of panes) {
+    if (pane.activity === 'needsInput') return 'needsInput';
+    if (pane.activity === 'active') result = 'active';
+    else if (pane.activity === 'done' && result === null) result = 'done';
+  }
+  return result;
 }
 
 function createTabStore() {
@@ -55,6 +66,7 @@ function createTabStore() {
           dir: dir || '',
           panes: [],
           focusedPaneId: '',
+          unreadActivity: null,
         });
         if (setActive) state.activeTabId = id;
         return state;
