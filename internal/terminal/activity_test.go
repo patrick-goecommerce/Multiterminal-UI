@@ -434,7 +434,7 @@ func TestDetectActivity_StaleOutput_ClassifiesDone(t *testing.T) {
 	}
 }
 
-func TestDetectActivity_StaleOutput_ClassifiesNeedsInput(t *testing.T) {
+func TestDetectActivity_StaleOutput_ClassifiesWaitingAnswer(t *testing.T) {
 	sess := NewSession(1, 5, 80)
 	sess.Screen.Write([]byte("Allow access? [Y/n] "))
 
@@ -512,7 +512,7 @@ func TestActivityLifecycle_ActiveToDoneToReset(t *testing.T) {
 // This simulates the "yellow pulse" cycle.
 // ---------------------------------------------------------------------------
 
-func TestActivityLifecycle_ActiveToNeedsInputToReset(t *testing.T) {
+func TestActivityLifecycle_ActiveToWaitingAnswerToReset(t *testing.T) {
 	sess := NewSession(1, 5, 80)
 
 	// Step 1: Claude is generating output
@@ -563,7 +563,7 @@ func TestResetActivity(t *testing.T) {
 	}
 }
 
-func TestResetActivity_FromNeedsInput(t *testing.T) {
+func TestResetActivity_FromWaitingAnswer(t *testing.T) {
 	sess := NewSession(1, 5, 80)
 
 	sess.mu.Lock()
