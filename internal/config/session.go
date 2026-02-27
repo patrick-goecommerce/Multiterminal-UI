@@ -6,6 +6,8 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -80,7 +82,7 @@ func RemoveTab(name string) (bool, error) {
 // removeTabFrom is the testable core, operating on an explicit path.
 func removeTabFrom(path string, name string) (bool, error) {
 	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
@@ -104,7 +106,9 @@ func removeTabFrom(path string, name string) (bool, error) {
 	}
 
 	state.Tabs = append(state.Tabs[:idx], state.Tabs[idx+1:]...)
-	if state.ActiveTab >= len(state.Tabs) && len(state.Tabs) > 0 {
+	if len(state.Tabs) == 0 {
+		state.ActiveTab = 0
+	} else if state.ActiveTab >= len(state.Tabs) {
 		state.ActiveTab = len(state.Tabs) - 1
 	}
 

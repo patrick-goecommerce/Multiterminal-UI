@@ -1,6 +1,8 @@
 package config
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -100,5 +102,45 @@ func TestRemoveTab_ActiveTabClamped(t *testing.T) {
 	result := loadSessionFrom(path)
 	if result.ActiveTab >= len(result.Tabs) {
 		t.Fatalf("ActiveTab %d out of bounds for %d tabs", result.ActiveTab, len(result.Tabs))
+	}
+}
+
+func TestRemoveTab_LastTabRemoved(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.json")
+
+	state := SessionState{
+		ActiveTab: 0,
+		Tabs:      []SavedTab{{Name: "Only", Dir: "/a"}},
+	}
+	if err := saveSessionTo(path, state); err != nil {
+		t.Fatal(err)
+	}
+
+	found, err := removeTabFrom(path, "Only")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("expected tab to be found")
+	}
+
+	// loadSessionFrom returns nil for empty tabs — that's correct
+	result := loadSessionFrom(path)
+	if result != nil {
+		t.Fatal("expected nil for empty session")
+	}
+
+	// But the raw file should have ActiveTab=0 (not some stale value)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw SessionState
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if raw.ActiveTab != 0 {
+		t.Fatalf("expected ActiveTab=0 after last tab removed, got %d", raw.ActiveTab)
 	}
 }
