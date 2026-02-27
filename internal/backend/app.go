@@ -143,7 +143,8 @@ type SessionInfo struct {
 
 // CreateSession spawns a new PTY session and starts streaming its output
 // to the frontend. Returns the session ID.
-func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int) int {
+// mode must be "shell", "claude", or "claude-yolo"; it controls env injection.
+func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int, mode string) int {
 	a.mu.Lock()
 	a.nextID++
 	id := a.nextID
@@ -159,15 +160,21 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 		cols = 80
 	}
 
-	log.Printf("[CreateSession] id=%d argv=%v dir=%q rows=%d cols=%d", id, argv, dir, rows, cols)
+	log.Printf("[CreateSession] id=%d argv=%v dir=%q rows=%d cols=%d mode=%q", id, argv, dir, rows, cols, mode)
 
 	// Use configured default shell when no command specified
 	if len(argv) == 0 && a.cfg.DefaultShell != "" {
 		argv = []string{a.cfg.DefaultShell}
 	}
 
+	// Inject session ID so Claude Code hook scripts can match events back.
+	var env []string
+	if mode == "claude" || mode == "claude-yolo" {
+		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
+	}
+
 	sess := terminal.NewSession(id, rows, cols)
-	if err := sess.Start(argv, dir, nil); err != nil {
+	if err := sess.Start(argv, dir, env); err != nil {
 		errMsg := fmt.Sprintf("Session start failed: %v", err)
 		log.Printf("[CreateSession] ERROR: %s", errMsg)
 		a.app.Event.Emit("terminal:error", TerminalErrorEvent{ID: id, Message: errMsg})

@@ -63,8 +63,8 @@ export function CreateNamedWorktree(arg1, arg2, arg3) {
   return $Call.ByID(1740508309, arg1, arg2, arg3);
 }
 
-export function CreateSession(arg1, arg2, arg3, arg4) {
-  return $Call.ByID(1395065, arg1, arg2, arg3, arg4);
+export function CreateSession(arg1, arg2, arg3, arg4, arg5) {
+  return $Call.ByID(1395065, arg1, arg2, arg3, arg4, arg5);
 }
 
 export function CreateWorktree(arg1, arg2, arg3) {
