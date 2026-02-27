@@ -65,5 +65,87 @@ begin
   Result := Pos(';' + Uppercase(Param) + ';', ';' + Uppercase(OrigPath) + ';') = 0;
 end;
 
+// Returns one dot-separated version segment (0-based index).
+function VersionPart(const V: string; Index: integer): integer;
+var
+  S: string;
+  P, Cur: integer;
+begin
+  S := V;
+  Cur := 0;
+  Result := 0;
+  while True do
+  begin
+    P := Pos('.', S);
+    if P = 0 then
+    begin
+      if Cur = Index then
+        Result := StrToIntDef(S, 0);
+      exit;
+    end;
+    if Cur = Index then
+    begin
+      Result := StrToIntDef(Copy(S, 1, P - 1), 0);
+      exit;
+    end;
+    S := Copy(S, P + 1, Length(S));
+    Inc(Cur);
+  end;
+end;
+
+// Returns true when A is strictly greater than B (semver: major.minor.patch).
+function IsVersionGreater(const A, B: string): boolean;
+var
+  i, av, bv: integer;
+begin
+  Result := False;
+  for i := 0 to 2 do
+  begin
+    av := VersionPart(A, i);
+    bv := VersionPart(B, i);
+    if av > bv then begin Result := True; exit; end;
+    if av < bv then exit;
+  end;
+end;
+
+// Returns the DisplayVersion stored by a previous Inno Setup installation,
+// or an empty string when the app is not installed yet.
+function GetInstalledVersion(): string;
+var
+  UninstallKey: string;
+  V: string;
+begin
+  UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' +
+                  '{B7E3F4A1-9C2D-4E5F-A8B6-1D3E5F7A9C2B}_is1';
+  Result := '';
+  if RegQueryStringValue(HKEY_CURRENT_USER, UninstallKey, 'DisplayVersion', V) then
+    Result := V;
+end;
+
+// Downgrade protection: abort when the setup version is older than what is
+// already installed.  Same version (reinstall) and upgrades are always allowed.
+function InitializeSetup(): boolean;
+var
+  Installed, Setup: string;
+begin
+  Result := True;
+  Installed := GetInstalledVersion();
+  if Installed = '' then exit;  // not installed yet — nothing to check
+
+  Setup := '{#MyAppVersion}';
+
+  if IsVersionGreater(Installed, Setup) then
+  begin
+    MsgBox(
+      'Eine neuere Version (' + Installed + ') ist bereits installiert.' + #13#10 +
+      'Dieser Installer (' + Setup + ') kann keine ältere Version einspielen.' + #13#10#13#10 +
+      'Lade die aktuelle Version von GitHub herunter:' + #13#10 +
+      '{#MyAppURL}/releases',
+      mbError, MB_OK
+    );
+    Result := False;
+  end;
+end;
+
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
