@@ -105,6 +105,9 @@ func (a *AppService) collectOutput(id int, sess *terminal.Session, ctx context.C
 						return
 					}
 					buf = append(buf, more...)
+				case <-ctx.Done():
+					a.batcher.add(id, buf)
+					return
 				default:
 					break drain
 				}
