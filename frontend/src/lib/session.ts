@@ -9,7 +9,9 @@ export async function restoreSession(claudePath: string): Promise<boolean> {
     if (!saved || !saved.tabs || saved.tabs.length === 0) return false;
 
     for (const savedTab of saved.tabs) {
-      const tabId = tabStore.addTab(savedTab.name, savedTab.dir);
+      // setActive=false: avoid triggering xterm.js creation for each tab during
+      // restore. Only the final setActiveTab() call below mounts the active tab.
+      const tabId = tabStore.addTab(savedTab.name, savedTab.dir, false);
       for (const savedPane of savedTab.panes) {
         const mode = INDEX_TO_MODE[savedPane.mode] || 'shell';
         const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath);

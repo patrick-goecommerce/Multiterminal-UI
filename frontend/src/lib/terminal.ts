@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { createWebLinksAddon, registerFileLinkProvider, type LinkHandler } from './links';
 
 /** Curated list of monospace fonts. Order = priority for fallback chain. */
@@ -50,7 +51,7 @@ export interface TerminalInstance {
 const baseOptions: Partial<import('@xterm/xterm').ITerminalOptions> = {
   cursorBlink: true,
   cursorStyle: 'block',
-  scrollback: 10000,
+  scrollback: 2000,
   allowProposedApi: true,
 };
 
@@ -208,4 +209,20 @@ export function createTerminal(
 
 export function getTerminalTheme(theme: string): import('@xterm/xterm').ITheme {
   return terminalThemes[theme] || terminalThemes.dark;
+}
+
+/**
+ * Load the WebGL renderer onto an already-opened terminal.
+ * Must be called AFTER terminal.open(element).
+ * Falls back to DOM renderer silently if WebGL is unavailable.
+ */
+export function attachWebglRenderer(terminal: Terminal): void {
+  try {
+    const webgl = new WebglAddon();
+    // Dispose on context loss — xterm.js falls back to DOM renderer automatically.
+    webgl.onContextLoss(() => webgl.dispose());
+    terminal.loadAddon(webgl);
+  } catch {
+    // WebGL unavailable (e.g. software rendering) — DOM renderer stays active.
+  }
 }

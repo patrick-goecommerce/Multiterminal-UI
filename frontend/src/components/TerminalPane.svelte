@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
-  import { createTerminal, getTerminalTheme, buildFontFamily } from '../lib/terminal';
+  import { createTerminal, getTerminalTheme, buildFontFamily, attachWebglRenderer } from '../lib/terminal';
   import { pasteToSession, copySelection, writeTextToSession } from '../lib/clipboard';
   import { encodeForPty } from '../lib/claude';
   import { sendNotification } from '../lib/notifications';
@@ -32,6 +32,8 @@
 
   let zoomTimer: ReturnType<typeof setTimeout> | null = null;
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  // Flush timer lives at component scope so onDestroy can cancel it.
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
   let isZooming = false;
   let showQueue = false;
   let queueCount = 0;
@@ -44,6 +46,14 @@
   let ctxHasSelection = false;
   let wheelHandler: ((e: WheelEvent) => void) | null = null;
   const seenLocalhostUrls = new Set<string>();
+
+  // Exposed inside onMount so the reactive tab-activation block can flush buffered
+  // data when this pane's tab becomes active.
+  let triggerFlushOnActivate: (() => void) | null = null;
+
+  // Exposed inside onMount so the reactive tab-activation block can lazily create
+  // the xterm.js instance when this pane's tab is first activated.
+  let triggerMountTerminal: (() => void) | null = null;
 
   function handleLink(_event: MouseEvent, uri: string) {
     if (isUrl(uri)) {
@@ -108,56 +118,15 @@
   }
 
   onMount(() => {
-    termInstance = createTerminal($currentTheme, handleLink, $config.font_family, ($config.font_size || 10) + (pane.zoomDelta || 0));
-    termInstance.terminal.open(containerEl);
-
-    requestAnimationFrame(() => {
-      termInstance?.fitAddon.fit();
-      const dims = termInstance?.fitAddon.proposeDimensions();
-      if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
-      // Give the shell time to process the resize before showing output.
-      // This prevents cursor-hopping from the initial 24x80 → real size transition.
-      setTimeout(() => {
-        isReady = true;
-        if (pendingChunks.length > 0) {
-          scheduleFlush();
-        }
-      }, 50);
-    });
-
-    termInstance.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      if (e.type !== 'keydown') return true;
-      if (e.ctrlKey && e.key === 'v') {
-        e.preventDefault();
-        pasteToSession(pane.sessionId, termInstance?.terminal ?? null);
-        return false;
-      }
-      if (e.ctrlKey && e.key === 'c' && termInstance?.terminal.hasSelection()) {
-        copySelection(termInstance.terminal);
-        return false;
-      }
-      if (e.ctrlKey && e.key === 'f') { openSearch(); return false; }
-      if (e.ctrlKey && ['z', 'n', 't', 'w', 'b'].includes(e.key)) return false;
-      if (e.ctrlKey && e.key >= '1' && e.key <= '9') return false;
-      return true;
-    });
-
-    termInstance.terminal.onData((data: string) => {
-      App.WriteToSession(pane.sessionId, encodeForPty(data));
-    });
-
-    // Batch PTY output writes with a short time window to reduce render overhead.
-    // We accumulate chunks then flush them in a single xterm.js write call.
-    // xterm.js handles frame-synced rendering internally (via its own rAF loop),
-    // so we do NOT wrap in requestAnimationFrame — that would add an extra frame
-    // of latency and cause overlapping flush cycles that produce flicker.
-    // Output is buffered until xterm.js has been fitted to the actual pane size
-    // to avoid cursor-hopping from 24x80 → real size.
+    // Buffer + flush state — declared first so mountTerminal() and EventsOn can share them.
     let pendingChunks: Uint8Array[] = [];
+    let pendingBytes = 0; // total bytes in pendingChunks — kept in sync to avoid O(n) sum
     let flushScheduled = false;
     let isReady = false;
     let appCursorVisible = true; // track DECTCEM state across batches
-    const FLUSH_DELAY = 16; // ms — one full frame at 60fps
+    // Stagger flushes by session ID (0-9 ms offset) to spread xterm.js work
+    // across the 16ms frame instead of having all panes flush simultaneously.
+    const FLUSH_DELAY = 16 + (pane.sessionId % 10);
     const HIDE_CURSOR = new Uint8Array([0x1b, 0x5b, 0x3f, 0x32, 0x35, 0x6c]); // \x1b[?25l
     const SHOW_CURSOR = new Uint8Array([0x1b, 0x5b, 0x3f, 0x32, 0x35, 0x68]); // \x1b[?25h
 
@@ -174,15 +143,31 @@
       return null;
     }
 
+    // Max bytes to send to xterm.js in a single write.
+    // Bounds VT100 parse time per cycle to ~5 ms and prevents a large accumulated
+    // buffer from blocking the JS thread when a tab is first activated.
+    const MAX_BYTES_PER_FLUSH = 65536; // 64 KB
+    // Unfocused panes in the same tab flush less aggressively (no cursor blinking, etc.).
+    const FLUSH_DELAY_UNFOCUSED = 200; // ms
+
     function flushOutput() {
       if (!termInstance || !isReady || pendingChunks.length === 0) {
         flushScheduled = false;
         return;
       }
-      const chunks = pendingChunks;
-      pendingChunks = [];
 
-      const total = chunks.reduce((sum, c) => sum + c.length, 0);
+      // Drain up to MAX_BYTES_PER_FLUSH bytes to bound parse time per cycle.
+      // Always take at least one chunk so we make progress even if a single chunk exceeds the cap.
+      let total = 0;
+      let i = 0;
+      while (i < pendingChunks.length) {
+        if (i > 0 && total + pendingChunks[i].length > MAX_BYTES_PER_FLUSH) break;
+        total += pendingChunks[i].length;
+        i++;
+      }
+      const chunks = pendingChunks.splice(0, i);
+      pendingBytes -= total;
+
       const merged = new Uint8Array(total);
       let offset = 0;
       for (const chunk of chunks) {
@@ -190,8 +175,6 @@
         offset += chunk.length;
       }
       // Update persistent cursor state if this batch contains a DECTCEM sequence.
-      // If not, the previous state carries over — this prevents wrongly showing
-      // the cursor when the app hid it in an earlier batch.
       const batchState = lastCursorVisible(merged);
       if (batchState !== null) appCursorVisible = batchState;
       const suffix = appCursorVisible ? SHOW_CURSOR : HIDE_CURSOR;
@@ -202,20 +185,31 @@
       buf.set(suffix, HIDE_CURSOR.length + total);
       termInstance.terminal.write(buf);
 
-      // Check if more data arrived while we were processing.
-      // Schedule another flush if so, otherwise release the flag.
       if (pendingChunks.length > 0) {
-        setTimeout(flushOutput, FLUSH_DELAY);
+        // Keep draining — unfocused panes at reduced rate to yield JS thread.
+        flushTimer = setTimeout(flushOutput, pane.focused ? FLUSH_DELAY : FLUSH_DELAY_UNFOCUSED);
       } else {
         flushScheduled = false;
+        flushTimer = null;
       }
     }
 
     function scheduleFlush() {
-      if (!isReady || flushScheduled) return;
+      if (!termInstance || !isReady || !active || flushScheduled) return;
       flushScheduled = true;
-      setTimeout(flushOutput, FLUSH_DELAY);
+      flushTimer = setTimeout(flushOutput, pane.focused ? FLUSH_DELAY : FLUSH_DELAY_UNFOCUSED);
     }
+
+    // When the tab is activated, cancel any pending timer and flush immediately.
+    triggerFlushOnActivate = () => {
+      if (!isReady || pendingChunks.length === 0) return;
+      if (flushTimer !== null) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+        flushScheduled = false;
+      }
+      scheduleFlush();
+    };
 
     // Pre-built lookup table for fast base64 decoding (avoids intermediate string from atob)
     const B64 = new Uint8Array(128);
@@ -241,9 +235,10 @@
     }
 
     // Wails v3: payload is in event.data ([]TerminalOutputEvent { id, data })
+    // Inactive panes buffer data silently — scheduleFlush() is a no-op when !active.
     cleanupFn = EventsOn('terminal:output-batch', (event: any) => {
       const items: Array<{ id: number; data: string }> = event.data;
-      if (!Array.isArray(items) || !termInstance) return;
+      if (!Array.isArray(items)) return;
       let gotData = false;
       for (const item of items) {
         if (item.id !== pane.sessionId) continue;
@@ -270,10 +265,23 @@
         }
 
         pendingChunks.push(bytes);
+        pendingBytes += bytes.length;
+        // Hard cap: keep at most 2 MB buffered per pane.
+        // A misbehaving session (e.g. burst output from a broken repo) can otherwise
+        // accumulate hundreds of MB, blocking the JS thread when the tab is opened.
+        const MAX_PENDING_BYTES = 2 * 1024 * 1024; // 2 MB
+        while (pendingBytes > MAX_PENDING_BYTES && pendingChunks.length > 1) {
+          pendingBytes -= pendingChunks.shift()!.length;
+        }
         gotData = true;
       }
       if (gotData) scheduleFlush();
     });
+
+    // Prevent native paste – we handle Ctrl+V manually via attachCustomKeyEventHandler
+    // to use the Wails clipboard API. Without this, the browser paste event also fires,
+    // causing double-paste through xterm.js onData.
+    containerEl.addEventListener('paste', (e) => e.preventDefault(), true);
 
     wheelHandler = (e: WheelEvent) => {
       if (!e.ctrlKey || !termInstance) return;
@@ -297,11 +305,6 @@
         }, 150);
       }
     };
-    // Prevent native paste – we handle Ctrl+V manually via attachCustomKeyEventHandler
-    // to use the Wails clipboard API. Without this, the browser paste event also fires,
-    // causing double-paste through xterm.js onData.
-    containerEl.addEventListener('paste', (e) => e.preventDefault(), true);
-
     containerEl.addEventListener('wheel', wheelHandler, { passive: false });
 
     resizeObserver = new ResizeObserver(() => {
@@ -326,9 +329,62 @@
         });
       }
     });
+
+    // Lazy xterm.js creation: only mount the terminal when this pane's tab is active.
+    // Inactive panes buffer PTY data in pendingChunks until their tab is first opened.
+    // This reduces simultaneous xterm.js instances from N-tabs to 1-2, freeing the
+    // JS thread from N concurrent rAF loops, ResizeObservers and VT100 parse jobs.
+    function mountTerminal() {
+      if (termInstance) return; // idempotent guard
+      termInstance = createTerminal($currentTheme, handleLink, $config.font_family, ($config.font_size || 10) + (pane.zoomDelta || 0));
+      termInstance.terminal.open(containerEl);
+      // WebGL renderer: offloads rendering to GPU, significantly faster than DOM renderer.
+      // Must be called after open() — needs a live canvas element in the DOM.
+      attachWebglRenderer(termInstance.terminal);
+
+      requestAnimationFrame(() => {
+        termInstance?.fitAddon.fit();
+        const dims = termInstance?.fitAddon.proposeDimensions();
+        if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
+        // Give the shell time to process the resize before showing output.
+        // This prevents cursor-hopping from the initial 24x80 → real size transition.
+        setTimeout(() => {
+          isReady = true;
+          if (pendingChunks.length > 0) {
+            scheduleFlush();
+          }
+        }, 50);
+      });
+
+      termInstance.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+        if (e.type !== 'keydown') return true;
+        if (e.ctrlKey && e.key === 'v') {
+          e.preventDefault();
+          pasteToSession(pane.sessionId, termInstance?.terminal ?? null);
+          return false;
+        }
+        if (e.ctrlKey && e.key === 'c' && termInstance?.terminal.hasSelection()) {
+          copySelection(termInstance.terminal);
+          return false;
+        }
+        if (e.ctrlKey && e.key === 'f') { openSearch(); return false; }
+        if (e.ctrlKey && ['z', 'n', 't', 'w', 'b'].includes(e.key)) return false;
+        if (e.ctrlKey && e.key >= '1' && e.key <= '9') return false;
+        return true;
+      });
+
+      termInstance.terminal.onData((data: string) => {
+        App.WriteToSession(pane.sessionId, encodeForPty(data));
+      });
+    }
+
+    // Mount immediately if already active; otherwise wait for tab activation.
+    if (active) mountTerminal();
+    triggerMountTerminal = mountTerminal;
   });
 
   onDestroy(() => {
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
     if (cleanupFn) cleanupFn();
     if (queueCleanup) queueCleanup();
     if (wheelHandler && containerEl) containerEl.removeEventListener('wheel', wheelHandler);
@@ -369,6 +425,15 @@
       const dims = termInstance.fitAddon.proposeDimensions();
       if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
     }
+  }
+
+  // Lazy mount: create xterm.js when this pane's tab is first activated.
+  // Must be declared before triggerFlushOnActivate so termInstance is set first.
+  $: if (active && !termInstance && triggerMountTerminal) triggerMountTerminal();
+
+  // When this pane's tab becomes active (or pane gains focus), flush buffered output.
+  $: if ((active || pane.focused) && triggerFlushOnActivate) {
+    triggerFlushOnActivate();
   }
 
   // Re-focus terminal when its tab becomes active or pane gets focused.

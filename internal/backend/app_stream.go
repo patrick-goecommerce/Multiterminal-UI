@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"encoding/base64"
+	"log"
 	"sync"
 	"time"
 
@@ -63,22 +64,34 @@ func (b *outputBatcher) swap() map[int][]byte {
 func (a *AppService) batchLoop(ctx context.Context) {
 	ticker := time.NewTicker(16 * time.Millisecond)
 	defer ticker.Stop()
+	var emitCount int64
+	var totalBytes int64
+	logTicker := time.NewTicker(5 * time.Second)
+	defer logTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-logTicker.C:
+			log.Printf("[batchLoop] emits/5s=%d totalBytes=%d", emitCount, totalBytes)
+			emitCount = 0
+			totalBytes = 0
 		case <-ticker.C:
 			batch := a.batcher.swap()
 			if len(batch) == 0 {
 				continue
 			}
 			items := make([]TerminalOutputEvent, 0, len(batch))
+			var batchBytes int
 			for id, raw := range batch {
+				batchBytes += len(raw)
 				items = append(items, TerminalOutputEvent{
 					ID:   id,
 					Data: base64.StdEncoding.EncodeToString(raw),
 				})
 			}
+			emitCount++
+			totalBytes += int64(batchBytes)
 			a.app.Event.Emit("terminal:output-batch", items)
 		}
 	}

@@ -45,7 +45,7 @@ function createTabStore() {
   return {
     subscribe,
 
-    addTab(name?: string, dir?: string) {
+    addTab(name?: string, dir?: string, setActive: boolean = true) {
       const id = `tab-${nextTabNum++}`;
       const tabName = name || `Tab ${nextTabNum - 1}`;
       update((state) => {
@@ -56,7 +56,7 @@ function createTabStore() {
           panes: [],
           focusedPaneId: '',
         });
-        state.activeTabId = id;
+        if (setActive) state.activeTabId = id;
         return state;
       });
       return id;
