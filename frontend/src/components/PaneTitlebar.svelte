@@ -77,7 +77,9 @@
     switch (activity) {
       case 'active': return 'dot-active';
       case 'done': return 'dot-done';
-      case 'needsInput': return 'dot-needs-input';
+      case 'waitingPermission': return 'dot-waiting-permission';
+      case 'waitingAnswer': return 'dot-waiting-answer';
+      case 'error': return 'dot-error';
       default: return 'dot-idle';
     }
   }
@@ -94,7 +96,9 @@
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div class="pane-titlebar"
   class:titlebar-done={pane.activity === 'done'}
-  class:titlebar-needs-input={pane.activity === 'needsInput'}
+  class:titlebar-waiting-permission={pane.activity === 'waitingPermission'}
+  class:titlebar-waiting-answer={pane.activity === 'waitingAnswer'}
+  class:titlebar-error={pane.activity === 'error'}
 >
   <div class="pane-title-left">
     {#if paneIndex > 0}
@@ -198,14 +202,28 @@
 
   .titlebar-done { background: rgba(34, 197, 94, 0.12); }
 
-  .titlebar-needs-input {
-    background: rgba(239, 68, 68, 0.12);
-    animation: titlebar-blink 1.2s ease-in-out infinite;
+  .titlebar-waiting-permission {
+    background: rgba(245, 166, 35, 0.12);
+    animation: titlebar-blink-permission 1.2s ease-in-out infinite;
   }
 
-  @keyframes titlebar-blink {
-    0%, 100% { background: rgba(239, 68, 68, 0.12); }
-    50% { background: rgba(239, 68, 68, 0.25); }
+  .titlebar-waiting-answer {
+    background: rgba(232, 135, 90, 0.12);
+    animation: titlebar-blink-answer 1.2s ease-in-out infinite;
+  }
+
+  .titlebar-error {
+    background: rgba(224, 82, 82, 0.12);
+  }
+
+  @keyframes titlebar-blink-permission {
+    0%, 100% { background: rgba(245, 166, 35, 0.12); }
+    50% { background: rgba(245, 166, 35, 0.25); }
+  }
+
+  @keyframes titlebar-blink-answer {
+    0%, 100% { background: rgba(232, 135, 90, 0.12); }
+    50% { background: rgba(232, 135, 90, 0.25); }
   }
 
   .pane-title-left { display: flex; align-items: center; gap: 6px; overflow: hidden; }
@@ -219,12 +237,32 @@
   .dot-idle { background: var(--fg-muted); }
   .dot-active { background: var(--accent); animation: dot-spin 1s linear infinite; }
   .dot-done { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.8); }
-  .dot-needs-input { background: #ef4444; animation: dot-blink 0.8s ease-in-out infinite; }
+
+  :global(.dot-waiting-permission) {
+    background: var(--color-warning, #f5a623);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  :global(.titlebar-waiting-permission) {
+    border-bottom-color: var(--color-warning, #f5a623);
+  }
+  :global(.dot-waiting-answer) {
+    background: var(--color-warning-soft, #e8875a);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  :global(.titlebar-waiting-answer) {
+    border-bottom-color: var(--color-warning-soft, #e8875a);
+  }
+  :global(.dot-error) {
+    background: var(--color-error, #e05252);
+  }
+  :global(.titlebar-error) {
+    border-bottom-color: var(--color-error, #e05252);
+  }
 
   @keyframes dot-spin { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-  @keyframes dot-blink {
-    0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(239, 68, 68, 0.8); }
-    50% { opacity: 0.3; box-shadow: none; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
   }
 
   .pane-name {

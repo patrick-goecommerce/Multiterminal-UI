@@ -346,9 +346,18 @@
     box-shadow: 0 0 4px #22c55e88;
   }
 
-  .tab-dot-needsInput {
-    background: #ef4444;
+  .tab-dot-waitingPermission {
+    background: #f5a623;
     animation: tab-dot-pulse 1s ease-in-out infinite;
+  }
+
+  .tab-dot-waitingAnswer {
+    background: #e8875a;
+    animation: tab-dot-pulse 1s ease-in-out infinite;
+  }
+
+  .tab-dot-error {
+    background: #e05252;
   }
 
   .tab-dot-active {
