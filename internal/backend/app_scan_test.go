@@ -9,10 +9,12 @@ import (
 // ---------------------------------------------------------------------------
 // activityString — maps ActivityState to frontend event strings
 // These strings drive the CSS classes for pane border colors:
-//   "done"       → green glow (Claude finished)
-//   "needsInput" → yellow pulse (needs user confirmation)
-//   "active"     → normal active state
-//   "idle"       → no special styling
+//   "done"               → green glow (Claude finished)
+//   "waitingPermission"  → yellow pulse (tool approval needed)
+//   "waitingAnswer"      → yellow pulse (text input needed)
+//   "error"              → red indicator (tool execution failed)
+//   "active"             → normal active state
+//   "idle"               → no special styling
 // ---------------------------------------------------------------------------
 
 func TestActivityString_AllStates(t *testing.T) {
@@ -23,7 +25,9 @@ func TestActivityString_AllStates(t *testing.T) {
 		{terminal.ActivityIdle, "idle"},
 		{terminal.ActivityActive, "active"},
 		{terminal.ActivityDone, "done"},
-		{terminal.ActivityNeedsInput, "needsInput"},
+		{terminal.ActivityWaitingPermission, "waitingPermission"},
+		{terminal.ActivityWaitingAnswer, "waitingAnswer"},
+		{terminal.ActivityError, "error"},
 	}
 	for _, tt := range tests {
 		got := activityString(tt.state)

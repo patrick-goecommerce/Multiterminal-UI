@@ -18,10 +18,12 @@ type TokenInfo struct {
 type ActivityState int
 
 const (
-	ActivityIdle       ActivityState = iota // no recent output
-	ActivityActive                          // currently producing output
-	ActivityDone                            // just finished (prompt returned)
-	ActivityNeedsInput                      // waiting for user confirmation
+	ActivityIdle              ActivityState = iota // no recent output
+	ActivityActive                                 // currently producing output
+	ActivityDone                                   // just finished (prompt returned)
+	ActivityWaitingPermission                      // tool needs user approval
+	ActivityWaitingAnswer                          // waiting for text input from user
+	ActivityError                                  // tool execution failed
 )
 
 // ScanTokens scans the screen buffer for token/cost patterns and updates
@@ -116,7 +118,7 @@ func (s *Session) classifyScreenState() ActivityState {
 
 		// Needs input patterns (check first — takes priority)
 		if needsInputPattern.MatchString(trimmed) {
-			return ActivityNeedsInput
+			return ActivityWaitingAnswer
 		}
 
 		// Prompt returned (Claude/shell is done)

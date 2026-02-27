@@ -305,8 +305,8 @@ func TestClassifyScreenState_NeedsInput(t *testing.T) {
 	sess.Screen.Write([]byte("Delete file? [Y/n] "))
 
 	state := sess.classifyScreenState()
-	if state != ActivityNeedsInput {
-		t.Errorf("classifyScreenState = %d, want ActivityNeedsInput (%d)", state, ActivityNeedsInput)
+	if state != ActivityWaitingAnswer {
+		t.Errorf("classifyScreenState = %d, want ActivityWaitingAnswer (%d)", state, ActivityWaitingAnswer)
 	}
 }
 
@@ -327,8 +327,8 @@ func TestClassifyScreenState_NeedsInputTakesPriority(t *testing.T) {
 	sess.Screen.Write([]byte("Do you want to proceed? [Y/n] $ "))
 
 	state := sess.classifyScreenState()
-	if state != ActivityNeedsInput {
-		t.Errorf("classifyScreenState = %d, want ActivityNeedsInput (%d)", state, ActivityNeedsInput)
+	if state != ActivityWaitingAnswer {
+		t.Errorf("classifyScreenState = %d, want ActivityWaitingAnswer (%d)", state, ActivityWaitingAnswer)
 	}
 }
 
@@ -336,7 +336,7 @@ func TestClassifyScreenState_NeedsInputTakesPriority(t *testing.T) {
 // DetectActivity – time-based activity state transitions
 // These tests drive the actual "window blink" behavior:
 //   - Green glow  → ActivityDone (prompt returned after >1.5s silence)
-//   - Yellow pulse → ActivityNeedsInput (Y/n prompt after >1.5s silence)
+//   - Yellow pulse → ActivityWaitingAnswer (Y/n prompt after >1.5s silence)
 //   - No change   → while output is recent (<1.5s) or never happened
 // ---------------------------------------------------------------------------
 
@@ -444,9 +444,9 @@ func TestDetectActivity_StaleOutput_ClassifiesNeedsInput(t *testing.T) {
 	sess.mu.Unlock()
 
 	state := sess.DetectActivity()
-	// Should see "[Y/n]" → NeedsInput (yellow pulse)
-	if state != ActivityNeedsInput {
-		t.Errorf("DetectActivity with stale output + Y/n = %d, want ActivityNeedsInput (%d)", state, ActivityNeedsInput)
+	// Should see "[Y/n]" → WaitingAnswer (yellow pulse)
+	if state != ActivityWaitingAnswer {
+		t.Errorf("DetectActivity with stale output + Y/n = %d, want ActivityWaitingAnswer (%d)", state, ActivityWaitingAnswer)
 	}
 }
 
@@ -508,7 +508,7 @@ func TestActivityLifecycle_ActiveToDoneToReset(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Full activity lifecycle: Active → NeedsInput → Reset → Idle
+// Full activity lifecycle: Active → WaitingAnswer → Reset → Idle
 // This simulates the "yellow pulse" cycle.
 // ---------------------------------------------------------------------------
 
@@ -528,8 +528,8 @@ func TestActivityLifecycle_ActiveToNeedsInputToReset(t *testing.T) {
 	sess.mu.Unlock()
 
 	state := sess.DetectActivity()
-	if state != ActivityNeedsInput {
-		t.Errorf("Step 2: state = %d, want ActivityNeedsInput (%d) — yellow pulse should trigger", state, ActivityNeedsInput)
+	if state != ActivityWaitingAnswer {
+		t.Errorf("Step 2: state = %d, want ActivityWaitingAnswer (%d) — yellow pulse should trigger", state, ActivityWaitingAnswer)
 	}
 
 	// Step 3: User answers → reset
@@ -567,7 +567,7 @@ func TestResetActivity_FromNeedsInput(t *testing.T) {
 	sess := NewSession(1, 5, 80)
 
 	sess.mu.Lock()
-	sess.Activity = ActivityNeedsInput
+	sess.Activity = ActivityWaitingAnswer
 	sess.mu.Unlock()
 
 	sess.ResetActivity()
@@ -576,6 +576,6 @@ func TestResetActivity_FromNeedsInput(t *testing.T) {
 	state := sess.Activity
 	sess.mu.Unlock()
 	if state != ActivityIdle {
-		t.Errorf("After ResetActivity from NeedsInput, state = %d, want ActivityIdle (%d)", state, ActivityIdle)
+		t.Errorf("After ResetActivity from WaitingAnswer, state = %d, want ActivityIdle (%d)", state, ActivityIdle)
 	}
 }

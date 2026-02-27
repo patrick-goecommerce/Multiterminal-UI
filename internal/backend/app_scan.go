@@ -13,7 +13,7 @@ import (
 // ActivityInfo is sent to the frontend when a session's activity state changes.
 type ActivityInfo struct {
 	ID       int    `json:"id"`
-	Activity string `json:"activity"` // "idle", "active", "done", "needsInput"
+	Activity string `json:"activity"` // "idle", "active", "done", "waitingPermission", "waitingAnswer", "error"
 	Cost     string `json:"cost"`
 }
 
@@ -68,8 +68,12 @@ func activityString(a terminal.ActivityState) string {
 		return "active"
 	case terminal.ActivityDone:
 		return "done"
-	case terminal.ActivityNeedsInput:
-		return "needsInput"
+	case terminal.ActivityWaitingPermission:
+		return "waitingPermission"
+	case terminal.ActivityWaitingAnswer:
+		return "waitingAnswer"
+	case terminal.ActivityError:
+		return "error"
 	default:
 		return "idle"
 	}

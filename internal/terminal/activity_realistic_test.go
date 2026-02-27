@@ -143,7 +143,7 @@ func TestRealistic_ClaudeCodePrompt_AfterMultilineOutput(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Claude Code permission prompt → should detect ActivityNeedsInput
+// Claude Code permission prompt → should detect ActivityWaitingAnswer
 // ---------------------------------------------------------------------------
 
 func TestRealistic_ClaudeCode_PermissionPrompt(t *testing.T) {
@@ -165,8 +165,8 @@ func TestRealistic_ClaudeCode_PermissionPrompt(t *testing.T) {
 	}
 
 	state := sess.DetectActivity()
-	if state != ActivityNeedsInput {
-		t.Errorf("Claude permission prompt: state = %d, want ActivityNeedsInput (%d)", state, ActivityNeedsInput)
+	if state != ActivityWaitingAnswer {
+		t.Errorf("Claude permission prompt: state = %d, want ActivityWaitingAnswer (%d)", state, ActivityWaitingAnswer)
 	}
 }
 
@@ -181,9 +181,9 @@ func TestRealistic_ClaudeCode_YesNoPrompt(t *testing.T) {
 	t.Logf("PlainTextRow: %q", plain)
 
 	state := sess.DetectActivity()
-	if state != ActivityNeedsInput {
-		t.Errorf("Claude y/n prompt: state = %d, want ActivityNeedsInput (%d)\nPlainTextRow = %q",
-			state, ActivityNeedsInput, plain)
+	if state != ActivityWaitingAnswer {
+		t.Errorf("Claude y/n prompt: state = %d, want ActivityWaitingAnswer (%d)\nPlainTextRow = %q",
+			state, ActivityWaitingAnswer, plain)
 	}
 }
 
@@ -377,14 +377,14 @@ func TestRealistic_EndToEnd_NeedsInputYellowPulse(t *testing.T) {
 	sess.mu.Unlock()
 
 	state := sess.DetectActivity()
-	if state != ActivityNeedsInput {
+	if state != ActivityWaitingAnswer {
 		for r := 0; r < 10; r++ {
 			row := sess.Screen.PlainTextRow(r)
 			if row != "" {
 				t.Logf("Row %d: %q", r, row)
 			}
 		}
-		t.Errorf("Phase 2: state = %d, want ActivityNeedsInput (yellow pulse)", state)
+		t.Errorf("Phase 2: state = %d, want ActivityWaitingAnswer (yellow pulse)", state)
 	}
 }
 
