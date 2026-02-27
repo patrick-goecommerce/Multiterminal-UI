@@ -28,7 +28,7 @@ export interface Tab {
   panes: Pane[];
   focusedPaneId: string;
   _highlight?: boolean;
-  unreadActivity: 'waitingPermission' | 'waitingAnswer' | 'active' | 'done' | null;
+  unreadActivity: 'waitingPermission' | 'waitingAnswer' | 'error' | 'active' | 'done' | null;
 }
 
 export function computeTabActivity(panes: Pane[]): Tab['unreadActivity'] {
@@ -36,7 +36,8 @@ export function computeTabActivity(panes: Pane[]): Tab['unreadActivity'] {
   for (const pane of panes) {
     if (pane.activity === 'waitingPermission') return 'waitingPermission';
     if (pane.activity === 'waitingAnswer') result = 'waitingAnswer';
-    else if (pane.activity === 'active' && result !== 'waitingAnswer') result = 'active';
+    else if (pane.activity === 'error' && result !== 'waitingAnswer') result = 'error';
+    else if (pane.activity === 'active' && result !== 'error') result = 'active';
     else if (pane.activity === 'done' && result === null) result = 'done';
   }
   return result;

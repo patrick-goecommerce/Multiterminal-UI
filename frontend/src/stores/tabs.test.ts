@@ -358,7 +358,7 @@ describe('computeTabActivity', () => {
     expect(computeTabActivity(panes)).toBe('active');
   });
 
-  it('returns needsInput when any pane needs input (highest priority)', () => {
+  it('returns waitingAnswer when any pane is waitingAnswer (higher priority than active)', () => {
     const panes = [
       { activity: 'active' } as any,
       { activity: 'waitingAnswer' } as any,
@@ -413,7 +413,7 @@ describe('updateActivity — tab unreadActivity', () => {
     expect(tab!.unreadActivity).toBeNull();
   });
 
-  it('escalates to needsInput when one pane needs input', () => {
+  it('escalates to waitingAnswer when one pane is waitingAnswer', () => {
     const bgTab = tabStore.addTab('UAEscalate');
     const fgTab = tabStore.addTab('UAForeground');
     tabStore.setActiveTab(fgTab);
