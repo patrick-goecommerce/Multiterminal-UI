@@ -103,10 +103,10 @@ describe('tabStore', () => {
       tabStore.setActiveTab(fgTab);
 
       tabStore.addPane(bgTab, 4001, 'Claude', 'claude', '');
-      tabStore.updateActivity(4001, 'needsInput', '');
+      tabStore.updateActivity(4001, 'waitingAnswer', '');
 
       let tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
-      expect(tab!.unreadActivity).toBe('needsInput');
+      expect(tab!.unreadActivity).toBe('waitingAnswer');
 
       tabStore.setActiveTab(bgTab);
       tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
@@ -208,10 +208,10 @@ describe('tabStore', () => {
       tabStore.setActiveTab(fgTab);
 
       const p1 = tabStore.addPane(bgTab, 5001, 'C1', 'claude', '');
-      tabStore.updateActivity(5001, 'needsInput', '');
+      tabStore.updateActivity(5001, 'waitingAnswer', '');
 
       let tab = tabStore.getState().tabs.find(t => t.id === bgTab);
-      expect(tab!.unreadActivity).toBe('needsInput');
+      expect(tab!.unreadActivity).toBe('waitingAnswer');
 
       tabStore.closePane(bgTab, p1);
       tab = tabStore.getState().tabs.find(t => t.id === bgTab);
@@ -361,15 +361,31 @@ describe('computeTabActivity', () => {
   it('returns needsInput when any pane needs input (highest priority)', () => {
     const panes = [
       { activity: 'active' } as any,
-      { activity: 'needsInput' } as any,
+      { activity: 'waitingAnswer' } as any,
       { activity: 'done' } as any,
     ];
-    expect(computeTabActivity(panes)).toBe('needsInput');
+    expect(computeTabActivity(panes)).toBe('waitingAnswer');
   });
 
   it('returns active for a single active pane', () => {
     const panes = [{ activity: 'active' } as any];
     expect(computeTabActivity(panes)).toBe('active');
+  });
+
+  it('waitingPermission has higher priority than waitingAnswer', () => {
+    const panes = [
+      { activity: 'waitingAnswer' } as any,
+      { activity: 'waitingPermission' } as any,
+    ];
+    expect(computeTabActivity(panes)).toBe('waitingPermission');
+  });
+
+  it('waitingPermission returns immediately without checking remaining panes', () => {
+    const panes = [
+      { activity: 'waitingPermission' } as any,
+      { activity: 'active' } as any,
+    ];
+    expect(computeTabActivity(panes)).toBe('waitingPermission');
   });
 });
 
@@ -406,9 +422,9 @@ describe('updateActivity — tab unreadActivity', () => {
     tabStore.addPane(bgTab, 3004, 'C2', 'claude', '');
 
     tabStore.updateActivity(3003, 'done', '');
-    tabStore.updateActivity(3004, 'needsInput', '');
+    tabStore.updateActivity(3004, 'waitingAnswer', '');
 
     const tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
-    expect(tab!.unreadActivity).toBe('needsInput');
+    expect(tab!.unreadActivity).toBe('waitingAnswer');
   });
 });

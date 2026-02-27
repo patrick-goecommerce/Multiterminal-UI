@@ -9,7 +9,7 @@ export interface Pane {
   mode: PaneMode;
   model: string;
   focused: boolean;
-  activity: 'idle' | 'active' | 'done' | 'needsInput';
+  activity: 'idle' | 'active' | 'done' | 'waitingPermission' | 'waitingAnswer' | 'error';
   cost: string;
   running: boolean;
   maximized: boolean;
@@ -28,14 +28,15 @@ export interface Tab {
   panes: Pane[];
   focusedPaneId: string;
   _highlight?: boolean;
-  unreadActivity: 'needsInput' | 'active' | 'done' | null;
+  unreadActivity: 'waitingPermission' | 'waitingAnswer' | 'active' | 'done' | null;
 }
 
 export function computeTabActivity(panes: Pane[]): Tab['unreadActivity'] {
   let result: Tab['unreadActivity'] = null;
   for (const pane of panes) {
-    if (pane.activity === 'needsInput') return 'needsInput';
-    if (pane.activity === 'active') result = 'active';
+    if (pane.activity === 'waitingPermission') return 'waitingPermission';
+    if (pane.activity === 'waitingAnswer') result = 'waitingAnswer';
+    else if (pane.activity === 'active' && result !== 'waitingAnswer') result = 'active';
     else if (pane.activity === 'done' && result === null) result = 'done';
   }
   return result;
