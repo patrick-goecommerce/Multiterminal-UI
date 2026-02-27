@@ -3,13 +3,13 @@ package backend
 import (
 	"context"
 	"encoding/base64"
+	"sync"
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
-// coalesceDelay returns the output coalescing delay based on the number
-// of active sessions. More sessions → longer delay to reduce event load.
+// coalesceDelay returns the scan tick delay — kept for scanLoop reuse.
 func (a *AppService) coalesceDelay() time.Duration {
 	a.mu.Lock()
 	n := len(a.sessions)
@@ -26,12 +26,68 @@ func (a *AppService) coalesceDelay() time.Duration {
 	}
 }
 
-// streamOutput reads raw PTY bytes from the session and emits them as
-// base64-encoded chunks to the frontend via Wails events.
-// It coalesces rapid output over a short time window so that TUI redraws
-// (which produce many small chunks) arrive as a single event, preventing
-// cursor flicker in xterm.js.
-func (a *AppService) streamOutput(id int, sess *terminal.Session, ctx context.Context) {
+// outputBatcher accumulates raw PTY bytes from all sessions and emits
+// them as a single batched Wails event per frame (≤16 ms).
+//
+// This eliminates Win32 main-thread saturation: instead of one
+// ExecJS/InvokeSync call per session per coalesce window we make exactly
+// one call per 16 ms frame regardless of how many sessions are active.
+type outputBatcher struct {
+	mu      sync.Mutex
+	pending map[int][]byte // sessionID → accumulated bytes
+}
+
+func newOutputBatcher() *outputBatcher {
+	return &outputBatcher{pending: make(map[int][]byte)}
+}
+
+// add appends raw bytes for a session into the accumulation buffer.
+func (b *outputBatcher) add(id int, data []byte) {
+	b.mu.Lock()
+	b.pending[id] = append(b.pending[id], data...)
+	b.mu.Unlock()
+}
+
+// swap atomically replaces the pending map with an empty one and
+// returns the old map for emission.
+func (b *outputBatcher) swap() map[int][]byte {
+	b.mu.Lock()
+	old := b.pending
+	b.pending = make(map[int][]byte, len(old))
+	b.mu.Unlock()
+	return old
+}
+
+// batchLoop emits one terminal:output-batch event per 16 ms tick.
+// Must be started as a goroutine in ServiceStartup.
+func (a *AppService) batchLoop(ctx context.Context) {
+	ticker := time.NewTicker(16 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			batch := a.batcher.swap()
+			if len(batch) == 0 {
+				continue
+			}
+			items := make([]TerminalOutputEvent, 0, len(batch))
+			for id, raw := range batch {
+				items = append(items, TerminalOutputEvent{
+					ID:   id,
+					Data: base64.StdEncoding.EncodeToString(raw),
+				})
+			}
+			a.app.Event.Emit("terminal:output-batch", items)
+		}
+	}
+}
+
+// collectOutput reads raw PTY bytes from the session's RawOutputCh and
+// hands them to the shared outputBatcher. It drains all currently
+// available bytes before yielding to reduce lock round-trips.
+func (a *AppService) collectOutput(id int, sess *terminal.Session, ctx context.Context) {
 	for {
 		select {
 		case data, ok := <-sess.RawOutputCh:
@@ -39,26 +95,21 @@ func (a *AppService) streamOutput(id int, sess *terminal.Session, ctx context.Co
 				return
 			}
 			buf := append([]byte(nil), data...)
-			// Wait briefly for more chunks — TUI apps redraw in bursts
-			deadline := time.After(a.coalesceDelay())
-		collect:
+			// Non-blocking drain: collect everything already in the buffer.
+		drain:
 			for {
 				select {
 				case more, ok := <-sess.RawOutputCh:
 					if !ok {
-						b64 := base64.StdEncoding.EncodeToString(buf)
-						a.app.Event.Emit("terminal:output", TerminalOutputEvent{ID: id, Data: b64})
+						a.batcher.add(id, buf)
 						return
 					}
 					buf = append(buf, more...)
-				case <-deadline:
-					break collect
-				case <-ctx.Done():
-					return
+				default:
+					break drain
 				}
 			}
-			b64 := base64.StdEncoding.EncodeToString(buf)
-			a.app.Event.Emit("terminal:output", TerminalOutputEvent{ID: id, Data: b64})
+			a.batcher.add(id, buf)
 		case <-ctx.Done():
 			return
 		}

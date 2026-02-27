@@ -37,6 +37,7 @@ type AppService struct {
 	mu                sync.Mutex
 	nextID            int
 	cancelAll         context.CancelFunc
+	batcher           *outputBatcher
 	resolvedClaudePath string
 	claudeDetected     bool
 	winMgr            *windowManager // tracks all open windows for multi-window support
@@ -76,7 +77,9 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
 	a.cancelAll = cancel
+	a.batcher = newOutputBatcher()
 	go a.scanLoop(scanCtx)
+	go a.batchLoop(scanCtx)
 
 	// Start focus listener and register custom protocol for notification clicks
 	a.startFocusListener()
@@ -160,7 +163,7 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 	a.mu.Unlock()
 
 	// Stream PTY output to frontend
-	go a.streamOutput(id, sess, a.serviceCtx)
+	go a.collectOutput(id, sess, a.serviceCtx)
 
 	// Watch for process exit
 	go a.watchExit(id, sess)
