@@ -5,6 +5,8 @@ package main
 
 import (
 	"embed"
+	"flag"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -29,12 +31,39 @@ func main() {
 		}
 	}
 
+	// --- CLI flags ---
+	var (
+		flagListTabs  = flag.Bool("list-tabs", false, "List saved tab names and exit")
+		flagRemoveTab = flag.String("remove-tab", "", "Remove a tab by name and exit")
+		flagClean     = flag.Bool("clean", false, "Delete the session file and exit")
+		flagSafeMode  = flag.Bool("safe-mode", false, "Start without loading sessions; restore session on close")
+	)
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: mtui [options]\n\nOptions:\n")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	// CLI-only commands — execute and exit without starting the GUI.
+	if *flagListTabs {
+		runListTabs()
+		return
+	}
+	if *flagRemoveTab != "" {
+		runRemoveTab(*flagRemoveTab)
+		return
+	}
+	if *flagClean {
+		runClean()
+		return
+	}
+
+	// --- GUI start ---
 	log.Println("Starting Multiterminal UI...")
 
 	cfg := config.Load()
 	log.Println("Config loaded, theme:", cfg.Theme)
 
-	// Enable file logging if configured (persistent or auto-enabled after crashes)
 	backend.InitLoggingFromConfig(cfg)
 
 	app := application.New(application.Options{
@@ -44,7 +73,7 @@ func main() {
 		},
 	})
 
-	svc := backend.NewAppService(app, cfg)
+	svc := backend.NewAppService(app, cfg, *flagSafeMode)
 	log.Println("AppService created, starting Wails...")
 
 	app.RegisterService(application.NewService(svc))
@@ -67,6 +96,38 @@ func main() {
 		log.Println("Wails error:", err)
 	}
 	log.Println("Multiterminal UI exited")
+}
+
+// runListTabs prints tab names from the saved session, one per line.
+func runListTabs() {
+	state := config.LoadSession()
+	if state == nil {
+		fmt.Fprintln(os.Stderr, "No session file found.")
+		return
+	}
+	for _, tab := range state.Tabs {
+		fmt.Println(tab.Name)
+	}
+}
+
+// runRemoveTab removes a single tab by name from the session file.
+func runRemoveTab(name string) {
+	found, err := config.RemoveTab(name)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if !found {
+		fmt.Fprintf(os.Stderr, "Tab %q not found in session.\n", name)
+		os.Exit(1)
+	}
+	fmt.Printf("Tab %q removed.\n", name)
+}
+
+// runClean deletes the session file entirely.
+func runClean() {
+	config.ClearSession()
+	fmt.Println("Session file cleared.")
 }
 
 // signalFocus connects to the running instance's focus listener
