@@ -201,6 +201,22 @@ describe('tabStore', () => {
       // p1 should now be focused
       expect(tab!.panes[0].focused).toBe(true);
     });
+
+    it('recomputes unreadActivity when a pane is closed on a background tab', () => {
+      const bgTab = tabStore.addTab('ClosePaneBg');
+      const fgTab = tabStore.addTab('ClosePaneFg');
+      tabStore.setActiveTab(fgTab);
+
+      const p1 = tabStore.addPane(bgTab, 5001, 'C1', 'claude', '');
+      tabStore.updateActivity(5001, 'needsInput', '');
+
+      let tab = tabStore.getState().tabs.find(t => t.id === bgTab);
+      expect(tab!.unreadActivity).toBe('needsInput');
+
+      tabStore.closePane(bgTab, p1);
+      tab = tabStore.getState().tabs.find(t => t.id === bgTab);
+      expect(tab!.unreadActivity).toBeNull();
+    });
   });
 
   describe('focusPane', () => {
@@ -349,6 +365,11 @@ describe('computeTabActivity', () => {
       { activity: 'done' } as any,
     ];
     expect(computeTabActivity(panes)).toBe('needsInput');
+  });
+
+  it('returns active for a single active pane', () => {
+    const panes = [{ activity: 'active' } as any];
+    expect(computeTabActivity(panes)).toBe('active');
   });
 });
 

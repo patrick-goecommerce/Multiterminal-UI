@@ -162,6 +162,9 @@ function createTabStore() {
         const idx = tab.panes.findIndex((p) => p.id === paneId);
         if (idx === -1) return state;
         tab.panes.splice(idx, 1);
+        if (tab.id !== state.activeTabId) {
+          tab.unreadActivity = computeTabActivity(tab.panes);
+        }
         if (tab.focusedPaneId === paneId && tab.panes.length > 0) {
           const newIdx = Math.min(idx, tab.panes.length - 1);
           tab.panes.forEach((p) => (p.focused = false));
@@ -256,7 +259,7 @@ function createTabStore() {
     importTab(tab: Tab) {
       update((s) => ({
         ...s,
-        tabs: [...s.tabs, { ...tab, _highlight: true }],
+        tabs: [...s.tabs, { ...tab, _highlight: true, unreadActivity: null }],
         activeTabId: tab.id,
       }));
       setTimeout(() => {
