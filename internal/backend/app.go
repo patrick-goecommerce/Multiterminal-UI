@@ -44,6 +44,7 @@ type AppService struct {
 	detachCount       int            // monotonic counter for detached window IDs
 	safeMode      bool
 	sessionBackup *config.SessionState // populated in safe-mode; restored on shutdown
+	hookMgr       *HookManager
 }
 
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
@@ -81,6 +82,9 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 
 	// Resolve Claude CLI path before anything else needs it
 	a.resolveClaudeOnStartup()
+
+	// Setup Claude Code hook integration
+	go a.setupHooks(ctx)
 
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
