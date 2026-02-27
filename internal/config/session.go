@@ -49,11 +49,7 @@ func SaveSession(state SessionState) error {
 	if p == "" {
 		return nil
 	}
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(p, data, 0644)
+	return saveSessionTo(p, state)
 }
 
 // LoadSession reads a previously saved session state from disk.
@@ -63,19 +59,7 @@ func LoadSession() *SessionState {
 	if p == "" {
 		return nil
 	}
-	data, err := os.ReadFile(p)
-	if err != nil {
-		return nil
-	}
-	var state SessionState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil
-	}
-	// Basic validation
-	if len(state.Tabs) == 0 {
-		return nil
-	}
-	return &state
+	return loadSessionFrom(p)
 }
 
 // ClearSession removes the session file from disk.
@@ -84,4 +68,70 @@ func ClearSession() {
 	if p != "" {
 		os.Remove(p)
 	}
+}
+
+// RemoveTab removes the first tab matching name from the session file.
+// Returns (true, nil) if found and removed, (false, nil) if not found,
+// or (false, err) on read/write failure.
+func RemoveTab(name string) (bool, error) {
+	return removeTabFrom(sessionPath(), name)
+}
+
+// removeTabFrom is the testable core, operating on an explicit path.
+func removeTabFrom(path string, name string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	var state SessionState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return false, err
+	}
+
+	idx := -1
+	for i, t := range state.Tabs {
+		if t.Name == name {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return false, nil
+	}
+
+	state.Tabs = append(state.Tabs[:idx], state.Tabs[idx+1:]...)
+	if state.ActiveTab >= len(state.Tabs) && len(state.Tabs) > 0 {
+		state.ActiveTab = len(state.Tabs) - 1
+	}
+
+	return true, saveSessionTo(path, state)
+}
+
+// saveSessionTo is the testable core for SaveSession.
+func saveSessionTo(path string, state SessionState) error {
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// loadSessionFrom is the testable core for LoadSession.
+func loadSessionFrom(path string) *SessionState {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var state SessionState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil
+	}
+	if len(state.Tabs) == 0 {
+		return nil
+	}
+	return &state
 }
