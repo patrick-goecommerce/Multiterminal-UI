@@ -240,35 +240,39 @@
       return out;
     }
 
-    // Wails v3: payload is in event.data (TerminalOutputEvent { id, data })
-    cleanupFn = EventsOn('terminal:output', (event: any) => {
-      const id: number = event.data.id;
-      const b64: string = event.data.data;
-      if (id !== pane.sessionId || !termInstance) return;
-      const bytes = decodeBase64(b64);
+    // Wails v3: payload is in event.data ([]TerminalOutputEvent { id, data })
+    cleanupFn = EventsOn('terminal:output-batch', (event: any) => {
+      const items: Array<{ id: number; data: string }> = event.data;
+      if (!Array.isArray(items) || !termInstance) return;
+      let gotData = false;
+      for (const item of items) {
+        if (item.id !== pane.sessionId) continue;
+        const bytes = decodeBase64(item.data);
 
-      // Scan for localhost URLs
-      const mode = $config.localhost_auto_open;
-      if (mode !== 'off') {
-        const decoded = new TextDecoder().decode(bytes);
-        LOCALHOST_REGEX.lastIndex = 0;
-        let urlMatch;
-        while ((urlMatch = LOCALHOST_REGEX.exec(decoded)) !== null) {
-          const url = urlMatch[0];
-          if (!seenLocalhostUrls.has(url)) {
-            seenLocalhostUrls.add(url);
-            if (mode === 'auto') {
-              BrowserOpenURL(url);
-              sendNotification('Dev Server', url + ' geöffnet');
-            } else {
-              sendNotification('Dev Server', url + ' erkannt');
+        // Scan for localhost URLs
+        const mode = $config.localhost_auto_open;
+        if (mode !== 'off') {
+          const decoded = new TextDecoder().decode(bytes);
+          LOCALHOST_REGEX.lastIndex = 0;
+          let urlMatch;
+          while ((urlMatch = LOCALHOST_REGEX.exec(decoded)) !== null) {
+            const url = urlMatch[0];
+            if (!seenLocalhostUrls.has(url)) {
+              seenLocalhostUrls.add(url);
+              if (mode === 'auto') {
+                BrowserOpenURL(url);
+                sendNotification('Dev Server', url + ' geöffnet');
+              } else {
+                sendNotification('Dev Server', url + ' erkannt');
+              }
             }
           }
         }
-      }
 
-      pendingChunks.push(bytes);
-      scheduleFlush();
+        pendingChunks.push(bytes);
+        gotData = true;
+      }
+      if (gotData) scheduleFlush();
     });
 
     wheelHandler = (e: WheelEvent) => {
