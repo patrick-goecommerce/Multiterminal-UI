@@ -20,9 +20,26 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **`App.mu`** — sessions map, queues map, nextID.
 - **Never allocate under lock** — use pre-allocated templates (e.g. `blankLine` in scroll ops).
 
+## Branch Strategy
+- **`main`** — stable releases only. Hotfixes land here first.
+- **`alpha-main`** — ongoing alpha development. New features target this branch.
+  - Merge direction: `alpha-main` → `main` when stable.
+  - Hotfixes: apply to `main` first, then `git cherry-pick <sha>` onto `alpha-main`.
+- **Feature branches** — branch off `alpha-main`, PR back into `alpha-main`.
+
+## Alpha Notes (`alpha-main`)
+- Runs on **Wails v3** (alpha) + **multi-window support** (tab drag & drop).
+- `go.mod` uses `github.com/wailsapp/wails/v3` (alpha) — API may change.
+- `App` struct renamed to `AppService` (Wails v3 service pattern, no `ctx` field).
+- Events: `runtime.EventsEmit(ctx, ...)` → `s.app.Event.Emit(...)`.
+- Frontend bindings in `wailsjs/` are v3-generated — import from `backend/AppService` not `backend/App`.
+- **Builds:** tagged as `v2.0.0-alpha.X` via separate GitHub Actions workflow.
+- Design doc: `docs/plans/2026-02-25-wails-v3-multiwindow-design.md`
+- Tracking issue: https://github.com/patrick-goecommerce/Multiterminal-UI/issues/89
+
 ## Tech Stack
 - **Language:** Go 1.21+ (backend) + TypeScript/Svelte (frontend)
-- **GUI framework:** Wails v2 (Go ↔ WebView bridge)
+- **GUI framework:** Wails v3 alpha (Go ↔ WebView bridge, multi-window)
 - **Frontend:** Svelte 4 + Vite + xterm.js
 - **Terminal emulation:** xterm.js (frontend) + VT100 screen buffer for activity scanning (backend)
 - **PTY management:** go-pty (cross-platform: Unix PTY + Windows ConPTY)
@@ -49,6 +66,8 @@ internal/
     app_health.go                Crash detection & health tracking
     app_audio.go                 Audio notification playback
     app_version.go               Version info
+    app_window.go                Window manager, DetachTab, MergeWindowToMain
+    app_events.go                Event payload types (TerminalOutputEvent, etc.)
   terminal/
     session.go                   PTY session lifecycle (start, read, close)
     session_helpers.go           Default shell, PTY console helpers
@@ -90,6 +109,7 @@ frontend/src/
     notifications.ts             Desktop notification wrapper
     audio.ts                     Audio playback (done/input sounds)
     git-polling.ts               Git status polling
+    window.ts                    Window identity helpers (getWindowId, isMainWindow)
 ```
 
 ## Build & Run
