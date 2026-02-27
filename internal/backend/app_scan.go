@@ -128,7 +128,7 @@ func (a *AppService) scanAllSessions() {
 		}
 		prevActivityMu.Unlock()
 
-		if changed {
+		if changed && a.app != nil {
 			log.Printf("[scan] session %d: activity=%s cost=%s", id, actStr, costStr)
 			a.app.Event.Emit("terminal:activity", ActivityInfo{
 				ID:       id,
@@ -138,12 +138,12 @@ func (a *AppService) scanAllSessions() {
 		}
 
 		// Trigger pipeline queue on fresh "done" transition
-		if activityChanged && actStr == "done" {
+		if activityChanged && actStr == "done" && a.app != nil {
 			a.processQueue(id)
 		}
 
 		// Report issue progress on activity transitions
-		if activityChanged {
+		if activityChanged && a.app != nil {
 			a.onActivityChangeForIssue(id, actStr, costStr)
 		}
 	}

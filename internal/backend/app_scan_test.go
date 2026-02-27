@@ -45,29 +45,28 @@ func TestActivityString_UnknownState(t *testing.T) {
 	}
 }
 
-func TestScanUsesHookActivityWhenPresent(t *testing.T) {
-	sess := terminal.NewSession(99, 24, 80)
-	// Mark session as having hook-driven state (WaitingPermission)
+func TestScanGuard_HookActivityNotOverwrittenByScan(t *testing.T) {
+	// Setup: a session with hook-driven WaitingPermission state
+	// and NO PTY output (LastOutputAt = zero, no screen content).
+	// Without the guard, DetectActivity() would return Idle or Done
+	// (since there's no PTY output matching the needsInput pattern).
+	// With the guard, the session stays at WaitingPermission.
+	sess := terminal.NewSession(42, 24, 80)
 	sess.SetHookActivity(terminal.ActivityWaitingPermission)
 
-	if !sess.HasHookData() {
-		t.Fatal("precondition: session must have hook data")
+	// Build a minimal AppService with this session
+	app := &AppService{
+		sessions: map[int]*terminal.Session{42: sess},
+		queues:   map[int]*sessionQueue{},
 	}
 
-	// activityString for WaitingPermission must be "waitingPermission"
-	got := activityString(terminal.ActivityWaitingPermission)
+	// Run one scan cycle
+	app.scanAllSessions()
+
+	// After scanning, the activity must still be WaitingPermission
+	// (the hook guard must have prevented DetectActivity() from resetting it)
+	got := activityString(sess.GetActivity())
 	if got != "waitingPermission" {
-		t.Errorf("activityString = %q, want %q", got, "waitingPermission")
+		t.Errorf("after scan, activity = %q, want %q — hook guard not working", got, "waitingPermission")
 	}
-
-	// Verify DetectActivity alone (without the guard) would reset state
-	// since there's no PTY output — this confirms why the guard is needed.
-	// The guard is in scanAllSessions(), not DetectActivity() itself.
-	detected := sess.DetectActivity()
-	if detected == terminal.ActivityWaitingPermission {
-		// Unusual: DetectActivity should return Idle/Done with no PTY output,
-		// not WaitingPermission (which is only set by hooks).
-		t.Logf("DetectActivity returned WaitingPermission — unexpected but not fatal")
-	}
-	_ = detected
 }
