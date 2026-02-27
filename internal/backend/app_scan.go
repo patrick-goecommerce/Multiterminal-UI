@@ -100,8 +100,15 @@ func (a *AppService) scanAllSessions() {
 
 	for i, sess := range sessions {
 		id := ids[i]
-		sess.ScanTokens()
-		activity := sess.DetectActivity()
+		sess.ScanTokens() // always scan for token/cost data
+
+		var activity terminal.ActivityState
+		if sess.HasHookData() {
+			// Hook events drive activity state for Claude panes — skip PTY regex scan
+			activity = sess.GetActivity()
+		} else {
+			activity = sess.DetectActivity()
+		}
 		actStr := activityString(activity)
 
 		tokens := sess.GetTokens()

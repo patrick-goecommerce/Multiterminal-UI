@@ -37,3 +37,10 @@ func (s *Session) HookSessionID() string {
 	defer s.mu.Unlock()
 	return s.hookSessionID
 }
+
+// GetActivity returns the current activity state under lock.
+func (s *Session) GetActivity() ActivityState {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Activity
+}

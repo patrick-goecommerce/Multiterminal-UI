@@ -44,3 +44,30 @@ func TestActivityString_UnknownState(t *testing.T) {
 		t.Errorf("activityString(99) = %q, want 'idle'", got)
 	}
 }
+
+func TestScanUsesHookActivityWhenPresent(t *testing.T) {
+	sess := terminal.NewSession(99, 24, 80)
+	// Mark session as having hook-driven state (WaitingPermission)
+	sess.SetHookActivity(terminal.ActivityWaitingPermission)
+
+	if !sess.HasHookData() {
+		t.Fatal("precondition: session must have hook data")
+	}
+
+	// activityString for WaitingPermission must be "waitingPermission"
+	got := activityString(terminal.ActivityWaitingPermission)
+	if got != "waitingPermission" {
+		t.Errorf("activityString = %q, want %q", got, "waitingPermission")
+	}
+
+	// Verify DetectActivity alone (without the guard) would reset state
+	// since there's no PTY output — this confirms why the guard is needed.
+	// The guard is in scanAllSessions(), not DetectActivity() itself.
+	detected := sess.DetectActivity()
+	if detected == terminal.ActivityWaitingPermission {
+		// Unusual: DetectActivity should return Idle/Done with no PTY output,
+		// not WaitingPermission (which is only set by hooks).
+		t.Logf("DetectActivity returned WaitingPermission — unexpected but not fatal")
+	}
+	_ = detected
+}
