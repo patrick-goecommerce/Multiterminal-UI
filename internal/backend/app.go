@@ -42,18 +42,26 @@ type AppService struct {
 	claudeDetected     bool
 	winMgr            *windowManager // tracks all open windows for multi-window support
 	detachCount       int            // monotonic counter for detached window IDs
+	safeMode      bool
+	sessionBackup *config.SessionState // populated in safe-mode; restored on shutdown
 }
 
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
-func NewAppService(app *application.App, cfg config.Config) *AppService {
-	return &AppService{
+func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppService {
+	svc := &AppService{
 		app:           app,
 		cfg:           cfg,
 		sessions:      make(map[int]*terminal.Session),
 		queues:        make(map[int]*sessionQueue),
 		sessionIssues: make(map[int]*sessionIssue),
 		winMgr:        newWindowManager(app),
+		safeMode:      safeMode,
 	}
+	if safeMode {
+		svc.sessionBackup = config.LoadSession() // may be nil — that's fine
+		log.Println("[SafeMode] active: sessions will not be loaded or saved")
+	}
+	return svc
 }
 
 // SetMainWindow stores the main window reference for dialog and focus operations.
@@ -113,6 +121,22 @@ func (a *AppService) ServiceShutdown() error {
 	}
 	_ = config.SaveHealth(a.health)
 	log.Println("[Shutdown] Clean shutdown recorded")
+
+	// In safe-mode, restore the original session file so the next normal
+	// start resumes where the user left off before this safe-mode run.
+	if a.safeMode {
+		if a.sessionBackup != nil {
+			if err := config.SaveSession(*a.sessionBackup); err != nil {
+				log.Printf("[SafeMode] failed to restore session backup: %v", err)
+			} else {
+				log.Printf("[SafeMode] session backup restored (%d tabs)", len(a.sessionBackup.Tabs))
+			}
+		} else {
+			// No session existed before — remove whatever the frontend may have written
+			config.ClearSession()
+			log.Printf("[SafeMode] no backup to restore; session cleared")
+		}
+	}
 	return nil
 }
 
@@ -244,6 +268,10 @@ func (a *AppService) SaveConfig(cfg config.Config) error {
 // SaveTabs persists the current tab/pane layout to disk so it can be
 // restored on next startup.
 func (a *AppService) SaveTabs(state config.SessionState) {
+	if a.safeMode {
+		log.Printf("[SaveTabs] skipped (safe-mode)")
+		return
+	}
 	log.Printf("[SaveTabs] saving %d tabs", len(state.Tabs))
 	if err := config.SaveSession(state); err != nil {
 		log.Printf("[SaveTabs] error: %v", err)
@@ -252,6 +280,10 @@ func (a *AppService) SaveTabs(state config.SessionState) {
 
 // LoadTabs returns the previously saved tab/pane layout, or nil.
 func (a *AppService) LoadTabs() *config.SessionState {
+	if a.safeMode {
+		log.Printf("[LoadTabs] skipped (safe-mode)")
+		return nil
+	}
 	if !a.cfg.ShouldRestoreSession() {
 		log.Printf("[LoadTabs] restore_session disabled")
 		return nil
