@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -254,5 +255,128 @@ func TestGetGitFileStatuses_EmptyDir(t *testing.T) {
 	statuses := a.GetGitFileStatuses("")
 	if len(statuses) != 0 {
 		t.Fatalf("expected empty map for empty dir, got %d entries", len(statuses))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AddToGitignore – integration tests
+// ---------------------------------------------------------------------------
+
+func setupGitRepo(t *testing.T) (dir string, run func(...string)) {
+	t.Helper()
+	dir = t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	run = func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), gitTestEnv()...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	run("init")
+	os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("hi"), 0644)
+	run("add", ".")
+	run("commit", "--no-gpg-sign", "-m", "initial")
+	return
+}
+
+func TestAddToGitignore_CreatesFile(t *testing.T) {
+	if !gitAvailable() {
+		t.Skip("git not available")
+	}
+	dir, _ := setupGitRepo(t)
+	a := newTestApp()
+
+	err := a.AddToGitignore(dir, "secret.env")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	content, err := os.ReadFile(gitignorePath)
+	if err != nil {
+		t.Fatalf(".gitignore not created: %v", err)
+	}
+	if !strings.Contains(string(content), "secret.env") {
+		t.Fatalf(".gitignore does not contain 'secret.env', got: %q", string(content))
+	}
+}
+
+func TestAddToGitignore_AppendsToExisting(t *testing.T) {
+	if !gitAvailable() {
+		t.Skip("git not available")
+	}
+	dir, _ := setupGitRepo(t)
+	a := newTestApp()
+
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	os.WriteFile(gitignorePath, []byte("node_modules/\n"), 0644)
+
+	err := a.AddToGitignore(dir, "dist/output.js")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	content, _ := os.ReadFile(gitignorePath)
+	if !strings.Contains(string(content), "node_modules/") {
+		t.Fatalf("existing entry was removed")
+	}
+	if !strings.Contains(string(content), "dist/output.js") {
+		t.Fatalf("new entry not appended")
+	}
+}
+
+func TestAddToGitignore_NoDuplicates(t *testing.T) {
+	if !gitAvailable() {
+		t.Skip("git not available")
+	}
+	dir, _ := setupGitRepo(t)
+	a := newTestApp()
+
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	os.WriteFile(gitignorePath, []byte("secret.env\n"), 0644)
+
+	err := a.AddToGitignore(dir, "secret.env")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	content, _ := os.ReadFile(gitignorePath)
+	count := strings.Count(string(content), "secret.env")
+	if count != 1 {
+		t.Fatalf("expected exactly 1 occurrence of 'secret.env', got %d", count)
+	}
+}
+
+func TestAddToGitignore_NormalizesBackslashes(t *testing.T) {
+	if !gitAvailable() {
+		t.Skip("git not available")
+	}
+	dir, _ := setupGitRepo(t)
+	a := newTestApp()
+
+	err := a.AddToGitignore(dir, `config\local.yaml`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	content, _ := os.ReadFile(gitignorePath)
+	if !strings.Contains(string(content), "config/local.yaml") {
+		t.Fatalf("expected forward slashes in .gitignore, got: %q", string(content))
+	}
+}
+
+func TestAddToGitignore_NonGitDir(t *testing.T) {
+	dir := t.TempDir()
+	a := newTestApp()
+
+	err := a.AddToGitignore(dir, "secret.env")
+	if err == nil {
+		t.Fatal("expected error for non-git directory, got nil")
 	}
 }
