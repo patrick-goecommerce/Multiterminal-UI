@@ -16,7 +16,7 @@ export function AddIssueComment(arg1, arg2, arg3) {
 }
 
 export function AddToGitignore(arg1, arg2) {
-  return $Call.ByName('github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.AppService.AddToGitignore', arg1, arg2);
+  return $Call.ByID(3593643739, arg1, arg2);
 }
 
 export function AddToQueue(arg1, arg2) {
