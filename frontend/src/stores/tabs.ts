@@ -9,7 +9,7 @@ export interface Pane {
   mode: PaneMode;
   model: string;
   focused: boolean;
-  activity: 'idle' | 'active' | 'done' | 'needsInput';
+  activity: 'idle' | 'active' | 'done' | 'waitingPermission' | 'waitingAnswer' | 'error';
   cost: string;
   running: boolean;
   maximized: boolean;
@@ -28,6 +28,19 @@ export interface Tab {
   panes: Pane[];
   focusedPaneId: string;
   _highlight?: boolean;
+  unreadActivity: 'waitingPermission' | 'waitingAnswer' | 'error' | 'active' | 'done' | null;
+}
+
+export function computeTabActivity(panes: Pane[]): Tab['unreadActivity'] {
+  let result: Tab['unreadActivity'] = null;
+  for (const pane of panes) {
+    if (pane.activity === 'waitingPermission') return 'waitingPermission';
+    if (pane.activity === 'waitingAnswer') result = 'waitingAnswer';
+    else if (pane.activity === 'error' && result !== 'waitingAnswer') result = 'error';
+    else if (pane.activity === 'active' && result !== 'error') result = 'active';
+    else if (pane.activity === 'done' && result === null) result = 'done';
+  }
+  return result;
 }
 
 function createTabStore() {
@@ -55,6 +68,7 @@ function createTabStore() {
           dir: dir || '',
           panes: [],
           focusedPaneId: '',
+          unreadActivity: null,
         });
         if (setActive) state.activeTabId = id;
         return state;
@@ -78,6 +92,8 @@ function createTabStore() {
     setActiveTab(tabId: string) {
       update((state) => {
         state.activeTabId = tabId;
+        const tab = state.tabs.find((t) => t.id === tabId);
+        if (tab) tab.unreadActivity = null;
         return state;
       });
     },
@@ -148,6 +164,9 @@ function createTabStore() {
         const idx = tab.panes.findIndex((p) => p.id === paneId);
         if (idx === -1) return state;
         tab.panes.splice(idx, 1);
+        if (tab.id !== state.activeTabId) {
+          tab.unreadActivity = computeTabActivity(tab.panes);
+        }
         if (tab.focusedPaneId === paneId && tab.panes.length > 0) {
           const newIdx = Math.min(idx, tab.panes.length - 1);
           tab.panes.forEach((p) => (p.focused = false));
@@ -195,6 +214,9 @@ function createTabStore() {
             if (pane.sessionId === sessionId) {
               pane.activity = activity as Pane['activity'];
               if (cost) pane.cost = cost;
+              if (tab.id !== state.activeTabId) {
+                tab.unreadActivity = computeTabActivity(tab.panes);
+              }
               return state;
             }
           }
@@ -239,7 +261,7 @@ function createTabStore() {
     importTab(tab: Tab) {
       update((s) => ({
         ...s,
-        tabs: [...s.tabs, { ...tab, _highlight: true }],
+        tabs: [...s.tabs, { ...tab, _highlight: true, unreadActivity: null }],
         activeTabId: tab.id,
       }));
       setTimeout(() => {

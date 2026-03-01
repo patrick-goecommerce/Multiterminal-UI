@@ -16,7 +16,7 @@ export async function restoreSession(claudePath: string): Promise<boolean> {
         const mode = INDEX_TO_MODE[savedPane.mode] || 'shell';
         const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath);
         try {
-          const sessionId = await App.CreateSession(argv, savedTab.dir || '', 24, 80);
+          const sessionId = await App.CreateSession(argv, savedTab.dir || '', 24, 80, mode);
           if (sessionId > 0) {
             const issueNum = (savedPane as any).issue_number || 0;
             const issueBranch = (savedPane as any).issue_branch || '';

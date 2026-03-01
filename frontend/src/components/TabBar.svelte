@@ -162,6 +162,9 @@
         {#if tab.panes.length > 0}
           <span class="tab-count">{tab.panes.length}</span>
         {/if}
+        {#if tab.unreadActivity}
+          <span class="tab-activity-dot tab-dot-{tab.unreadActivity}"></span>
+        {/if}
         <button class="tab-close" on:click={(e) => handleCloseTab(e, tab.id)}>
           &times;
         </button>
@@ -329,4 +332,46 @@
   .ctx-item-danger { color: #f87171; }
 
   .ctx-separator { height: 1px; background: var(--border); margin: 4px 0; }
+
+  .tab-activity-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+
+  .tab-dot-done {
+    background: #22c55e;
+    box-shadow: 0 0 4px #22c55e88;
+  }
+
+  .tab-dot-waitingPermission {
+    background: #f5a623;
+    animation: tab-dot-pulse 1s ease-in-out infinite;
+  }
+
+  .tab-dot-waitingAnswer {
+    background: #e8875a;
+    animation: tab-dot-pulse 1s ease-in-out infinite;
+  }
+
+  .tab-dot-error {
+    background: #e05252;
+  }
+
+  .tab-dot-active {
+    background: var(--accent);
+    animation: tab-dot-slow-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes tab-dot-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(0.75); }
+  }
+
+  @keyframes tab-dot-slow-pulse {
+    0%, 100% { opacity: 0.8; }
+    50%       { opacity: 0.25; }
+  }
 </style>

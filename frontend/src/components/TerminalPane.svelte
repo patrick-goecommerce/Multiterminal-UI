@@ -490,7 +490,7 @@
           sendNotification(`${pane.name} - Fertig`, 'Claude ist fertig. Prompt bereit.');
         }
         if (shouldPlayAudio) playBell('done', audio.volume, audio.done_sound || undefined);
-      } else if (pane.activity === 'needsInput' && !needsInputAlerted) {
+      } else if ((pane.activity === 'waitingPermission' || pane.activity === 'waitingAnswer') && !needsInputAlerted) {
         needsInputAlerted = true;
         if (!document.hasFocus()) {
           sendNotification(`${pane.name} - Eingabe nötig`, 'Claude wartet auf Bestätigung.');
@@ -507,7 +507,7 @@
   class="terminal-pane"
   class:focused={pane.focused}
   class:activity-done={pane.activity === 'done'}
-  class:activity-needs-input={pane.activity === 'needsInput'}
+  class:activity-waiting={pane.activity === 'waitingPermission' || pane.activity === 'waitingAnswer'}
   class:drop-target={dropHighlight}
   on:mousedown={() => dispatch('focus', { paneId: pane.id })}
   on:dragover={handleDragOver}
@@ -575,20 +575,20 @@
     box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), inset 0 0 4px rgba(34, 197, 94, 0.1);
   }
 
-  .terminal-pane.activity-needs-input {
-    border-color: #ef4444;
-    box-shadow: 0 0 14px rgba(239, 68, 68, 0.6), inset 0 0 4px rgba(239, 68, 68, 0.1);
-    animation: red-pulse 1.2s ease-in-out infinite;
+  .terminal-pane.activity-waiting {
+    border-color: #f5a623;
+    box-shadow: 0 0 14px rgba(245, 166, 35, 0.6), inset 0 0 4px rgba(245, 166, 35, 0.1);
+    animation: waiting-pulse 1.2s ease-in-out infinite;
   }
 
-  @keyframes red-pulse {
+  @keyframes waiting-pulse {
     0%, 100% {
-      border-color: #ef4444;
-      box-shadow: 0 0 14px rgba(239, 68, 68, 0.6), inset 0 0 4px rgba(239, 68, 68, 0.1);
+      border-color: #f5a623;
+      box-shadow: 0 0 14px rgba(245, 166, 35, 0.6), inset 0 0 4px rgba(245, 166, 35, 0.1);
     }
     50% {
-      border-color: #dc2626;
-      box-shadow: 0 0 24px rgba(239, 68, 68, 0.9), inset 0 0 8px rgba(239, 68, 68, 0.2);
+      border-color: #e8875a;
+      box-shadow: 0 0 24px rgba(245, 166, 35, 0.9), inset 0 0 8px rgba(245, 166, 35, 0.2);
     }
   }
 

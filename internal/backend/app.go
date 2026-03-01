@@ -44,6 +44,7 @@ type AppService struct {
 	detachCount       int            // monotonic counter for detached window IDs
 	safeMode      bool
 	sessionBackup *config.SessionState // populated in safe-mode; restored on shutdown
+	hookMgr       *HookManager
 }
 
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
@@ -81,6 +82,9 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 
 	// Resolve Claude CLI path before anything else needs it
 	a.resolveClaudeOnStartup()
+
+	// Setup Claude Code hook integration
+	go a.setupHooks(ctx)
 
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
@@ -143,7 +147,8 @@ type SessionInfo struct {
 
 // CreateSession spawns a new PTY session and starts streaming its output
 // to the frontend. Returns the session ID.
-func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int) int {
+// mode must be "shell", "claude", or "claude-yolo"; it controls env injection.
+func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int, mode string) int {
 	a.mu.Lock()
 	a.nextID++
 	id := a.nextID
@@ -159,15 +164,21 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 		cols = 80
 	}
 
-	log.Printf("[CreateSession] id=%d argv=%v dir=%q rows=%d cols=%d", id, argv, dir, rows, cols)
+	log.Printf("[CreateSession] id=%d argv=%v dir=%q rows=%d cols=%d mode=%q", id, argv, dir, rows, cols, mode)
 
 	// Use configured default shell when no command specified
 	if len(argv) == 0 && a.cfg.DefaultShell != "" {
 		argv = []string{a.cfg.DefaultShell}
 	}
 
+	// Inject session ID so Claude Code hook scripts can match events back.
+	var env []string
+	if mode == "claude" || mode == "claude-yolo" {
+		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
+	}
+
 	sess := terminal.NewSession(id, rows, cols)
-	if err := sess.Start(argv, dir, nil); err != nil {
+	if err := sess.Start(argv, dir, env); err != nil {
 		errMsg := fmt.Sprintf("Session start failed: %v", err)
 		log.Printf("[CreateSession] ERROR: %s", errMsg)
 		a.app.Event.Emit("terminal:error", TerminalErrorEvent{ID: id, Message: errMsg})
@@ -240,24 +251,6 @@ func (a *AppService) CloseSession(id int) {
 	}()
 }
 
-// GetConfig returns the current application configuration.
-func (a *AppService) GetConfig() config.Config {
-	return a.cfg
-}
-
-// SaveConfig saves the given config to disk and updates the in-memory copy.
-func (a *AppService) SaveConfig(cfg config.Config) error {
-	log.Printf("[SaveConfig] theme=%q terminal_color=%q", cfg.Theme, cfg.TerminalColor)
-	a.cfg = cfg
-	if err := config.Save(cfg); err != nil {
-		log.Printf("[SaveConfig] error: %v", err)
-		return fmt.Errorf("config save failed: %w", err)
-	}
-	// Re-detect Claude path in case claude_command changed
-	a.resolveClaudeOnStartup()
-	return nil
-}
-
 // SaveTabs persists the current tab/pane layout to disk so it can be
 // restored on next startup.
 func (a *AppService) SaveTabs(state config.SessionState) {
@@ -290,11 +283,3 @@ func (a *AppService) LoadTabs() *config.SessionState {
 	return state
 }
 
-// GetWorkingDir returns the effective working directory (from config or cwd).
-func (a *AppService) GetWorkingDir() string {
-	if a.cfg.DefaultDir != "" {
-		return a.cfg.DefaultDir
-	}
-	dir, _ := os.Getwd()
-	return dir
-}

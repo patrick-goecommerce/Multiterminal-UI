@@ -13,7 +13,7 @@ import (
 // ActivityInfo is sent to the frontend when a session's activity state changes.
 type ActivityInfo struct {
 	ID       int    `json:"id"`
-	Activity string `json:"activity"` // "idle", "active", "done", "needsInput"
+	Activity string `json:"activity"` // "idle", "active", "done", "waitingPermission", "waitingAnswer", "error"
 	Cost     string `json:"cost"`
 }
 
@@ -68,8 +68,12 @@ func activityString(a terminal.ActivityState) string {
 		return "active"
 	case terminal.ActivityDone:
 		return "done"
-	case terminal.ActivityNeedsInput:
-		return "needsInput"
+	case terminal.ActivityWaitingPermission:
+		return "waitingPermission"
+	case terminal.ActivityWaitingAnswer:
+		return "waitingAnswer"
+	case terminal.ActivityError:
+		return "error"
 	default:
 		return "idle"
 	}
@@ -96,8 +100,15 @@ func (a *AppService) scanAllSessions() {
 
 	for i, sess := range sessions {
 		id := ids[i]
-		sess.ScanTokens()
-		activity := sess.DetectActivity()
+		sess.ScanTokens() // always scan for token/cost data
+
+		var activity terminal.ActivityState
+		if sess.HasHookData() {
+			// Hook events drive activity state for Claude panes — skip PTY regex scan
+			activity = sess.GetActivity()
+		} else {
+			activity = sess.DetectActivity()
+		}
 		actStr := activityString(activity)
 
 		tokens := sess.GetTokens()
@@ -117,7 +128,7 @@ func (a *AppService) scanAllSessions() {
 		}
 		prevActivityMu.Unlock()
 
-		if changed {
+		if changed && a.app != nil {
 			log.Printf("[scan] session %d: activity=%s cost=%s", id, actStr, costStr)
 			a.app.Event.Emit("terminal:activity", ActivityInfo{
 				ID:       id,
@@ -127,12 +138,12 @@ func (a *AppService) scanAllSessions() {
 		}
 
 		// Trigger pipeline queue on fresh "done" transition
-		if activityChanged && actStr == "done" {
+		if activityChanged && actStr == "done" && a.app != nil {
 			a.processQueue(id)
 		}
 
 		// Report issue progress on activity transitions
-		if activityChanged {
+		if activityChanged && a.app != nil {
 			a.onActivityChangeForIssue(id, actStr, costStr)
 		}
 	}

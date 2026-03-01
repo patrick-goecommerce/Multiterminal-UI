@@ -32,7 +32,7 @@ export function CreateIssue(arg1:string,arg2:string,arg3:string,arg4:Array<strin
 
 export function CreateNamedWorktree(arg1:string,arg2:string,arg3:string):Promise<backend.WorktreeInfo>;
 
-export function CreateSession(arg1:Array<string>,arg2:string,arg3:number,arg4:number):Promise<number>;
+export function CreateSession(arg1:Array<string>,arg2:string,arg3:number,arg4:number,arg5:string):Promise<number>;
 
 export function CreateWorktree(arg1:string,arg2:number,arg3:string):Promise<backend.WorktreeInfo>;
 

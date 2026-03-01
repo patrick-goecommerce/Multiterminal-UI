@@ -193,7 +193,7 @@
         <div class="issue-item" draggable="true" on:dragstart={(e) => handleDragStart(e, issue)} on:click={() => openIssue(issue.number)}>
           <div class="issue-icon" class:open={issue.state === 'OPEN'} class:closed={issue.state !== 'OPEN'}>
             {#if paneIssues[issue.number]}
-              <span class="activity-dot" class:active={paneIssues[issue.number].activity === 'active'} class:done={paneIssues[issue.number].activity === 'done'} class:needs-input={paneIssues[issue.number].activity === 'needsInput'} title="Agent: {paneIssues[issue.number].activity}">●</span>
+              <span class="activity-dot" class:active={paneIssues[issue.number].activity === 'active'} class:done={paneIssues[issue.number].activity === 'done'} class:needs-input={paneIssues[issue.number].activity === 'waitingPermission' || paneIssues[issue.number].activity === 'waitingAnswer'} title="Agent: {paneIssues[issue.number].activity}">●</span>
             {:else}
               {issue.state === 'OPEN' ? '●' : '✓'}
             {/if}

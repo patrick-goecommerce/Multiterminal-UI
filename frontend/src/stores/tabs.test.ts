@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { tabStore, activeTab, allTabs } from './tabs';
+import { tabStore, activeTab, allTabs, computeTabActivity } from './tabs';
 
 // Note: tabStore uses internal counters that persist across tests.
 // We work with that by testing behavior rather than exact IDs.
@@ -36,6 +36,12 @@ describe('tabStore', () => {
       const state = tabStore.getState();
       const tab = state.tabs.find((t) => t.id === id);
       expect(tab!.dir).toBe('');
+    });
+
+    it('initializes unreadActivity as null', () => {
+      const id = tabStore.addTab('ActivityInit');
+      const tab = tabStore.getState().tabs.find((t) => t.id === id);
+      expect(tab!.unreadActivity).toBeNull();
     });
   });
 
@@ -89,6 +95,22 @@ describe('tabStore', () => {
 
       tabStore.setActiveTab(id2);
       expect(tabStore.getState().activeTabId).toBe(id2);
+    });
+
+    it('clears unreadActivity when tab becomes active', () => {
+      const bgTab = tabStore.addTab('ClearBg');
+      const fgTab = tabStore.addTab('ClearFg');
+      tabStore.setActiveTab(fgTab);
+
+      tabStore.addPane(bgTab, 4001, 'Claude', 'claude', '');
+      tabStore.updateActivity(4001, 'waitingAnswer', '');
+
+      let tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
+      expect(tab!.unreadActivity).toBe('waitingAnswer');
+
+      tabStore.setActiveTab(bgTab);
+      tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
+      expect(tab!.unreadActivity).toBeNull();
     });
   });
 
@@ -178,6 +200,22 @@ describe('tabStore', () => {
       const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
       // p1 should now be focused
       expect(tab!.panes[0].focused).toBe(true);
+    });
+
+    it('recomputes unreadActivity when a pane is closed on a background tab', () => {
+      const bgTab = tabStore.addTab('ClosePaneBg');
+      const fgTab = tabStore.addTab('ClosePaneFg');
+      tabStore.setActiveTab(fgTab);
+
+      const p1 = tabStore.addPane(bgTab, 5001, 'C1', 'claude', '');
+      tabStore.updateActivity(5001, 'waitingAnswer', '');
+
+      let tab = tabStore.getState().tabs.find(t => t.id === bgTab);
+      expect(tab!.unreadActivity).toBe('waitingAnswer');
+
+      tabStore.closePane(bgTab, p1);
+      tab = tabStore.getState().tabs.find(t => t.id === bgTab);
+      expect(tab!.unreadActivity).toBeNull();
     });
   });
 
@@ -296,5 +334,97 @@ describe('tabStore', () => {
       const after = get(allTabs).length;
       expect(after).toBe(before + 1);
     });
+  });
+});
+
+describe('computeTabActivity', () => {
+  it('returns null for all-idle panes', () => {
+    expect(computeTabActivity([])).toBeNull();
+  });
+
+  it('returns done when all panes are done', () => {
+    const panes = [
+      { activity: 'done' } as any,
+      { activity: 'idle' } as any,
+    ];
+    expect(computeTabActivity(panes)).toBe('done');
+  });
+
+  it('returns active when any pane is active', () => {
+    const panes = [
+      { activity: 'done' } as any,
+      { activity: 'active' } as any,
+    ];
+    expect(computeTabActivity(panes)).toBe('active');
+  });
+
+  it('returns waitingAnswer when any pane is waitingAnswer (higher priority than active)', () => {
+    const panes = [
+      { activity: 'active' } as any,
+      { activity: 'waitingAnswer' } as any,
+      { activity: 'done' } as any,
+    ];
+    expect(computeTabActivity(panes)).toBe('waitingAnswer');
+  });
+
+  it('returns active for a single active pane', () => {
+    const panes = [{ activity: 'active' } as any];
+    expect(computeTabActivity(panes)).toBe('active');
+  });
+
+  it('waitingPermission has higher priority than waitingAnswer', () => {
+    const panes = [
+      { activity: 'waitingAnswer' } as any,
+      { activity: 'waitingPermission' } as any,
+    ];
+    expect(computeTabActivity(panes)).toBe('waitingPermission');
+  });
+
+  it('waitingPermission returns immediately without checking remaining panes', () => {
+    const panes = [
+      { activity: 'waitingPermission' } as any,
+      { activity: 'active' } as any,
+    ];
+    expect(computeTabActivity(panes)).toBe('waitingPermission');
+  });
+});
+
+describe('updateActivity — tab unreadActivity', () => {
+  it('sets unreadActivity on non-active tab when pane becomes done', () => {
+    const tab1 = tabStore.addTab('UAActive');
+    const tab2 = tabStore.addTab('UABackground');
+    tabStore.setActiveTab(tab1);
+
+    tabStore.addPane(tab2, 3001, 'Claude', 'claude', '');
+    tabStore.updateActivity(3001, 'done', '$0.10');
+
+    const t2 = tabStore.getState().tabs.find((t) => t.id === tab2);
+    expect(t2!.unreadActivity).toBe('done');
+  });
+
+  it('does not set unreadActivity on the currently active tab', () => {
+    const tabId = tabStore.addTab('UAActiveTab');
+    tabStore.setActiveTab(tabId);
+    tabStore.addPane(tabId, 3002, 'Claude', 'claude', '');
+
+    tabStore.updateActivity(3002, 'done', '');
+
+    const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
+    expect(tab!.unreadActivity).toBeNull();
+  });
+
+  it('escalates to waitingAnswer when one pane is waitingAnswer', () => {
+    const bgTab = tabStore.addTab('UAEscalate');
+    const fgTab = tabStore.addTab('UAForeground');
+    tabStore.setActiveTab(fgTab);
+
+    tabStore.addPane(bgTab, 3003, 'C1', 'claude', '');
+    tabStore.addPane(bgTab, 3004, 'C2', 'claude', '');
+
+    tabStore.updateActivity(3003, 'done', '');
+    tabStore.updateActivity(3004, 'waitingAnswer', '');
+
+    const tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
+    expect(tab!.unreadActivity).toBe('waitingAnswer');
   });
 });

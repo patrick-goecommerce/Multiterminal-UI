@@ -286,7 +286,7 @@
     const argv = buildClaudeArgv('claude', '', claudeCmd);
     const name = `Claude – ⎇ ${wt.branch}`;
     try {
-      const sessionId = await App.CreateSession(argv, wt.path, 24, 80);
+      const sessionId = await App.CreateSession(argv, wt.path, 24, 80, 'claude');
       if (sessionId > 0) {
         tabStore.addPane(tab.id, sessionId, name, 'claude', '', null, '', wt.branch, wt.path, wt.branch);
       }
@@ -336,7 +336,7 @@
         sessionDir = result.sessionDir;
       }
 
-      const sessionId = await App.CreateSession(argv, sessionDir, 24, 80);
+      const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, type);
       if (sessionId > 0) {
         let paneBranch = issueBranch;
         if (!paneBranch) {
@@ -370,7 +370,7 @@
       const resolved = await resolveBranchConflict(e.detail.action, launch.sessionDir, issueCtx);
       if (resolved.cancelled) return;
 
-      const sessionId = await App.CreateSession(argv, resolved.sessionDir, 24, 80);
+      const sessionId = await App.CreateSession(argv, resolved.sessionDir, 24, 80, type);
       if (sessionId > 0) {
         let paneBranch = resolved.issueBranch;
         if (!paneBranch) {
@@ -425,7 +425,7 @@
     const claudeCmd = resolvedClaudePath;
     const argv = buildClaudeArgv(mode, model, claudeCmd);
     try {
-      const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80);
+      const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
       if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model);
     } catch (err) { console.error('[handleRestartPane] failed:', err); }
   }
