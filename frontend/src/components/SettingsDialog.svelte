@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { get } from 'svelte/store';
   import { config } from '../stores/config';
   import { applyAccentColor, applyTheme } from '../stores/theme';
   import type { ThemeName } from '../stores/theme';
@@ -47,19 +48,20 @@
 
   $: if (visible) {
     requestAnimationFrame(() => dialogEl?.focus());
-    colorValue = $config.terminal_color || '#39ff14';
-    selectedTheme = ($config.theme as ThemeName) || 'dark';
+    const c = get(config);
+    colorValue = c.terminal_color || '#39ff14';
+    selectedTheme = (c.theme as ThemeName) || 'dark';
     savedTheme = selectedTheme;
-    loggingEnabled = $config.logging_enabled || false;
-    claudeCommand = $config.claude_command || '';
-    audioEnabled = $config.audio?.enabled ?? true;
-    audioWhenFocused = $config.audio?.when_focused ?? true;
-    audioVolume = $config.audio?.volume ?? 50;
-    audioDoneSound = $config.audio?.done_sound || '';
-    audioInputSound = $config.audio?.input_sound || '';
-    audioErrorSound = $config.audio?.error_sound || '';
-    fontFamily = $config.font_family || '';
-    fontSize = $config.font_size || 10;
+    loggingEnabled = c.logging_enabled || false;
+    claudeCommand = c.claude_command || '';
+    audioEnabled = c.audio?.enabled ?? true;
+    audioWhenFocused = c.audio?.when_focused ?? true;
+    audioVolume = c.audio?.volume ?? 50;
+    audioDoneSound = c.audio?.done_sound || '';
+    audioInputSound = c.audio?.input_sound || '';
+    audioErrorSound = c.audio?.error_sound || '';
+    fontFamily = c.font_family || '';
+    fontSize = c.font_size || 10;
     savedFontFamily = fontFamily;
     savedFontSize = fontSize;
     availableFonts = MONOSPACE_FONTS.map(name => ({
