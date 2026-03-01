@@ -380,3 +380,33 @@ func TestAddToGitignore_NonGitDir(t *testing.T) {
 		t.Fatal("expected error for non-git directory, got nil")
 	}
 }
+
+func TestAddToGitignore_ExistingNoTrailingNewline(t *testing.T) {
+	if !gitAvailable() {
+		t.Skip("git not available")
+	}
+	dir, _ := setupGitRepo(t)
+	a := newTestApp()
+
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	// Write existing content WITHOUT trailing newline
+	os.WriteFile(gitignorePath, []byte("node_modules/"), 0644)
+
+	err := a.AddToGitignore(dir, "dist/output.js")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	content, _ := os.ReadFile(gitignorePath)
+	lines := strings.Split(strings.TrimRight(string(content), "\n"), "\n")
+	// Should have two entries on separate lines
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d: %q", len(lines), string(content))
+	}
+	if lines[0] != "node_modules/" {
+		t.Fatalf("first line should be 'node_modules/', got %q", lines[0])
+	}
+	if lines[1] != "dist/output.js" {
+		t.Fatalf("second line should be 'dist/output.js', got %q", lines[1])
+	}
+}

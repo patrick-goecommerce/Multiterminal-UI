@@ -465,7 +465,14 @@
     previewFilePath = e.detail.path;
   }
 
-  $: if ($activeTab) showDashboard = false;
+  let _prevActiveTabId = '';
+  $: {
+    const id = $activeTab?.id ?? '';
+    if (id && id !== _prevActiveTabId) {
+      if (_prevActiveTabId !== '') showDashboard = false;
+      _prevActiveTabId = id;
+    }
+  }
 
   $: totalCost = (() => {
     let sum = 0;

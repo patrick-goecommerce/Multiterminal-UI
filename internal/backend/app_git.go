@@ -243,9 +243,11 @@ func (a *AppService) AddToGitignore(dir, relPath string) error {
 	repoRoot := strings.TrimSpace(string(out))
 	gitignorePath := filepath.Join(filepath.FromSlash(repoRoot), ".gitignore")
 
-	// Check for existing entry
-	if data, err := os.ReadFile(gitignorePath); err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
+	// Check for existing entry (retain data for newline check below)
+	var existingData []byte
+	if d, err := os.ReadFile(gitignorePath); err == nil {
+		existingData = d
+		for _, line := range strings.Split(string(d), "\n") {
 			if strings.TrimSpace(line) == entry {
 				return nil // already present
 			}
@@ -260,17 +262,9 @@ func (a *AppService) AddToGitignore(dir, relPath string) error {
 	defer f.Close()
 
 	// Ensure new entry starts on its own line
-	info, _ := f.Stat()
-	if info != nil && info.Size() > 0 {
-		rf, _ := os.Open(gitignorePath)
-		if rf != nil {
-			rf.Seek(-1, 2)
-			buf := make([]byte, 1)
-			rf.Read(buf)
-			rf.Close()
-			if buf[0] != '\n' {
-				f.WriteString("\n")
-			}
+	if len(existingData) > 0 && existingData[len(existingData)-1] != '\n' {
+		if _, err := f.WriteString("\n"); err != nil {
+			return fmt.Errorf("write newline to .gitignore: %w", err)
 		}
 	}
 
