@@ -6,6 +6,7 @@
   import { getWindowId, isMainWindow } from '../lib/window';
 
   export let activeTabId: string;
+  export let isDashboard: boolean = false;
 
   const dispatch = createEventDispatcher();
 
@@ -146,6 +147,16 @@
     on:dragleave={handleTabBarDragLeave}
     on:drop={handleTabBarDrop}
   >
+    <button
+      class="tab tab-home"
+      class:active={isDashboard}
+      title="Dashboard (Ctrl+Shift+H)"
+      on:click={() => dispatch('showDashboard')}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+    </button>
     {#each $allTabs as tab (tab.id)}
       <button
         class="tab"
@@ -237,6 +248,11 @@
     white-space: nowrap;
     transition: all 0.15s;
     min-width: 100px;
+  }
+
+  .tab-home {
+    min-width: unset;
+    padding: 12px 14px;
   }
 
   .tab:hover {
