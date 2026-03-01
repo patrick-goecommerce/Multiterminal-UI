@@ -34,7 +34,7 @@ func hookEventToActivity(event string) terminal.ActivityState {
 	case "PermissionRequest":
 		return terminal.ActivityWaitingPermission
 	case "Notification":
-		return terminal.ActivityWaitingAnswer
+		return terminal.ActivityIdle
 	case "Stop":
 		return terminal.ActivityDone
 	default:

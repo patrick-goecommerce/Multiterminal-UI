@@ -6,6 +6,7 @@ export type PaneWithContext = Pane & {
 };
 
 export type ActivityGroups = {
+  starting: PaneWithContext[];       // starting (just launched, not yet scanned)
   needsAttention: PaneWithContext[]; // waitingPermission | waitingAnswer | error
   active: PaneWithContext[];         // active
   done: PaneWithContext[];           // done
@@ -14,6 +15,7 @@ export type ActivityGroups = {
 
 export function groupPanesByActivity(tabs: Tab[]): ActivityGroups {
   const groups: ActivityGroups = {
+    starting: [],
     needsAttention: [],
     active: [],
     done: [],
@@ -23,7 +25,9 @@ export function groupPanesByActivity(tabs: Tab[]): ActivityGroups {
   for (const tab of tabs) {
     for (const pane of tab.panes) {
       const ctx: PaneWithContext = { ...pane, tabId: tab.id, tabName: tab.name };
-      if (
+      if (pane.activity === 'starting' && pane.running) {
+        groups.starting.push(ctx);
+      } else if (
         pane.activity === 'waitingPermission' ||
         pane.activity === 'waitingAnswer' ||
         pane.activity === 'error'

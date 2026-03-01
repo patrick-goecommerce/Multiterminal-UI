@@ -158,7 +158,7 @@ describe('tabStore', () => {
       expect(pane!.model).toBe('opus');
       expect(pane!.focused).toBe(true);
       expect(pane!.running).toBe(true);
-      expect(pane!.activity).toBe('idle');
+      expect(pane!.activity).toBe('starting');
       expect(pane!.cost).toBe('');
       expect(pane!.maximized).toBe(false);
     });

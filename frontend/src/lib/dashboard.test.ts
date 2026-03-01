@@ -19,10 +19,25 @@ function makeTab(id: string, name: string, panes: Pane[]): Tab {
 describe('groupPanesByActivity', () => {
   it('returns empty groups for no tabs', () => {
     const groups = groupPanesByActivity([]);
+    expect(groups.starting).toEqual([]);
     expect(groups.needsAttention).toEqual([]);
     expect(groups.active).toEqual([]);
     expect(groups.done).toEqual([]);
     expect(groups.idle).toEqual([]);
+  });
+
+  it('groups running starting pane into starting', () => {
+    const tab = makeTab('t1', 'Dev', [makePane({ id: 'p1', activity: 'starting', running: true })]);
+    const groups = groupPanesByActivity([tab]);
+    expect(groups.starting).toHaveLength(1);
+    expect(groups.starting[0].tabName).toBe('Dev');
+  });
+
+  it('groups exited starting pane into idle (not starting)', () => {
+    const tab = makeTab('t1', 'Dev', [makePane({ id: 'p1', activity: 'starting', running: false })]);
+    const groups = groupPanesByActivity([tab]);
+    expect(groups.starting).toHaveLength(0);
+    expect(groups.idle).toHaveLength(1);
   });
 
   it('groups waitingPermission into needsAttention', () => {

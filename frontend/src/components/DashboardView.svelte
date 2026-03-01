@@ -44,6 +44,7 @@
 
   function statusDotClass(activity: string): string {
     switch (activity) {
+      case 'starting':          return 'dot-starting';
       case 'waitingPermission': return 'dot-attention';
       case 'waitingAnswer':     return 'dot-attention';
       case 'error':             return 'dot-error';
@@ -55,6 +56,7 @@
 
   function statusLabel(activity: string): string {
     switch (activity) {
+      case 'starting':          return 'startet...';
       case 'waitingPermission': return 'attention';
       case 'waitingAnswer':     return 'attention';
       case 'error':             return 'error';
@@ -103,8 +105,37 @@
     <div class="dash-tabs-count">{$allTabs.length} tab{$allTabs.length !== 1 ? 's' : ''}</div>
   </header>
 
-  <!-- Swim lanes: ATTENTION | IN PROGRESS | DONE | IDLE -->
-  <div class="swim-lanes">
+  <!-- Swim lanes: [STARTET] ATTENTION | IN PROGRESS | DONE | IDLE -->
+  <div class="swim-lanes" class:has-starting={groups.starting.length > 0}>
+
+    <!-- Starting: just launched, waiting for first backend scan -->
+    {#if groups.starting.length > 0}
+    <div class="lane">
+      <div class="lane-header">
+        <span class="lane-dot dot-starting-hdr"></span>
+        STARTET
+        <span class="lane-count">{groups.starting.length}</span>
+      </div>
+      <div class="lane-cards">
+        {#each groups.starting as pane (pane.id)}
+          {@const focused = isFocused(pane)}
+          <button class="card card-starting" class:card-focused={focused} on:click={() => handleCardClick(pane)}>
+            <div class="card-title card-title-muted">{cardTitle(pane)}</div>
+            <div class="card-project">{pane.tabName}</div>
+            <div class="card-footer">
+              {#if pane.branch}
+                <span class="card-branch">⎇ {pane.branch}</span>
+              {/if}
+              <span class="card-status-row">
+                <span class="dot dot-starting"></span>
+                <span class="status-text status-starting">startet...</span>
+              </span>
+            </div>
+          </button>
+        {/each}
+      </div>
+    </div>
+    {/if}
 
     <!-- Attention: waitingPermission + waitingAnswer + error -->
     <div class="lane">
@@ -253,6 +284,8 @@
   .dashboard {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-width: 0;
     height: 100%;
     background: var(--bg);
     overflow: hidden;
@@ -312,6 +345,10 @@
     background: var(--border);
   }
 
+  .swim-lanes.has-starting {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
   .lane {
     display: flex;
     flex-direction: column;
@@ -346,6 +383,7 @@
     flex-shrink: 0;
   }
 
+  .dot-starting-hdr  { background: var(--fg-muted); opacity: 0.5; animation: slow-pulse 2s ease-in-out infinite; }
   .dot-attention-hdr { background: #f5a623; }
   .dot-active-hdr    { background: var(--accent); }
   .dot-done-hdr      { background: #22c55e; }
@@ -394,6 +432,7 @@
   }
 
   /* Left accent stripe per status */
+  .card-starting  { border-left: 3px solid var(--fg-muted); opacity: 0.6; }
   .card-attention { border-left: 3px solid #f5a623; }
   .card-active    { border-left: 3px solid var(--accent); }
   .card-done      { border-left: 3px solid #22c55e; }
@@ -471,6 +510,7 @@
     flex-shrink: 0;
   }
 
+  .dot-starting  { background: var(--fg-muted); opacity: 0.5; animation: slow-pulse 2s ease-in-out infinite; }
   .dot-attention { background: #f5a623; animation: pulse 1s ease-in-out infinite; }
   .dot-error     { background: #e05252; }
   .dot-active    { background: var(--accent); animation: slow-pulse 2s ease-in-out infinite; }
@@ -491,6 +531,7 @@
     font-weight: 500;
   }
 
+  .status-starting      { color: var(--fg-muted); opacity: 0.6; }
   .status-waitingPermission,
   .status-waitingAnswer { color: #f5a623; }
   .status-error         { color: #e05252; }

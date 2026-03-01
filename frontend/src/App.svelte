@@ -588,7 +588,7 @@
   />
 
   <div class="content">
-    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} pinned={$config.sidebar_pinned} on:close={() => { if (!$config.sidebar_pinned) showSidebar = false; }} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
+    <Sidebar visible={showSidebar && !showDashboard} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} pinned={$config.sidebar_pinned} on:close={() => { if (!$config.sidebar_pinned) showSidebar = false; }} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
     {#if showDashboard}
       <DashboardView on:navigate={handleDashboardNavigate} />
     {:else}
