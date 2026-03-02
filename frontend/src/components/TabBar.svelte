@@ -37,6 +37,9 @@
   function handleTabClick(e: MouseEvent, tabId: string) {
     (e.currentTarget as HTMLElement).blur();
     tabStore.setActiveTab(tabId);
+    // Always close the dashboard when a tab is clicked, even if it was
+    // already the active tab (in that case the store doesn't emit a change).
+    if (isDashboard) dispatch('closeDashboard');
   }
 
   function handleCloseTab(e: MouseEvent, tabId: string) {

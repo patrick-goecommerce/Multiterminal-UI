@@ -574,6 +574,7 @@
     isDashboard={showDashboard}
     on:addTab={() => (showProjectDialog = true)}
     on:showDashboard={() => { showDashboard = true; }}
+    on:closeDashboard={() => { showDashboard = false; }}
   />
   <Toolbar
     paneCount={currentPanes}
