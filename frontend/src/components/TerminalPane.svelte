@@ -178,12 +178,23 @@
       const batchState = lastCursorVisible(merged);
       if (batchState !== null) appCursorVisible = batchState;
       const suffix = appCursorVisible ? SHOW_CURSOR : HIDE_CURSOR;
-      // Wrap: hide cursor → data → restore app's intended state
+      // Wrap: hide cursor → data → restore app's intended cursor state.
       const buf = new Uint8Array(HIDE_CURSOR.length + total + suffix.length);
       buf.set(HIDE_CURSOR, 0);
       buf.set(merged, HIDE_CURSOR.length);
       buf.set(suffix, HIDE_CURSOR.length + total);
-      termInstance.terminal.write(buf);
+      termInstance.terminal.write(buf, () => {
+        // After parse: hide cursor if it landed in Claude Code's "park zone"
+        // (status bar = last row, past col 40). The ❯ input cursor sits on the
+        // second-to-last row (col < 40) and is not affected.
+        if (!appCursorVisible || !termInstance) return;
+        const t = termInstance.terminal;
+        const active = (t as any).buffer?.active;
+        if (!active) return;
+        if (active.cursorY >= t.rows - 1 && active.cursorX >= 40) {
+          t.write(HIDE_CURSOR);
+        }
+      });
 
       if (pendingChunks.length > 0) {
         // Keep draining — unfocused panes at reduced rate to yield JS thread.
@@ -594,10 +605,15 @@
 
   .terminal-container { flex: 1; padding: 4px 14px 4px 4px; overflow: hidden; }
   .terminal-container :global(.xterm) { height: 100%; }
+  /* xterm helper textarea: used for keyboard input only, must never be visible.
+   * position:fixed + off-screen ensures WebView2's OS-level caret does not bleed
+   * through (opacity:0 alone is insufficient in some WebView2 versions). */
   .terminal-container :global(.xterm-helper-textarea) {
-    caret-color: transparent !important;
-    color: transparent !important;
+    position: fixed !important;
+    top: -9999px !important;
+    left: -9999px !important;
     opacity: 0 !important;
+    caret-color: transparent !important;
   }
   /* Force visible scrollbar in WebView2 — overlay scrollbars auto-hide on Windows 11 */
   .terminal-container :global(.xterm-viewport)::-webkit-scrollbar {

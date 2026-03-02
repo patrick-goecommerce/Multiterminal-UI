@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -222,4 +223,51 @@ func (a *AppService) GetLocalBranches(dir string) []string {
 		}
 	}
 	return branches
+}
+
+// AddToGitignore appends relPath to the .gitignore at the repo root of dir.
+// Creates .gitignore if it does not exist. No-ops if the entry is already present.
+// relPath must be relative to the repo root (forward slashes preferred; backslashes are normalized).
+func (a *AppService) AddToGitignore(dir, relPath string) error {
+	// Normalize path separator for .gitignore (always forward slashes)
+	entry := strings.ReplaceAll(relPath, `\`, "/")
+
+	// Find repo root
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd.Dir = dir
+	hideConsole(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("not a git repository: %w", err)
+	}
+	repoRoot := strings.TrimSpace(string(out))
+	gitignorePath := filepath.Join(filepath.FromSlash(repoRoot), ".gitignore")
+
+	// Check for existing entry (retain data for newline check below)
+	var existingData []byte
+	if d, err := os.ReadFile(gitignorePath); err == nil {
+		existingData = d
+		for _, line := range strings.Split(string(d), "\n") {
+			if strings.TrimSpace(line) == entry {
+				return nil // already present
+			}
+		}
+	}
+
+	// Append entry (create file if missing)
+	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("open .gitignore: %w", err)
+	}
+	defer f.Close()
+
+	// Ensure new entry starts on its own line
+	if len(existingData) > 0 && existingData[len(existingData)-1] != '\n' {
+		if _, err := f.WriteString("\n"); err != nil {
+			return fmt.Errorf("write newline to .gitignore: %w", err)
+		}
+	}
+
+	_, err = fmt.Fprintf(f, "%s\n", entry)
+	return err
 }

@@ -25,7 +25,9 @@ type rawHookEvent struct {
 }
 
 // hookEventToActivity maps a Claude Code event name to an ActivityState.
-func hookEventToActivity(event string) terminal.ActivityState {
+// For Notification events the message content is inspected: if it contains
+// a question mark the user needs to respond, otherwise it is informational.
+func hookEventToActivity(event, message string) terminal.ActivityState {
 	switch event {
 	case "PreToolUse", "PostToolUse", "UserPromptSubmit":
 		return terminal.ActivityActive
@@ -34,7 +36,10 @@ func hookEventToActivity(event string) terminal.ActivityState {
 	case "PermissionRequest":
 		return terminal.ActivityWaitingPermission
 	case "Notification":
-		return terminal.ActivityWaitingAnswer
+		if strings.Contains(message, "?") {
+			return terminal.ActivityWaitingAnswer
+		}
+		return terminal.ActivityDone
 	case "Stop":
 		return terminal.ActivityDone
 	default:
@@ -66,11 +71,15 @@ func newHookManager(
 }
 
 // Start begins polling the hooks directory every 100ms.
+// Existing files are seeked to their current end so that events from previous
+// app sessions are not replayed (session IDs reset on each start, so old
+// events would otherwise match new sessions and cause spurious state jumps).
 func (hm *HookManager) Start(ctx context.Context) {
 	if err := os.MkdirAll(hm.dir, 0755); err != nil {
 		log.Printf("[hooks] could not create hooks dir: %v — hook integration disabled", err)
 		return
 	}
+	hm.skipExistingFiles()
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
@@ -83,6 +92,27 @@ func (hm *HookManager) Start(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// skipExistingFiles records the current end-of-file offset for each JSONL
+// file already present so that stale events from previous sessions are ignored.
+func (hm *HookManager) skipExistingFiles() {
+	entries, err := os.ReadDir(hm.dir)
+	if err != nil {
+		return
+	}
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		hm.offsets[entry.Name()] = info.Size()
+	}
 }
 
 // processDirectory scans the hooks directory for new JSONL events.
@@ -173,7 +203,7 @@ func (hm *HookManager) handleEvent(ev rawHookEvent) {
 		return
 	}
 
-	newState := hookEventToActivity(ev.Event)
+	newState := hookEventToActivity(ev.Event, ev.Message)
 	sess.SetHookActivity(newState)
 
 	if hm.onActivity != nil {

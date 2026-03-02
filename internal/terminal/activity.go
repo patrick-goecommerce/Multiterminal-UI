@@ -98,6 +98,13 @@ func (s *Session) DetectActivity() ActivityState {
 	return newState
 }
 
+// ClassifyScreenState examines the screen buffer and returns ActivityWaitingAnswer
+// if a trailing question is detected above the prompt, otherwise ActivityDone or
+// ActivityIdle. Exported so hook-driven scan logic can cross-check after Stop events.
+func (s *Session) ClassifyScreenState() ActivityState {
+	return s.classifyScreenState()
+}
+
 // classifyScreenState examines the last rows of the screen to determine
 // if Claude is done or waiting for input.
 func (s *Session) classifyScreenState() ActivityState {
@@ -108,6 +115,8 @@ func (s *Session) classifyScreenState() ActivityState {
 		scanFrom = 0
 	}
 	lines := s.Screen.PlainTextRows(scanFrom, rows)
+
+	promptAt := -1
 	// Iterate in reverse (bottom-up) to find the most recent prompt/input
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := lines[i]
@@ -121,12 +130,38 @@ func (s *Session) classifyScreenState() ActivityState {
 			return ActivityWaitingAnswer
 		}
 
-		// Prompt returned (Claude/shell is done)
+		// Prompt found — record position, then check above for trailing question
 		if promptPattern.MatchString(trimmed) {
-			return ActivityDone
+			promptAt = i
+			break
 		}
 	}
-	return ActivityIdle
+
+	if promptAt < 0 {
+		return ActivityIdle
+	}
+
+	// Scan up to 8 lines above the prompt for a trailing question.
+	// Claude often ends its last message with "...?" immediately before the
+	// input prompt. Claude Code's TUI also shows a status/hint line (model,
+	// mode, cost) directly above the ❯ prompt, so we must check up to 2
+	// non-empty lines — the first may be the status bar, the second the question.
+	nonEmpty := 0
+	for i := promptAt - 1; i >= 0 && i >= promptAt-8; i-- {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" {
+			continue
+		}
+		nonEmpty++
+		if strings.HasSuffix(trimmed, "?") {
+			return ActivityWaitingAnswer
+		}
+		if nonEmpty >= 2 {
+			break // checked 2 non-empty lines above prompt, give up
+		}
+	}
+
+	return ActivityDone
 }
 
 // ResetActivity sets the activity state back to Idle.
@@ -142,11 +177,14 @@ var (
 	inputTokenPattern  = regexp.MustCompile(`(\d+\.?\d*[kK]?)\s*(?:input|in\b)`)
 	outputTokenPattern = regexp.MustCompile(`(\d+\.?\d*[kK]?)\s*(?:output|out\b)`)
 
-	// Needs user input: permission prompts, Y/n confirmations, etc.
+	// Needs user input: Y/n confirmations and explicit question phrases.
+	// Note: "permission" is intentionally excluded — Claude Code shows
+	// "bypass permissions on" on YOLO startup, which would false-positive.
+	// PermissionRequest hook events handle the real permission-request case.
 	needsInputPattern = regexp.MustCompile(`(?i)` +
 		`\[Y/n\]|\[y/N\]|\(y/n\)|` + // Classic Y/n prompts
 		`(?:proceed|continue|confirm|approve|allow)\s*\?|` + // Question prompts
-		`permission|Do you want to|Would you like to|` + // Permission phrases
+		`Do you want to|Would you like to|` + // Permission phrases
 		`Press Enter to|waiting for|Waiting for`)
 
 	// Prompt returned — Claude or shell is done and waiting for new input.

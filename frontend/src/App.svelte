@@ -13,6 +13,7 @@
   import IssueDialog from './components/IssueDialog.svelte';
   import BranchConflictDialog from './components/BranchConflictDialog.svelte';
   import FilePreview from './components/FilePreview.svelte';
+  import DashboardView from './components/DashboardView.svelte';
   import { get } from 'svelte/store';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { config } from './stores/config';
@@ -43,6 +44,7 @@
   let showSidebar = false;
   let showCrashDialog = false;
   let showIssueDialog = false;
+  let showDashboard = false;
   let previewFilePath = '';
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
   let launchIssueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
@@ -99,6 +101,7 @@
       if (tab && idx < tab.panes.length) tabStore.focusPane(tab.id, tab.panes[idx].id);
     },
     canAddPane: () => ($activeTab?.panes.length ?? 0) < MAX_PANES_PER_TAB,
+    onToggleDashboard: () => { showDashboard = !showDashboard; },
   });
 
   onMount(async () => {
@@ -392,6 +395,13 @@
     showLaunchDialog = true;
   }
 
+  function handleDashboardNavigate(e: CustomEvent<{ tabId: string; paneId: string }>) {
+    const { tabId, paneId } = e.detail;
+    showDashboard = false;
+    tabStore.setActiveTab(tabId);
+    tabStore.focusPane(tabId, paneId);
+  }
+
   function handleClosePane(e: CustomEvent<{ paneId: string; sessionId: number }>) {
     const tab = $activeTab;
     if (!tab) return;
@@ -453,6 +463,15 @@
 
   function handleSidebarFile(e: CustomEvent<{ path: string }>) {
     previewFilePath = e.detail.path;
+  }
+
+  let _prevActiveTabId = '';
+  $: {
+    const id = $activeTab?.id ?? '';
+    if (id && id !== _prevActiveTabId) {
+      if (_prevActiveTabId !== '') showDashboard = false;
+      _prevActiveTabId = id;
+    }
   }
 
   $: totalCost = (() => {
@@ -550,7 +569,13 @@
 </script>
 
 <div class="app">
-  <TabBar activeTabId={$activeTab?.id ?? ''} on:addTab={() => (showProjectDialog = true)} />
+  <TabBar
+    activeTabId={$activeTab?.id ?? ''}
+    isDashboard={showDashboard}
+    on:addTab={() => (showProjectDialog = true)}
+    on:showDashboard={() => { showDashboard = true; }}
+    on:closeDashboard={() => { showDashboard = false; }}
+  />
   <Toolbar
     paneCount={currentPanes}
     maxPanes={MAX_PANES_PER_TAB}
@@ -564,30 +589,34 @@
   />
 
   <div class="content">
-    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} pinned={$config.sidebar_pinned} on:close={() => { if (!$config.sidebar_pinned) showSidebar = false; }} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
-    <div class="tab-layers">
-      {#each $allTabs as tab (tab.id)}
-        <div class="tab-layer" class:active={tab.id === $activeTab?.id}>
-          <PaneGrid
-            tabId={tab.id}
-            panes={tab.panes}
-            active={tab.id === $activeTab?.id}
-            worktrees={allWorktrees}
-            tabDir={$activeTab?.dir || ''}
-            on:closePane={handleClosePane}
-            on:maximizePane={handleMaximizePane}
-            on:focusPane={handleFocusPane}
-            on:renamePane={handleRenamePane}
-            on:restartPane={handleRestartPane}
-            on:issueAction={handleIssueAction}
-            on:navigateFile={handleNavigateFile}
-            on:splitPane={() => (showLaunchDialog = true)}
-            on:openWorktreePane={handleOpenWorktreePane}
-            on:worktreeListChanged={loadWorktrees}
-          />
-        </div>
-      {/each}
-    </div>
+    <Sidebar visible={showSidebar && !showDashboard} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} pinned={$config.sidebar_pinned} on:close={() => { if (!$config.sidebar_pinned) showSidebar = false; }} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
+    {#if showDashboard}
+      <DashboardView on:navigate={handleDashboardNavigate} />
+    {:else}
+      <div class="tab-layers">
+        {#each $allTabs as tab (tab.id)}
+          <div class="tab-layer" class:active={tab.id === $activeTab?.id}>
+            <PaneGrid
+              tabId={tab.id}
+              panes={tab.panes}
+              active={tab.id === $activeTab?.id}
+              worktrees={allWorktrees}
+              tabDir={$activeTab?.dir || ''}
+              on:closePane={handleClosePane}
+              on:maximizePane={handleMaximizePane}
+              on:focusPane={handleFocusPane}
+              on:renamePane={handleRenamePane}
+              on:restartPane={handleRestartPane}
+              on:issueAction={handleIssueAction}
+              on:navigateFile={handleNavigateFile}
+              on:splitPane={() => (showLaunchDialog = true)}
+              on:openWorktreePane={handleOpenWorktreePane}
+              on:worktreeListChanged={loadWorktrees}
+            />
+          </div>
+        {/each}
+      </div>
+    {/if}
   </div>
 
   <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} />

@@ -9,7 +9,7 @@ export interface Pane {
   mode: PaneMode;
   model: string;
   focused: boolean;
-  activity: 'idle' | 'active' | 'done' | 'waitingPermission' | 'waitingAnswer' | 'error';
+  activity: 'starting' | 'idle' | 'active' | 'done' | 'waitingPermission' | 'waitingAnswer' | 'error';
   cost: string;
   running: boolean;
   maximized: boolean;
@@ -140,7 +140,7 @@ function createTabStore() {
           mode,
           model,
           focused: true,
-          activity: 'idle',
+          activity: 'starting',
           cost: '',
           running: true,
           maximized: false,

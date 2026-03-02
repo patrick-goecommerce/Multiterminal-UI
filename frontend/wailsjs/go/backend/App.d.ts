@@ -8,6 +8,8 @@ export function AddFavorite(arg1:string,arg2:string):Promise<void>;
 
 export function AddIssueComment(arg1:string,arg2:number,arg3:string):Promise<void>;
 
+export function AddToGitignore(arg1:string,arg2:string):Promise<void>;
+
 export function AddToQueue(arg1:number,arg2:string):Promise<backend.QueueItem>;
 
 export function BrowseForAudioFile():Promise<string>;

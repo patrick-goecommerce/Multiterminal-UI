@@ -34,23 +34,29 @@ func writeTestHookEvent(t *testing.T, dir, sessionID string, ev testHookEvent) {
 
 func TestHookEventToActivity(t *testing.T) {
 	tests := []struct {
-		event string
-		want  terminal.ActivityState
+		event   string
+		message string
+		want    terminal.ActivityState
 	}{
-		{"PreToolUse", terminal.ActivityActive},
-		{"PostToolUse", terminal.ActivityActive},
-		{"PostToolUseFailure", terminal.ActivityError},
-		{"PermissionRequest", terminal.ActivityWaitingPermission},
-		{"Notification", terminal.ActivityWaitingAnswer},
-		{"Stop", terminal.ActivityDone},
-		{"UserPromptSubmit", terminal.ActivityActive},
-		{"SessionEnd", terminal.ActivityIdle},
-		{"unknown", terminal.ActivityIdle},
+		{"PreToolUse", "", terminal.ActivityActive},
+		{"PostToolUse", "", terminal.ActivityActive},
+		{"PostToolUseFailure", "", terminal.ActivityError},
+		{"PermissionRequest", "", terminal.ActivityWaitingPermission},
+		// Notification with a question → user must respond
+		{"Notification", "Möchtest du fortfahren?", terminal.ActivityWaitingAnswer},
+		{"Notification", "Should I proceed?", terminal.ActivityWaitingAnswer},
+		// Notification without a question → informational, show as done
+		{"Notification", "Task completed successfully.", terminal.ActivityDone},
+		{"Notification", "", terminal.ActivityDone},
+		{"Stop", "", terminal.ActivityDone},
+		{"UserPromptSubmit", "", terminal.ActivityActive},
+		{"SessionEnd", "", terminal.ActivityIdle},
+		{"unknown", "", terminal.ActivityIdle},
 	}
 	for _, tt := range tests {
-		got := hookEventToActivity(tt.event)
+		got := hookEventToActivity(tt.event, tt.message)
 		if got != tt.want {
-			t.Errorf("hookEventToActivity(%q) = %d, want %d", tt.event, got, tt.want)
+			t.Errorf("hookEventToActivity(%q, %q) = %d, want %d", tt.event, tt.message, got, tt.want)
 		}
 	}
 }

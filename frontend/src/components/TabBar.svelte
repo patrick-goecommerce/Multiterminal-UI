@@ -6,6 +6,7 @@
   import { getWindowId, isMainWindow } from '../lib/window';
 
   export let activeTabId: string;
+  export let isDashboard: boolean = false;
 
   const dispatch = createEventDispatcher();
 
@@ -36,6 +37,9 @@
   function handleTabClick(e: MouseEvent, tabId: string) {
     (e.currentTarget as HTMLElement).blur();
     tabStore.setActiveTab(tabId);
+    // Always close the dashboard when a tab is clicked, even if it was
+    // already the active tab (in that case the store doesn't emit a change).
+    if (isDashboard) dispatch('closeDashboard');
   }
 
   function handleCloseTab(e: MouseEvent, tabId: string) {
@@ -146,10 +150,20 @@
     on:dragleave={handleTabBarDragLeave}
     on:drop={handleTabBarDrop}
   >
+    <button
+      class="tab tab-home"
+      class:active={isDashboard}
+      title="Dashboard (Ctrl+Shift+H)"
+      on:click={() => dispatch('showDashboard')}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+    </button>
     {#each $allTabs as tab (tab.id)}
       <button
         class="tab"
-        class:active={tab.id === activeTabId}
+        class:active={tab.id === activeTabId && !isDashboard}
         class:highlight={tab._highlight}
         draggable="true"
         on:click={(e) => handleTabClick(e, tab.id)}
@@ -237,6 +251,11 @@
     white-space: nowrap;
     transition: all 0.15s;
     min-width: 100px;
+  }
+
+  .tab-home {
+    min-width: unset;
+    padding: 12px 14px;
   }
 
   .tab:hover {

@@ -23,7 +23,6 @@ func TestNeedsInputPattern(t *testing.T) {
 		"Press Enter to continue",
 		"waiting for input",
 		"Waiting for response",
-		"permission required",
 	}
 	for _, s := range shouldMatch {
 		if !needsInputPattern.MatchString(s) {
@@ -36,6 +35,9 @@ func TestNeedsInputPattern(t *testing.T) {
 		"compiling main.go",
 		"100% complete",
 		"file saved successfully",
+		// Claude Code YOLO startup line — must NOT trigger attention
+		"bypass permissions on (shift+tab to cycle)",
+		"permission required", // handled by PermissionRequest hook, not PTY scan
 	}
 	for _, s := range shouldNotMatch {
 		if needsInputPattern.MatchString(s) {
@@ -122,6 +124,66 @@ func TestClassifyScreenState_NeedsInputTakesPriority(t *testing.T) {
 	state := sess.classifyScreenState()
 	if state != ActivityWaitingAnswer {
 		t.Errorf("classifyScreenState = %d, want ActivityWaitingAnswer (%d)", state, ActivityWaitingAnswer)
+	}
+}
+
+func TestClassifyScreenState_QuestionAbovePrompt(t *testing.T) {
+	// Claude asked a question, then the input prompt appeared below it.
+	// The scanner must detect WaitingAnswer even though the prompt is present.
+	sess := NewSession(1, 10, 80)
+	sess.Screen.Write([]byte(
+		"Sure! What would you like to work on?\r\n" +
+			"Woran möchtest du arbeiten?\r\n" +
+			"\r\n" +
+			"> "))
+
+	state := sess.classifyScreenState()
+	if state != ActivityWaitingAnswer {
+		t.Errorf("classifyScreenState = %d, want ActivityWaitingAnswer (%d)", state, ActivityWaitingAnswer)
+	}
+}
+
+func TestClassifyScreenState_StatementAbovePrompt(t *testing.T) {
+	// Claude finished with a normal statement (no question) — should be Done.
+	sess := NewSession(1, 10, 80)
+	sess.Screen.Write([]byte(
+		"Task completed successfully.\r\n" +
+			"\r\n" +
+			"> "))
+
+	state := sess.classifyScreenState()
+	if state != ActivityDone {
+		t.Errorf("classifyScreenState = %d, want ActivityDone (%d)", state, ActivityDone)
+	}
+}
+
+func TestClassifyScreenState_QuestionWithStatusBarAbovePrompt(t *testing.T) {
+	// Claude Code's TUI shows a status/hint line directly above ❯, so the
+	// question may be separated from the prompt by the status bar.
+	// The scanner must still detect WaitingAnswer.
+	sess := NewSession(1, 10, 80)
+	sess.Screen.Write([]byte(
+		"Was willst du angehen?\r\n" +
+			"claude-sonnet-4-6 · bypass permissions on\r\n" + // status bar
+			"> "))
+
+	state := sess.classifyScreenState()
+	if state != ActivityWaitingAnswer {
+		t.Errorf("classifyScreenState = %d, want ActivityWaitingAnswer (%d)", state, ActivityWaitingAnswer)
+	}
+}
+
+func TestClassifyScreenState_StatementWithStatusBarAbovePrompt(t *testing.T) {
+	// A statement (no question) + status bar — must still be Done, not WaitingAnswer.
+	sess := NewSession(1, 10, 80)
+	sess.Screen.Write([]byte(
+		"Task completed successfully.\r\n" +
+			"claude-sonnet-4-6 · bypass permissions on\r\n" + // status bar
+			"> "))
+
+	state := sess.classifyScreenState()
+	if state != ActivityDone {
+		t.Errorf("classifyScreenState = %d, want ActivityDone (%d)", state, ActivityDone)
 	}
 }
 
