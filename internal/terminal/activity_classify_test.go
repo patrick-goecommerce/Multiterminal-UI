@@ -23,7 +23,6 @@ func TestNeedsInputPattern(t *testing.T) {
 		"Press Enter to continue",
 		"waiting for input",
 		"Waiting for response",
-		"permission required",
 	}
 	for _, s := range shouldMatch {
 		if !needsInputPattern.MatchString(s) {
@@ -36,6 +35,9 @@ func TestNeedsInputPattern(t *testing.T) {
 		"compiling main.go",
 		"100% complete",
 		"file saved successfully",
+		// Claude Code YOLO startup line — must NOT trigger attention
+		"bypass permissions on (shift+tab to cycle)",
+		"permission required", // handled by PermissionRequest hook, not PTY scan
 	}
 	for _, s := range shouldNotMatch {
 		if needsInputPattern.MatchString(s) {

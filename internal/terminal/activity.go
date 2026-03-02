@@ -142,11 +142,14 @@ var (
 	inputTokenPattern  = regexp.MustCompile(`(\d+\.?\d*[kK]?)\s*(?:input|in\b)`)
 	outputTokenPattern = regexp.MustCompile(`(\d+\.?\d*[kK]?)\s*(?:output|out\b)`)
 
-	// Needs user input: permission prompts, Y/n confirmations, etc.
+	// Needs user input: Y/n confirmations and explicit question phrases.
+	// Note: "permission" is intentionally excluded — Claude Code shows
+	// "bypass permissions on" on YOLO startup, which would false-positive.
+	// PermissionRequest hook events handle the real permission-request case.
 	needsInputPattern = regexp.MustCompile(`(?i)` +
 		`\[Y/n\]|\[y/N\]|\(y/n\)|` + // Classic Y/n prompts
 		`(?:proceed|continue|confirm|approve|allow)\s*\?|` + // Question prompts
-		`permission|Do you want to|Would you like to|` + // Permission phrases
+		`Do you want to|Would you like to|` + // Permission phrases
 		`Press Enter to|waiting for|Waiting for`)
 
 	// Prompt returned — Claude or shell is done and waiting for new input.
