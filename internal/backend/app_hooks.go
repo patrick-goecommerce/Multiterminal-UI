@@ -25,7 +25,9 @@ type rawHookEvent struct {
 }
 
 // hookEventToActivity maps a Claude Code event name to an ActivityState.
-func hookEventToActivity(event string) terminal.ActivityState {
+// For Notification events the message content is inspected: if it contains
+// a question mark the user needs to respond, otherwise it is informational.
+func hookEventToActivity(event, message string) terminal.ActivityState {
 	switch event {
 	case "PreToolUse", "PostToolUse", "UserPromptSubmit":
 		return terminal.ActivityActive
@@ -34,6 +36,9 @@ func hookEventToActivity(event string) terminal.ActivityState {
 	case "PermissionRequest":
 		return terminal.ActivityWaitingPermission
 	case "Notification":
+		if strings.Contains(message, "?") {
+			return terminal.ActivityWaitingAnswer
+		}
 		return terminal.ActivityDone
 	case "Stop":
 		return terminal.ActivityDone
@@ -198,7 +203,7 @@ func (hm *HookManager) handleEvent(ev rawHookEvent) {
 		return
 	}
 
-	newState := hookEventToActivity(ev.Event)
+	newState := hookEventToActivity(ev.Event, ev.Message)
 	sess.SetHookActivity(newState)
 
 	if hm.onActivity != nil {
