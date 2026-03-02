@@ -106,6 +106,14 @@ func (a *AppService) scanAllSessions() {
 		if sess.HasHookData() {
 			// Hook events drive activity state for Claude panes — skip PTY regex scan
 			activity = sess.GetActivity()
+			// Exception: when hook says "done", cross-check screen for a trailing
+			// question (e.g. Claude ended with "Was liegt an?"). The Stop hook fires
+			// before the PTY scanner can see the question, so we do it here.
+			if activity == terminal.ActivityDone {
+				if screen := sess.ClassifyScreenState(); screen == terminal.ActivityWaitingAnswer {
+					activity = terminal.ActivityWaitingAnswer
+				}
+			}
 		} else {
 			activity = sess.DetectActivity()
 		}

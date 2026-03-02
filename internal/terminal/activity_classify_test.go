@@ -157,6 +157,36 @@ func TestClassifyScreenState_StatementAbovePrompt(t *testing.T) {
 	}
 }
 
+func TestClassifyScreenState_QuestionWithStatusBarAbovePrompt(t *testing.T) {
+	// Claude Code's TUI shows a status/hint line directly above ❯, so the
+	// question may be separated from the prompt by the status bar.
+	// The scanner must still detect WaitingAnswer.
+	sess := NewSession(1, 10, 80)
+	sess.Screen.Write([]byte(
+		"Was willst du angehen?\r\n" +
+			"claude-sonnet-4-6 · bypass permissions on\r\n" + // status bar
+			"> "))
+
+	state := sess.classifyScreenState()
+	if state != ActivityWaitingAnswer {
+		t.Errorf("classifyScreenState = %d, want ActivityWaitingAnswer (%d)", state, ActivityWaitingAnswer)
+	}
+}
+
+func TestClassifyScreenState_StatementWithStatusBarAbovePrompt(t *testing.T) {
+	// A statement (no question) + status bar — must still be Done, not WaitingAnswer.
+	sess := NewSession(1, 10, 80)
+	sess.Screen.Write([]byte(
+		"Task completed successfully.\r\n" +
+			"claude-sonnet-4-6 · bypass permissions on\r\n" + // status bar
+			"> "))
+
+	state := sess.classifyScreenState()
+	if state != ActivityDone {
+		t.Errorf("classifyScreenState = %d, want ActivityDone (%d)", state, ActivityDone)
+	}
+}
+
 func TestSession_HookData(t *testing.T) {
 	s := NewSession(1, 24, 80)
 

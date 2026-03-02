@@ -98,6 +98,13 @@ func (s *Session) DetectActivity() ActivityState {
 	return newState
 }
 
+// ClassifyScreenState examines the screen buffer and returns ActivityWaitingAnswer
+// if a trailing question is detected above the prompt, otherwise ActivityDone or
+// ActivityIdle. Exported so hook-driven scan logic can cross-check after Stop events.
+func (s *Session) ClassifyScreenState() ActivityState {
+	return s.classifyScreenState()
+}
+
 // classifyScreenState examines the last rows of the screen to determine
 // if Claude is done or waiting for input.
 func (s *Session) classifyScreenState() ActivityState {
@@ -136,16 +143,22 @@ func (s *Session) classifyScreenState() ActivityState {
 
 	// Scan up to 8 lines above the prompt for a trailing question.
 	// Claude often ends its last message with "...?" immediately before the
-	// input prompt, which means the user must answer before work can continue.
+	// input prompt. Claude Code's TUI also shows a status/hint line (model,
+	// mode, cost) directly above the ❯ prompt, so we must check up to 2
+	// non-empty lines — the first may be the status bar, the second the question.
+	nonEmpty := 0
 	for i := promptAt - 1; i >= 0 && i >= promptAt-8; i-- {
 		trimmed := strings.TrimSpace(lines[i])
 		if trimmed == "" {
 			continue
 		}
+		nonEmpty++
 		if strings.HasSuffix(trimmed, "?") {
 			return ActivityWaitingAnswer
 		}
-		break // first non-empty line above prompt does not end with '?'
+		if nonEmpty >= 2 {
+			break // checked 2 non-empty lines above prompt, give up
+		}
 	}
 
 	return ActivityDone

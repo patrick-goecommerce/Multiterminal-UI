@@ -49,9 +49,10 @@ export interface TerminalInstance {
 }
 
 const baseOptions: Partial<import('@xterm/xterm').ITerminalOptions> = {
-  cursorBlink: true,
-  cursorStyle: 'block',
-  scrollback: 2000,
+  cursorBlink: false,
+  cursorStyle: 'bar',
+  cursorInactiveStyle: 'none',
+  scrollback: 10000,
   allowProposedApi: true,
 };
 

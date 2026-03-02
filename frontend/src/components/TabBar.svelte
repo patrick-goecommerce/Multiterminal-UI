@@ -163,7 +163,7 @@
     {#each $allTabs as tab (tab.id)}
       <button
         class="tab"
-        class:active={tab.id === activeTabId}
+        class:active={tab.id === activeTabId && !isDashboard}
         class:highlight={tab._highlight}
         draggable="true"
         on:click={(e) => handleTabClick(e, tab.id)}
