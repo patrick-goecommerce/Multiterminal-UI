@@ -108,6 +108,8 @@ func (s *Session) classifyScreenState() ActivityState {
 		scanFrom = 0
 	}
 	lines := s.Screen.PlainTextRows(scanFrom, rows)
+
+	promptAt := -1
 	// Iterate in reverse (bottom-up) to find the most recent prompt/input
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := lines[i]
@@ -121,12 +123,32 @@ func (s *Session) classifyScreenState() ActivityState {
 			return ActivityWaitingAnswer
 		}
 
-		// Prompt returned (Claude/shell is done)
+		// Prompt found — record position, then check above for trailing question
 		if promptPattern.MatchString(trimmed) {
-			return ActivityDone
+			promptAt = i
+			break
 		}
 	}
-	return ActivityIdle
+
+	if promptAt < 0 {
+		return ActivityIdle
+	}
+
+	// Scan up to 8 lines above the prompt for a trailing question.
+	// Claude often ends its last message with "...?" immediately before the
+	// input prompt, which means the user must answer before work can continue.
+	for i := promptAt - 1; i >= 0 && i >= promptAt-8; i-- {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasSuffix(trimmed, "?") {
+			return ActivityWaitingAnswer
+		}
+		break // first non-empty line above prompt does not end with '?'
+	}
+
+	return ActivityDone
 }
 
 // ResetActivity sets the activity state back to Idle.

@@ -127,6 +127,36 @@ func TestClassifyScreenState_NeedsInputTakesPriority(t *testing.T) {
 	}
 }
 
+func TestClassifyScreenState_QuestionAbovePrompt(t *testing.T) {
+	// Claude asked a question, then the input prompt appeared below it.
+	// The scanner must detect WaitingAnswer even though the prompt is present.
+	sess := NewSession(1, 10, 80)
+	sess.Screen.Write([]byte(
+		"Sure! What would you like to work on?\r\n" +
+			"Woran möchtest du arbeiten?\r\n" +
+			"\r\n" +
+			"> "))
+
+	state := sess.classifyScreenState()
+	if state != ActivityWaitingAnswer {
+		t.Errorf("classifyScreenState = %d, want ActivityWaitingAnswer (%d)", state, ActivityWaitingAnswer)
+	}
+}
+
+func TestClassifyScreenState_StatementAbovePrompt(t *testing.T) {
+	// Claude finished with a normal statement (no question) — should be Done.
+	sess := NewSession(1, 10, 80)
+	sess.Screen.Write([]byte(
+		"Task completed successfully.\r\n" +
+			"\r\n" +
+			"> "))
+
+	state := sess.classifyScreenState()
+	if state != ActivityDone {
+		t.Errorf("classifyScreenState = %d, want ActivityDone (%d)", state, ActivityDone)
+	}
+}
+
 func TestSession_HookData(t *testing.T) {
 	s := NewSession(1, 24, 80)
 
