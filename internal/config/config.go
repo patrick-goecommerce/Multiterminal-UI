@@ -28,6 +28,7 @@ type Config struct {
 	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
 	Audio                 AudioSettings  `yaml:"audio" json:"audio"`
+	KeepAlive             KeepAliveSettings `yaml:"keep_alive" json:"keep_alive"`
 	LocalhostAutoOpen     string         `yaml:"localhost_auto_open" json:"localhost_auto_open"`
 	SidebarPinned         bool           `yaml:"sidebar_pinned" json:"sidebar_pinned"`
 	Favorites             map[string][]string `yaml:"favorites,omitempty" json:"favorites,omitempty"`
@@ -66,6 +67,13 @@ type AudioSettings struct {
 	ErrorSound  string `yaml:"error_sound" json:"error_sound"`
 }
 
+// KeepAliveSettings controls the automatic Claude session keep-alive feature.
+type KeepAliveSettings struct {
+	Enabled         *bool  `yaml:"enabled" json:"enabled"`
+	IntervalMinutes int    `yaml:"interval_minutes" json:"interval_minutes"`
+	Message         string `yaml:"message" json:"message"`
+}
+
 // DefaultConfig returns the built-in defaults.
 // boolPtr returns a pointer to a bool value.
 func boolPtr(b bool) *bool { return &b }
@@ -102,6 +110,11 @@ func DefaultConfig() Config {
 			Enabled:     boolPtr(true),
 			Volume:      50,
 			WhenFocused: boolPtr(true),
+		},
+		KeepAlive: KeepAliveSettings{
+			Enabled:         boolPtr(true),
+			IntervalMinutes: 300,
+			Message:         "Hi!",
 		},
 		LocalhostAutoOpen: "notify",
 		FontFamily:        "",
@@ -187,6 +200,16 @@ func Load() Config {
 	}
 	if cfg.Audio.WhenFocused == nil {
 		cfg.Audio.WhenFocused = boolPtr(true)
+	}
+
+	if cfg.KeepAlive.Enabled == nil {
+		cfg.KeepAlive.Enabled = boolPtr(true)
+	}
+	if cfg.KeepAlive.IntervalMinutes <= 0 {
+		cfg.KeepAlive.IntervalMinutes = 300
+	}
+	if cfg.KeepAlive.Message == "" {
+		cfg.KeepAlive.Message = "Hi!"
 	}
 
 	if cfg.RestoreSession == nil {
