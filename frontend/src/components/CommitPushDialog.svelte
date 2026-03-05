@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { App } from '../../wailsjs/go/backend/AppService';
+  import * as App from '../../wailsjs/go/backend/App';
 
   export let visible: boolean = false;
   export let dir: string = '';

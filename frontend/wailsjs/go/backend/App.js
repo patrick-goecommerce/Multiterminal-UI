@@ -55,6 +55,10 @@ export function CloseSession(arg1) {
   return $Call.ByID(961833007, arg1);
 }
 
+export function CommitStaged(arg1, arg2) {
+  return $Call.ByID(3916022276, arg1, arg2);
+}
+
 export function CreateDirectory(arg1) {
   return $Call.ByID(3107327782, arg1);
 }
@@ -95,6 +99,10 @@ export function EnableLogging(arg1) {
   return $Call.ByID(2270560969, arg1);
 }
 
+export function GenerateCommitSuggestion(arg1, arg2) {
+  return $Call.ByID(4184172341, arg1, arg2);
+}
+
 export function GetAppVersion() {
   return $Call.ByID(1351953244);
 }
@@ -103,8 +111,16 @@ export function GetConfig() {
   return $Call.ByID(741379475);
 }
 
+export function GetDiffStats(arg1) {
+  return $Call.ByID(2590445749, arg1);
+}
+
 export function GetFavorites(arg1) {
   return $Call.ByID(508786262, arg1);
+}
+
+export function GetFileDiff(arg1, arg2) {
+  return $Call.ByID(1856212252, arg1, arg2);
 }
 
 export function GetGitBranch(arg1) {
@@ -223,6 +239,10 @@ export function OpenLogDir() {
   return $Call.ByID(1351486042);
 }
 
+export function PushBranch(arg1) {
+  return $Call.ByID(3236885099, arg1);
+}
+
 export function ReadFile(arg1) {
   return $Call.ByID(1041447045, arg1);
 }
@@ -277,6 +297,10 @@ export function SelectDirectory(arg1) {
 
 export function SendNotification(arg1, arg2) {
   return $Call.ByID(855829018, arg1, arg2);
+}
+
+export function StageFiles(arg1, arg2) {
+  return $Call.ByID(2458453226, arg1, arg2);
 }
 
 export function UpdateIssue(arg1, arg2, arg3, arg4, arg5) {

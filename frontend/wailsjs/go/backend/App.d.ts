@@ -48,9 +48,17 @@ export function EnableLogging(arg1:boolean):Promise<string>;
 
 export function GetAppVersion():Promise<string>;
 
+export function CommitStaged(arg1:string,arg2:string):Promise<void>;
+
+export function GenerateCommitSuggestion(arg1:string,arg2:Array<string>):Promise<backend.CommitSuggestion>;
+
 export function GetConfig():Promise<config.Config>;
 
+export function GetDiffStats(arg1:string):Promise<Array<backend.DiffFileStat>>;
+
 export function GetFavorites(arg1:string):Promise<Array<string>>;
+
+export function GetFileDiff(arg1:string,arg2:string):Promise<string>;
 
 export function GetGitBranch(arg1:string):Promise<string>;
 
@@ -110,6 +118,8 @@ export function OpenFileInEditor(arg1:string):Promise<string>;
 
 export function OpenLogDir():Promise<void>;
 
+export function PushBranch(arg1:string):Promise<void>;
+
 export function ReadFile(arg1:string):Promise<backend.FileContent>;
 
 export function RemoveFavorite(arg1:string,arg2:string):Promise<void>;
@@ -129,6 +139,8 @@ export function SearchFiles(arg1:string,arg2:string):Promise<Array<backend.FileE
 export function SelectDirectory(arg1:string):Promise<string>;
 
 export function SendNotification(arg1:string,arg2:string):Promise<void>;
+
+export function StageFiles(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function UpdateIssue(arg1:string,arg2:number,arg3:string,arg4:string,arg5:string):Promise<void>;
 
