@@ -115,6 +115,10 @@ export function GetGitFileStatuses(arg1) {
   return $Call.ByID(1919900195, arg1);
 }
 
+export function GetGlobalLastActivityUnix() {
+  return $Call.ByID(593134621);
+}
+
 export function GetIssueDetail(arg1, arg2) {
   return $Call.ByID(220592869, arg1, arg2);
 }
