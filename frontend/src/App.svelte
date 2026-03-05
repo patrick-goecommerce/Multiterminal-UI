@@ -24,6 +24,7 @@
   import { createGlobalKeyHandler } from './lib/shortcuts';
   import { sendNotification } from './lib/notifications';
   import { restoreSession, saveSession } from './lib/session';
+  import { startKeepAliveLoop } from './lib/keepalive';
   import { fetchBranch, fetchCommitAge, fetchConflicts, fetchIssueCount } from './lib/git-polling';
   import { buildIssuePrompt, setupIssueBranch, resolveBranchConflict } from './lib/launch';
   import type { IssueContext } from './lib/launch';
@@ -85,6 +86,7 @@
   let branchInterval: ReturnType<typeof setInterval> | null = null;
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
   let storeUnsubscribe: (() => void) | null = null;
+  let keepAliveCleanup: (() => void) | null = null;
 
   const handleGlobalKeydown = createGlobalKeyHandler({
     onNewPane: () => { showLaunchDialog = true; },
@@ -174,6 +176,11 @@
       tabStore.addTab('Workspace', workDir);
     }
 
+    // Start keep-alive loop (auto-start + periodic ping)
+    if ($config.keep_alive) {
+      keepAliveCleanup = await startKeepAliveLoop($config.keep_alive, resolvedClaudePath);
+    }
+
     // Listen for tabs merging back from secondary windows
     EventsOn('window:tabs-merged', (event: any) => {
       try {
@@ -235,6 +242,7 @@
     if (branchInterval) clearInterval(branchInterval);
     if (commitAgeInterval) clearInterval(commitAgeInterval);
     if (storeUnsubscribe) storeUnsubscribe();
+    if (keepAliveCleanup) keepAliveCleanup();
     window.removeEventListener('beforeunload', saveSession);
     document.removeEventListener('keydown', handleGlobalKeydown);
   });
