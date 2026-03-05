@@ -138,6 +138,14 @@ func (c Config) ShouldAutoBranch() bool {
 	return *c.AutoBranchOnIssue
 }
 
+// ShouldKeepAlive returns whether the keep-alive feature is enabled.
+func (c Config) ShouldKeepAlive() bool {
+	if c.KeepAlive.Enabled == nil {
+		return true
+	}
+	return *c.KeepAlive.Enabled
+}
+
 // configPath returns the path to ~/.multiterminal.yaml.
 func configPath() string {
 	home, err := os.UserHomeDir()

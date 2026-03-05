@@ -56,6 +56,8 @@ export function GetGitBranch(arg1:string):Promise<string>;
 
 export function GetGitFileStatuses(arg1:string):Promise<Record<string, string>>;
 
+export function GetGlobalLastActivityUnix():Promise<number>;
+
 export function GetIssueDetail(arg1:string,arg2:number):Promise<backend.IssueDetail>;
 
 export function GetIssueLabels(arg1:string):Promise<Array<backend.IssueLabel>>;
