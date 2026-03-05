@@ -264,6 +264,42 @@ export namespace backend {
 	        this.existing_command = source["existing_command"];
 	    }
 	}
+	export class CommitSuggestion {
+	    type: string;
+	    scope: string;
+	    description: string;
+	    full: string;
+
+	    static createFrom(source: any = {}) {
+	        return new CommitSuggestion(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.scope = source["scope"];
+	        this.description = source["description"];
+	        this.full = source["full"];
+	    }
+	}
+	export class DiffFileStat {
+	    path: string;
+	    status: string;
+	    insertions: number;
+	    deletions: number;
+
+	    static createFrom(source: any = {}) {
+	        return new DiffFileStat(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.status = source["status"];
+	        this.insertions = source["insertions"];
+	        this.deletions = source["deletions"];
+	    }
+	}
 	export class WorktreeInfo {
 	    path: string;
 	    branch: string;
