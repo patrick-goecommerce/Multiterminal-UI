@@ -176,7 +176,10 @@
       tabStore.addTab('Workspace', workDir);
     }
 
-    // Start keep-alive loop (auto-start + periodic ping)
+    // Start keep-alive loop (auto-start + periodic ping).
+    // NOTE: restoreSession() calls tabStore.addPane() with running=true before
+    // CreateSession resolves, so findFirstClaudePane() in startKeepAliveLoop
+    // correctly sees restored panes immediately.
     if ($config.keep_alive) {
       keepAliveCleanup = await startKeepAliveLoop($config.keep_alive, resolvedClaudePath);
     }

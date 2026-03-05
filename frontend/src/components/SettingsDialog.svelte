@@ -193,6 +193,9 @@
     audioDoneSound = '';
     audioInputSound = '';
     audioErrorSound = '';
+    keepAliveEnabled = true;
+    keepAliveInterval = 300;
+    keepAliveMessage = 'Hi!';
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -252,7 +255,7 @@
 
       <div class="setting-group">
         <label class="setting-label">Session Keep-Alive</label>
-        <p class="setting-desc">Sendet automatisch eine Nachricht an Claude, wenn das Token-Fenster ausläuft.</p>
+        <p class="setting-desc">Sendet automatisch eine Nachricht an Claude, wenn das Token-Fenster ausläuft. Änderungen werden beim nächsten Start wirksam.</p>
         <label class="toggle-row">
           <input type="checkbox" bind:checked={keepAliveEnabled} />
           Aktiviert
@@ -436,8 +439,6 @@
     border-radius: 6px; color: #000; cursor: pointer; font-size: 13px; font-weight: 600;
   }
   .btn-save:hover { opacity: 0.9; }
-
-  .toggle-row { display: flex; align-items: center; gap: 10px; }
 
   .toggle-btn {
     width: 44px; height: 24px; border-radius: 12px; border: none;
