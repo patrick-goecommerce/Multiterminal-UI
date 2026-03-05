@@ -58,29 +58,54 @@ export async function startKeepAliveLoop(
   const intervalMs = cfg.interval_minutes * 60 * 1000;
   const intervalSec = cfg.interval_minutes * 60;
 
+  async function sendPing() {
+    const pane = findFirstClaudePane();
+    if (!pane) return;
+    // Send message text and Enter as separate writes (mimics real typing)
+    await App.WriteToSession(pane.sessionId, encodeForPty(cfg.message));
+    await new Promise(r => setTimeout(r, 100));
+    await App.WriteToSession(pane.sessionId, encodeForPty('\r'));
+  }
+
   async function ping() {
     try {
       const lastActivity = await App.GetGlobalLastActivityUnix();
       const nowSec = Math.floor(Date.now() / 1000);
-
       if (lastActivity > 0 && nowSec - lastActivity < intervalSec) {
         return; // activity within window
       }
-
-      const pane = findFirstClaudePane();
-      if (!pane) return; // no Claude pane to ping
-
-      await App.WriteToSession(pane.sessionId, encodeForPty(cfg.message + '\n'));
+      await sendPing();
     } catch (err) {
       console.error('[keepalive] ping failed:', err);
     }
   }
 
-  // Send once at startup after a short delay (let Claude initialize).
-  const startupTimer = setTimeout(ping, 3000);
+  // Send once at startup — wait until Claude's startup output has settled
+  // (no PTY output for 2s), then send. Gives up after 60s.
+  async function startupPing() {
+    const timeoutMs = 60_000;
+    const idleMs = 2_000;
+    const pollMs = 500;
+    const start = Date.now();
+    let lastSeen = await App.GetGlobalLastActivityUnix();
+    let lastChangeAt = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+      await new Promise(r => setTimeout(r, pollMs));
+      const cur = await App.GetGlobalLastActivityUnix();
+      if (cur !== lastSeen) {
+        lastSeen = cur;
+        lastChangeAt = Date.now();
+      } else if (Date.now() - lastChangeAt >= idleMs) {
+        await sendPing();
+        return;
+      }
+    }
+  }
+  startupPing().catch(err => console.error('[keepalive] startup ping failed:', err));
 
   // Then repeat every interval.
   const timer = setInterval(ping, intervalMs);
 
-  return () => { clearTimeout(startupTimer); clearInterval(timer); };
+  return () => clearInterval(timer);
 }

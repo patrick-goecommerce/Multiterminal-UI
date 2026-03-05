@@ -19,6 +19,12 @@ export interface AudioConfig {
   error_sound: string;
 }
 
+export interface KeepAliveConfig {
+  enabled?: boolean;
+  interval_minutes: number;
+  message: string;
+}
+
 export interface AppConfig {
   default_shell: string;
   default_dir: string;
@@ -33,6 +39,7 @@ export interface AppConfig {
   logging_enabled?: boolean;
   commands: CommandEntry[];
   audio: AudioConfig;
+  keep_alive: KeepAliveConfig;
   localhost_auto_open: string;
   sidebar_pinned: boolean;
   font_family: string;
