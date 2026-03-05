@@ -565,7 +565,11 @@
     if (!tab) return;
     const dir = tab.dir || '';
 
-    if (action === 'pr') {
+    if (action === 'commit') {
+      // TODO: will be replaced with CommitPushDialog from SourceControlView
+      const msg = `Closes #${issueNumber}`;
+      App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m '${msg}' && git push\n`));
+    } else if (action === 'pr') {
       App.WriteToSession(sessionId, encodeForPty(`gh pr create --title "Closes #${issueNumber}" --body "Resolves #${issueNumber}" --fill\n`));
     } else if (action === 'closeIssue') {
       try {
@@ -644,7 +648,7 @@
     on:choose={handleBranchConflictChoice}
     on:close={() => { showBranchConflict = false; pendingLaunch = null; branchConflictData = null; }}
   />
-  <FilePreview visible={!!previewFilePath} filePath={previewFilePath} on:close={() => (previewFilePath = '')} />
+  <FilePreview visible={!!previewFilePath} filePath={previewFilePath} dir={$activeTab?.dir ?? ''} on:close={() => (previewFilePath = '')} />
 </div>
 
 <style>

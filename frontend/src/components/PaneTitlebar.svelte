@@ -7,7 +7,6 @@
   export let pane: Pane;
   export let paneIndex: number = 0;
   export let queueCount: number = 0;
-  export let changeCount: number = 0;
   export let worktrees: any[] = [];
   export let tabDir: string = '';
 
@@ -22,10 +21,6 @@
 
   function toggleWorktreeDropdown() {
     showWorktreeDropdown = !showWorktreeDropdown;
-  }
-
-  function toggleDiffView() {
-    dispatch('toggleDiff');
   }
 
   function handleWorktreeSelect(e: CustomEvent) {
@@ -151,19 +146,6 @@
         />
       {/if}
     </div>
-    {#if pane.mode !== 'shell'}
-      <button
-        class="changes-btn"
-        class:has-changes={changeCount > 0}
-        on:click|stopPropagation={toggleDiffView}
-        title="Änderungen anzeigen ({changeCount} Dateien)"
-      >
-        <span class="changes-icon">&#916;</span>
-        {#if changeCount > 0}
-          <span class="changes-badge">{changeCount}</span>
-        {/if}
-      </button>
-    {/if}
     {#if pane.model}
       <span class="model-label">{pane.model}</span>
     {/if}
@@ -176,7 +158,7 @@
         </button>
         {#if showIssueActions}
           <div class="issue-actions-menu">
-            <button on:click|stopPropagation={() => { showIssueActions = false; toggleDiffView(); }}>Commit & Push</button>
+            <button on:click|stopPropagation={() => issueAction('commit')}>Commit & Push</button>
             <button on:click|stopPropagation={() => issueAction('pr')}>PR erstellen</button>
             <button on:click|stopPropagation={() => issueAction('closeIssue')}>Issue schließen</button>
           </div>
@@ -322,31 +304,6 @@
 
   .dropdown-backdrop {
     position: fixed; inset: 0; z-index: 199;
-  }
-
-  .changes-btn {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    background: none;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    color: var(--text-secondary, #a6adc8);
-    cursor: pointer;
-    padding: 1px 6px;
-    font-size: 12px;
-  }
-  .changes-btn:hover { background: var(--bg-hover, #313244); }
-  .changes-btn.has-changes { color: #e2b714; border-color: #e2b71444; }
-  .changes-icon { font-weight: 700; }
-  .changes-badge {
-    background: #e2b714;
-    color: #000;
-    border-radius: 8px;
-    padding: 0 5px;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 16px;
   }
 
   .model-label { font-size: 10px; color: var(--fg-muted); }

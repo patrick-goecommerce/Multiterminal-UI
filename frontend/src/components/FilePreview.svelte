@@ -32,6 +32,7 @@
 
   export let visible: boolean = false;
   export let filePath: string = '';
+  export let dir: string = '';  // git repo directory for diff
 
   const dispatch = createEventDispatcher();
 
@@ -43,8 +44,10 @@
   let loading = false;
   let highlightedHtml = '';
   let lines: string[] = [];
+  let viewMode: 'view' | 'diff' = 'view';
+  let diffContent: string = '';
 
-  $: if (visible && filePath) loadFile(filePath);
+  $: if (visible && filePath) { loadFile(filePath); loadDiff(filePath); }
   $: if (!visible) reset();
 
   function reset() {
@@ -54,6 +57,8 @@
     size = 0;
     highlightedHtml = '';
     lines = [];
+    diffContent = '';
+    viewMode = 'view';
   }
 
   async function loadFile(path: string) {
@@ -77,6 +82,34 @@
       error = String(err);
     }
     loading = false;
+  }
+
+  async function loadDiff(path: string) {
+    if (!dir || !path) { diffContent = ''; return; }
+    try {
+      // Extract relative path from absolute path
+      const normalizedDir = dir.replace(/\\/g, '/').replace(/\/$/, '');
+      const normalizedPath = path.replace(/\\/g, '/');
+      const relPath = normalizedPath.startsWith(normalizedDir)
+        ? normalizedPath.slice(normalizedDir.length).replace(/^\//, '')
+        : normalizedPath;
+      diffContent = await App.GetFileDiff(dir, relPath) || '';
+    } catch (err) {
+      diffContent = '';
+      console.error('[FilePreview] loadDiff failed:', err);
+    }
+  }
+
+  function parseDiffLines(raw: string): Array<{ text: string; type: string }> {
+    return raw.split('\n').map(line => {
+      let type = 'context';
+      if (line.startsWith('+') && !line.startsWith('+++')) type = 'add';
+      else if (line.startsWith('-') && !line.startsWith('---')) type = 'del';
+      else if (line.startsWith('@@')) type = 'hunk';
+      else if (line.startsWith('diff ') || line.startsWith('index ') ||
+               line.startsWith('---') || line.startsWith('+++')) type = 'meta';
+      return { text: line, type };
+    });
   }
 
   async function openInEditor() {
@@ -109,6 +142,10 @@
           <span class="preview-path">{filePath}</span>
         </div>
         <div class="preview-actions">
+          <div class="view-toggle">
+            <button class="toggle-btn" class:active={viewMode === 'view'} on:click={() => viewMode = 'view'}>Datei</button>
+            <button class="toggle-btn" class:active={viewMode === 'diff'} on:click={() => viewMode = 'diff'}>Diff</button>
+          </div>
           <button class="preview-btn" on:click={openInEditor} title="Im Editor öffnen">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
@@ -133,6 +170,13 @@
             <p>Binärdatei kann nicht angezeigt werden</p>
             <button class="preview-btn" on:click={openInEditor}>Im Editor öffnen</button>
           </div>
+        {:else if viewMode === 'diff'}
+          {#if diffContent}
+            <pre class="diff-pre">{#each parseDiffLines(diffContent) as line}<span class="diff-line diff-{line.type}">{line.text}</span>
+{/each}</pre>
+          {:else}
+            <div class="preview-message">Kein Diff verfügbar (neue oder ungetrackte Datei)</div>
+          {/if}
         {:else}
           <div class="code-container">
             <div class="line-numbers">
@@ -251,6 +295,42 @@
   :global(.hljs-attr), :global(.hljs-variable) { color: var(--fg); }
   :global(.hljs-meta) { color: var(--fg-muted); }
   :global(.hljs-symbol), :global(.hljs-bullet) { color: var(--accent); }
+
+  .view-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .toggle-btn {
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    color: var(--fg-muted);
+    cursor: pointer;
+  }
+  .toggle-btn:hover { background: var(--bg-tertiary); }
+  .toggle-btn.active {
+    background: var(--accent);
+    color: #fff;
+  }
+  .diff-pre {
+    margin: 0;
+    padding: 12px 16px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre;
+    tab-size: 4;
+  }
+  .diff-line { display: block; }
+  .diff-add { color: #50fa7b; background: rgba(80, 250, 123, 0.07); }
+  .diff-del { color: #ff5555; background: rgba(255, 85, 85, 0.07); }
+  .diff-hunk { color: #bd93f9; }
+  .diff-meta { color: var(--fg-muted); }
+  .diff-context { color: var(--fg-muted); }
 
   @keyframes fade-in {
     from { opacity: 0; }

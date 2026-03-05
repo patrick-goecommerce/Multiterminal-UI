@@ -15,9 +15,6 @@
   import PaneTitlebar from './PaneTitlebar.svelte';
   import TerminalSearch from './TerminalSearch.svelte';
   import ContextMenu from './ContextMenu.svelte';
-  import DiffView from './DiffView.svelte';
-  import CommitPushDialog from './CommitPushDialog.svelte';
-
   export let pane: Pane;
   export let paneIndex: number = 0;
   export let active: boolean = true;
@@ -48,62 +45,6 @@
   let ctxHasSelection = false;
   let wheelHandler: ((e: WheelEvent) => void) | null = null;
   const seenLocalhostUrls = new Set<string>();
-
-  let showDiff = false;
-  let showCommitDialog = false;
-  let changeCount = 0;
-  let commitFiles: string[] = [];
-
-  function getPaneDir(): string {
-    return pane.worktreePath || tabDir;
-  }
-
-  let diffPollInterval: ReturnType<typeof setInterval> | null = null;
-
-  async function pollChangeCount() {
-    if (pane.mode === 'shell') return;
-    try {
-      const stats = await App.GetDiffStats(getPaneDir());
-      changeCount = stats?.length || 0;
-    } catch {}
-  }
-
-  function startDiffPolling() {
-    stopDiffPolling();
-    if (pane.mode !== 'shell') {
-      pollChangeCount();
-      diffPollInterval = setInterval(pollChangeCount, 10_000);
-    }
-  }
-
-  function stopDiffPolling() {
-    if (diffPollInterval) {
-      clearInterval(diffPollInterval);
-      diffPollInterval = null;
-    }
-  }
-
-  function handleToggleDiff() {
-    showDiff = !showDiff;
-    if (showDiff) pollChangeCount();
-  }
-
-  function handleCommitRequest(e: CustomEvent) {
-    commitFiles = e.detail.files;
-    showCommitDialog = true;
-  }
-
-  function handleCommitted() {
-    showCommitDialog = false;
-    // Keep DiffView open to enable multiple small commits
-    pollChangeCount();
-  }
-
-  function handleCreatePR(e: CustomEvent) {
-    const { issueNumber } = e.detail;
-    const cmd = `gh pr create --title "Closes #${issueNumber}" --body "Resolves #${issueNumber}" --fill\n`;
-    App.WriteToSession(pane.sessionId, btoa(cmd));
-  }
 
   // Exposed inside onMount so the reactive tab-activation block can flush buffered
   // data when this pane's tab becomes active.
@@ -450,15 +391,12 @@
     // Mount immediately if already active; otherwise wait for tab activation.
     if (active) mountTerminal();
     triggerMountTerminal = mountTerminal;
-
-    startDiffPolling();
   });
 
   onDestroy(() => {
     if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
     if (cleanupFn) cleanupFn();
     if (queueCleanup) queueCleanup();
-    stopDiffPolling();
     if (wheelHandler && containerEl) containerEl.removeEventListener('wheel', wheelHandler);
     resizeObserver?.disconnect();
     termInstance?.dispose();
@@ -590,7 +528,6 @@
     {pane}
     {paneIndex}
     {queueCount}
-    {changeCount}
     {worktrees}
     {tabDir}
     on:close
@@ -598,7 +535,6 @@
     on:rename
     on:restart={() => dispatch('restart', { paneId: pane.id, sessionId: pane.sessionId, mode: pane.mode, model: pane.model, name: pane.name })}
     on:toggleQueue={() => (showQueue = !showQueue)}
-    on:toggleDiff={handleToggleDiff}
     on:issueAction
     on:openWorktreePane
     on:worktreeListChanged
@@ -627,22 +563,7 @@
     on:action={handleContextAction}
     on:close={closeContextMenu}
   />
-  <DiffView
-    dir={getPaneDir()}
-    visible={showDiff}
-    on:close={() => showDiff = false}
-    on:commitRequest={handleCommitRequest}
-  />
-  <CommitPushDialog
-    visible={showCommitDialog}
-    dir={getPaneDir()}
-    files={commitFiles}
-    issueNumber={pane.issueNumber || 0}
-    branch={pane.branch || pane.issueBranch || ''}
-    on:close={() => showCommitDialog = false}
-    on:committed={handleCommitted}
-    on:createPR={handleCreatePR}
-  />
+
 </div>
 
 <style>
