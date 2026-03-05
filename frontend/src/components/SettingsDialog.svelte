@@ -39,6 +39,9 @@
   let audioDoneSound = $config.audio?.done_sound || '';
   let audioInputSound = $config.audio?.input_sound || '';
   let audioErrorSound = $config.audio?.error_sound || '';
+  let keepAliveEnabled = $config.keep_alive?.enabled ?? true;
+  let keepAliveInterval = $config.keep_alive?.interval_minutes ?? 300;
+  let keepAliveMessage = $config.keep_alive?.message ?? 'Hi!';
 
   let fontFamily = $config.font_family || '';
   let fontSize = $config.font_size || 10;
@@ -60,6 +63,9 @@
     audioDoneSound = c.audio?.done_sound || '';
     audioInputSound = c.audio?.input_sound || '';
     audioErrorSound = c.audio?.error_sound || '';
+    keepAliveEnabled = c.keep_alive?.enabled ?? true;
+    keepAliveInterval = c.keep_alive?.interval_minutes ?? 300;
+    keepAliveMessage = c.keep_alive?.message ?? 'Hi!';
     fontFamily = c.font_family || '';
     fontSize = c.font_size || 10;
     savedFontFamily = fontFamily;
@@ -156,6 +162,11 @@
         input_sound: audioInputSound,
         error_sound: audioErrorSound,
       },
+      keep_alive: {
+        enabled: keepAliveEnabled,
+        interval_minutes: keepAliveInterval,
+        message: keepAliveMessage,
+      },
     };
     config.set(updated);
     try { await App.SaveConfig(updated); } catch (err) { console.error('[SettingsDialog] SaveConfig failed:', err); }
@@ -237,6 +248,36 @@
             <option value={size}>{size}px</option>
           {/each}
         </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label">Session Keep-Alive</label>
+        <p class="setting-desc">Sendet automatisch eine Nachricht an Claude, wenn das Token-Fenster ausläuft.</p>
+        <label class="toggle-row">
+          <input type="checkbox" bind:checked={keepAliveEnabled} />
+          Aktiviert
+        </label>
+        {#if keepAliveEnabled}
+          <div class="keepalive-fields">
+            <label for="keepalive-interval">Intervall (Minuten)</label>
+            <input
+              id="keepalive-interval"
+              type="number"
+              min="1"
+              max="1440"
+              bind:value={keepAliveInterval}
+              class="text-input"
+            />
+            <label for="keepalive-message">Nachricht</label>
+            <input
+              id="keepalive-message"
+              type="text"
+              bind:value={keepAliveMessage}
+              class="text-input"
+              placeholder="Hi!"
+            />
+          </div>
+        {/if}
       </div>
 
       <div class="setting-group">
@@ -469,5 +510,20 @@
 
   .sound-label {
     font-size: 12px; color: var(--fg-muted); display: block; margin-bottom: 4px;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    margin-top: 6px;
+  }
+  .keepalive-fields {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 6px 12px;
+    align-items: center;
+    margin-top: 8px;
   }
 </style>
