@@ -6,6 +6,14 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **Max 300 lines per Go file.** Split into logically grouped files (e.g. `app_scan.go`, `app_stream.go`).
 - **Go structs** exposed to frontend need both `yaml` and `json` tags.
 - **UI text is German**, code/comments are English.
+- **Wails bindings (`models.ts`) must be kept in sync manually.** Wails v3 does NOT auto-regenerate `frontend/wailsjs/go/models.ts`. Whenever a new field is added to a Go struct that is returned to the frontend (especially `config.Config`), you **must** also:
+  1. Add the corresponding class (if new nested struct) to `models.ts`.
+  2. Add the field declaration to the class in `models.ts`.
+  3. Add `this.field = this.convertValues(source["field"], FieldClass)` (or `source["field"]` for primitives) to the constructor.
+  Failure to do this causes the field to be silently stripped when Wails deserializes the response — the frontend will always see `undefined`, making settings for that field impossible to read or save. This is a **recurring bug** (affected `status_line`, could affect any future field).
+- **SettingsDialog: NEVER put variable assignments directly inside a `$:` reactive block.** Svelte tracks all variable references (including writes like `x = value` and reads like `saved = x`) as dependencies. If ANY referenced variable changes (e.g. user toggles a checkbox), the entire block re-runs and **resets all values back to config defaults**, making controls appear frozen/unresponsive. This is a **recurring bug** (broke checkboxes/toggles 3× already).
+  - **Correct:** `$: if (visible) initDialog();` — call a function. Svelte only tracks `visible`, not variables inside the function body.
+  - **Wrong:** `$: if (visible) { myVar = config.value; savedVar = myVar; }` — Svelte tracks `myVar` as a dependency because it's read in `savedVar = myVar`, causing re-triggers on any change.
 
 ## Platform Gotchas (Windows)
 - CLI tools (`claude`, `npm`) are `.cmd` shims — must wrap via `os.Getenv("COMSPEC")` + `/c` for ConPTY.

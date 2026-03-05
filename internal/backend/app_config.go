@@ -16,6 +16,7 @@ func (a *AppService) GetConfig() config.Config {
 // SaveConfig saves the given config to disk and updates the in-memory copy.
 func (a *AppService) SaveConfig(cfg config.Config) error {
 	log.Printf("[SaveConfig] theme=%q terminal_color=%q", cfg.Theme, cfg.TerminalColor)
+	wasEnabled := a.cfg.StatusLine.Enabled
 	a.cfg = cfg
 	if err := config.Save(cfg); err != nil {
 		log.Printf("[SaveConfig] error: %v", err)
@@ -23,6 +24,12 @@ func (a *AppService) SaveConfig(cfg config.Config) error {
 	}
 	// Re-detect Claude path in case claude_command changed
 	a.resolveClaudeOnStartup()
+	// Apply or remove statusline in ~/.claude/settings.json
+	if cfg.StatusLine.Enabled {
+		a.applyStatusLine(cfg.StatusLine)
+	} else if wasEnabled {
+		a.removeStatusLine()
+	}
 	return nil
 }
 

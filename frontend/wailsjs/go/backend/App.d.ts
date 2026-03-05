@@ -80,6 +80,8 @@ export function GetQueue(arg1:number):Promise<Array<backend.QueueItem>>;
 
 export function GetResolvedClaudePath():Promise<string>;
 
+export function GetStatusLineStatus():Promise<backend.StatusLineStatus>;
+
 export function GetSessionIssue(arg1:number):Promise<number>;
 
 export function GetWorkingDir():Promise<string>;

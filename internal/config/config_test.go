@@ -390,3 +390,196 @@ func TestConfig_FavoritesDefaultNil(t *testing.T) {
 		t.Errorf("DefaultConfig should have nil Favorites, got %v", cfg.Favorites)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// KeepAlive settings: JSON round-trip (simulates Wails frontend→backend call)
+// ---------------------------------------------------------------------------
+
+func TestKeepAlive_DefaultValues(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.KeepAlive.Enabled == nil || !*cfg.KeepAlive.Enabled {
+		t.Error("KeepAlive.Enabled should default to true")
+	}
+	if cfg.KeepAlive.IntervalMinutes != 300 {
+		t.Errorf("KeepAlive.IntervalMinutes = %d, want 300", cfg.KeepAlive.IntervalMinutes)
+	}
+	if cfg.KeepAlive.Message != "Hi!" {
+		t.Errorf("KeepAlive.Message = %q, want 'Hi!'", cfg.KeepAlive.Message)
+	}
+}
+
+func TestKeepAlive_JSONRoundTrip(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.KeepAlive = KeepAliveSettings{
+		Enabled:         boolPtr(false),
+		IntervalMinutes: 60,
+		Message:         "keep going",
+	}
+
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var loaded Config
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if loaded.KeepAlive.Enabled == nil || *loaded.KeepAlive.Enabled {
+		t.Error("KeepAlive.Enabled should be false after round-trip")
+	}
+	if loaded.KeepAlive.IntervalMinutes != 60 {
+		t.Errorf("KeepAlive.IntervalMinutes = %d, want 60", loaded.KeepAlive.IntervalMinutes)
+	}
+	if loaded.KeepAlive.Message != "keep going" {
+		t.Errorf("KeepAlive.Message = %q, want 'keep going'", loaded.KeepAlive.Message)
+	}
+}
+
+func TestKeepAlive_YAMLRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "keepalive-test.yaml")
+
+	original := DefaultConfig()
+	original.KeepAlive = KeepAliveSettings{
+		Enabled:         boolPtr(false),
+		IntervalMinutes: 120,
+		Message:         "still here",
+	}
+
+	if err := writeDefaults(path, original); err != nil {
+		t.Fatalf("writeDefaults: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	var loaded Config
+	if err := yaml.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("yaml.Unmarshal: %v", err)
+	}
+
+	if loaded.KeepAlive.Enabled == nil || *loaded.KeepAlive.Enabled {
+		t.Error("KeepAlive.Enabled should be false after YAML round-trip")
+	}
+	if loaded.KeepAlive.IntervalMinutes != 120 {
+		t.Errorf("KeepAlive.IntervalMinutes = %d, want 120", loaded.KeepAlive.IntervalMinutes)
+	}
+	if loaded.KeepAlive.Message != "still here" {
+		t.Errorf("KeepAlive.Message = %q, want 'still here'", loaded.KeepAlive.Message)
+	}
+}
+
+func TestShouldKeepAlive_NilDefault(t *testing.T) {
+	cfg := Config{KeepAlive: KeepAliveSettings{Enabled: nil}}
+	if !cfg.ShouldKeepAlive() {
+		t.Error("ShouldKeepAlive with nil should return true")
+	}
+}
+
+func TestShouldKeepAlive_False(t *testing.T) {
+	cfg := Config{KeepAlive: KeepAliveSettings{Enabled: boolPtr(false)}}
+	if cfg.ShouldKeepAlive() {
+		t.Error("ShouldKeepAlive(false) should return false")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// StatusLine settings: JSON round-trip
+// ---------------------------------------------------------------------------
+
+func TestStatusLine_DefaultValues(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.StatusLine.Enabled {
+		t.Error("StatusLine.Enabled should default to false")
+	}
+	if cfg.StatusLine.Template != "standard" {
+		t.Errorf("StatusLine.Template = %q, want 'standard'", cfg.StatusLine.Template)
+	}
+	if !cfg.StatusLine.ShowModel {
+		t.Error("StatusLine.ShowModel should default to true")
+	}
+	if !cfg.StatusLine.ShowContext {
+		t.Error("StatusLine.ShowContext should default to true")
+	}
+	if !cfg.StatusLine.ShowCost {
+		t.Error("StatusLine.ShowCost should default to true")
+	}
+}
+
+func TestStatusLine_JSONRoundTrip(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.StatusLine = StatusLineSettings{
+		Enabled:       true,
+		Template:      "minimal",
+		ShowModel:     false,
+		ShowContext:   true,
+		ShowCost:      false,
+		ShowGitBranch: true,
+		ShowDuration:  true,
+	}
+
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var loaded Config
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if !loaded.StatusLine.Enabled {
+		t.Error("StatusLine.Enabled should be true after round-trip")
+	}
+	if loaded.StatusLine.Template != "minimal" {
+		t.Errorf("StatusLine.Template = %q, want 'minimal'", loaded.StatusLine.Template)
+	}
+	if loaded.StatusLine.ShowModel {
+		t.Error("StatusLine.ShowModel should be false")
+	}
+	if !loaded.StatusLine.ShowGitBranch {
+		t.Error("StatusLine.ShowGitBranch should be true")
+	}
+	if !loaded.StatusLine.ShowDuration {
+		t.Error("StatusLine.ShowDuration should be true")
+	}
+}
+
+func TestStatusLine_YAMLRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "statusline-test.yaml")
+
+	original := DefaultConfig()
+	original.StatusLine = StatusLineSettings{
+		Enabled:       true,
+		Template:      "extended",
+		ShowModel:     true,
+		ShowContext:   false,
+		ShowCost:      true,
+		ShowGitBranch: false,
+		ShowDuration:  true,
+	}
+
+	if err := writeDefaults(path, original); err != nil {
+		t.Fatalf("writeDefaults: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	var loaded Config
+	if err := yaml.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("yaml.Unmarshal: %v", err)
+	}
+
+	if !loaded.StatusLine.Enabled {
+		t.Error("StatusLine.Enabled should be true after YAML round-trip")
+	}
+	if loaded.StatusLine.Template != "extended" {
+		t.Errorf("StatusLine.Template = %q, want 'extended'", loaded.StatusLine.Template)
+	}
+	if loaded.StatusLine.ShowContext {
+		t.Error("StatusLine.ShowContext should be false")
+	}
+	if !loaded.StatusLine.ShowDuration {
+		t.Error("StatusLine.ShowDuration should be true")
+	}
+}

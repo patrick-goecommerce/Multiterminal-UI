@@ -87,6 +87,9 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	// Setup Claude Code hook integration
 	go a.setupHooks(ctx)
 
+	// Auto-setup statusline in ~/.claude/settings.json if not already configured
+	go a.setupStatusLine()
+
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
 	a.cancelAll = cancel

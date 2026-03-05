@@ -49,7 +49,18 @@
   let savedFontSize = fontSize;
   let availableFonts: { name: string; available: boolean }[] = [];
 
-  $: if (visible) {
+  let statusLineEnabled = $config.status_line?.enabled ?? false;
+  let statusLineTemplate = $config.status_line?.template ?? 'standard';
+  let statusLineShowModel = $config.status_line?.show_model ?? true;
+  let statusLineShowContext = $config.status_line?.show_context ?? true;
+  let statusLineShowCost = $config.status_line?.show_cost ?? true;
+  let statusLineShowGitBranch = $config.status_line?.show_git_branch ?? false;
+  let statusLineShowDuration = $config.status_line?.show_duration ?? false;
+  let statusLineConflictWarning = false;
+
+  $: if (visible) initDialog();
+
+  function initDialog() {
     requestAnimationFrame(() => dialogEl?.focus());
     const c = get(config);
     colorValue = c.terminal_color || '#39ff14';
@@ -76,6 +87,17 @@
     }));
     App.GetLogPath().then(p => logPath = p).catch(() => {});
     detectClaude();
+    statusLineEnabled = c.status_line?.enabled ?? false;
+    statusLineTemplate = c.status_line?.template ?? 'standard';
+    statusLineShowModel = c.status_line?.show_model ?? true;
+    statusLineShowContext = c.status_line?.show_context ?? true;
+    statusLineShowCost = c.status_line?.show_cost ?? true;
+    statusLineShowGitBranch = c.status_line?.show_git_branch ?? false;
+    statusLineShowDuration = c.status_line?.show_duration ?? false;
+    statusLineConflictWarning = false;
+    App.GetStatusLineStatus().then(s => {
+      statusLineConflictWarning = s.has_existing && !s.is_ours;
+    }).catch(() => {});
   }
 
   function handleColorChange(e: CustomEvent<{ value: string }>) {
@@ -167,6 +189,15 @@
         interval_minutes: keepAliveInterval,
         message: keepAliveMessage,
       },
+      status_line: {
+        enabled: statusLineEnabled,
+        template: statusLineTemplate,
+        show_model: statusLineShowModel,
+        show_context: statusLineShowContext,
+        show_cost: statusLineShowCost,
+        show_git_branch: statusLineShowGitBranch,
+        show_duration: statusLineShowDuration,
+      },
     };
     config.set(updated);
     try { await App.SaveConfig(updated); } catch (err) { console.error('[SettingsDialog] SaveConfig failed:', err); }
@@ -196,21 +227,30 @@
     keepAliveEnabled = true;
     keepAliveInterval = 300;
     keepAliveMessage = 'Hi!';
+    statusLineEnabled = false;
+    statusLineTemplate = 'standard';
+    statusLineShowModel = true;
+    statusLineShowContext = true;
+    statusLineShowCost = true;
+    statusLineShowGitBranch = false;
+    statusLineShowDuration = false;
   }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') close();
-    if (e.key === 'Enter') save();
+    // Only save on Enter when not focused on an input/select/textarea
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (e.key === 'Enter' && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') save();
   }
 </script>
 
 {#if visible}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div class="overlay" on:click={close}>
+  <div class="overlay" on:click={(e) => { if (e.target === e.currentTarget) close(); }}>
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="dialog" on:click|stopPropagation bind:this={dialogEl} tabindex="-1" on:keydown={handleKeydown}>
+    <div class="dialog" bind:this={dialogEl} tabindex="-1" on:keydown={handleKeydown}>
       <h3>Einstellungen</h3>
 
       <div class="setting-group">
@@ -254,12 +294,15 @@
       </div>
 
       <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
         <label class="setting-label">Session Keep-Alive</label>
         <p class="setting-desc">Sendet automatisch eine Nachricht an Claude, wenn das Token-Fenster ausläuft. Änderungen werden beim nächsten Start wirksam.</p>
-        <label class="toggle-row">
-          <input type="checkbox" bind:checked={keepAliveEnabled} />
-          Aktiviert
-        </label>
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <button class="toggle-btn" class:toggle-on={keepAliveEnabled} on:click={() => keepAliveEnabled = !keepAliveEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{keepAliveEnabled ? 'Aktiviert' : 'Deaktiviert'}</span>
+        </div>
         {#if keepAliveEnabled}
           <div class="keepalive-fields">
             <label for="keepalive-interval">Intervall (Minuten)</label>
@@ -279,6 +322,38 @@
               class="text-input"
               placeholder="Hi!"
             />
+          </div>
+        {/if}
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Claude Statusline</label>
+        <p class="setting-desc">Aktiviert eine Statuszeile in Claude Code Panes (Modell, Kontext-%, Kosten). Schreibt in ~/.claude/settings.json.</p>
+        {#if statusLineConflictWarning}
+          <p class="conflict-warning">Achtung: Eine externe statusLine-Konfiguration wurde erkannt und wird beim Speichern überschrieben.</p>
+        {/if}
+        <div class="toggle-row">
+          <button class="toggle-btn" class:toggle-on={statusLineEnabled} on:click={() => statusLineEnabled = !statusLineEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{statusLineEnabled ? 'Aktiviert' : 'Deaktiviert'}</span>
+        </div>
+        {#if statusLineEnabled}
+          <div class="statusline-fields">
+            <label for="sl-template" class="sound-label">Template</label>
+            <select id="sl-template" class="theme-select" bind:value={statusLineTemplate}>
+              <option value="minimal">Minimal — [Model] | XX%</option>
+              <option value="standard">Standard — [Model] ████ XX% | $X.XX</option>
+              <option value="extended">Erweitert — 2-zeilig mit Verzeichnis</option>
+            </select>
+            <div class="sl-checkboxes">
+              <label><input type="checkbox" bind:checked={statusLineShowModel} /> Modell-Name</label>
+              <label><input type="checkbox" bind:checked={statusLineShowContext} /> Kontext-Auslastung %</label>
+              <label><input type="checkbox" bind:checked={statusLineShowCost} /> Kosten ($)</label>
+              <label><input type="checkbox" bind:checked={statusLineShowGitBranch} /> Git-Branch</label>
+              <label><input type="checkbox" bind:checked={statusLineShowDuration} /> Dauer</label>
+            </div>
           </div>
         {/if}
       </div>
@@ -527,4 +602,16 @@
     align-items: center;
     margin-top: 8px;
   }
+  .text-input {
+    padding: 7px 10px; background: var(--bg-secondary);
+    color: var(--fg); border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12px; font-family: inherit; outline: none; width: 100%;
+  }
+  .text-input:focus { border-color: var(--accent); }
+  .keepalive-fields label { font-size: 12px; color: var(--fg-muted); }
+
+  .conflict-warning { font-size: 11px; color: #f9e2af; margin: 0 0 8px; }
+  .statusline-fields { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .sl-checkboxes { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+  .sl-checkboxes label { font-size: 13px; color: var(--fg-muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
 </style>

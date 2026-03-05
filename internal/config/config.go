@@ -29,6 +29,7 @@ type Config struct {
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
 	Audio                 AudioSettings  `yaml:"audio" json:"audio"`
 	KeepAlive             KeepAliveSettings `yaml:"keep_alive" json:"keep_alive"`
+	StatusLine            StatusLineSettings `yaml:"status_line" json:"status_line"`
 	LocalhostAutoOpen     string         `yaml:"localhost_auto_open" json:"localhost_auto_open"`
 	SidebarPinned         bool           `yaml:"sidebar_pinned" json:"sidebar_pinned"`
 	Favorites             map[string][]string `yaml:"favorites,omitempty" json:"favorites,omitempty"`
@@ -74,6 +75,17 @@ type KeepAliveSettings struct {
 	Message         string `yaml:"message" json:"message"`
 }
 
+// StatusLineSettings controls the Claude Code statusline written to ~/.claude/settings.json.
+type StatusLineSettings struct {
+	Enabled       bool   `yaml:"enabled" json:"enabled"`
+	Template      string `yaml:"template" json:"template"` // "minimal", "standard", "extended"
+	ShowModel     bool   `yaml:"show_model" json:"show_model"`
+	ShowContext   bool   `yaml:"show_context" json:"show_context"`
+	ShowCost      bool   `yaml:"show_cost" json:"show_cost"`
+	ShowGitBranch bool   `yaml:"show_git_branch" json:"show_git_branch"`
+	ShowDuration  bool   `yaml:"show_duration" json:"show_duration"`
+}
+
 // DefaultConfig returns the built-in defaults.
 // boolPtr returns a pointer to a bool value.
 func boolPtr(b bool) *bool { return &b }
@@ -115,6 +127,13 @@ func DefaultConfig() Config {
 			Enabled:         boolPtr(true),
 			IntervalMinutes: 300,
 			Message:         "Hi!",
+		},
+		StatusLine: StatusLineSettings{
+			Enabled:     false,
+			Template:    "standard",
+			ShowModel:   true,
+			ShowContext: true,
+			ShowCost:    true,
 		},
 		LocalhostAutoOpen: "notify",
 		FontFamily:        "",

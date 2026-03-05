@@ -248,6 +248,22 @@ export namespace backend {
 	        this.downloadURL = source["downloadURL"];
 	    }
 	}
+	export class StatusLineStatus {
+	    has_existing: boolean;
+	    is_ours: boolean;
+	    existing_command: string;
+
+	    static createFrom(source: any = {}) {
+	        return new StatusLineStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.has_existing = source["has_existing"];
+	        this.is_ours = source["is_ours"];
+	        this.existing_command = source["existing_command"];
+	    }
+	}
 	export class WorktreeInfo {
 	    path: string;
 	    branch: string;
@@ -345,6 +361,30 @@ export namespace config {
 	        this.include_cost_in_report = source["include_cost_in_report"];
 	    }
 	}
+	export class StatusLineSettings {
+    enabled: boolean;
+    template: string;
+    show_model: boolean;
+    show_context: boolean;
+    show_cost: boolean;
+    show_git_branch: boolean;
+    show_duration: boolean;
+
+    static createFrom(source: any = {}) {
+        return new StatusLineSettings(source);
+    }
+
+    constructor(source: any = {}) {
+        if ('string' === typeof source) source = JSON.parse(source);
+        this.enabled = source["enabled"];
+        this.template = source["template"];
+        this.show_model = source["show_model"];
+        this.show_context = source["show_context"];
+        this.show_cost = source["show_cost"];
+        this.show_git_branch = source["show_git_branch"];
+        this.show_duration = source["show_duration"];
+    }
+}
 	export class ModelEntry {
 	    label: string;
 	    id: string;
@@ -376,6 +416,7 @@ export namespace config {
 	    commands: CommandEntry[];
 	    audio: AudioSettings;
 	    keep_alive: KeepAliveSettings;
+	    status_line: StatusLineSettings;
 	    localhost_auto_open: string;
 	    sidebar_pinned: boolean;
 	    favorites?: Record<string, Array<string>>;
@@ -404,6 +445,7 @@ export namespace config {
 	        this.commands = this.convertValues(source["commands"], CommandEntry);
 	        this.audio = this.convertValues(source["audio"], AudioSettings);
 	        this.keep_alive = this.convertValues(source["keep_alive"], KeepAliveSettings);
+	        this.status_line = this.convertValues(source["status_line"], StatusLineSettings);
 	        this.localhost_auto_open = source["localhost_auto_open"];
 	        this.sidebar_pinned = source["sidebar_pinned"];
 	        this.favorites = source["favorites"];

@@ -25,6 +25,16 @@ export interface KeepAliveConfig {
   message: string;
 }
 
+export interface StatusLineConfig {
+  enabled: boolean;
+  template: string;
+  show_model: boolean;
+  show_context: boolean;
+  show_cost: boolean;
+  show_git_branch: boolean;
+  show_duration: boolean;
+}
+
 export interface AppConfig {
   default_shell: string;
   default_dir: string;
@@ -40,6 +50,7 @@ export interface AppConfig {
   commands: CommandEntry[];
   audio: AudioConfig;
   keep_alive: KeepAliveConfig;
+  status_line: StatusLineConfig;
   localhost_auto_open: string;
   sidebar_pinned: boolean;
   font_family: string;
@@ -65,6 +76,11 @@ export const config = writable<AppConfig>({
   commands: [
     { name: 'Commit & Push', text: "git add -A && git commit -m 'update' && git push" },
   ],
+  keep_alive: {
+    enabled: true,
+    interval_minutes: 300,
+    message: 'Hi!',
+  },
   audio: {
     enabled: true,
     volume: 50,
@@ -72,6 +88,15 @@ export const config = writable<AppConfig>({
     done_sound: '',
     input_sound: '',
     error_sound: '',
+  },
+  status_line: {
+    enabled: false,
+    template: 'standard',
+    show_model: true,
+    show_context: true,
+    show_cost: true,
+    show_git_branch: false,
+    show_duration: false,
   },
   localhost_auto_open: 'notify',
   sidebar_pinned: false,

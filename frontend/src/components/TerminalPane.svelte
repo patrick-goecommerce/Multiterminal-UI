@@ -603,8 +603,12 @@
     }
   }
 
-  .terminal-container { flex: 1; padding: 4px 14px 4px 4px; overflow: hidden; }
-  .terminal-container :global(.xterm) { height: 100%; }
+  /* Right padding moved to .xterm so the scrollbar lives in .xterm's padding area.
+   * .xterm-viewport (position:absolute, right:0) fills the padding box — scrollbar
+   * appears there. The WebGL canvas only renders into the content box, so it can
+   * never cover the scrollbar regardless of FitAddon's scrollBarWidth detection. */
+  .terminal-container { flex: 1; padding: 4px; overflow: hidden; }
+  .terminal-container :global(.xterm) { height: 100%; padding-right: 10px; }
   /* xterm helper textarea: used for keyboard input only, must never be visible.
    * position:fixed + off-screen ensures WebView2's OS-level caret does not bleed
    * through (opacity:0 alone is insufficient in some WebView2 versions). */

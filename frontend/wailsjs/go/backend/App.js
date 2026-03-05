@@ -163,6 +163,10 @@ export function GetResolvedClaudePath() {
   return $Call.ByID(2078339156);
 }
 
+export function GetStatusLineStatus() {
+  return $Call.ByID(1969813307);
+}
+
 export function GetSessionIssue(arg1) {
   return $Call.ByID(2723699338, arg1);
 }
