@@ -58,7 +58,7 @@ export async function startKeepAliveLoop(
   const intervalMs = cfg.interval_minutes * 60 * 1000;
   const intervalSec = cfg.interval_minutes * 60;
 
-  const timer = setInterval(async () => {
+  async function ping() {
     try {
       const lastActivity = await App.GetGlobalLastActivityUnix();
       const nowSec = Math.floor(Date.now() / 1000);
@@ -74,7 +74,13 @@ export async function startKeepAliveLoop(
     } catch (err) {
       console.error('[keepalive] ping failed:', err);
     }
-  }, intervalMs);
+  }
 
-  return () => clearInterval(timer);
+  // Send once at startup after a short delay (let Claude initialize).
+  const startupTimer = setTimeout(ping, 3000);
+
+  // Then repeat every interval.
+  const timer = setInterval(ping, intervalMs);
+
+  return () => { clearTimeout(startupTimer); clearInterval(timer); };
 }
