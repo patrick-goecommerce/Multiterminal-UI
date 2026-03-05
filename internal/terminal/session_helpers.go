@@ -3,6 +3,7 @@ package terminal
 import (
 	"os"
 	"runtime"
+	"time"
 )
 
 // defaultShell returns the default shell command for the current OS.
@@ -41,4 +42,11 @@ func (s *Session) DisableKittyKeyboard() {
 	if pty != nil {
 		pty.Write([]byte("\x1b[<1u"))
 	}
+}
+
+// GetLastOutputAt returns when the last PTY output was received, under lock.
+func (s *Session) GetLastOutputAt() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.LastOutputAt
 }
