@@ -565,10 +565,7 @@
     if (!tab) return;
     const dir = tab.dir || '';
 
-    if (action === 'commit') {
-      const msg = `Closes #${issueNumber}`;
-      App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m '${msg}' && git push\n`));
-    } else if (action === 'pr') {
+    if (action === 'pr') {
       App.WriteToSession(sessionId, encodeForPty(`gh pr create --title "Closes #${issueNumber}" --body "Resolves #${issueNumber}" --fill\n`));
     } else if (action === 'closeIssue') {
       try {

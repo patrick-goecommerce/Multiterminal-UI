@@ -176,7 +176,7 @@
         </button>
         {#if showIssueActions}
           <div class="issue-actions-menu">
-            <button on:click|stopPropagation={() => issueAction('commit')}>Commit & Push</button>
+            <button on:click|stopPropagation={() => { showIssueActions = false; toggleDiffView(); }}>Commit & Push</button>
             <button on:click|stopPropagation={() => issueAction('pr')}>PR erstellen</button>
             <button on:click|stopPropagation={() => issueAction('closeIssue')}>Issue schließen</button>
           </div>
