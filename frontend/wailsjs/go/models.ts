@@ -273,6 +273,22 @@ export namespace backend {
 
 export namespace config {
 	
+	export class KeepAliveSettings {
+	    enabled?: boolean;
+	    interval_minutes: number;
+	    message: string;
+
+	    static createFrom(source: any = {}) {
+	        return new KeepAliveSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.interval_minutes = source["interval_minutes"];
+	        this.message = source["message"];
+	    }
+	}
 	export class AudioSettings {
 	    enabled?: boolean;
 	    volume: number;
@@ -359,6 +375,7 @@ export namespace config {
 	    issue_tracking: IssueTracking;
 	    commands: CommandEntry[];
 	    audio: AudioSettings;
+	    keep_alive: KeepAliveSettings;
 	    localhost_auto_open: string;
 	    sidebar_pinned: boolean;
 	    favorites?: Record<string, Array<string>>;
@@ -386,6 +403,7 @@ export namespace config {
 	        this.issue_tracking = this.convertValues(source["issue_tracking"], IssueTracking);
 	        this.commands = this.convertValues(source["commands"], CommandEntry);
 	        this.audio = this.convertValues(source["audio"], AudioSettings);
+	        this.keep_alive = this.convertValues(source["keep_alive"], KeepAliveSettings);
 	        this.localhost_auto_open = source["localhost_auto_open"];
 	        this.sidebar_pinned = source["sidebar_pinned"];
 	        this.favorites = source["favorites"];
