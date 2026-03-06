@@ -151,6 +151,9 @@
     {/if}
   </div>
   <div class="pane-title-right">
+    <button class="pane-btn commit-btn" on:click|stopPropagation={() => dispatch('commitPush', { paneId: pane.id, sessionId: pane.sessionId })} title="Commit & Push">
+      ☁
+    </button>
     {#if pane.issueNumber}
       <div class="issue-actions-wrap">
         <button class="pane-btn issue-actions-btn" on:click|stopPropagation={() => (showIssueActions = !showIssueActions)} title="Issue-Aktionen">
@@ -333,6 +336,9 @@
     background: var(--bg-tertiary); width: 16px; height: 16px;
     line-height: 16px; text-align: center; border-radius: 3px; flex-shrink: 0;
   }
+
+  .commit-btn { font-size: 12px !important; font-weight: 700; }
+  .commit-btn:hover { color: var(--success) !important; }
 
   .issue-actions-wrap { position: relative; }
   .issue-actions-btn { font-size: 16px !important; letter-spacing: 1px; }

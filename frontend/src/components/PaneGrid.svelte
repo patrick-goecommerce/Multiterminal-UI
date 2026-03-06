@@ -35,6 +35,10 @@
     dispatch('issueAction', e.detail);
   }
 
+  function handleCommitPush(e: CustomEvent) {
+    dispatch('commitPush', e.detail);
+  }
+
   function handleNavigateFile(e: CustomEvent) {
     dispatch('navigateFile', e.detail);
   }
@@ -66,6 +70,7 @@
       on:rename={handleRename}
       on:restart={handleRestart}
       on:issueAction={handleIssueAction}
+      on:commitPush={handleCommitPush}
       on:navigateFile={handleNavigateFile}
       on:splitPane={handleSplitPane}
       on:openWorktreePane
