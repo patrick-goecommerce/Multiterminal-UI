@@ -66,12 +66,12 @@
     {/if}
   </div>
   <div class="footer-right">
-    <span class="shortcut">Ctrl+N:new</span>
-    <span class="shortcut">Ctrl+1-9:pane</span>
-    <span class="shortcut">Ctrl+F:search</span>
-    <span class="shortcut">Ctrl+Z:zoom</span>
-    <span class="shortcut">Ctrl+B:files</span>
-    <span class="shortcut">Ctrl+I:issues</span>
+    <span class="shortcut">{$t('footerShortcuts.new')}</span>
+    <span class="shortcut">{$t('footerShortcuts.pane')}</span>
+    <span class="shortcut">{$t('footerShortcuts.search')}</span>
+    <span class="shortcut">{$t('footerShortcuts.zoom')}</span>
+    <span class="shortcut">{$t('footerShortcuts.files')}</span>
+    <span class="shortcut">{$t('footerShortcuts.issues')}</span>
   </div>
 </div>
 

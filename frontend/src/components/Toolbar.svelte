@@ -63,13 +63,13 @@
       disabled={atLimit}
       title={atLimit ? $t('toolbar.maxReached', { max: maxPanes }) : $t('toolbar.newTerminal')}
     >
-      + New Terminal
+      + {$t('toolbar.newTerminal').replace(/ *\(.*\)/, '')}
     </button>
     <button class="toolbar-btn" on:click={openCommands} title={$t('toolbar.commandPalette')}>
       <span class="icon">&#9889;</span> {$t('toolbar.commandPalette')}
     </button>
     <button class="toolbar-btn" on:click={toggleSidebar} title={$t('toolbar.files')}>
-      <span class="icon">&#128193;</span> Files
+      <span class="icon">&#128193;</span> {$t('toolbar.files').replace(/ *\(.*\)/, '')}
     </button>
     <button
       class="toolbar-btn mute-btn"

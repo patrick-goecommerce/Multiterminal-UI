@@ -199,12 +199,12 @@
     <div class="ctx-menu" style="left:{contextMenuX}px; top:{contextMenuY}px"
          on:click|stopPropagation>
       <button class="ctx-item" on:click={() => { detachTab(_ctxTabId); closeContextMenu(); }}>
-        In neuem Fenster öffnen
+        {$t('tabBar.detachWindow')}
       </button>
       <div class="ctx-separator"></div>
       <button class="ctx-item ctx-item-danger"
               on:click={() => { tabStore.closeTab(_ctxTabId); closeContextMenu(); }}>
-        Tab schließen
+        {$t('tabBar.closeTab')}
       </button>
     </div>
   </div>

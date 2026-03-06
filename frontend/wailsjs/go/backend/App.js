@@ -32,11 +32,11 @@ export function BrowseForClaude() {
 }
 
 export function BrowseForCodex() {
-  return window['go']['backend']['App']['BrowseForCodex']();
+  return $Call.ByID(2919136575);
 }
 
 export function BrowseForGemini() {
-  return window['go']['backend']['App']['BrowseForGemini']();
+  return $Call.ByID(1027700551);
 }
 
 export function CheckForUpdates() {
@@ -100,11 +100,11 @@ export function DetectClaudePath() {
 }
 
 export function DetectCodexPath() {
-  return window['go']['backend']['App']['DetectCodexPath']();
+  return $Call.ByID(3451434784);
 }
 
 export function DetectGeminiPath() {
-  return window['go']['backend']['App']['DetectGeminiPath']();
+  return $Call.ByID(3042203720);
 }
 
 export function DisableLogging() {
@@ -200,11 +200,11 @@ export function GetStatusLineStatus() {
 }
 
 export function GetResolvedCodexPath() {
-  return window['go']['backend']['App']['GetResolvedCodexPath']();
+  return $Call.ByID(3436116343);
 }
 
 export function GetResolvedGeminiPath() {
-  return window['go']['backend']['App']['GetResolvedGeminiPath']();
+  return $Call.ByID(1942354009);
 }
 
 export function GetSessionIssue(arg1) {
@@ -224,11 +224,11 @@ export function IsClaudeDetected() {
 }
 
 export function IsCodexDetected() {
-  return window['go']['backend']['App']['IsCodexDetected']();
+  return $Call.ByID(1539261952);
 }
 
 export function IsGeminiDetected() {
-  return window['go']['backend']['App']['IsGeminiDetected']();
+  return $Call.ByID(864734474);
 }
 
 export function IsGitRepo(arg1) {
@@ -344,11 +344,11 @@ export function ValidateClaudePath(arg1) {
 }
 
 export function ValidateCodexPath(arg1) {
-  return window['go']['backend']['App']['ValidateCodexPath'](arg1);
+  return $Call.ByID(1225856159, arg1);
 }
 
 export function ValidateGeminiPath(arg1) {
-  return window['go']['backend']['App']['ValidateGeminiPath'](arg1);
+  return $Call.ByID(931204881, arg1);
 }
 
 export function WriteToSession(arg1, arg2) {

@@ -16,6 +16,8 @@ const de = {
   tabBar: {
     rename: 'Tab umbenennen:',
     newTab: 'Neuer Tab (Ctrl+T)',
+    detachWindow: 'In neuem Fenster öffnen',
+    closeTab: 'Tab schließen',
   },
 
   // Toolbar
@@ -284,8 +286,9 @@ const de = {
     mergeInProgress: '{op} in Bearbeitung',
     noChanges: 'Keine Änderungen',
     copied: 'kopiert!',
-    added: 'hinzugefügt!',
+    addedBadge: 'hinzugefügt!',
     copyPath: 'Pfad kopieren',
+    addToGitignore: 'Zu .gitignore hinzufügen',
   },
 
   // FileTreeItem
@@ -345,6 +348,33 @@ const de = {
     cliToolsDesc: 'Wähle welche AI-Tools du verwenden möchtest.',
     finishButton: 'Los geht\'s',
     skipButton: 'Überspringen',
+  },
+
+  // Dashboard
+  dashboard: {
+    sessions: '{count} Session | {count} Sessions',
+    tabs: '{count} Tab | {count} Tabs',
+    laneStarting: 'STARTET',
+    laneAttention: 'ACHTUNG',
+    laneInProgress: 'IN ARBEIT',
+    laneDone: 'FERTIG',
+    laneIdle: 'LEERLAUF',
+    statusStarting: 'startet...',
+    statusAttention: 'Achtung',
+    statusError: 'Fehler',
+    statusWorking: 'arbeitet',
+    statusDone: 'fertig',
+    statusIdle: 'Leerlauf',
+  },
+
+  // Footer
+  footerShortcuts: {
+    new: 'Ctrl+N:Neu',
+    pane: 'Ctrl+1-9:Pane',
+    search: 'Ctrl+F:Suche',
+    zoom: 'Ctrl+Z:Zoom',
+    files: 'Ctrl+B:Dateien',
+    issues: 'Ctrl+I:Issues',
   },
 
   // Common

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { allTabs, activeTab } from '../stores/tabs';
+  import { t } from '../stores/i18n';
   import { groupPanesByActivity } from '../lib/dashboard';
   import type { PaneWithContext } from '../lib/dashboard';
 
@@ -56,13 +57,13 @@
 
   function statusLabel(activity: string): string {
     switch (activity) {
-      case 'starting':          return 'startet...';
-      case 'waitingPermission': return 'attention';
-      case 'waitingAnswer':     return 'attention';
-      case 'error':             return 'error';
-      case 'active':            return 'working';
-      case 'done':              return 'done';
-      default:                  return 'idle';
+      case 'starting':          return $t('dashboard.statusStarting');
+      case 'waitingPermission': return $t('dashboard.statusAttention');
+      case 'waitingAnswer':     return $t('dashboard.statusAttention');
+      case 'error':             return $t('dashboard.statusError');
+      case 'active':            return $t('dashboard.statusWorking');
+      case 'done':              return $t('dashboard.statusDone');
+      default:                  return $t('dashboard.statusIdle');
     }
   }
 
@@ -98,11 +99,11 @@
       {/if}
       <span class="dash-sep">—</span>
       <span class="dash-stats">
-        {totalPanes} session{totalPanes !== 1 ? 's' : ''}
+        {totalPanes === 1 ? $t('dashboard.sessions', { count: totalPanes }).split(' | ')[0] : $t('dashboard.sessions', { count: totalPanes }).split(' | ')[1]}
         {#if totalCost}<span class="dash-cost">{totalCost}</span>{/if}
       </span>
     </div>
-    <div class="dash-tabs-count">{$allTabs.length} tab{$allTabs.length !== 1 ? 's' : ''}</div>
+    <div class="dash-tabs-count">{$allTabs.length === 1 ? $t('dashboard.tabs', { count: $allTabs.length }).split(' | ')[0] : $t('dashboard.tabs', { count: $allTabs.length }).split(' | ')[1]}</div>
   </header>
 
   <!-- Swim lanes: [STARTET] ATTENTION | IN PROGRESS | DONE | IDLE -->
@@ -113,7 +114,7 @@
     <div class="lane">
       <div class="lane-header">
         <span class="lane-dot dot-starting-hdr"></span>
-        STARTET
+        {$t('dashboard.laneStarting')}
         <span class="lane-count">{groups.starting.length}</span>
       </div>
       <div class="lane-cards">
@@ -128,7 +129,7 @@
               {/if}
               <span class="card-status-row">
                 <span class="dot dot-starting"></span>
-                <span class="status-text status-starting">startet...</span>
+                <span class="status-text status-starting">{$t('dashboard.statusStarting')}</span>
               </span>
             </div>
           </button>
@@ -141,7 +142,7 @@
     <div class="lane">
       <div class="lane-header">
         <span class="lane-dot dot-attention-hdr"></span>
-        ATTENTION
+        {$t('dashboard.laneAttention')}
         <span class="lane-count">{groups.needsAttention.length}</span>
       </div>
       <div class="lane-cards">
@@ -177,7 +178,7 @@
     <div class="lane">
       <div class="lane-header">
         <span class="lane-dot dot-active-hdr"></span>
-        IN PROGRESS
+        {$t('dashboard.laneInProgress')}
         <span class="lane-count">{groups.active.length}</span>
       </div>
       <div class="lane-cards">
@@ -198,7 +199,7 @@
               {/if}
               <span class="card-status-row">
                 <span class="dot dot-active"></span>
-                <span class="status-text status-active">working</span>
+                <span class="status-text status-active">{statusLabel('active')}</span>
               </span>
             </div>
           </button>
@@ -213,7 +214,7 @@
     <div class="lane">
       <div class="lane-header">
         <span class="lane-dot dot-done-hdr"></span>
-        DONE
+        {$t('dashboard.laneDone')}
         <span class="lane-count">{groups.done.length}</span>
       </div>
       <div class="lane-cards">
@@ -234,7 +235,7 @@
               {/if}
               <span class="card-status-row">
                 <span class="dot dot-done"></span>
-                <span class="status-text status-done">done</span>
+                <span class="status-text status-done">{statusLabel('done')}</span>
               </span>
             </div>
           </button>
@@ -249,7 +250,7 @@
     <div class="lane">
       <div class="lane-header">
         <span class="lane-dot dot-idle-hdr"></span>
-        IDLE
+        {$t('dashboard.laneIdle')}
         <span class="lane-count">{groups.idle.length}</span>
       </div>
       <div class="lane-cards">

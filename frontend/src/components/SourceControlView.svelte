@@ -156,7 +156,7 @@
           {#if copiedPath === entry.path}
             <span class="copied-badge">{$t('sourceControl.copied')}</span>
           {:else if addedPath === entry.path}
-            <span class="copied-badge">{$t('sourceControl.added')}</span>
+            <span class="copied-badge">{$t('sourceControl.addedBadge')}</span>
           {:else}
             <span class="sc-badge {getStatusClass(entry.status)}">{entry.status === '?' ? 'N' : entry.status === 'U' ? 'C' : entry.status}</span>
           {/if}
@@ -175,7 +175,7 @@
     <div class="ctx-backdrop" on:click={closeContextMenu} on:contextmenu|preventDefault></div>
     <div class="ctx-menu" style="left:{contextMenu.x}px; top:{contextMenu.y}px">
       <button class="ctx-item" on:click={handleAddToGitignore}>
-        Zu .gitignore hinzufügen
+        {$t('sourceControl.addToGitignore')}
       </button>
     </div>
   {/if}

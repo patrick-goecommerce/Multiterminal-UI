@@ -483,8 +483,11 @@
   }
 
   function handleNavigateFile(e: CustomEvent<{ path: string }>) {
-    showSidebar = true;
-    sidebarView = 'explorer';
+    const rel = e.detail.path;
+    const dir = $activeTab?.dir ?? '';
+    // Resolve relative path against working directory
+    const fullPath = rel.match(/^[A-Z]:|^\//) ? rel : (dir ? dir.replace(/\\/g, '/').replace(/\/$/, '') + '/' + rel.replace(/\\/g, '/') : rel);
+    previewFilePath = fullPath;
   }
 
   async function handleTogglePin() {

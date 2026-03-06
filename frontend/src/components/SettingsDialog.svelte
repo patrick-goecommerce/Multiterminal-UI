@@ -58,6 +58,7 @@
   let keepAliveInterval = $config.keep_alive?.interval_minutes ?? 300;
   let keepAliveMessage = $config.keep_alive?.message ?? 'Hi!';
 
+  let useWorktrees = $config.use_worktrees || false;
   let selectedLang: Language = ($config.language || 'de') as Language;
 
   let fontFamily = $config.font_family || '';
