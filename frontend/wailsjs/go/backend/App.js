@@ -35,6 +35,10 @@ export function BrowseForCodex() {
   return window['go']['backend']['App']['BrowseForCodex']();
 }
 
+export function BrowseForGemini() {
+  return window['go']['backend']['App']['BrowseForGemini']();
+}
+
 export function CheckForUpdates() {
   return $Call.ByID(3663542522);
 }
@@ -97,6 +101,10 @@ export function DetectClaudePath() {
 
 export function DetectCodexPath() {
   return window['go']['backend']['App']['DetectCodexPath']();
+}
+
+export function DetectGeminiPath() {
+  return window['go']['backend']['App']['DetectGeminiPath']();
 }
 
 export function DisableLogging() {
@@ -195,6 +203,10 @@ export function GetResolvedCodexPath() {
   return window['go']['backend']['App']['GetResolvedCodexPath']();
 }
 
+export function GetResolvedGeminiPath() {
+  return window['go']['backend']['App']['GetResolvedGeminiPath']();
+}
+
 export function GetSessionIssue(arg1) {
   return $Call.ByID(2723699338, arg1);
 }
@@ -213,6 +225,10 @@ export function IsClaudeDetected() {
 
 export function IsCodexDetected() {
   return window['go']['backend']['App']['IsCodexDetected']();
+}
+
+export function IsGeminiDetected() {
+  return window['go']['backend']['App']['IsGeminiDetected']();
 }
 
 export function IsGitRepo(arg1) {
@@ -329,6 +345,10 @@ export function ValidateClaudePath(arg1) {
 
 export function ValidateCodexPath(arg1) {
   return window['go']['backend']['App']['ValidateCodexPath'](arg1);
+}
+
+export function ValidateGeminiPath(arg1) {
+  return window['go']['backend']['App']['ValidateGeminiPath'](arg1);
 }
 
 export function WriteToSession(arg1, arg2) {

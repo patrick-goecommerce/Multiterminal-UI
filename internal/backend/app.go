@@ -48,6 +48,8 @@ type AppService struct {
 	hookMgr       *HookManager
 	resolvedCodexPath  string
 	codexDetected      bool
+	resolvedGeminiPath string
+	geminiDetected     bool
 }
 
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
@@ -86,6 +88,7 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	// Resolve CLI paths before anything else needs them
 	a.resolveClaudeOnStartup()
 	a.resolveCodexOnStartup()
+	a.resolveGeminiOnStartup()
 
 	// Setup Claude Code hook integration
 	go a.setupHooks(ctx)

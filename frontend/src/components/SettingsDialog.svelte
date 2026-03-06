@@ -29,13 +29,23 @@
 
   let dialogEl: HTMLDivElement;
 
+  // Claude CLI
+  let claudeEnabled = $config.claude_enabled !== false;
   let claudeCommand = $config.claude_command || '';
   let claudeStatus: 'unknown' | 'found' | 'notfound' = 'unknown';
   let claudeStatusPath = '';
 
+  // Codex CLI
+  let codexEnabled = $config.codex_enabled || false;
   let codexCommand = $config.codex_command || '';
   let codexStatus: 'unknown' | 'found' | 'notfound' = 'unknown';
   let codexStatusPath = '';
+
+  // Gemini CLI
+  let geminiEnabled = $config.gemini_enabled || false;
+  let geminiCommand = $config.gemini_command || '';
+  let geminiStatus: 'unknown' | 'found' | 'notfound' = 'unknown';
+  let geminiStatusPath = '';
 
   let audioEnabled = $config.audio?.enabled ?? true;
   let audioWhenFocused = $config.audio?.when_focused ?? true;
@@ -72,8 +82,12 @@
     savedTheme = selectedTheme;
     loggingEnabled = c.logging_enabled || false;
     useWorktrees = c.use_worktrees || false;
+    claudeEnabled = c.claude_enabled !== false;
     claudeCommand = c.claude_command || '';
+    codexEnabled = c.codex_enabled || false;
     codexCommand = c.codex_command || '';
+    geminiEnabled = c.gemini_enabled || false;
+    geminiCommand = c.gemini_command || '';
     audioEnabled = c.audio?.enabled ?? true;
     audioWhenFocused = c.audio?.when_focused ?? true;
     audioVolume = c.audio?.volume ?? 50;
@@ -94,6 +108,7 @@
     App.GetLogPath().then(p => logPath = p).catch(() => {});
     detectClaude();
     detectCodex();
+    detectGemini();
     statusLineEnabled = c.status_line?.enabled ?? false;
     statusLineTemplate = c.status_line?.template ?? 'standard';
     statusLineShowModel = c.status_line?.show_model ?? true;
@@ -134,13 +149,8 @@
   async function detectClaude() {
     try {
       const result = await App.DetectClaudePath();
-      if (result.valid) {
-        claudeStatus = 'found';
-        claudeStatusPath = result.path;
-      } else {
-        claudeStatus = 'notfound';
-        claudeStatusPath = '';
-      }
+      claudeStatus = result.valid ? 'found' : 'notfound';
+      claudeStatusPath = result.valid ? result.path : '';
     } catch {
       claudeStatus = 'unknown';
       claudeStatusPath = '';
@@ -162,13 +172,8 @@
   async function detectCodex() {
     try {
       const result = await App.DetectCodexPath();
-      if (result.valid) {
-        codexStatus = 'found';
-        codexStatusPath = result.path;
-      } else {
-        codexStatus = 'notfound';
-        codexStatusPath = '';
-      }
+      codexStatus = result.valid ? 'found' : 'notfound';
+      codexStatusPath = result.valid ? result.path : '';
     } catch {
       codexStatus = 'unknown';
       codexStatusPath = '';
@@ -183,6 +188,29 @@
         const valid = await App.ValidateCodexPath(path);
         codexStatus = valid ? 'found' : 'notfound';
         codexStatusPath = valid ? path : '';
+      }
+    } catch {}
+  }
+
+  async function detectGemini() {
+    try {
+      const result = await App.DetectGeminiPath();
+      geminiStatus = result.valid ? 'found' : 'notfound';
+      geminiStatusPath = result.valid ? result.path : '';
+    } catch {
+      geminiStatus = 'unknown';
+      geminiStatusPath = '';
+    }
+  }
+
+  async function browseGemini() {
+    try {
+      const path = await App.BrowseForGemini();
+      if (path) {
+        geminiCommand = path;
+        const valid = await App.ValidateGeminiPath(path);
+        geminiStatus = valid ? 'found' : 'notfound';
+        geminiStatusPath = valid ? path : '';
       }
     } catch {}
   }
@@ -208,8 +236,13 @@
       terminal_color: colorValue,
       theme: selectedTheme,
       logging_enabled: loggingEnabled,
+      use_worktrees: useWorktrees,
+      claude_enabled: claudeEnabled,
       claude_command: claudeCommand,
+      codex_enabled: codexEnabled,
       codex_command: codexCommand,
+      gemini_enabled: geminiEnabled,
+      gemini_command: geminiCommand,
       font_family: fontFamily,
       font_size: fontSize,
       audio: {
@@ -414,50 +447,102 @@
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="setting-label">Claude CLI</label>
-        <p class="setting-desc">Pfad zur Claude Code CLI. Leer lassen für automatische Erkennung.</p>
-        <div class="claude-row">
-          <input
-            type="text"
-            class="claude-input"
-            bind:value={claudeCommand}
-            placeholder="claude (automatisch)"
-          />
-          <button class="claude-btn" on:click={browseClaude} title="Durchsuchen">&#128194;</button>
-          <button class="claude-btn" on:click={detectClaude} title="Erkennen">&#128269;</button>
+        <label class="setting-label">Git Worktrees</label>
+        <p class="setting-desc">Erstellt pro Issue ein isoliertes Arbeitsverzeichnis statt nur einen Branch zu wechseln.</p>
+        <div class="toggle-row">
+          <button class="toggle-btn" class:toggle-on={useWorktrees} on:click={() => useWorktrees = !useWorktrees}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{useWorktrees ? 'Aktiv' : 'Inaktiv'}</span>
         </div>
-        {#if claudeStatus === 'found'}
-          <p class="claude-status found">Gefunden: {claudeStatusPath}</p>
-        {:else if claudeStatus === 'notfound'}
-          <p class="claude-status notfound">Nicht gefunden</p>
+      </div>
+
+      <!-- CLI Tools Section -->
+      <div class="section-divider">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="section-title">CLI-Tools</label>
+        <p class="setting-desc">Aktivierte Tools erscheinen in der Terminal-Auswahl (Ctrl+N).</p>
+      </div>
+
+      <!-- Claude CLI -->
+      <div class="setting-group cli-group">
+        <div class="cli-header">
+          <button class="toggle-btn" class:toggle-on={claudeEnabled} on:click={() => claudeEnabled = !claudeEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <!-- svelte-ignore a11y-label-has-associated-control -->
+          <label class="setting-label" style="margin-bottom:0">Claude Code</label>
+          <span class="cli-badge claude-badge">Anthropic</span>
+        </div>
+        {#if claudeEnabled}
+          <p class="setting-desc">Pfad zur Claude Code CLI. Leer lassen für automatische Erkennung.</p>
+          <div class="claude-row">
+            <input type="text" class="claude-input" bind:value={claudeCommand} placeholder="claude (automatisch)" />
+            <button class="claude-btn" on:click={browseClaude} title="Durchsuchen">&#128194;</button>
+            <button class="claude-btn" on:click={detectClaude} title="Erkennen">&#128269;</button>
+          </div>
+          {#if claudeStatus === 'found'}
+            <p class="claude-status found">Gefunden: {claudeStatusPath}</p>
+          {:else if claudeStatus === 'notfound'}
+            <p class="claude-status notfound">Nicht gefunden</p>
+          {/if}
         {/if}
       </div>
 
-      <div class="setting-group">
-        <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="setting-label">Codex CLI</label>
-        <p class="setting-desc">Pfad zur OpenAI Codex CLI. Leer lassen für automatische Erkennung. Installation: <code>npm i -g @openai/codex</code></p>
-        <div class="claude-row">
-          <input
-            type="text"
-            class="claude-input"
-            bind:value={codexCommand}
-            placeholder="codex (automatisch)"
-          />
-          <button class="claude-btn" on:click={browseCodex} title="Durchsuchen">&#128194;</button>
-          <button class="claude-btn" on:click={detectCodex} title="Erkennen">&#128269;</button>
+      <!-- Codex CLI -->
+      <div class="setting-group cli-group">
+        <div class="cli-header">
+          <button class="toggle-btn" class:toggle-on={codexEnabled} on:click={() => codexEnabled = !codexEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <!-- svelte-ignore a11y-label-has-associated-control -->
+          <label class="setting-label" style="margin-bottom:0">Codex</label>
+          <span class="cli-badge codex-badge">OpenAI</span>
         </div>
-        {#if codexStatus === 'found'}
-          <p class="claude-status found">Gefunden: {codexStatusPath}</p>
-        {:else if codexStatus === 'notfound'}
-          <p class="claude-status notfound">Nicht gefunden — <code>npm i -g @openai/codex</code></p>
+        {#if codexEnabled}
+          <p class="setting-desc">Pfad zur Codex CLI. Installation: <code>npm i -g @openai/codex</code></p>
+          <div class="claude-row">
+            <input type="text" class="claude-input" bind:value={codexCommand} placeholder="codex (automatisch)" />
+            <button class="claude-btn" on:click={browseCodex} title="Durchsuchen">&#128194;</button>
+            <button class="claude-btn" on:click={detectCodex} title="Erkennen">&#128269;</button>
+          </div>
+          {#if codexStatus === 'found'}
+            <p class="claude-status found">Gefunden: {codexStatusPath}</p>
+          {:else if codexStatus === 'notfound'}
+            <p class="claude-status notfound">Nicht gefunden — <code>npm i -g @openai/codex</code></p>
+          {/if}
+        {/if}
+      </div>
+
+      <!-- Gemini CLI -->
+      <div class="setting-group cli-group">
+        <div class="cli-header">
+          <button class="toggle-btn" class:toggle-on={geminiEnabled} on:click={() => geminiEnabled = !geminiEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <!-- svelte-ignore a11y-label-has-associated-control -->
+          <label class="setting-label" style="margin-bottom:0">Gemini</label>
+          <span class="cli-badge gemini-badge">Google</span>
+        </div>
+        {#if geminiEnabled}
+          <p class="setting-desc">Pfad zur Gemini CLI. Installation: <code>npm i -g @google/gemini-cli</code></p>
+          <div class="claude-row">
+            <input type="text" class="claude-input" bind:value={geminiCommand} placeholder="gemini (automatisch)" />
+            <button class="claude-btn" on:click={browseGemini} title="Durchsuchen">&#128194;</button>
+            <button class="claude-btn" on:click={detectGemini} title="Erkennen">&#128269;</button>
+          </div>
+          {#if geminiStatus === 'found'}
+            <p class="claude-status found">Gefunden: {geminiStatusPath}</p>
+          {:else if geminiStatus === 'notfound'}
+            <p class="claude-status notfound">Nicht gefunden — <code>npm i -g @google/gemini-cli</code></p>
+          {/if}
         {/if}
       </div>
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
         <label class="setting-label">Audio</label>
-        <p class="setting-desc">Akustische Benachrichtigungen wenn Claude fertig ist oder Eingabe braucht.</p>
+        <p class="setting-desc">Akustische Benachrichtigungen wenn ein Agent fertig ist oder Eingabe braucht.</p>
         <div class="toggle-row" style="margin-bottom: 12px;">
           <button class="toggle-btn" class:toggle-on={audioEnabled} on:click={() => audioEnabled = !audioEnabled}>
             <span class="toggle-knob"></span>
@@ -538,6 +623,36 @@
   h3 { margin: 0 0 20px; color: var(--fg); font-size: 18px; }
   .setting-group { margin-bottom: 24px; }
 
+  .section-divider {
+    margin-bottom: 16px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .section-title {
+    font-size: 15px; font-weight: 700; color: var(--fg);
+    display: block; margin-bottom: 4px;
+  }
+
+  .cli-group {
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .cli-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+  }
+
+  .cli-badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .claude-badge { background: rgba(203, 166, 247, 0.2); color: #cba6f7; }
+  .codex-badge { background: rgba(16, 163, 127, 0.2); color: #10a37f; }
+  .gemini-badge { background: rgba(66, 133, 244, 0.2); color: #4285f4; }
+
   .theme-select {
     width: 100%; padding: 8px 12px; background: var(--bg-secondary);
     color: var(--fg); border: 1px solid var(--border); border-radius: 6px;
@@ -550,6 +665,10 @@
 
   .setting-label { font-size: 14px; font-weight: 600; color: var(--fg); display: block; margin-bottom: 4px; }
   .setting-desc { font-size: 12px; color: var(--fg-muted); margin: 0 0 12px; }
+  .setting-desc code {
+    background: rgba(255, 255, 255, 0.1); padding: 1px 4px;
+    border-radius: 3px; font-size: 11px;
+  }
 
   .dialog-footer { display: flex; justify-content: space-between; align-items: center; }
   .footer-right-btns { display: flex; gap: 8px; }
@@ -606,6 +725,7 @@
     color: var(--fg); border: 1px solid var(--border); border-radius: 6px;
     font-size: 12px; font-family: monospace; outline: none;
   }
+  .cli-group .claude-input { background: var(--bg); }
   .claude-input:focus { border-color: var(--accent); }
   .claude-input::placeholder { color: var(--fg-muted); opacity: 0.6; }
 

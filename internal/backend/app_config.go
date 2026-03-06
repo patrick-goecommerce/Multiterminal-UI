@@ -25,6 +25,7 @@ func (a *AppService) SaveConfig(cfg config.Config) error {
 	// Re-detect CLI paths in case commands changed
 	a.resolveClaudeOnStartup()
 	a.resolveCodexOnStartup()
+	a.resolveGeminiOnStartup()
 	// Apply or remove statusline in ~/.claude/settings.json
 	if cfg.StatusLine.Enabled {
 		a.applyStatusLine(cfg.StatusLine)

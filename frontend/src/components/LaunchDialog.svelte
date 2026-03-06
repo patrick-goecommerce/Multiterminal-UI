@@ -1,22 +1,55 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { config } from '../stores/config';
+  import type { PaneMode } from '../stores/tabs';
 
   export let visible: boolean = false;
   export let issueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
   export let claudeDetected: boolean = true;
   export let codexDetected: boolean = false;
+  export let geminiDetected: boolean = false;
 
   const dispatch = createEventDispatcher();
 
   let selectedModel = '';
   let dialogEl: HTMLDivElement;
 
+  interface LaunchOption {
+    mode: PaneMode;
+    label: string;
+    desc: string;
+    icon: string;
+    cssClass: string;
+  }
+
+  // Build available options based on enabled CLI tools
+  $: options = buildOptions(issueContext, $config);
+
+  function buildOptions(issue: typeof issueContext, cfg: typeof $config): LaunchOption[] {
+    const opts: LaunchOption[] = [];
+    if (!issue) {
+      opts.push({ mode: 'shell', label: 'Shell', desc: 'Standard-Terminal', icon: '&#9000;', cssClass: '' });
+    }
+    if (cfg.claude_enabled !== false) {
+      opts.push({ mode: 'claude', label: 'Claude Code', desc: 'Normal-Modus', icon: '&#10024;', cssClass: '' });
+      opts.push({ mode: 'claude-yolo', label: 'Claude YOLO', desc: 'Alle Berechtigungen', icon: '&#9889;', cssClass: 'yolo' });
+    }
+    if (cfg.codex_enabled) {
+      opts.push({ mode: 'codex', label: 'Codex', desc: 'OpenAI Codex CLI', icon: '&#129302;', cssClass: 'codex' });
+      opts.push({ mode: 'codex-auto', label: 'Codex Auto', desc: 'Full-Auto Modus', icon: '&#9889;', cssClass: 'codex-auto' });
+    }
+    if (cfg.gemini_enabled) {
+      opts.push({ mode: 'gemini', label: 'Gemini', desc: 'Google Gemini CLI', icon: '&#9733;', cssClass: 'gemini' });
+      opts.push({ mode: 'gemini-yolo', label: 'Gemini Sandbox', desc: 'Sandbox-Modus', icon: '&#9889;', cssClass: 'gemini-yolo' });
+    }
+    return opts;
+  }
+
   $: if (visible) {
     requestAnimationFrame(() => dialogEl?.focus());
   }
 
-  function launch(type: 'shell' | 'claude' | 'claude-yolo' | 'codex' | 'codex-auto') {
+  function launch(type: PaneMode) {
     dispatch('launch', { type, model: selectedModel, issue: issueContext });
     dispatch('close');
     selectedModel = '';
@@ -29,17 +62,28 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') close();
-    if (issueContext) {
-      if (e.key === '1') launch('claude');
-      if (e.key === '2') launch('claude-yolo');
-    } else {
-      if (e.key === '1') launch('shell');
-      if (e.key === '2') launch('claude');
-      if (e.key === '3') launch('claude-yolo');
-      if (e.key === '4') launch('codex');
-      if (e.key === '5') launch('codex-auto');
+    const idx = parseInt(e.key) - 1;
+    if (idx >= 0 && idx < options.length) {
+      launch(options[idx].mode);
     }
   }
+
+  // Show separator between tool groups
+  function needsSeparator(i: number): boolean {
+    if (i === 0) return false;
+    const group = (m: PaneMode) => {
+      if (m === 'shell') return 0;
+      if (m === 'claude' || m === 'claude-yolo') return 1;
+      if (m === 'codex' || m === 'codex-auto') return 2;
+      return 3;
+    };
+    return group(options[i - 1].mode) !== group(options[i].mode);
+  }
+
+  $: showClaudeWarning = ($config.claude_enabled !== false) && !claudeDetected;
+  $: showCodexWarning = $config.codex_enabled && !codexDetected;
+  $: showGeminiWarning = $config.gemini_enabled && !geminiDetected;
+  $: showModelPicker = ($config.claude_enabled !== false) && $config.claude_models.length > 0;
 </script>
 
 {#if visible}
@@ -49,7 +93,7 @@
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="dialog" on:click|stopPropagation bind:this={dialogEl} tabindex="-1" on:keydown={handleKeydown}>
-      <h3>{issueContext ? `Claude für #${issueContext.number}` : 'Neues Terminal'}</h3>
+      <h3>{issueContext ? `Agent für #${issueContext.number}` : 'Neues Terminal'}</h3>
       {#if issueContext}
         <div class="issue-context">
           <span class="issue-ctx-num">#{issueContext.number}</span>
@@ -57,7 +101,7 @@
         </div>
       {/if}
 
-      {#if !claudeDetected}
+      {#if showClaudeWarning}
         <div class="cli-warning">
           <span class="warning-icon">&#9888;</span>
           <span>Claude CLI nicht gefunden.</span>
@@ -65,67 +109,37 @@
         </div>
       {/if}
 
-      {#if !codexDetected}
-        <div class="cli-warning codex-warning">
+      {#if showCodexWarning}
+        <div class="cli-warning">
           <span class="warning-icon">&#9888;</span>
           <span>Codex CLI nicht gefunden. <code>npm i -g @openai/codex</code></span>
         </div>
       {/if}
 
+      {#if showGeminiWarning}
+        <div class="cli-warning">
+          <span class="warning-icon">&#9888;</span>
+          <span>Gemini CLI nicht gefunden. <code>npm i -g @google/gemini-cli</code></span>
+        </div>
+      {/if}
+
       <div class="options">
-        {#if !issueContext}
-          <button class="option" on:click={() => launch('shell')}>
-            <span class="option-key">1</span>
-            <span class="option-icon">&#9000;</span>
+        {#each options as opt, i}
+          {#if needsSeparator(i)}
+            <div class="separator"></div>
+          {/if}
+          <button class="option {opt.cssClass}" on:click={() => launch(opt.mode)}>
+            <span class="option-key">{i + 1}</span>
+            <span class="option-icon">{@html opt.icon}</span>
             <div class="option-text">
-              <strong>Shell</strong>
-              <span>Standard-Terminal</span>
+              <strong>{opt.label}</strong>
+              <span>{opt.desc}</span>
             </div>
           </button>
-        {/if}
-
-        <button class="option" on:click={() => launch('claude')}>
-          <span class="option-key">{issueContext ? '1' : '2'}</span>
-          <span class="option-icon">&#10024;</span>
-          <div class="option-text">
-            <strong>Claude Code</strong>
-            <span>Normal-Modus</span>
-          </div>
-        </button>
-
-        <button class="option yolo" on:click={() => launch('claude-yolo')}>
-          <span class="option-key">{issueContext ? '2' : '3'}</span>
-          <span class="option-icon">&#9889;</span>
-          <div class="option-text">
-            <strong>Claude YOLO</strong>
-            <span>Alle Berechtigungen</span>
-          </div>
-        </button>
-
-        {#if !issueContext}
-          <div class="separator"></div>
-
-          <button class="option codex" on:click={() => launch('codex')}>
-            <span class="option-key">4</span>
-            <span class="option-icon">&#129302;</span>
-            <div class="option-text">
-              <strong>Codex</strong>
-              <span>OpenAI Codex CLI</span>
-            </div>
-          </button>
-
-          <button class="option codex-auto" on:click={() => launch('codex-auto')}>
-            <span class="option-key">5</span>
-            <span class="option-icon">&#9889;</span>
-            <div class="option-text">
-              <strong>Codex Auto</strong>
-              <span>Full-Auto Modus</span>
-            </div>
-          </button>
-        {/if}
+        {/each}
       </div>
 
-      {#if $config.claude_models.length > 0}
+      {#if showModelPicker}
         <div class="model-picker">
           <label>Claude Modell:</label>
           <select bind:value={selectedModel}>
@@ -211,17 +225,11 @@
     background: var(--bg-tertiary);
   }
 
-  .option.yolo:hover {
-    border-color: var(--error);
-  }
-
-  .option.codex:hover {
-    border-color: #10a37f;
-  }
-
-  .option.codex-auto:hover {
-    border-color: #e87b35;
-  }
+  .option.yolo:hover { border-color: var(--error); }
+  .option.codex:hover { border-color: #10a37f; }
+  .option.codex-auto:hover { border-color: #e87b35; }
+  .option.gemini:hover { border-color: #4285f4; }
+  .option.gemini-yolo:hover { border-color: #ea4335; }
 
   .option-key {
     font-size: 11px;
@@ -232,18 +240,14 @@
     font-family: monospace;
   }
 
-  .option-icon {
-    font-size: 20px;
-  }
+  .option-icon { font-size: 20px; }
 
   .option-text {
     display: flex;
     flex-direction: column;
   }
 
-  .option-text strong {
-    font-size: 14px;
-  }
+  .option-text strong { font-size: 14px; }
 
   .option-text span {
     font-size: 11px;
@@ -287,9 +291,7 @@
     font-size: 12px;
   }
 
-  .cancel-btn:hover {
-    color: var(--fg);
-  }
+  .cancel-btn:hover { color: var(--fg); }
 
   .cli-warning {
     display: flex; align-items: center; gap: 8px;
