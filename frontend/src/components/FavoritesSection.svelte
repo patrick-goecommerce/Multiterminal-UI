@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
 
   export let favorites: string[] = [];
   let collapsed = false;
@@ -43,7 +44,7 @@
 
     {#if !collapsed}
       {#if favorites.length === 0}
-        <div class="no-favorites">Keine Favoriten</div>
+        <div class="no-favorites">{$t('favorites.noFavorites')}</div>
       {:else}
         {#each favorites as fav (fav)}
           <div
@@ -58,7 +59,7 @@
           >
             <span class="fav-icon">{isDir(fav) ? '\u{1F4C1}' : '\u{1F4C4}'}</span>
             <span class="fav-name">{fileName(fav)}</span>
-            <button class="remove-btn" on:click={(e) => handleRemove(e, fav)} title="Favorit entfernen">
+            <button class="remove-btn" on:click={(e) => handleRemove(e, fav)} title={$t('favorites.removeFavorite')}>
               <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm3.5 9.5l-1 1L8 9l-2.5 2.5-1-1L7 8 4.5 5.5l1-1L8 7l2.5-2.5 1 1L9 8z"/>
               </svg>

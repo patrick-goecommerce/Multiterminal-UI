@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { tabStore, allTabs } from '../stores/tabs';
+  import { t } from '../stores/i18n';
 
   export let activeTabId: string;
 
@@ -20,7 +21,7 @@
   }
 
   function handleTabDblClick(tabId: string) {
-    const name = prompt('Tab umbenennen:');
+    const name = prompt($t('tabBar.rename'));
     if (name) tabStore.renameTab(tabId, name);
   }
 </script>
@@ -44,7 +45,7 @@
       </button>
     {/each}
   </div>
-  <button class="tab-add" on:click={handleAddTab} title="Neuer Tab (Ctrl+T)">
+  <button class="tab-add" on:click={handleAddTab} title={$t('tabBar.newTab')}>
     +
   </button>
 </div>

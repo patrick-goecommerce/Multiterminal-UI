@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../stores/i18n';
+
   export let branch: string = '';
   export let totalCost: string = '';
   export let tabInfo: string = '';
@@ -11,11 +13,11 @@
 
   $: commitLabel = (() => {
     if (commitAgeMinutes < 0) return '';
-    if (commitAgeMinutes < 1) return 'Letzter Commit: gerade eben';
-    if (commitAgeMinutes < 60) return `Letzter Commit: ${commitAgeMinutes}m`;
+    if (commitAgeMinutes < 1) return $t('footer.commitJustNow');
+    if (commitAgeMinutes < 60) return $t('footer.commitMinutes', { min: commitAgeMinutes });
     const h = Math.floor(commitAgeMinutes / 60);
     const m = commitAgeMinutes % 60;
-    return `Letzter Commit: ${h}h ${m}m`;
+    return $t('footer.commitHours', { h, m });
   })();
 
   $: conflictLabel = (() => {
@@ -23,7 +25,7 @@
     const op = conflictOperation
       ? ` (${conflictOperation === 'cherry-pick' ? 'Cherry-Pick' : conflictOperation.charAt(0).toUpperCase() + conflictOperation.slice(1)})`
       : '';
-    return `\u26A0 ${conflictCount} Konflikt${conflictCount > 1 ? 'e' : ''}${op}`;
+    return $t('footer.conflicts', { count: conflictCount, op });
   })();
 
   $: commitClass = (() => {
@@ -59,7 +61,7 @@
   <div class="footer-update">
     {#if updateAvailable && downloadURL}
       <a class="update-link" href={downloadURL} target="_blank" rel="noopener">
-        Update v{latestVersion} verfügbar
+        {$t('footer.updateAvailable', { version: latestVersion })}
       </a>
     {/if}
   </div>

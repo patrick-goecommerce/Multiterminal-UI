@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import { ClipboardSetText } from '../../wailsjs/runtime/runtime';
 
   export let dir: string = '';
@@ -12,14 +13,16 @@
   interface ScEntry { path: string; name: string; relPath: string; status: string; }
   interface ScGroup { label: string; code: string; entries: ScEntry[]; }
 
-  const statusGroups = [
-    { label: 'Konflikte', code: 'U' },
-    { label: 'Modified', code: 'M' },
-    { label: 'Added', code: 'A' },
-    { label: 'Untracked', code: '?' },
-    { label: 'Deleted', code: 'D' },
-    { label: 'Renamed', code: 'R' },
+  const statusGroupCodes = [
+    { key: 'sourceControl.conflicts', code: 'U' },
+    { key: 'sourceControl.modified', code: 'M' },
+    { key: 'sourceControl.added', code: 'A' },
+    { key: 'sourceControl.untracked', code: '?' },
+    { key: 'sourceControl.deleted', code: 'D' },
+    { key: 'sourceControl.renamed', code: 'R' },
   ];
+
+  $: statusGroups = statusGroupCodes.map(g => ({ label: $t(g.key), code: g.code }));
 
   let copiedPath = '';
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
@@ -85,13 +88,11 @@
 <div class="file-list">
   {#if conflictFiles.length > 0 && conflictOperation}
     <div class="sc-operation-banner">
-      {conflictOperation === 'merge' ? 'Merge' :
-       conflictOperation === 'rebase' ? 'Rebase' : 'Cherry-Pick'}
-      in Bearbeitung
+      {$t('sourceControl.mergeInProgress', { op: conflictOperation === 'merge' ? 'Merge' : conflictOperation === 'rebase' ? 'Rebase' : 'Cherry-Pick' })}
     </div>
   {/if}
   {#if groupedChanges.length === 0}
-    <div class="no-results">Keine Änderungen</div>
+    <div class="no-results">{$t('sourceControl.noChanges')}</div>
   {:else}
     {#each groupedChanges as group}
       <div class="sc-group-header">{group.label}</div>
@@ -107,11 +108,11 @@
           <span class="sc-name">{entry.name}</span>
           <span class="sc-relpath">{entry.relPath}</span>
           {#if copiedPath === entry.path}
-            <span class="copied-badge">kopiert!</span>
+            <span class="copied-badge">{$t('sourceControl.copied')}</span>
           {:else}
             <span class="sc-badge {getStatusClass(entry.status)}">{entry.status === '?' ? 'N' : entry.status === 'U' ? 'C' : entry.status}</span>
           {/if}
-          <button class="copy-btn" on:click={(e) => handleScCopy(e, entry.path)} title="Pfad kopieren">
+          <button class="copy-btn" on:click={(e) => handleScCopy(e, entry.path)} title={$t('sourceControl.copyPath')}>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
               <path d="M4 4v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2v2a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2zm2-2v2h2a2 2 0 0 1 2 2v2h2V2H6zM2 6v6h6V6H2z"/>
             </svg>

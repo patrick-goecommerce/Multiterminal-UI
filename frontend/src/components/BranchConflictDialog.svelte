@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
 
   export let visible: boolean = false;
   export let currentBranch: string = '';
@@ -35,11 +36,11 @@
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="dialog" on:click|stopPropagation>
-      <h3>Branch-Konflikt</h3>
+      <h3>{$t('branchConflict.title')}</h3>
 
       <div class="conflict-info">
         <div class="conflict-row">
-          <span class="conflict-label">Aktuell:</span>
+          <span class="conflict-label">{$t('branchConflict.current')}</span>
           <span class="conflict-branch">{currentBranch}</span>
           {#if currentIssueNumber}
             <span class="conflict-issue">#{currentIssueNumber}</span>
@@ -47,7 +48,7 @@
         </div>
         <div class="conflict-arrow">&#8595;</div>
         <div class="conflict-row">
-          <span class="conflict-label">Ziel:</span>
+          <span class="conflict-label">{$t('branchConflict.target')}</span>
           <span class="conflict-branch">issue/{targetIssueNumber}-...</span>
           <span class="conflict-issue">#{targetIssueNumber}</span>
         </div>
@@ -59,7 +60,7 @@
       {#if dirtyWorkingTree}
         <div class="dirty-warning">
           <span class="warning-icon">&#9888;</span>
-          <span>Uncommitted Changes vorhanden — Branch-Wechsel nicht moeglich.</span>
+          <span>{$t('branchConflict.dirtyWarning')}</span>
         </div>
       {/if}
 
@@ -68,8 +69,8 @@
           <span class="option-key">1</span>
           <span class="option-icon">&#8634;</span>
           <div class="option-text">
-            <strong>Branch wechseln</strong>
-            <span>Zum Issue-Branch wechseln{dirtyWorkingTree ? ' (dirty tree)' : ''}</span>
+            <strong>{$t('branchConflict.switchBranch')}</strong>
+            <span>{$t('branchConflict.switchDesc', { dirty: dirtyWorkingTree ? ' (dirty tree)' : '' })}</span>
           </div>
         </button>
 
@@ -77,8 +78,8 @@
           <span class="option-key">2</span>
           <span class="option-icon">&#9654;</span>
           <div class="option-text">
-            <strong>Im Branch bleiben</strong>
-            <span>Session ohne Branch-Wechsel starten</span>
+            <strong>{$t('branchConflict.stay')}</strong>
+            <span>{$t('branchConflict.stayDesc')}</span>
           </div>
         </button>
 
@@ -86,14 +87,14 @@
           <span class="option-key">3</span>
           <span class="option-icon">&#128194;</span>
           <div class="option-text">
-            <strong>Worktree erstellen</strong>
-            <span>Isoliertes Verzeichnis fuer Issue #{targetIssueNumber}</span>
+            <strong>{$t('branchConflict.createWorktree')}</strong>
+            <span>{$t('branchConflict.worktreeDesc', { number: targetIssueNumber })}</span>
           </div>
         </button>
       </div>
 
       <div class="dialog-footer">
-        <button class="cancel-btn" on:click={close}>Abbrechen (Esc)</button>
+        <button class="cancel-btn" on:click={close}>{$t('branchConflict.cancel')}</button>
       </div>
     </div>
   </div>

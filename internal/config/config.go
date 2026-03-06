@@ -39,6 +39,8 @@ type Config struct {
 	Favorites             map[string][]string `yaml:"favorites,omitempty" json:"favorites,omitempty"`
 	FontFamily            string         `yaml:"font_family" json:"font_family"`
 	FontSize              int            `yaml:"font_size"   json:"font_size"`
+	Language              string         `yaml:"language" json:"language"`
+	SetupDone             bool           `yaml:"setup_done" json:"setup_done"`
 }
 
 // IssueTracking holds settings for automatic issue progress reporting.
@@ -118,6 +120,8 @@ func DefaultConfig() Config {
 		LocalhostAutoOpen: "notify",
 		FontFamily:        "",
 		FontSize:          10,
+		Language:          "de",
+		SetupDone:         false,
 	}
 }
 
@@ -226,6 +230,12 @@ func Load() Config {
 
 	if cfg.Favorites == nil {
 		cfg.Favorites = make(map[string][]string)
+	}
+
+	// Validate language
+	validLangs := map[string]bool{"de": true, "en": true, "it": true, "es": true, "fr": true}
+	if !validLangs[cfg.Language] {
+		cfg.Language = "de"
 	}
 
 	return cfg

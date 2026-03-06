@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import * as App from '../../wailsjs/go/backend/App';
 
   export let visible: boolean = false;
@@ -17,7 +18,7 @@
   let error = '';
 
   $: isEdit = editIssue !== null;
-  $: dialogTitle = isEdit ? `Issue #${editIssue?.number} bearbeiten` : 'Neues Issue';
+  $: dialogTitle = isEdit ? $t('issue.editTitle', { number: editIssue?.number ?? 0 }) : $t('issue.createTitle');
 
   $: if (visible) {
     error = '';
@@ -54,7 +55,7 @@
 
   async function submit() {
     if (!title.trim()) {
-      error = 'Titel ist erforderlich';
+      error = $t('issue.titleRequired');
       return;
     }
     submitting = true;
@@ -69,7 +70,7 @@
       dispatch('saved');
       close();
     } catch (e: any) {
-      error = e?.message || 'Fehler beim Speichern';
+      error = e?.message || $t('issue.saveError');
     }
     submitting = false;
   }
@@ -104,18 +105,18 @@
       {/if}
 
       <div class="field">
-        <label for="issue-title">Titel</label>
+        <label for="issue-title">{$t('issue.titleLabel')}</label>
         <input id="issue-title" type="text" bind:value={title} placeholder="Issue-Titel..." />
       </div>
 
       <div class="field">
-        <label for="issue-body">Beschreibung</label>
-        <textarea id="issue-body" bind:value={body} placeholder="Beschreibung (Markdown)..." rows="6"></textarea>
+        <label for="issue-body">{$t('issue.descLabel')}</label>
+        <textarea id="issue-body" bind:value={body} placeholder={$t('issue.descPlaceholder')} rows="6"></textarea>
       </div>
 
       {#if availableLabels.length > 0}
         <div class="field">
-          <label>Labels</label>
+          <label>{$t('issue.labelsLabel')}</label>
           <div class="label-grid">
             {#each availableLabels as label}
               <button
@@ -133,7 +134,7 @@
 
       {#if isEdit}
         <div class="field">
-          <label for="issue-state">Status</label>
+          <label for="issue-state">{$t('issue.statusLabel')}</label>
           <select id="issue-state" bind:value={newState}>
             <option value="open">Open</option>
             <option value="closed">Closed</option>
@@ -142,10 +143,10 @@
       {/if}
 
       <div class="dialog-footer">
-        <span class="hint">Ctrl+Enter zum Speichern</span>
-        <button class="cancel-btn" on:click={close}>Abbrechen</button>
+        <span class="hint">{$t('issue.saveHint')}</span>
+        <button class="cancel-btn" on:click={close}>{$t('issue.cancel')}</button>
         <button class="submit-btn" on:click={submit} disabled={submitting}>
-          {submitting ? 'Speichere...' : isEdit ? 'Speichern' : 'Erstellen'}
+          {submitting ? $t('issue.saving') : isEdit ? $t('issue.save') : $t('issue.create')}
         </button>
       </div>
     </div>

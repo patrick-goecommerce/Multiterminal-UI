@@ -13,9 +13,11 @@
   import IssueDialog from './components/IssueDialog.svelte';
   import BranchConflictDialog from './components/BranchConflictDialog.svelte';
   import FilePreview from './components/FilePreview.svelte';
+  import SetupDialog from './components/SetupDialog.svelte';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
+  import { initI18n, setLanguage, t, type Language } from './stores/i18n';
   import type { PaneMode } from './stores/tabs';
   import { buildClaudeArgv, getClaudeName, encodeForPty } from './lib/claude';
   import { createGlobalKeyHandler } from './lib/shortcuts';
@@ -35,6 +37,7 @@
   let showCommandPalette = false;
   let showSidebar = false;
   let showCrashDialog = false;
+  let showSetupDialog = false;
   let showIssueDialog = false;
   let previewFilePath = '';
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
@@ -104,7 +107,9 @@
       applyTheme(cfg.theme || 'dark');
       if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
       if (cfg.sidebar_pinned) showSidebar = true;
-    } catch { applyTheme('dark'); }
+      await initI18n((cfg.language || 'de') as Language);
+      if (!cfg.setup_done) showSetupDialog = true;
+    } catch { applyTheme('dark'); await initI18n('de'); }
 
     try {
       resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude';
@@ -158,7 +163,7 @@
         for (const tab of $allTabs) {
           const pane = tab.panes.find(p => p.sessionId === info.id);
           if (pane?.issueNumber) {
-            sendNotification(`Agent fertig – #${pane.issueNumber}`, pane.issueTitle || pane.name);
+            sendNotification($t('app.agentDone', { number: pane.issueNumber }), pane.issueTitle || pane.name);
             break;
           }
         }
@@ -167,7 +172,7 @@
     EventsOn('terminal:exit', (id: number) => tabStore.markExited(id));
     EventsOn('terminal:error', (id: number, msg: string) => {
       console.error('[terminal:error]', id, msg);
-      alert(`Terminal-Fehler (Session ${id}): ${msg}`);
+      alert($t('app.terminalError', { id: String(id), msg }));
     });
 
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -216,8 +221,8 @@
         ? ` (${info.operation.charAt(0).toUpperCase() + info.operation.slice(1)})`
         : '';
       sendNotification(
-        `Merge-Konflikte erkannt${opLabel}`,
-        `${info.count} Datei${info.count > 1 ? 'en' : ''} mit Konflikten`
+        $t('app.mergeConflicts', { op: opLabel }),
+        $t('app.conflictFiles', { count: info.count })
       );
     }
     prevConflictCount = info.count;
@@ -234,7 +239,7 @@
     const tab = $activeTab;
     if (!tab) return;
     if (tab.panes.length >= MAX_PANES_PER_TAB) {
-      alert(`Max. ${MAX_PANES_PER_TAB} Terminals pro Tab erreicht.`);
+      alert($t('app.maxPanes', { max: MAX_PANES_PER_TAB }));
       return;
     }
     const argv = buildClaudeArgv(type, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
@@ -418,6 +423,26 @@
     tabStore.addTab(e.detail.name, e.detail.dir);
   }
 
+  async function handleSetupFinish(e: CustomEvent<{ language: Language; claudeEnabled: boolean; codexEnabled: boolean; geminiEnabled: boolean }>) {
+    const { language, claudeEnabled, codexEnabled, geminiEnabled } = e.detail;
+    showSetupDialog = false;
+    await setLanguage(language);
+    const updated = {
+      ...$config,
+      language,
+      setup_done: true,
+      claude_enabled: claudeEnabled,
+      codex_enabled: codexEnabled,
+      gemini_enabled: geminiEnabled,
+    };
+    config.set(updated);
+    try { await App.SaveConfig(updated); } catch {}
+  }
+
+  async function handleSetupLangChange(e: CustomEvent<{ lang: Language }>) {
+    await setLanguage(e.detail.lang);
+  }
+
   function handleCrashEnable() {
     showCrashDialog = false;
     App.EnableLogging(true);
@@ -513,6 +538,7 @@
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
   <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} try { resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex'; codexDetected = await App.IsCodexDetected(); } catch {} try { resolvedGeminiPath = (await App.GetResolvedGeminiPath()) || 'gemini'; geminiDetected = await App.IsGeminiDetected(); } catch {} }} />
   <CommandPalette visible={showCommandPalette} on:send={handleSendCommand} on:close={() => (showCommandPalette = false)} />
+  <SetupDialog visible={showSetupDialog} {claudeDetected} {codexDetected} {geminiDetected} on:finish={handleSetupFinish} on:langChange={handleSetupLangChange} on:close={() => { showSetupDialog = false; }} />
   <CrashDialog visible={showCrashDialog} on:enable={handleCrashEnable} on:dismiss={() => (showCrashDialog = false)} />
   <IssueDialog visible={showIssueDialog} dir={$activeTab?.dir ?? ''} editIssue={editIssueData} on:saved={handleIssueSaved} on:close={() => { showIssueDialog = false; editIssueData = null; }} />
   <BranchConflictDialog

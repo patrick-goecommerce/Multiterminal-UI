@@ -398,11 +398,13 @@ export namespace config {
 	    favorites?: Record<string, Array<string>>;
 	    font_family: string;
 	    font_size: number;
-	
+	    language: string;
+	    setup_done: boolean;
+
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.default_shell = source["default_shell"];
@@ -431,6 +433,8 @@ export namespace config {
 	        this.favorites = source["favorites"];
 	        this.font_family = source["font_family"];
 	        this.font_size = source["font_size"];
+	        this.language = source["language"];
+	        this.setup_done = source["setup_done"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

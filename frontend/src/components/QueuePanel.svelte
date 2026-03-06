@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { t } from '../stores/i18n';
   import * as App from '../../wailsjs/go/backend/App';
   import { EventsOn } from '../../wailsjs/runtime/runtime';
 
@@ -83,9 +84,9 @@
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <div class="queue-panel" on:click|stopPropagation>
     <div class="queue-header">
-      <span class="queue-title">Pipeline Queue</span>
+      <span class="queue-title">{$t('queue.title')}</span>
       {#if doneCount > 0}
-        <button class="clear-btn" on:click={clearDone}>Clear done ({doneCount})</button>
+        <button class="clear-btn" on:click={clearDone}>{$t('queue.clearDone', { count: doneCount })}</button>
       {/if}
     </div>
 
@@ -93,14 +94,14 @@
       <textarea
         bind:value={promptText}
         on:keydown={handleKeydown}
-        placeholder="Prompt eingeben... (Enter = Add)"
+        placeholder={$t('queue.placeholder')}
         rows="2"
       ></textarea>
       <button class="add-btn" on:click={addItem} disabled={!promptText.trim()}>+</button>
     </div>
 
     {#if items.length === 0}
-      <div class="queue-empty">Queue ist leer. Prompts werden nacheinander abgearbeitet.</div>
+      <div class="queue-empty">{$t('queue.empty')}</div>
     {:else}
       <div class="queue-list">
         {#each items as item (item.id)}
@@ -114,7 +115,7 @@
               {item.prompt.length > 80 ? item.prompt.slice(0, 80) + '...' : item.prompt}
             </span>
             {#if item.status !== 'sent'}
-              <button class="item-remove" on:click={() => removeItem(item.id)} title="Entfernen">&times;</button>
+              <button class="item-remove" on:click={() => removeItem(item.id)} title={$t('queue.remove')}>&times;</button>
             {/if}
           </div>
         {/each}
@@ -122,7 +123,7 @@
     {/if}
 
     {#if pendingCount > 0 && sentItem}
-      <div class="queue-footer">{pendingCount} wartend</div>
+      <div class="queue-footer">{$t('queue.pending', { count: pendingCount })}</div>
     {/if}
   </div>
 {/if}

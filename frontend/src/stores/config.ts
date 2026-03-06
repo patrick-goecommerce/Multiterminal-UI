@@ -44,6 +44,8 @@ export interface AppConfig {
   font_family: string;
   font_size: number;
   favorites: Record<string, string[]>;
+  language: string;
+  setup_done: boolean;
 }
 
 export const config = writable<AppConfig>({
@@ -82,4 +84,6 @@ export const config = writable<AppConfig>({
   font_family: '',
   font_size: 10,
   favorites: {},
+  language: 'de',
+  setup_done: false,
 });

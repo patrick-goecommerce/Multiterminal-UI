@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+  import { t } from '../stores/i18n';
 
   export let x: number = 0;
   export let y: number = 0;
@@ -46,24 +47,24 @@
 {#if visible}
   <div class="context-menu" bind:this={menuEl} style={style}>
     <button class="ctx-item" class:disabled={!hasSelection} on:click={() => handleAction('copy')} disabled={!hasSelection}>
-      <span class="ctx-icon">&#x2398;</span> Kopieren <span class="ctx-shortcut">Ctrl+C</span>
+      <span class="ctx-icon">&#x2398;</span> {$t('contextMenu.copy')} <span class="ctx-shortcut">Ctrl+C</span>
     </button>
     <button class="ctx-item" on:click={() => handleAction('paste')}>
-      <span class="ctx-icon">&#x2399;</span> Einfügen <span class="ctx-shortcut">Ctrl+V</span>
+      <span class="ctx-icon">&#x2399;</span> {$t('contextMenu.paste')} <span class="ctx-shortcut">Ctrl+V</span>
     </button>
     <div class="ctx-separator"></div>
     <button class="ctx-item" on:click={() => handleAction('selectAll')}>
-      <span class="ctx-icon">&#x2610;</span> Alles auswählen
+      <span class="ctx-icon">&#x2610;</span> {$t('contextMenu.selectAll')}
     </button>
     <button class="ctx-item" on:click={() => handleAction('search')}>
-      <span class="ctx-icon">&#x2315;</span> Suchen <span class="ctx-shortcut">Ctrl+F</span>
+      <span class="ctx-icon">&#x2315;</span> {$t('contextMenu.search')} <span class="ctx-shortcut">Ctrl+F</span>
     </button>
     <div class="ctx-separator"></div>
     <button class="ctx-item" on:click={() => handleAction('clear')}>
-      <span class="ctx-icon">&#x2327;</span> Terminal leeren
+      <span class="ctx-icon">&#x2327;</span> {$t('contextMenu.clearTerminal')}
     </button>
     <button class="ctx-item" on:click={() => handleAction('splitPane')}>
-      <span class="ctx-icon">&#x229e;</span> Neues Terminal <span class="ctx-shortcut">Ctrl+N</span>
+      <span class="ctx-icon">&#x229e;</span> {$t('contextMenu.newTerminal')} <span class="ctx-shortcut">Ctrl+N</span>
     </button>
   </div>
 {/if}
