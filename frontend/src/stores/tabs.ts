@@ -1,6 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
 
-export type PaneMode = 'shell' | 'claude' | 'claude-yolo';
+export type PaneMode = 'shell' | 'claude' | 'claude-yolo' | 'codex' | 'codex-auto';
 
 export interface Pane {
   id: string;

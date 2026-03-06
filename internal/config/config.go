@@ -21,6 +21,7 @@ type Config struct {
 	SidebarWidth          int            `yaml:"sidebar_width" json:"sidebar_width"`
 	ClaudeCommand         string         `yaml:"claude_command" json:"claude_command"`
 	ClaudeModels          []ModelEntry   `yaml:"claude_models" json:"claude_models"`
+	CodexCommand          string         `yaml:"codex_command" json:"codex_command"`
 	CommitReminderMinutes int            `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
 	RestoreSession        *bool          `yaml:"restore_session" json:"restore_session"`
 	LoggingEnabled        bool           `yaml:"logging_enabled" json:"logging_enabled"`
@@ -80,6 +81,7 @@ func DefaultConfig() Config {
 		MaxPanesPerTab:        12,
 		SidebarWidth:          30,
 		ClaudeCommand:         "claude",
+		CodexCommand:          "codex",
 		CommitReminderMinutes: 30,
 		RestoreSession:        boolPtr(true),
 		AutoBranchOnIssue:     boolPtr(true),

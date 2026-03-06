@@ -71,6 +71,8 @@
 
   let resolvedClaudePath = 'claude';
   let claudeDetected = true;
+  let resolvedCodexPath = 'codex';
+  let codexDetected = false;
 
   let branchInterval: ReturnType<typeof setInterval> | null = null;
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
@@ -111,6 +113,14 @@
     }
 
     try {
+      resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex';
+      codexDetected = await App.IsCodexDetected();
+    } catch {
+      resolvedCodexPath = 'codex';
+      codexDetected = false;
+    }
+
+    try {
       const health = await App.CheckHealth();
       if (health.crash_detected && !health.logging_enabled) showCrashDialog = true;
     } catch {}
@@ -123,7 +133,7 @@
       }
     }).catch(() => {});
 
-    const restored = await restoreSession(resolvedClaudePath);
+    const restored = await restoreSession(resolvedClaudePath, resolvedCodexPath);
     if (!restored) {
       let workDir = '';
       try { workDir = await App.GetWorkingDir(); } catch {}
@@ -218,7 +228,8 @@
       return;
     }
     const claudeCmd = resolvedClaudePath;
-    const argv = buildClaudeArgv(type, model, claudeCmd);
+    const codexCmd = resolvedCodexPath;
+    const argv = buildClaudeArgv(type, model, claudeCmd, codexCmd);
     const baseName = getClaudeName(type, model);
     const name = issueCtx ? `${baseName} – #${issueCtx.number}` : baseName;
     try {
@@ -327,7 +338,7 @@
     App.CloseSession(sessionId);
     tabStore.closePane(tab.id, paneId);
     const claudeCmd = resolvedClaudePath;
-    const argv = buildClaudeArgv(mode, model, claudeCmd);
+    const argv = buildClaudeArgv(mode, model, claudeCmd, resolvedCodexPath);
     try {
       const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80);
       if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model);
@@ -491,9 +502,9 @@
   </div>
 
   <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} />
-  <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
+  <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} {codexDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
-  <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} }} />
+  <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} try { resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex'; codexDetected = await App.IsCodexDetected(); } catch {} }} />
   <CommandPalette visible={showCommandPalette} on:send={handleSendCommand} on:close={() => (showCommandPalette = false)} />
   <CrashDialog visible={showCrashDialog} on:enable={handleCrashEnable} on:dismiss={() => (showCrashDialog = false)} />
   <IssueDialog visible={showIssueDialog} dir={$activeTab?.dir ?? ''} editIssue={editIssueData} on:saved={handleIssueSaved} on:close={() => { showIssueDialog = false; editIssueData = null; }} />

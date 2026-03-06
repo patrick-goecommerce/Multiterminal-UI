@@ -22,6 +22,10 @@ export function BrowseForClaude() {
   return window['go']['backend']['App']['BrowseForClaude']();
 }
 
+export function BrowseForCodex() {
+  return window['go']['backend']['App']['BrowseForCodex']();
+}
+
 export function CheckForUpdates() {
   return window['go']['backend']['App']['CheckForUpdates']();
 }
@@ -64,6 +68,10 @@ export function CreateWorktree(arg1, arg2, arg3) {
 
 export function DetectClaudePath() {
   return window['go']['backend']['App']['DetectClaudePath']();
+}
+
+export function DetectCodexPath() {
+  return window['go']['backend']['App']['DetectCodexPath']();
 }
 
 export function DisableLogging() {
@@ -130,6 +138,10 @@ export function GetResolvedClaudePath() {
   return window['go']['backend']['App']['GetResolvedClaudePath']();
 }
 
+export function GetResolvedCodexPath() {
+  return window['go']['backend']['App']['GetResolvedCodexPath']();
+}
+
 export function GetSessionIssue(arg1) {
   return window['go']['backend']['App']['GetSessionIssue'](arg1);
 }
@@ -144,6 +156,10 @@ export function HasCleanWorkingTree(arg1) {
 
 export function IsClaudeDetected() {
   return window['go']['backend']['App']['IsClaudeDetected']();
+}
+
+export function IsCodexDetected() {
+  return window['go']['backend']['App']['IsCodexDetected']();
 }
 
 export function IsGitRepo(arg1) {

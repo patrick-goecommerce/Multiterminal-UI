@@ -37,6 +37,8 @@ type App struct {
 	cancelAll         context.CancelFunc
 	resolvedClaudePath string
 	claudeDetected     bool
+	resolvedCodexPath  string
+	codexDetected      bool
 }
 
 // NewApp creates a new App instance with the given configuration.
@@ -58,8 +60,9 @@ func (a *App) Startup(ctx context.Context) {
 	config.MarkStarting(&a.health)
 	_ = config.SaveHealth(a.health)
 
-	// Resolve Claude CLI path before anything else needs it
+	// Resolve CLI paths before anything else needs them
 	a.resolveClaudeOnStartup()
+	a.resolveCodexOnStartup()
 
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
@@ -219,8 +222,9 @@ func (a *App) SaveConfig(cfg config.Config) error {
 		log.Printf("[SaveConfig] error: %v", err)
 		return fmt.Errorf("config save failed: %w", err)
 	}
-	// Re-detect Claude path in case claude_command changed
+	// Re-detect CLI paths in case commands changed
 	a.resolveClaudeOnStartup()
+	a.resolveCodexOnStartup()
 	return nil
 }
 
