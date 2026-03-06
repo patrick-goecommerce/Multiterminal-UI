@@ -5,6 +5,7 @@
   export let visible: boolean = false;
   export let issueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
   export let claudeDetected: boolean = true;
+  export let codexDetected: boolean = false;
 
   const dispatch = createEventDispatcher();
 
@@ -15,7 +16,7 @@
     requestAnimationFrame(() => dialogEl?.focus());
   }
 
-  function launch(type: 'shell' | 'claude' | 'claude-yolo') {
+  function launch(type: 'shell' | 'claude' | 'claude-yolo' | 'codex' | 'codex-auto') {
     dispatch('launch', { type, model: selectedModel, issue: issueContext });
     dispatch('close');
     selectedModel = '';
@@ -35,6 +36,8 @@
       if (e.key === '1') launch('shell');
       if (e.key === '2') launch('claude');
       if (e.key === '3') launch('claude-yolo');
+      if (e.key === '4') launch('codex');
+      if (e.key === '5') launch('codex-auto');
     }
   }
 </script>
@@ -55,10 +58,17 @@
       {/if}
 
       {#if !claudeDetected}
-        <div class="claude-warning">
+        <div class="cli-warning">
           <span class="warning-icon">&#9888;</span>
           <span>Claude CLI nicht gefunden.</span>
           <button class="warning-link" on:click={() => dispatch('openSettings')}>Einstellungen</button>
+        </div>
+      {/if}
+
+      {#if !codexDetected}
+        <div class="cli-warning codex-warning">
+          <span class="warning-icon">&#9888;</span>
+          <span>Codex CLI nicht gefunden. <code>npm i -g @openai/codex</code></span>
         </div>
       {/if}
 
@@ -91,11 +101,33 @@
             <span>Alle Berechtigungen</span>
           </div>
         </button>
+
+        {#if !issueContext}
+          <div class="separator"></div>
+
+          <button class="option codex" on:click={() => launch('codex')}>
+            <span class="option-key">4</span>
+            <span class="option-icon">&#129302;</span>
+            <div class="option-text">
+              <strong>Codex</strong>
+              <span>OpenAI Codex CLI</span>
+            </div>
+          </button>
+
+          <button class="option codex-auto" on:click={() => launch('codex-auto')}>
+            <span class="option-key">5</span>
+            <span class="option-icon">&#9889;</span>
+            <div class="option-text">
+              <strong>Codex Auto</strong>
+              <span>Full-Auto Modus</span>
+            </div>
+          </button>
+        {/if}
       </div>
 
       {#if $config.claude_models.length > 0}
         <div class="model-picker">
-          <label>Modell:</label>
+          <label>Claude Modell:</label>
           <select bind:value={selectedModel}>
             {#each $config.claude_models as model}
               <option value={model.id}>{model.label}</option>
@@ -154,6 +186,12 @@
     margin-bottom: 16px;
   }
 
+  .separator {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+
   .option {
     display: flex;
     align-items: center;
@@ -175,6 +213,14 @@
 
   .option.yolo:hover {
     border-color: var(--error);
+  }
+
+  .option.codex:hover {
+    border-color: #10a37f;
+  }
+
+  .option.codex-auto:hover {
+    border-color: #e87b35;
   }
 
   .option-key {
@@ -245,11 +291,18 @@
     color: var(--fg);
   }
 
-  .claude-warning {
+  .cli-warning {
     display: flex; align-items: center; gap: 8px;
     padding: 8px 12px; margin-bottom: 12px;
     background: rgba(243, 139, 168, 0.1); border: 1px solid rgba(243, 139, 168, 0.4);
     border-radius: 8px; font-size: 12px; color: #f38ba8;
+  }
+
+  .cli-warning code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
   }
 
   .warning-icon { font-size: 16px; }

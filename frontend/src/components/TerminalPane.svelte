@@ -490,7 +490,7 @@
     lastNotifiedActivity = pane.activity;
     // Reset alert flag when Claude finishes real work — allows next needsInput to fire
     if (pane.activity === 'done') needsInputAlerted = false;
-    if (pane.mode === 'claude' || pane.mode === 'claude-yolo') {
+    if (pane.mode === 'claude' || pane.mode === 'claude-yolo' || pane.mode === 'codex' || pane.mode === 'codex-auto') {
       const audio = $config.audio;
       const shouldPlayAudio = audio.enabled && !$audioMuted &&
         (audio.when_focused || !document.hasFocus());

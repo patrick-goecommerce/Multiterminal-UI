@@ -31,6 +31,10 @@ export function BrowseForClaude() {
   return $Call.ByID(1995003730);
 }
 
+export function BrowseForCodex() {
+  return window['go']['backend']['App']['BrowseForCodex']();
+}
+
 export function CheckForUpdates() {
   return $Call.ByID(3663542522);
 }
@@ -89,6 +93,10 @@ export function GetDetachedTabState(arg1) {
 
 export function DetectClaudePath() {
   return $Call.ByID(3544275289);
+}
+
+export function DetectCodexPath() {
+  return window['go']['backend']['App']['DetectCodexPath']();
 }
 
 export function DisableLogging() {
@@ -183,6 +191,10 @@ export function GetStatusLineStatus() {
   return $Call.ByID(1969813307);
 }
 
+export function GetResolvedCodexPath() {
+  return window['go']['backend']['App']['GetResolvedCodexPath']();
+}
+
 export function GetSessionIssue(arg1) {
   return $Call.ByID(2723699338, arg1);
 }
@@ -197,6 +209,10 @@ export function HasCleanWorkingTree(arg1) {
 
 export function IsClaudeDetected() {
   return $Call.ByID(434809535);
+}
+
+export function IsCodexDetected() {
+  return window['go']['backend']['App']['IsCodexDetected']();
 }
 
 export function IsGitRepo(arg1) {

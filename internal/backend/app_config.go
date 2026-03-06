@@ -22,8 +22,9 @@ func (a *AppService) SaveConfig(cfg config.Config) error {
 		log.Printf("[SaveConfig] error: %v", err)
 		return fmt.Errorf("config save failed: %w", err)
 	}
-	// Re-detect Claude path in case claude_command changed
+	// Re-detect CLI paths in case commands changed
 	a.resolveClaudeOnStartup()
+	a.resolveCodexOnStartup()
 	// Apply or remove statusline in ~/.claude/settings.json
 	if cfg.StatusLine.Enabled {
 		a.applyStatusLine(cfg.StatusLine)

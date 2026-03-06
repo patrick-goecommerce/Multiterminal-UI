@@ -44,6 +44,7 @@ export interface AppConfig {
   sidebar_width: number;
   claude_command: string;
   claude_models: ModelEntry[];
+  codex_command: string;
   commit_reminder_minutes: number;
   restore_session?: boolean;
   logging_enabled?: boolean;
@@ -66,6 +67,7 @@ export const config = writable<AppConfig>({
   max_panes_per_tab: 12,
   sidebar_width: 30,
   claude_command: 'claude',
+  codex_command: 'codex',
   claude_models: [
     { label: 'Default', id: '' },
     { label: 'Opus 4.6', id: 'claude-opus-4-6' },

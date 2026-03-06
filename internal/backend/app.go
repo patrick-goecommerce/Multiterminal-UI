@@ -46,6 +46,8 @@ type AppService struct {
 	safeMode      bool
 	sessionBackup *config.SessionState // populated in safe-mode; restored on shutdown
 	hookMgr       *HookManager
+	resolvedCodexPath  string
+	codexDetected      bool
 }
 
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
@@ -81,8 +83,9 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	config.MarkStarting(&a.health)
 	_ = config.SaveHealth(a.health)
 
-	// Resolve Claude CLI path before anything else needs it
+	// Resolve CLI paths before anything else needs them
 	a.resolveClaudeOnStartup()
+	a.resolveCodexOnStartup()
 
 	// Setup Claude Code hook integration
 	go a.setupHooks(ctx)

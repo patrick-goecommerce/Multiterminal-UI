@@ -3,7 +3,7 @@ import { INDEX_TO_MODE, MODE_TO_INDEX, buildClaudeArgv } from './claude';
 import * as App from '../../wailsjs/go/backend/App';
 
 /** Restore saved tabs/panes from the backend session file. */
-export async function restoreSession(claudePath: string): Promise<boolean> {
+export async function restoreSession(claudePath: string, codexPath?: string): Promise<boolean> {
   try {
     const saved = await App.LoadTabs();
     if (!saved || !saved.tabs || saved.tabs.length === 0) return false;
@@ -14,7 +14,7 @@ export async function restoreSession(claudePath: string): Promise<boolean> {
       const tabId = tabStore.addTab(savedTab.name, savedTab.dir, false);
       for (const savedPane of savedTab.panes) {
         const mode = INDEX_TO_MODE[savedPane.mode] || 'shell';
-        const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath);
+        const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath, codexPath || 'codex');
         try {
           const sessionId = await App.CreateSession(argv, savedTab.dir || '', 24, 80, mode);
           if (sessionId > 0) {
