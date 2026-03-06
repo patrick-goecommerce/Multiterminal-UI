@@ -30,7 +30,6 @@
   hljs.registerLanguage('sql', sql);
   hljs.registerLanguage('dockerfile', dockerfile);
 
-  export let visible: boolean = false;
   export let filePath: string = '';
   export let dir: string = '';  // git repo directory for diff
 
@@ -47,8 +46,7 @@
   let viewMode: 'view' | 'diff' = 'view';
   let diffContent: string = '';
 
-  $: if (visible && filePath) { loadFile(filePath); loadDiff(filePath); }
-  $: if (!visible) reset();
+  $: if (filePath) { loadFile(filePath); loadDiff(filePath); }
 
   function reset() {
     content = '';
@@ -125,17 +123,11 @@
     if (e.key === 'Escape') close();
   }
 
-  function handleBackdropClick(e: MouseEvent) {
-    if ((e.target as HTMLElement).classList.contains('preview-backdrop')) close();
-  }
-
   onMount(() => document.addEventListener('keydown', handleKeydown));
   onDestroy(() => document.removeEventListener('keydown', handleKeydown));
 </script>
 
-{#if visible}
-  <div class="preview-backdrop" on:click={handleBackdropClick} role="presentation">
-    <div class="preview-panel">
+<div class="preview-overlay">
       <div class="preview-header">
         <div class="preview-title">
           <span class="preview-filename">{fileName}</span>
@@ -188,26 +180,15 @@
           </div>
         {/if}
       </div>
-    </div>
-  </div>
-{/if}
+</div>
 
 <style>
-  .preview-backdrop {
-    position: fixed; inset: 0; z-index: 1000;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex; align-items: center; justify-content: center;
-    animation: fade-in 0.15s ease;
-  }
-
-  .preview-panel {
-    width: 80%; height: 80%;
+  .preview-overlay {
+    position: absolute; inset: 0; z-index: 10;
     background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 8px;
     display: flex; flex-direction: column;
     overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: fade-in 0.15s ease;
   }
 
   .preview-header {

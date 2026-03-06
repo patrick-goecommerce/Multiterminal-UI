@@ -559,6 +559,24 @@
     updateIssueCount();
   }
 
+  async function handleCommitPush(e: CustomEvent<{ paneId: string; sessionId: number }>) {
+    const { sessionId } = e.detail;
+    const tab = $activeTab;
+    if (!tab) return;
+    const dir = tab.dir || '';
+    try {
+      const suggestion = await App.GenerateCommitSuggestion(dir, []);
+      const type = suggestion.type || 'chore';
+      const scope = suggestion.scope ? `(${suggestion.scope})` : '';
+      const desc = suggestion.description || 'update';
+      const msg = `${type}${scope}: ${desc}`;
+      App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m '${msg.replace(/'/g, "'\\''")}' && git push\n`));
+    } catch (err) {
+      console.error('[handleCommitPush] failed:', err);
+      App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m 'chore: update' && git push\n`));
+    }
+  }
+
   async function handleIssueAction(e: CustomEvent<{ paneId: string; sessionId: number; issueNumber: number; action: string }>) {
     const { sessionId, issueNumber, action } = e.detail;
     const tab = $activeTab;
@@ -566,9 +584,16 @@
     const dir = tab.dir || '';
 
     if (action === 'commit') {
-      // TODO: will be replaced with CommitPushDialog from SourceControlView
-      const msg = `Closes #${issueNumber}`;
-      App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m '${msg}' && git push\n`));
+      try {
+        const suggestion = await App.GenerateCommitSuggestion(dir, []);
+        const type = suggestion.type || 'chore';
+        const scope = suggestion.scope ? `(${suggestion.scope})` : '';
+        const desc = suggestion.description || 'update';
+        const msg = `${type}${scope}: ${desc} (#${issueNumber})`;
+        App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m '${msg.replace(/'/g, "'\\''")}' && git push\n`));
+      } catch {
+        App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m 'chore: update (#${issueNumber})' && git push\n`));
+      }
     } else if (action === 'pr') {
       App.WriteToSession(sessionId, encodeForPty(`gh pr create --title "Closes #${issueNumber}" --body "Resolves #${issueNumber}" --fill\n`));
     } else if (action === 'closeIssue') {
@@ -620,6 +645,7 @@
               on:renamePane={handleRenamePane}
               on:restartPane={handleRestartPane}
               on:issueAction={handleIssueAction}
+              on:commitPush={handleCommitPush}
               on:navigateFile={handleNavigateFile}
               on:splitPane={() => (showLaunchDialog = true)}
               on:openWorktreePane={handleOpenWorktreePane}
@@ -627,6 +653,9 @@
             />
           </div>
         {/each}
+        {#if previewFilePath}
+          <FilePreview filePath={previewFilePath} dir={$activeTab?.dir ?? ''} on:close={() => (previewFilePath = '')} />
+        {/if}
       </div>
     {/if}
   </div>
@@ -648,7 +677,6 @@
     on:choose={handleBranchConflictChoice}
     on:close={() => { showBranchConflict = false; pendingLaunch = null; branchConflictData = null; }}
   />
-  <FilePreview visible={!!previewFilePath} filePath={previewFilePath} dir={$activeTab?.dir ?? ''} on:close={() => (previewFilePath = '')} />
 </div>
 
 <style>
