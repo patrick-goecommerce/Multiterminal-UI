@@ -32,6 +32,22 @@ export namespace backend {
 	        this.valid = source["valid"];
 	    }
 	}
+	export class GeminiDetectResult {
+	    path: string;
+	    source: string;
+	    valid: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new GeminiDetectResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.source = source["source"];
+	        this.valid = source["valid"];
+	    }
+	}
 	export class FileContent {
 	    path: string;
 	    name: string;
@@ -364,7 +380,11 @@ export namespace config {
 	    sidebar_width: number;
 	    claude_command: string;
 	    claude_models: ModelEntry[];
+	    claude_enabled?: boolean;
 	    codex_command: string;
+	    codex_enabled?: boolean;
+	    gemini_command: string;
+	    gemini_enabled?: boolean;
 	    commit_reminder_minutes: number;
 	    restore_session?: boolean;
 	    logging_enabled: boolean;
@@ -393,7 +413,11 @@ export namespace config {
 	        this.sidebar_width = source["sidebar_width"];
 	        this.claude_command = source["claude_command"];
 	        this.claude_models = this.convertValues(source["claude_models"], ModelEntry);
+	        this.claude_enabled = source["claude_enabled"];
 	        this.codex_command = source["codex_command"];
+	        this.codex_enabled = source["codex_enabled"];
+	        this.gemini_command = source["gemini_command"];
+	        this.gemini_enabled = source["gemini_enabled"];
 	        this.commit_reminder_minutes = source["commit_reminder_minutes"];
 	        this.restore_session = source["restore_session"];
 	        this.logging_enabled = source["logging_enabled"];

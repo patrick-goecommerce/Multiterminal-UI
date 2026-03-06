@@ -28,7 +28,11 @@ export interface AppConfig {
   sidebar_width: number;
   claude_command: string;
   claude_models: ModelEntry[];
+  claude_enabled?: boolean;
   codex_command: string;
+  codex_enabled?: boolean;
+  gemini_command: string;
+  gemini_enabled?: boolean;
   commit_reminder_minutes: number;
   restore_session?: boolean;
   logging_enabled?: boolean;
@@ -50,7 +54,11 @@ export const config = writable<AppConfig>({
   max_panes_per_tab: 12,
   sidebar_width: 30,
   claude_command: 'claude',
+  claude_enabled: true,
   codex_command: 'codex',
+  codex_enabled: false,
+  gemini_command: 'gemini',
+  gemini_enabled: false,
   claude_models: [
     { label: 'Default', id: '' },
     { label: 'Opus 4.6', id: 'claude-opus-4-6' },

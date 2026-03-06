@@ -15,6 +15,8 @@ export function BrowseForClaude():Promise<string>;
 
 export function BrowseForCodex():Promise<string>;
 
+export function BrowseForGemini():Promise<string>;
+
 export function CheckForUpdates():Promise<backend.UpdateInfo>;
 
 export function CheckGitHubCLI():Promise<string>;
@@ -38,6 +40,8 @@ export function CreateWorktree(arg1:string,arg2:number,arg3:string):Promise<back
 export function DetectClaudePath():Promise<backend.ClaudeDetectResult>;
 
 export function DetectCodexPath():Promise<backend.CodexDetectResult>;
+
+export function DetectGeminiPath():Promise<backend.GeminiDetectResult>;
 
 export function DisableLogging():Promise<void>;
 
@@ -73,6 +77,8 @@ export function GetResolvedClaudePath():Promise<string>;
 
 export function GetResolvedCodexPath():Promise<string>;
 
+export function GetResolvedGeminiPath():Promise<string>;
+
 export function GetSessionIssue(arg1:number):Promise<number>;
 
 export function GetWorkingDir():Promise<string>;
@@ -82,6 +88,8 @@ export function HasCleanWorkingTree(arg1:string):Promise<boolean>;
 export function IsClaudeDetected():Promise<boolean>;
 
 export function IsCodexDetected():Promise<boolean>;
+
+export function IsGeminiDetected():Promise<boolean>;
 
 export function IsGitRepo(arg1:string):Promise<boolean>;
 
@@ -124,5 +132,7 @@ export function UpdateIssue(arg1:string,arg2:number,arg3:string,arg4:string,arg5
 export function ValidateClaudePath(arg1:string):Promise<boolean>;
 
 export function ValidateCodexPath(arg1:string):Promise<boolean>;
+
+export function ValidateGeminiPath(arg1:string):Promise<boolean>;
 
 export function WriteToSession(arg1:number,arg2:string):Promise<void>;

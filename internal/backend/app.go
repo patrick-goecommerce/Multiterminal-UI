@@ -39,6 +39,8 @@ type App struct {
 	claudeDetected     bool
 	resolvedCodexPath  string
 	codexDetected      bool
+	resolvedGeminiPath string
+	geminiDetected     bool
 }
 
 // NewApp creates a new App instance with the given configuration.
@@ -63,6 +65,7 @@ func (a *App) Startup(ctx context.Context) {
 	// Resolve CLI paths before anything else needs them
 	a.resolveClaudeOnStartup()
 	a.resolveCodexOnStartup()
+	a.resolveGeminiOnStartup()
 
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
@@ -225,6 +228,7 @@ func (a *App) SaveConfig(cfg config.Config) error {
 	// Re-detect CLI paths in case commands changed
 	a.resolveClaudeOnStartup()
 	a.resolveCodexOnStartup()
+	a.resolveGeminiOnStartup()
 	return nil
 }
 
