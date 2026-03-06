@@ -242,6 +242,10 @@ export function ValidateClaudePath(arg1) {
   return window['go']['backend']['App']['ValidateClaudePath'](arg1);
 }
 
+export function ValidateCodexPath(arg1) {
+  return window['go']['backend']['App']['ValidateCodexPath'](arg1);
+}
+
 export function WriteToSession(arg1, arg2) {
   return window['go']['backend']['App']['WriteToSession'](arg1, arg2);
 }

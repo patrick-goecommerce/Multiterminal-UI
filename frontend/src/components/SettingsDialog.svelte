@@ -33,6 +33,10 @@
   let claudeStatus: 'unknown' | 'found' | 'notfound' = 'unknown';
   let claudeStatusPath = '';
 
+  let codexCommand = $config.codex_command || '';
+  let codexStatus: 'unknown' | 'found' | 'notfound' = 'unknown';
+  let codexStatusPath = '';
+
   let audioEnabled = $config.audio?.enabled ?? true;
   let audioWhenFocused = $config.audio?.when_focused ?? true;
   let audioVolume = $config.audio?.volume ?? 50;
@@ -54,6 +58,7 @@
     loggingEnabled = $config.logging_enabled || false;
     useWorktrees = $config.use_worktrees || false;
     claudeCommand = $config.claude_command || '';
+    codexCommand = $config.codex_command || '';
     audioEnabled = $config.audio?.enabled ?? true;
     audioWhenFocused = $config.audio?.when_focused ?? true;
     audioVolume = $config.audio?.volume ?? 50;
@@ -70,6 +75,7 @@
     }));
     App.GetLogPath().then(p => logPath = p).catch(() => {});
     detectClaude();
+    detectCodex();
   }
 
   function handleColorChange(e: CustomEvent<{ value: string }>) {
@@ -124,6 +130,34 @@
     } catch {}
   }
 
+  async function detectCodex() {
+    try {
+      const result = await App.DetectCodexPath();
+      if (result.valid) {
+        codexStatus = 'found';
+        codexStatusPath = result.path;
+      } else {
+        codexStatus = 'notfound';
+        codexStatusPath = '';
+      }
+    } catch {
+      codexStatus = 'unknown';
+      codexStatusPath = '';
+    }
+  }
+
+  async function browseCodex() {
+    try {
+      const path = await App.BrowseForCodex();
+      if (path) {
+        codexCommand = path;
+        const valid = await App.ValidateCodexPath(path);
+        codexStatus = valid ? 'found' : 'notfound';
+        codexStatusPath = valid ? path : '';
+      }
+    } catch {}
+  }
+
   async function browseAudioFile(target: 'done' | 'input' | 'error') {
     try {
       const path = await App.BrowseForAudioFile();
@@ -147,6 +181,7 @@
       logging_enabled: loggingEnabled,
       use_worktrees: useWorktrees,
       claude_command: claudeCommand,
+      codex_command: codexCommand,
       font_family: fontFamily,
       font_size: fontSize,
       audio: {
@@ -288,6 +323,27 @@
           <p class="claude-status found">Gefunden: {claudeStatusPath}</p>
         {:else if claudeStatus === 'notfound'}
           <p class="claude-status notfound">Nicht gefunden</p>
+        {/if}
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Codex CLI</label>
+        <p class="setting-desc">Pfad zur OpenAI Codex CLI. Leer lassen für automatische Erkennung. Installation: <code>npm i -g @openai/codex</code></p>
+        <div class="claude-row">
+          <input
+            type="text"
+            class="claude-input"
+            bind:value={codexCommand}
+            placeholder="codex (automatisch)"
+          />
+          <button class="claude-btn" on:click={browseCodex} title="Durchsuchen">&#128194;</button>
+          <button class="claude-btn" on:click={detectCodex} title="Erkennen">&#128269;</button>
+        </div>
+        {#if codexStatus === 'found'}
+          <p class="claude-status found">Gefunden: {codexStatusPath}</p>
+        {:else if codexStatus === 'notfound'}
+          <p class="claude-status notfound">Nicht gefunden — <code>npm i -g @openai/codex</code></p>
         {/if}
       </div>
 

@@ -80,6 +80,11 @@ func (a *App) BrowseForCodex() string {
 	return path
 }
 
+// ValidateCodexPath checks if the given path points to a valid executable.
+func (a *App) ValidateCodexPath(path string) bool {
+	return fileIsExecutable(path)
+}
+
 // resolveCodexOnStartup runs detection and caches the result.
 func (a *App) resolveCodexOnStartup() {
 	result := a.DetectCodexPath()
