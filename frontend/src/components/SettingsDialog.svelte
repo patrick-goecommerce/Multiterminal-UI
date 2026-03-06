@@ -463,7 +463,7 @@
               <input type="text" class="claude-input" bind:value={audioDoneSound} placeholder={$t('settings.doneSoundDefault')} />
               <button class="claude-btn" on:click={() => browseAudioFile('done')} title={$t('settings.browse')}>&#128194;</button>
               {#if audioDoneSound}
-                <button class="claude-btn" on:click={() => audioDoneSound = ''} title="Zurücksetzen">&times;</button>
+                <button class="claude-btn" on:click={() => audioDoneSound = ''} title={$t('settings.reset')}>&times;</button>
               {/if}
             </div>
           </div>
@@ -473,7 +473,7 @@
               <input type="text" class="claude-input" bind:value={audioInputSound} placeholder={$t('settings.doneSoundDefault')} />
               <button class="claude-btn" on:click={() => browseAudioFile('input')} title={$t('settings.browse')}>&#128194;</button>
               {#if audioInputSound}
-                <button class="claude-btn" on:click={() => audioInputSound = ''} title="Zurücksetzen">&times;</button>
+                <button class="claude-btn" on:click={() => audioInputSound = ''} title={$t('settings.reset')}>&times;</button>
               {/if}
             </div>
           </div>
@@ -483,7 +483,7 @@
               <input type="text" class="claude-input" bind:value={audioErrorSound} placeholder={$t('settings.doneSoundDefault')} />
               <button class="claude-btn" on:click={() => browseAudioFile('error')} title={$t('settings.browse')}>&#128194;</button>
               {#if audioErrorSound}
-                <button class="claude-btn" on:click={() => audioErrorSound = ''} title="Zurücksetzen">&times;</button>
+                <button class="claude-btn" on:click={() => audioErrorSound = ''} title={$t('settings.reset')}>&times;</button>
               {/if}
             </div>
           </div>
