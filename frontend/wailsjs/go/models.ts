@@ -357,6 +357,28 @@ export namespace backend {
 
 export namespace config {
 	
+	export class BackgroundAgents {
+	    review_enabled?: boolean;
+	    review_tool: string;
+	    review_model: string;
+	    review_prompt: string;
+	    test_enabled?: boolean;
+	    test_command: string;
+
+	    static createFrom(source: any = {}) {
+	        return new BackgroundAgents(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.review_enabled = source["review_enabled"];
+	        this.review_tool = source["review_tool"];
+	        this.review_model = source["review_model"];
+	        this.review_prompt = source["review_prompt"];
+	        this.test_enabled = source["test_enabled"];
+	        this.test_command = source["test_command"];
+	    }
+	}
 	export class KeepAliveSettings {
 	    enabled?: boolean;
 	    interval_minutes: number;
@@ -478,8 +500,10 @@ export namespace config {
 	    claude_models: ModelEntry[];
 	    claude_enabled?: boolean;
 	    codex_command: string;
+	    codex_models: ModelEntry[];
 	    codex_enabled?: boolean;
 	    gemini_command: string;
+	    gemini_models: ModelEntry[];
 	    gemini_enabled?: boolean;
 	    commit_reminder_minutes: number;
 	    restore_session?: boolean;
@@ -489,6 +513,7 @@ export namespace config {
 	    commands: CommandEntry[];
 	    audio: AudioSettings;
 	    keep_alive: KeepAliveSettings;
+	    background_agents: BackgroundAgents;
 	    status_line: StatusLineSettings;
 	    localhost_auto_open: string;
 	    sidebar_pinned: boolean;
@@ -514,8 +539,10 @@ export namespace config {
 	        this.claude_models = this.convertValues(source["claude_models"], ModelEntry);
 	        this.claude_enabled = source["claude_enabled"];
 	        this.codex_command = source["codex_command"];
+	        this.codex_models = this.convertValues(source["codex_models"], ModelEntry);
 	        this.codex_enabled = source["codex_enabled"];
 	        this.gemini_command = source["gemini_command"];
+	        this.gemini_models = this.convertValues(source["gemini_models"], ModelEntry);
 	        this.gemini_enabled = source["gemini_enabled"];
 	        this.commit_reminder_minutes = source["commit_reminder_minutes"];
 	        this.restore_session = source["restore_session"];
@@ -525,6 +552,7 @@ export namespace config {
 	        this.commands = this.convertValues(source["commands"], CommandEntry);
 	        this.audio = this.convertValues(source["audio"], AudioSettings);
 	        this.keep_alive = this.convertValues(source["keep_alive"], KeepAliveSettings);
+	        this.background_agents = this.convertValues(source["background_agents"], BackgroundAgents);
 	        this.status_line = this.convertValues(source["status_line"], StatusLineSettings);
 	        this.localhost_auto_open = source["localhost_auto_open"];
 	        this.sidebar_pinned = source["sidebar_pinned"];

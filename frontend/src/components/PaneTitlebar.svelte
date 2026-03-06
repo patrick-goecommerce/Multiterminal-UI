@@ -62,6 +62,10 @@
     switch (mode) {
       case 'claude': return 'Claude';
       case 'claude-yolo': return 'YOLO';
+      case 'codex': return 'Codex';
+      case 'codex-auto': return 'Codex Auto';
+      case 'gemini': return 'Gemini';
+      case 'gemini-yolo': return 'Gemini SB';
       default: return 'Shell';
     }
   }
@@ -70,6 +74,10 @@
     switch (mode) {
       case 'claude': return 'badge-claude';
       case 'claude-yolo': return 'badge-yolo';
+      case 'codex': return 'badge-codex';
+      case 'codex-auto': return 'badge-codex-auto';
+      case 'gemini': return 'badge-gemini';
+      case 'gemini-yolo': return 'badge-gemini-yolo';
       default: return 'badge-shell';
     }
   }
@@ -121,6 +129,9 @@
       <span class="pane-name" on:dblclick|stopPropagation={startRename} title={$t('titlebar.doubleClickRename')}>{pane.name}</span>
     {/if}
     <span class="mode-badge {getModeBadgeClass(pane.mode)}">{getModeLabel(pane.mode)}</span>
+    {#if pane.background}
+      <span class="mode-badge badge-bg">BG</span>
+    {/if}
     {#if pane.issueNumber}
       <span class="issue-badge" title="Issue #{pane.issueNumber}: {pane.issueTitle}">#{pane.issueNumber}</span>
     {/if}
@@ -284,6 +295,11 @@
   .badge-shell { background: var(--bg-tertiary); color: var(--fg-muted); }
   .badge-claude { background: #7c3aed33; color: #a78bfa; }
   .badge-yolo { background: #dc262633; color: #f87171; }
+  .badge-codex { background: #10a37f33; color: #34d399; }
+  .badge-codex-auto { background: #e87b3533; color: #fb923c; }
+  .badge-gemini { background: #4285f433; color: #60a5fa; }
+  .badge-gemini-yolo { background: #ea433533; color: #f87171; }
+  .badge-bg { background: #64748b33; color: #94a3b8; font-size: 9px; }
 
   .issue-badge {
     font-size: 10px; padding: 1px 6px; border-radius: 4px;

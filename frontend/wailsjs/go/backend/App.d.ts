@@ -80,6 +80,10 @@ export function GetIssueLabels(arg1:string):Promise<Array<backend.IssueLabel>>;
 
 export function GetIssues(arg1:string,arg2:string):Promise<Array<backend.Issue>>;
 
+export function GetLastCommitHash(arg1:string):Promise<string>;
+
+export function GetLastCommitDiff(arg1:string):Promise<string>;
+
 export function GetLastCommitTime(arg1:string):Promise<number>;
 
 export function GetLocalBranches(arg1:string):Promise<Array<string>>;

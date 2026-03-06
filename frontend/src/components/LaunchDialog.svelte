@@ -84,7 +84,18 @@
   $: showClaudeWarning = ($config.claude_enabled !== false) && !claudeDetected;
   $: showCodexWarning = $config.codex_enabled && !codexDetected;
   $: showGeminiWarning = $config.gemini_enabled && !geminiDetected;
-  $: showModelPicker = ($config.claude_enabled !== false) && $config.claude_models.length > 0;
+  $: allModels = (() => {
+    const models: Array<{ label: string; id: string }> = [];
+    if ($config.claude_enabled !== false && $config.claude_models?.length) {
+      models.push(...$config.claude_models);
+    } else if ($config.codex_enabled && $config.codex_models?.length) {
+      models.push(...$config.codex_models);
+    } else if ($config.gemini_enabled && $config.gemini_models?.length) {
+      models.push(...$config.gemini_models);
+    }
+    return models;
+  })();
+  $: showModelPicker = allModels.length > 0;
 </script>
 
 {#if visible}
@@ -144,9 +155,27 @@
         <div class="model-picker">
           <label>{$t('launch.modelLabel')}</label>
           <select bind:value={selectedModel}>
-            {#each $config.claude_models as model}
-              <option value={model.id}>{model.label}</option>
-            {/each}
+            {#if $config.claude_enabled !== false}
+              <optgroup label="Claude">
+                {#each ($config.claude_models || []) as model}
+                  <option value={model.id}>{model.label}</option>
+                {/each}
+              </optgroup>
+            {/if}
+            {#if $config.codex_enabled && $config.codex_models?.length}
+              <optgroup label="Codex">
+                {#each $config.codex_models as model}
+                  <option value={model.id}>{model.label}</option>
+                {/each}
+              </optgroup>
+            {/if}
+            {#if $config.gemini_enabled && $config.gemini_models?.length}
+              <optgroup label="Gemini">
+                {#each $config.gemini_models as model}
+                  <option value={model.id}>{model.label}</option>
+                {/each}
+              </optgroup>
+            {/if}
           </select>
         </div>
       {/if}

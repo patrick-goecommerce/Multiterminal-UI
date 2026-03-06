@@ -19,8 +19,8 @@ func TestDefaultConfig_Values(t *testing.T) {
 	if cfg.Theme != "dark" {
 		t.Errorf("Theme = %q, want 'dark'", cfg.Theme)
 	}
-	if cfg.MaxPanesPerTab != 12 {
-		t.Errorf("MaxPanesPerTab = %d, want 12", cfg.MaxPanesPerTab)
+	if cfg.MaxPanesPerTab != 9 {
+		t.Errorf("MaxPanesPerTab = %d, want 9", cfg.MaxPanesPerTab)
 	}
 	if cfg.SidebarWidth != 30 {
 		t.Errorf("SidebarWidth = %d, want 30", cfg.SidebarWidth)
@@ -135,9 +135,9 @@ func TestConfig_Validation_MaxPanesPerTab(t *testing.T) {
 		{-5, 1},
 		{1, 1},
 		{6, 6},
-		{12, 12},
-		{13, 12},
-		{100, 12},
+		{9, 9},
+		{10, 9},
+		{100, 9},
 	}
 
 	for _, tt := range tests {
@@ -152,8 +152,8 @@ func TestConfig_Validation_MaxPanesPerTab(t *testing.T) {
 		if loaded.MaxPanesPerTab < 1 {
 			loaded.MaxPanesPerTab = 1
 		}
-		if loaded.MaxPanesPerTab > 12 {
-			loaded.MaxPanesPerTab = 12
+		if loaded.MaxPanesPerTab > 9 {
+			loaded.MaxPanesPerTab = 9
 		}
 
 		if loaded.MaxPanesPerTab != tt.want {

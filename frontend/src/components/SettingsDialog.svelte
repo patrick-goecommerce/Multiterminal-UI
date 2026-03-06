@@ -67,6 +67,33 @@
   let savedFontSize = fontSize;
   let availableFonts: { name: string; available: boolean }[] = [];
 
+  let bgReviewEnabled = $config.background_agents?.review_enabled ?? false;
+  let bgReviewTool = $config.background_agents?.review_tool ?? 'claude';
+  let bgReviewModel = $config.background_agents?.review_model ?? 'claude-haiku-4-5-20251001';
+  let bgReviewPrompt = $config.background_agents?.review_prompt ?? '';
+  let reviewModels: Array<{ label: string; id: string }> = [];
+  let bgTestEnabled = $config.background_agents?.test_enabled ?? false;
+  let bgTestCommand = $config.background_agents?.test_command ?? '';
+
+  const defaultReviewPrompt = 'Review the following commit diff. Flag bugs, security issues, and code quality problems:\n\n{diff}';
+
+  function getModelsForTool(tool: string, c?: any): Array<{ label: string; id: string }> {
+    const cfg = c || get(config);
+    if (tool === 'codex' && cfg.codex_models?.length) return cfg.codex_models;
+    if (tool === 'gemini' && cfg.gemini_models?.length) return cfg.gemini_models;
+    return (cfg.claude_models?.length) ? cfg.claude_models : [
+      { label: 'Default', id: '' },
+      { label: 'Opus 4.6', id: 'claude-opus-4-6' },
+      { label: 'Sonnet 4.5', id: 'claude-sonnet-4-5-20250929' },
+      { label: 'Haiku 4.5', id: 'claude-haiku-4-5-20251001' },
+    ];
+  }
+
+  function onReviewToolChange() {
+    reviewModels = getModelsForTool(bgReviewTool);
+    bgReviewModel = reviewModels[0]?.id ?? '';
+  }
+
   let statusLineEnabled = $config.status_line?.enabled ?? false;
   let statusLineTemplate = $config.status_line?.template ?? 'standard';
   let statusLineShowModel = $config.status_line?.show_model ?? true;
@@ -114,6 +141,13 @@
     detectClaude();
     detectCodex();
     detectGemini();
+    bgReviewEnabled = c.background_agents?.review_enabled ?? false;
+    bgReviewTool = c.background_agents?.review_tool ?? 'claude';
+    bgReviewModel = c.background_agents?.review_model ?? 'claude-haiku-4-5-20251001';
+    reviewModels = getModelsForTool(bgReviewTool, c);
+    bgReviewPrompt = c.background_agents?.review_prompt ?? defaultReviewPrompt;
+    bgTestEnabled = c.background_agents?.test_enabled ?? false;
+    bgTestCommand = c.background_agents?.test_command ?? '';
     statusLineEnabled = c.status_line?.enabled ?? false;
     statusLineTemplate = c.status_line?.template ?? 'standard';
     statusLineShowModel = c.status_line?.show_model ?? true;
@@ -265,6 +299,14 @@
         interval_minutes: keepAliveInterval,
         message: keepAliveMessage,
       },
+      background_agents: {
+        review_enabled: bgReviewEnabled,
+        review_tool: bgReviewTool,
+        review_model: bgReviewModel,
+        review_prompt: bgReviewPrompt,
+        test_enabled: bgTestEnabled,
+        test_command: bgTestCommand,
+      },
       status_line: {
         enabled: statusLineEnabled,
         template: statusLineTemplate,
@@ -303,6 +345,12 @@
     keepAliveEnabled = true;
     keepAliveInterval = 300;
     keepAliveMessage = 'Hi!';
+    bgReviewEnabled = false;
+    bgReviewTool = 'claude';
+    bgReviewModel = 'claude-haiku-4-5-20251001';
+    bgReviewPrompt = defaultReviewPrompt;
+    bgTestEnabled = false;
+    bgTestCommand = '';
     statusLineEnabled = false;
     statusLineTemplate = 'standard';
     statusLineShowModel = true;
@@ -406,6 +454,69 @@
               bind:value={keepAliveMessage}
               class="text-input"
               placeholder="Hi!"
+            />
+          </div>
+        {/if}
+      </div>
+
+      <!-- Background Agents Section -->
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">{$t('settings.backgroundAgents')}</label>
+        <p class="setting-desc">{$t('settings.bgDesc')}</p>
+
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <button class="toggle-btn" class:toggle-on={bgReviewEnabled} on:click={() => bgReviewEnabled = !bgReviewEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{$t('settings.bgReviewEnabled')}</span>
+        </div>
+        {#if bgReviewEnabled}
+          <div class="keepalive-fields" style="margin-bottom: 12px;">
+            <label for="bg-review-tool">{$t('settings.bgReviewTool')}</label>
+            <select id="bg-review-tool" class="theme-select" bind:value={bgReviewTool} on:change={onReviewToolChange}>
+              {#if $config.claude_enabled !== false}<option value="claude">Claude Code</option>{/if}
+              {#if $config.codex_enabled}<option value="codex">Codex</option>{/if}
+              {#if $config.gemini_enabled}<option value="gemini">Gemini</option>{/if}
+            </select>
+            <label for="bg-review-model">{$t('settings.bgReviewModel')}</label>
+            <select id="bg-review-model" class="theme-select" bind:value={bgReviewModel}>
+              {#each reviewModels as m}
+                <option value={m.id}>{m.label}</option>
+              {/each}
+            </select>
+            <label for="bg-review-prompt">{$t('settings.bgReviewPrompt')}</label>
+            <div style="grid-column: 2; display: flex; flex-direction: column; gap: 4px;">
+              <textarea
+                id="bg-review-prompt"
+                class="text-input"
+                bind:value={bgReviewPrompt}
+                rows="3"
+                style="resize: vertical; font-family: monospace; font-size: 11px;"
+              ></textarea>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="setting-desc" style="margin: 0;">{$t('settings.bgReviewPromptHint')}</span>
+                <button class="claude-btn" style="font-size: 11px; padding: 2px 8px;" on:click={() => bgReviewPrompt = defaultReviewPrompt}>{$t('settings.bgReviewPromptDefault')}</button>
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <button class="toggle-btn" class:toggle-on={bgTestEnabled} on:click={() => bgTestEnabled = !bgTestEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{$t('settings.bgTestEnabled')}</span>
+        </div>
+        {#if bgTestEnabled}
+          <div class="keepalive-fields">
+            <label for="bg-test-cmd">{$t('settings.bgTestCommand')}</label>
+            <input
+              id="bg-test-cmd"
+              type="text"
+              class="text-input"
+              bind:value={bgTestCommand}
+              placeholder={$t('settings.bgTestPlaceholder')}
             />
           </div>
         {/if}

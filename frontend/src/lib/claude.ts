@@ -21,13 +21,17 @@ export function buildClaudeArgv(mode: PaneMode, model: string, claudeCmd: string
         ? [claudeCmd, '--dangerously-skip-permissions', '--model', model]
         : [claudeCmd, '--dangerously-skip-permissions'];
     case 'codex':
-      return [codexCmd || 'codex'];
+      return model ? [codexCmd || 'codex', '--model', model] : [codexCmd || 'codex'];
     case 'codex-auto':
-      return [codexCmd || 'codex', '--approval-mode', 'full-auto'];
+      return model
+        ? [codexCmd || 'codex', '--full-auto', '--model', model]
+        : [codexCmd || 'codex', '--full-auto'];
     case 'gemini':
-      return [geminiCmd || 'gemini'];
+      return model ? [geminiCmd || 'gemini', '--model', model] : [geminiCmd || 'gemini'];
     case 'gemini-yolo':
-      return [geminiCmd || 'gemini', '--sandbox'];
+      return model
+        ? [geminiCmd || 'gemini', '--sandbox', '--model', model]
+        : [geminiCmd || 'gemini', '--sandbox'];
     default:
       return [];
   }
@@ -38,10 +42,10 @@ export function getClaudeName(mode: PaneMode, model: string): string {
   switch (mode) {
     case 'claude': return `Claude ${model ? `(${model})` : ''}`.trim();
     case 'claude-yolo': return `YOLO ${model ? `(${model})` : ''}`.trim();
-    case 'codex': return 'Codex';
-    case 'codex-auto': return 'Codex Auto';
-    case 'gemini': return 'Gemini';
-    case 'gemini-yolo': return 'Gemini Sandbox';
+    case 'codex': return `Codex ${model ? `(${model})` : ''}`.trim();
+    case 'codex-auto': return `Codex Auto ${model ? `(${model})` : ''}`.trim();
+    case 'gemini': return `Gemini ${model ? `(${model})` : ''}`.trim();
+    case 'gemini-yolo': return `Gemini Sandbox ${model ? `(${model})` : ''}`.trim();
     default: return 'Shell';
   }
 }

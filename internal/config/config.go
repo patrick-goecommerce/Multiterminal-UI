@@ -23,8 +23,10 @@ type Config struct {
 	ClaudeModels          []ModelEntry   `yaml:"claude_models" json:"claude_models"`
 	ClaudeEnabled         *bool          `yaml:"claude_enabled" json:"claude_enabled"`
 	CodexCommand          string         `yaml:"codex_command" json:"codex_command"`
+	CodexModels           []ModelEntry   `yaml:"codex_models" json:"codex_models"`
 	CodexEnabled          *bool          `yaml:"codex_enabled" json:"codex_enabled"`
 	GeminiCommand         string         `yaml:"gemini_command" json:"gemini_command"`
+	GeminiModels          []ModelEntry   `yaml:"gemini_models" json:"gemini_models"`
 	GeminiEnabled         *bool          `yaml:"gemini_enabled" json:"gemini_enabled"`
 	CommitReminderMinutes int            `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
 	RestoreSession        *bool          `yaml:"restore_session" json:"restore_session"`
@@ -40,6 +42,7 @@ type Config struct {
 	Favorites             map[string][]string `yaml:"favorites,omitempty" json:"favorites,omitempty"`
 	FontFamily            string         `yaml:"font_family" json:"font_family"`
 	FontSize              int            `yaml:"font_size"   json:"font_size"`
+	BackgroundAgents      BackgroundAgents `yaml:"background_agents" json:"background_agents"`
 	Language              string         `yaml:"language" json:"language"`
 	SetupDone             bool           `yaml:"setup_done" json:"setup_done"`
 }
@@ -93,6 +96,16 @@ type StatusLineSettings struct {
 	ShowDuration  bool   `yaml:"show_duration" json:"show_duration"`
 }
 
+// BackgroundAgents holds settings for automatic background review and test agents.
+type BackgroundAgents struct {
+	ReviewEnabled *bool  `yaml:"review_enabled" json:"review_enabled"`
+	ReviewTool    string `yaml:"review_tool" json:"review_tool"`
+	ReviewModel   string `yaml:"review_model" json:"review_model"`
+	ReviewPrompt  string `yaml:"review_prompt" json:"review_prompt"`
+	TestEnabled   *bool  `yaml:"test_enabled" json:"test_enabled"`
+	TestCommand   string `yaml:"test_command" json:"test_command"`
+}
+
 // DefaultConfig returns the built-in defaults.
 // boolPtr returns a pointer to a bool value.
 func boolPtr(b bool) *bool { return &b }
@@ -103,14 +116,25 @@ func DefaultConfig() Config {
 		DefaultDir:            "",
 		Theme:                 "dark",
 		TerminalColor:         "#39ff14",
-		MaxPanesPerTab:        12,
+		MaxPanesPerTab:        9,
 		SidebarWidth:          30,
 		ClaudeCommand:         "claude",
 		ClaudeEnabled:         boolPtr(true),
-		CodexCommand:          "codex",
-		CodexEnabled:          boolPtr(false),
-		GeminiCommand:         "gemini",
-		GeminiEnabled:         boolPtr(false),
+		CodexCommand: "codex",
+		CodexModels: []ModelEntry{
+			{Label: "Default", ID: ""},
+			{Label: "o4-mini", ID: "o4-mini"},
+			{Label: "o3", ID: "o3"},
+			{Label: "GPT-4.1", ID: "gpt-4.1"},
+		},
+		CodexEnabled:  boolPtr(false),
+		GeminiCommand: "gemini",
+		GeminiModels: []ModelEntry{
+			{Label: "Default", ID: ""},
+			{Label: "Gemini 2.5 Pro", ID: "gemini-2.5-pro"},
+			{Label: "Gemini 2.5 Flash", ID: "gemini-2.5-flash"},
+		},
+		GeminiEnabled: boolPtr(false),
 		CommitReminderMinutes: 30,
 		RestoreSession:        boolPtr(true),
 		AutoBranchOnIssue:     boolPtr(true),
@@ -146,6 +170,14 @@ func DefaultConfig() Config {
 			ShowModel:   true,
 			ShowContext: true,
 			ShowCost:    true,
+		},
+		BackgroundAgents: BackgroundAgents{
+			ReviewEnabled: boolPtr(false),
+			ReviewTool:    "claude",
+			ReviewModel:   "claude-haiku-4-5-20251001",
+			ReviewPrompt:  "Review the following commit diff. Flag bugs, security issues, and code quality problems:\n\n{diff}",
+			TestEnabled:   boolPtr(false),
+			TestCommand:   "",
 		},
 		LocalhostAutoOpen: "notify",
 		FontFamily:        "",
@@ -210,8 +242,8 @@ func Load() Config {
 	if cfg.MaxPanesPerTab < 1 {
 		cfg.MaxPanesPerTab = 1
 	}
-	if cfg.MaxPanesPerTab > 12 {
-		cfg.MaxPanesPerTab = 12
+	if cfg.MaxPanesPerTab > 9 {
+		cfg.MaxPanesPerTab = 9
 	}
 	if cfg.SidebarWidth < 15 {
 		cfg.SidebarWidth = 15
@@ -271,6 +303,14 @@ func Load() Config {
 	if cfg.Favorites == nil {
 		cfg.Favorites = make(map[string][]string)
 	}
+
+	ba := &cfg.BackgroundAgents
+	if ba.ReviewEnabled == nil { ba.ReviewEnabled = boolPtr(false) }
+	validTools := map[string]bool{"claude": true, "codex": true, "gemini": true}
+	if !validTools[ba.ReviewTool] { ba.ReviewTool = "claude" }
+	if ba.ReviewModel == "" { ba.ReviewModel = "claude-haiku-4-5-20251001" }
+	if ba.ReviewPrompt == "" { ba.ReviewPrompt = "Review the following commit diff. Flag bugs, security issues, and code quality problems:\n\n{diff}" }
+	if ba.TestEnabled == nil { ba.TestEnabled = boolPtr(false) }
 
 	// Validate language
 	validLangs := map[string]bool{"de": true, "en": true, "it": true, "es": true, "fr": true}

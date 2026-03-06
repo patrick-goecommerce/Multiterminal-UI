@@ -163,6 +163,14 @@ export function GetIssues(arg1, arg2) {
   return $Call.ByID(2569602789, arg1, arg2);
 }
 
+export function GetLastCommitHash(arg1) {
+  return $Call.ByID(1429232572, arg1);
+}
+
+export function GetLastCommitDiff(arg1) {
+  return $Call.ByID(4144005451, arg1);
+}
+
 export function GetLastCommitTime(arg1) {
   return $Call.ByID(3366753469, arg1);
 }

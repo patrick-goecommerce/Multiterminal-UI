@@ -28,6 +28,7 @@
   import { restoreSession, saveSession } from './lib/session';
   import { startKeepAliveLoop } from './lib/keepalive';
   import { fetchBranch, fetchCommitAge, fetchConflicts, fetchIssueCount } from './lib/git-polling';
+  import { checkForNewCommit } from './lib/background-agents';
   import { buildIssuePrompt, setupIssueBranch, resolveBranchConflict } from './lib/launch';
   import type { IssueContext } from './lib/launch';
   import * as App from '../wailsjs/go/backend/App';
@@ -292,7 +293,12 @@
   async function updateCommitAge() {
     const tab = $activeTab;
     if (!tab) return;
-    commitAgeMinutes = await fetchCommitAge(tab.dir || '.');
+    const dir = tab.dir || '.';
+    commitAgeMinutes = await fetchCommitAge(dir);
+    const bg = $config.background_agents;
+    if (bg?.review_enabled || bg?.test_enabled) {
+      checkForNewCommit(dir, bg, { claude: resolvedClaudePath, codex: resolvedCodexPath, gemini: resolvedGeminiPath }, tab.id);
+    }
   }
 
   async function updateConflicts() {

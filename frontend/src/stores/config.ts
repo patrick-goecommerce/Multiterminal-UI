@@ -35,6 +35,15 @@ export interface StatusLineConfig {
   show_duration: boolean;
 }
 
+export interface BackgroundAgentsConfig {
+  review_enabled?: boolean;
+  review_tool: string;
+  review_model: string;
+  review_prompt: string;
+  test_enabled?: boolean;
+  test_command: string;
+}
+
 export interface AppConfig {
   default_shell: string;
   default_dir: string;
@@ -46,8 +55,10 @@ export interface AppConfig {
   claude_models: ModelEntry[];
   claude_enabled?: boolean;
   codex_command: string;
+  codex_models: ModelEntry[];
   codex_enabled?: boolean;
   gemini_command: string;
+  gemini_models: ModelEntry[];
   gemini_enabled?: boolean;
   commit_reminder_minutes: number;
   restore_session?: boolean;
@@ -61,6 +72,7 @@ export interface AppConfig {
   font_family: string;
   font_size: number;
   favorites: Record<string, string[]>;
+  background_agents: BackgroundAgentsConfig;
   language: string;
   setup_done: boolean;
 }
@@ -70,13 +82,24 @@ export const config = writable<AppConfig>({
   default_dir: '',
   theme: 'dark',
   terminal_color: '#39ff14',
-  max_panes_per_tab: 12,
+  max_panes_per_tab: 9,
   sidebar_width: 30,
   claude_command: 'claude',
   claude_enabled: true,
   codex_command: 'codex',
+  codex_models: [
+    { label: 'Default', id: '' },
+    { label: 'o4-mini', id: 'o4-mini' },
+    { label: 'o3', id: 'o3' },
+    { label: 'GPT-4.1', id: 'gpt-4.1' },
+  ],
   codex_enabled: false,
   gemini_command: 'gemini',
+  gemini_models: [
+    { label: 'Default', id: '' },
+    { label: 'Gemini 2.5 Pro', id: 'gemini-2.5-pro' },
+    { label: 'Gemini 2.5 Flash', id: 'gemini-2.5-flash' },
+  ],
   gemini_enabled: false,
   claude_models: [
     { label: 'Default', id: '' },
@@ -109,6 +132,14 @@ export const config = writable<AppConfig>({
     show_cost: true,
     show_git_branch: false,
     show_duration: false,
+  },
+  background_agents: {
+    review_enabled: false,
+    review_tool: 'claude',
+    review_model: 'claude-haiku-4-5-20251001',
+    review_prompt: 'Review the following commit diff. Flag bugs, security issues, and code quality problems:\n\n{diff}',
+    test_enabled: false,
+    test_command: '',
   },
   localhost_auto_open: 'notify',
   sidebar_pinned: false,

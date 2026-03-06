@@ -212,16 +212,39 @@ export function getTerminalTheme(theme: string): import('@xterm/xterm').ITheme {
   return terminalThemes[theme] || terminalThemes.dark;
 }
 
+// Track active WebGL contexts to stay below the browser/WebView2 limit.
+// Most browsers allow ~16 simultaneous WebGL contexts; beyond that, the oldest
+// contexts are lost, causing panes to crash or go blank.
+const MAX_WEBGL_CONTEXTS = 8; // conservative limit — leaves headroom for other WebGL users
+let activeWebglCount = 0;
+
 /**
  * Load the WebGL renderer onto an already-opened terminal.
  * Must be called AFTER terminal.open(element).
- * Falls back to DOM renderer silently if WebGL is unavailable.
+ * Falls back to DOM renderer silently if WebGL is unavailable or context limit reached.
  */
 export function attachWebglRenderer(terminal: Terminal): void {
+  if (activeWebglCount >= MAX_WEBGL_CONTEXTS) {
+    // DOM renderer stays active — avoids evicting older contexts.
+    return;
+  }
   try {
     const webgl = new WebglAddon();
-    // Dispose on context loss — xterm.js falls back to DOM renderer automatically.
-    webgl.onContextLoss(() => webgl.dispose());
+    activeWebglCount++;
+    webgl.onContextLoss(() => {
+      webgl.dispose();
+      activeWebglCount = Math.max(0, activeWebglCount - 1);
+    });
+    // Decrement counter when the terminal or addon is disposed normally.
+    const origDispose = webgl.dispose.bind(webgl);
+    let disposed = false;
+    webgl.dispose = () => {
+      if (!disposed) {
+        disposed = true;
+        activeWebglCount = Math.max(0, activeWebglCount - 1);
+      }
+      origDispose();
+    };
     terminal.loadAddon(webgl);
   } catch {
     // WebGL unavailable (e.g. software rendering) — DOM renderer stays active.

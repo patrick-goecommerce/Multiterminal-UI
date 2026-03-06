@@ -37,6 +37,31 @@ func (a *AppService) GetLastCommitTime(dir string) int64 {
 	return ts
 }
 
+// GetLastCommitHash returns the full SHA of the last commit.
+func (a *AppService) GetLastCommitHash(dir string) string {
+	cmd := exec.Command("git", "log", "-1", "--format=%H")
+	cmd.Dir = dir
+	hideConsole(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// GetLastCommitDiff returns the diff of the last commit (max 8000 chars).
+func (a *AppService) GetLastCommitDiff(dir string) string {
+	cmd := exec.Command("git", "diff", "HEAD~1", "HEAD")
+	cmd.Dir = dir
+	hideConsole(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	if s := string(out); len(s) > 8000 { return s[:8000] }
+	return string(out)
+}
+
 // GitFileStatus represents the git status of a single file.
 // Status values: "M" = modified, "A" = added/staged, "?" = untracked/new,
 // "D" = deleted, "R" = renamed, "" = unchanged.
