@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { get } from 'svelte/store';
   import { config } from '../stores/config';
+  import { t, setLanguage, LANGUAGES, type Language } from '../stores/i18n';
   import { applyAccentColor, applyTheme } from '../stores/theme';
   import type { ThemeName } from '../stores/theme';
   import * as App from '../../wailsjs/go/backend/App';
@@ -57,6 +58,8 @@
   let keepAliveInterval = $config.keep_alive?.interval_minutes ?? 300;
   let keepAliveMessage = $config.keep_alive?.message ?? 'Hi!';
 
+  let selectedLang: Language = ($config.language || 'de') as Language;
+
   let fontFamily = $config.font_family || '';
   let fontSize = $config.font_size || 10;
   let savedFontFamily = fontFamily;
@@ -82,6 +85,7 @@
     savedTheme = selectedTheme;
     loggingEnabled = c.logging_enabled || false;
     useWorktrees = c.use_worktrees || false;
+    selectedLang = (c.language || 'de') as Language;
     claudeEnabled = c.claude_enabled !== false;
     claudeCommand = c.claude_command || '';
     codexEnabled = c.codex_enabled || false;
@@ -231,10 +235,12 @@
   }
 
   async function save() {
+    await setLanguage(selectedLang);
     const updated = {
       ...$config,
       terminal_color: colorValue,
       theme: selectedTheme,
+      language: selectedLang,
       logging_enabled: loggingEnabled,
       use_worktrees: useWorktrees,
       claude_enabled: claudeEnabled,
@@ -320,41 +326,50 @@
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="dialog" bind:this={dialogEl} tabindex="-1" on:keydown={handleKeydown}>
-      <h3>Einstellungen</h3>
+      <h3>{$t('settings.title')}</h3>
 
       <div class="setting-group">
-        <label class="setting-label" for="theme-select">Theme</label>
-        <p class="setting-desc">Farbschema der gesamten Oberfläche.</p>
+        <label class="setting-label" for="theme-select">{$t('settings.theme')}</label>
+        <p class="setting-desc">{$t('settings.themeDesc')}</p>
         <select id="theme-select" class="theme-select" value={selectedTheme} on:change={handleThemeChange}>
-          {#each availableThemes as t}
-            <option value={t.value} selected={t.value === selectedTheme}>{t.label}</option>
+          {#each availableThemes as th}
+            <option value={th.value} selected={th.value === selectedTheme}>{th.label}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="lang-select">{$t('setup.languageLabel')}</label>
+        <select id="lang-select" class="theme-select" bind:value={selectedLang}>
+          {#each LANGUAGES as lang}
+            <option value={lang.code}>{lang.label}</option>
           {/each}
         </select>
       </div>
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="setting-label">Terminal-Farbe</label>
-        <p class="setting-desc">Bestimmt Akzentfarbe, Cursor und fokussierte Rahmen.</p>
+        <label class="setting-label">{$t('settings.terminalColor')}</label>
+        <p class="setting-desc">{$t('settings.terminalColorDesc')}</p>
         <ColorPicker value={colorValue} on:change={handleColorChange} />
       </div>
 
       <div class="setting-group">
-        <label class="setting-label" for="font-select">Schriftart</label>
-        <p class="setting-desc">Monospace-Schriftart für alle Terminals.</p>
+        <label class="setting-label" for="font-select">{$t('settings.fontFamily')}</label>
+        <p class="setting-desc">{$t('settings.fontFamilyDesc')}</p>
         <select id="font-select" class="theme-select" value={fontFamily} on:change={handleFontFamilyChange}>
-          <option value="">Standard (Cascadia Code, Fira Code, ...)</option>
+          <option value="">{$t('settings.fontDefault')}</option>
           {#each availableFonts as font}
             <option value={font.name} disabled={!font.available} style={font.available ? `font-family: '${font.name}', monospace` : ''}>
-              {font.name}{font.available ? '' : ' (nicht installiert)'}
+              {font.name}{font.available ? '' : ` ${$t('settings.fontNotInstalled')}`}
             </option>
           {/each}
         </select>
       </div>
 
       <div class="setting-group">
-        <label class="setting-label" for="font-size">Schriftgröße</label>
-        <p class="setting-desc">Basis-Schriftgröße in Pixel. Ctrl+Scroll zum Zoomen pro Pane.</p>
+        <label class="setting-label" for="font-size">{$t('settings.fontSize')}</label>
+        <p class="setting-desc">{$t('settings.fontSizeDesc')}</p>
         <select id="font-size" class="theme-select" bind:value={fontSize}>
           {#each [8, 10, 12, 14, 16, 18, 20] as size}
             <option value={size}>{size}px</option>
@@ -364,17 +379,17 @@
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="setting-label">Session Keep-Alive</label>
-        <p class="setting-desc">Sendet automatisch eine Nachricht an Claude, wenn das Token-Fenster ausläuft. Änderungen werden beim nächsten Start wirksam.</p>
+        <label class="setting-label">{$t('settings.keepAlive')}</label>
+        <p class="setting-desc">{$t('settings.keepAliveDesc')}</p>
         <div class="toggle-row" style="margin-bottom: 12px;">
           <button class="toggle-btn" class:toggle-on={keepAliveEnabled} on:click={() => keepAliveEnabled = !keepAliveEnabled}>
             <span class="toggle-knob"></span>
           </button>
-          <span class="toggle-label">{keepAliveEnabled ? 'Aktiviert' : 'Deaktiviert'}</span>
+          <span class="toggle-label">{keepAliveEnabled ? $t('settings.active') : $t('settings.inactive')}</span>
         </div>
         {#if keepAliveEnabled}
           <div class="keepalive-fields">
-            <label for="keepalive-interval">Intervall (Minuten)</label>
+            <label for="keepalive-interval">{$t('settings.keepAliveInterval')}</label>
             <input
               id="keepalive-interval"
               type="number"
@@ -383,7 +398,7 @@
               bind:value={keepAliveInterval}
               class="text-input"
             />
-            <label for="keepalive-message">Nachricht</label>
+            <label for="keepalive-message">{$t('settings.keepAliveMessage')}</label>
             <input
               id="keepalive-message"
               type="text"
@@ -397,16 +412,16 @@
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="setting-label">Claude Statusline</label>
-        <p class="setting-desc">Aktiviert eine Statuszeile in Claude Code Panes (Modell, Kontext-%, Kosten). Schreibt in ~/.claude/settings.json.</p>
+        <label class="setting-label">{$t('settings.statusLine')}</label>
+        <p class="setting-desc">{$t('settings.statusLineDesc')}</p>
         {#if statusLineConflictWarning}
-          <p class="conflict-warning">Achtung: Eine externe statusLine-Konfiguration wurde erkannt und wird beim Speichern überschrieben.</p>
+          <p class="conflict-warning">{$t('settings.statusLineConflict')}</p>
         {/if}
         <div class="toggle-row">
           <button class="toggle-btn" class:toggle-on={statusLineEnabled} on:click={() => statusLineEnabled = !statusLineEnabled}>
             <span class="toggle-knob"></span>
           </button>
-          <span class="toggle-label">{statusLineEnabled ? 'Aktiviert' : 'Deaktiviert'}</span>
+          <span class="toggle-label">{statusLineEnabled ? $t('settings.active') : $t('settings.inactive')}</span>
         </div>
         {#if statusLineEnabled}
           <div class="statusline-fields">
@@ -414,14 +429,14 @@
             <select id="sl-template" class="theme-select" bind:value={statusLineTemplate}>
               <option value="minimal">Minimal — [Model] | XX%</option>
               <option value="standard">Standard — [Model] ████ XX% | $X.XX</option>
-              <option value="extended">Erweitert — 2-zeilig mit Verzeichnis</option>
+              <option value="extended">{$t('settings.statusLineExtended')}</option>
             </select>
             <div class="sl-checkboxes">
-              <label><input type="checkbox" bind:checked={statusLineShowModel} /> Modell-Name</label>
-              <label><input type="checkbox" bind:checked={statusLineShowContext} /> Kontext-Auslastung %</label>
-              <label><input type="checkbox" bind:checked={statusLineShowCost} /> Kosten ($)</label>
+              <label><input type="checkbox" bind:checked={statusLineShowModel} /> {$t('settings.statusLineModel')}</label>
+              <label><input type="checkbox" bind:checked={statusLineShowContext} /> {$t('settings.statusLineContext')}</label>
+              <label><input type="checkbox" bind:checked={statusLineShowCost} /> {$t('settings.statusLineCost')}</label>
               <label><input type="checkbox" bind:checked={statusLineShowGitBranch} /> Git-Branch</label>
-              <label><input type="checkbox" bind:checked={statusLineShowDuration} /> Dauer</label>
+              <label><input type="checkbox" bind:checked={statusLineShowDuration} /> {$t('settings.statusLineDuration')}</label>
             </div>
           </div>
         {/if}
@@ -429,39 +444,39 @@
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="setting-label">Logging</label>
-        <p class="setting-desc">Schreibt detaillierte Protokolle in eine Datei. Wird automatisch deaktiviert nach 3 stabilen Starts.</p>
+        <label class="setting-label">{$t('settings.logging')}</label>
+        <p class="setting-desc">{$t('settings.loggingDesc')}</p>
         <div class="toggle-row">
           <button class="toggle-btn" class:toggle-on={loggingEnabled} on:click={handleLoggingToggle}>
             <span class="toggle-knob"></span>
           </button>
-          <span class="toggle-label">{loggingEnabled ? 'Aktiv' : 'Inaktiv'}</span>
+          <span class="toggle-label">{loggingEnabled ? $t('settings.active') : $t('settings.inactive')}</span>
         </div>
         {#if loggingEnabled && logPath}
           <div class="log-path-row">
             <p class="log-path">{logPath}</p>
-            <button class="claude-btn" on:click={() => App.OpenLogDir()} title="Log-Ordner öffnen">&#128194;</button>
+            <button class="claude-btn" on:click={() => App.OpenLogDir()} title={$t('settings.openLogDir')}>&#128194;</button>
           </div>
         {/if}
       </div>
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="setting-label">Git Worktrees</label>
-        <p class="setting-desc">Erstellt pro Issue ein isoliertes Arbeitsverzeichnis statt nur einen Branch zu wechseln.</p>
+        <label class="setting-label">{$t('settings.worktrees')}</label>
+        <p class="setting-desc">{$t('settings.worktreesDesc')}</p>
         <div class="toggle-row">
           <button class="toggle-btn" class:toggle-on={useWorktrees} on:click={() => useWorktrees = !useWorktrees}>
             <span class="toggle-knob"></span>
           </button>
-          <span class="toggle-label">{useWorktrees ? 'Aktiv' : 'Inaktiv'}</span>
+          <span class="toggle-label">{useWorktrees ? $t('settings.active') : $t('settings.inactive')}</span>
         </div>
       </div>
 
       <!-- CLI Tools Section -->
       <div class="section-divider">
         <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="section-title">CLI-Tools</label>
-        <p class="setting-desc">Aktivierte Tools erscheinen in der Terminal-Auswahl (Ctrl+N).</p>
+        <label class="section-title">{$t('settings.cliTools')}</label>
+        <p class="setting-desc">{$t('settings.cliToolsDesc')}</p>
       </div>
 
       <!-- Claude CLI -->
@@ -475,16 +490,16 @@
           <span class="cli-badge claude-badge">Anthropic</span>
         </div>
         {#if claudeEnabled}
-          <p class="setting-desc">Pfad zur Claude Code CLI. Leer lassen für automatische Erkennung.</p>
+          <p class="setting-desc">{$t('settings.claudePathDesc')}</p>
           <div class="claude-row">
-            <input type="text" class="claude-input" bind:value={claudeCommand} placeholder="claude (automatisch)" />
-            <button class="claude-btn" on:click={browseClaude} title="Durchsuchen">&#128194;</button>
-            <button class="claude-btn" on:click={detectClaude} title="Erkennen">&#128269;</button>
+            <input type="text" class="claude-input" bind:value={claudeCommand} placeholder={$t('settings.claudePlaceholder')} />
+            <button class="claude-btn" on:click={browseClaude} title={$t('settings.browse')}>&#128194;</button>
+            <button class="claude-btn" on:click={detectClaude} title={$t('settings.detect')}>&#128269;</button>
           </div>
           {#if claudeStatus === 'found'}
-            <p class="claude-status found">Gefunden: {claudeStatusPath}</p>
+            <p class="claude-status found">{$t('settings.found', { path: claudeStatusPath })}</p>
           {:else if claudeStatus === 'notfound'}
-            <p class="claude-status notfound">Nicht gefunden</p>
+            <p class="claude-status notfound">{$t('settings.notFound')}</p>
           {/if}
         {/if}
       </div>
@@ -500,16 +515,16 @@
           <span class="cli-badge codex-badge">OpenAI</span>
         </div>
         {#if codexEnabled}
-          <p class="setting-desc">Pfad zur Codex CLI. Installation: <code>npm i -g @openai/codex</code></p>
+          <p class="setting-desc">{$t('settings.codexPathDesc')}</p>
           <div class="claude-row">
-            <input type="text" class="claude-input" bind:value={codexCommand} placeholder="codex (automatisch)" />
-            <button class="claude-btn" on:click={browseCodex} title="Durchsuchen">&#128194;</button>
-            <button class="claude-btn" on:click={detectCodex} title="Erkennen">&#128269;</button>
+            <input type="text" class="claude-input" bind:value={codexCommand} placeholder={$t('settings.codexPlaceholder')} />
+            <button class="claude-btn" on:click={browseCodex} title={$t('settings.browse')}>&#128194;</button>
+            <button class="claude-btn" on:click={detectCodex} title={$t('settings.detect')}>&#128269;</button>
           </div>
           {#if codexStatus === 'found'}
-            <p class="claude-status found">Gefunden: {codexStatusPath}</p>
+            <p class="claude-status found">{$t('settings.found', { path: codexStatusPath })}</p>
           {:else if codexStatus === 'notfound'}
-            <p class="claude-status notfound">Nicht gefunden — <code>npm i -g @openai/codex</code></p>
+            <p class="claude-status notfound">{$t('settings.codexNotFound')}</p>
           {/if}
         {/if}
       </div>
@@ -525,68 +540,68 @@
           <span class="cli-badge gemini-badge">Google</span>
         </div>
         {#if geminiEnabled}
-          <p class="setting-desc">Pfad zur Gemini CLI. Installation: <code>npm i -g @google/gemini-cli</code></p>
+          <p class="setting-desc">{$t('settings.geminiPathDesc')}</p>
           <div class="claude-row">
-            <input type="text" class="claude-input" bind:value={geminiCommand} placeholder="gemini (automatisch)" />
-            <button class="claude-btn" on:click={browseGemini} title="Durchsuchen">&#128194;</button>
-            <button class="claude-btn" on:click={detectGemini} title="Erkennen">&#128269;</button>
+            <input type="text" class="claude-input" bind:value={geminiCommand} placeholder={$t('settings.geminiPlaceholder')} />
+            <button class="claude-btn" on:click={browseGemini} title={$t('settings.browse')}>&#128194;</button>
+            <button class="claude-btn" on:click={detectGemini} title={$t('settings.detect')}>&#128269;</button>
           </div>
           {#if geminiStatus === 'found'}
-            <p class="claude-status found">Gefunden: {geminiStatusPath}</p>
+            <p class="claude-status found">{$t('settings.found', { path: geminiStatusPath })}</p>
           {:else if geminiStatus === 'notfound'}
-            <p class="claude-status notfound">Nicht gefunden — <code>npm i -g @google/gemini-cli</code></p>
+            <p class="claude-status notfound">{$t('settings.geminiNotFound')}</p>
           {/if}
         {/if}
       </div>
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="setting-label">Audio</label>
-        <p class="setting-desc">Akustische Benachrichtigungen wenn ein Agent fertig ist oder Eingabe braucht.</p>
+        <label class="setting-label">{$t('settings.audio')}</label>
+        <p class="setting-desc">{$t('settings.audioDesc')}</p>
         <div class="toggle-row" style="margin-bottom: 12px;">
           <button class="toggle-btn" class:toggle-on={audioEnabled} on:click={() => audioEnabled = !audioEnabled}>
             <span class="toggle-knob"></span>
           </button>
-          <span class="toggle-label">{audioEnabled ? 'Aktiv' : 'Inaktiv'}</span>
+          <span class="toggle-label">{audioEnabled ? $t('settings.active') : $t('settings.inactive')}</span>
         </div>
         {#if audioEnabled}
           <div class="toggle-row" style="margin-bottom: 12px;">
             <button class="toggle-btn" class:toggle-on={audioWhenFocused} on:click={() => audioWhenFocused = !audioWhenFocused}>
               <span class="toggle-knob"></span>
             </button>
-            <span class="toggle-label">Auch bei fokussiertem Fenster</span>
+            <span class="toggle-label">{$t('settings.audioWhenFocused')}</span>
           </div>
           <div class="volume-row">
-            <label class="volume-label" for="audio-volume">Lautstärke</label>
+            <label class="volume-label" for="audio-volume">{$t('settings.volume')}</label>
             <input id="audio-volume" type="range" min="0" max="100" bind:value={audioVolume} class="volume-slider" />
             <span class="volume-value">{audioVolume}%</span>
-            <button class="claude-btn" on:click={previewAudio} title="Vorschau">&#9654;</button>
+            <button class="claude-btn" on:click={previewAudio} title={$t('settings.preview')}>&#9654;</button>
           </div>
           <div class="sound-picker">
-            <span class="sound-label">Fertig-Sound</span>
+            <span class="sound-label">{$t('settings.doneSound')}</span>
             <div class="claude-row">
-              <input type="text" class="claude-input" bind:value={audioDoneSound} placeholder="Standard (Synthesizer)" />
-              <button class="claude-btn" on:click={() => browseAudioFile('done')} title="Durchsuchen">&#128194;</button>
+              <input type="text" class="claude-input" bind:value={audioDoneSound} placeholder={$t('settings.doneSoundDefault')} />
+              <button class="claude-btn" on:click={() => browseAudioFile('done')} title={$t('settings.browse')}>&#128194;</button>
               {#if audioDoneSound}
                 <button class="claude-btn" on:click={() => audioDoneSound = ''} title="Zurücksetzen">&times;</button>
               {/if}
             </div>
           </div>
           <div class="sound-picker">
-            <span class="sound-label">Eingabe-Sound</span>
+            <span class="sound-label">{$t('settings.inputSound')}</span>
             <div class="claude-row">
-              <input type="text" class="claude-input" bind:value={audioInputSound} placeholder="Standard (Synthesizer)" />
-              <button class="claude-btn" on:click={() => browseAudioFile('input')} title="Durchsuchen">&#128194;</button>
+              <input type="text" class="claude-input" bind:value={audioInputSound} placeholder={$t('settings.doneSoundDefault')} />
+              <button class="claude-btn" on:click={() => browseAudioFile('input')} title={$t('settings.browse')}>&#128194;</button>
               {#if audioInputSound}
                 <button class="claude-btn" on:click={() => audioInputSound = ''} title="Zurücksetzen">&times;</button>
               {/if}
             </div>
           </div>
           <div class="sound-picker">
-            <span class="sound-label">Fehler-Sound</span>
+            <span class="sound-label">{$t('settings.errorSound')}</span>
             <div class="claude-row">
-              <input type="text" class="claude-input" bind:value={audioErrorSound} placeholder="Standard (Synthesizer)" />
-              <button class="claude-btn" on:click={() => browseAudioFile('error')} title="Durchsuchen">&#128194;</button>
+              <input type="text" class="claude-input" bind:value={audioErrorSound} placeholder={$t('settings.doneSoundDefault')} />
+              <button class="claude-btn" on:click={() => browseAudioFile('error')} title={$t('settings.browse')}>&#128194;</button>
               {#if audioErrorSound}
                 <button class="claude-btn" on:click={() => audioErrorSound = ''} title="Zurücksetzen">&times;</button>
               {/if}
@@ -596,10 +611,10 @@
       </div>
 
       <div class="dialog-footer">
-        <button class="btn-reset" on:click={resetDefault}>Standard</button>
+        <button class="btn-reset" on:click={resetDefault}>{$t('settings.reset')}</button>
         <div class="footer-right-btns">
-          <button class="btn-cancel" on:click={close}>Abbrechen</button>
-          <button class="btn-save" on:click={save}>Speichern</button>
+          <button class="btn-cancel" on:click={close}>{$t('settings.cancel')}</button>
+          <button class="btn-save" on:click={save}>{$t('settings.save')}</button>
         </div>
       </div>
     </div>

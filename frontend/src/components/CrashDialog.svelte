@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
 
   export let visible: boolean = false;
 
@@ -29,17 +30,16 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="dialog" on:click|stopPropagation>
       <div class="icon">!</div>
-      <h3>Instabilität erkannt</h3>
+      <h3>{$t('crash.title')}</h3>
       <p class="desc">
-        Die letzten zwei Sitzungen wurden nicht sauber beendet.
-        Möchtest du das Logging aktivieren, um die Ursache zu finden?
+        {$t('crash.description')}
       </p>
       <p class="hint">
-        Das Log wird automatisch deaktiviert, sobald 3 Sitzungen wieder stabil laufen.
+        {$t('crash.hint')}
       </p>
       <div class="actions">
-        <button class="btn-dismiss" on:click={dismiss}>Nein, danke</button>
-        <button class="btn-enable" on:click={enableLogging}>Logging aktivieren</button>
+        <button class="btn-dismiss" on:click={dismiss}>{$t('crash.dismiss')}</button>
+        <button class="btn-enable" on:click={enableLogging}>{$t('crash.enable')}</button>
       </div>
     </div>
   </div>

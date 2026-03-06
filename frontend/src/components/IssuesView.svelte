@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import * as App from '../../wailsjs/go/backend/App';
   import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
   import IssueDetailComponent from './IssueDetail.svelte';
@@ -143,8 +144,8 @@
   <div class="status-msg">
     <span class="status-icon">!</span>
     <div>
-      <strong>GitHub CLI nicht gefunden</strong>
-      <p>Bitte <code>gh</code> installieren:</p>
+      <strong>{$t('issues.ghNotFound')}</strong>
+      <p>{$t('issues.ghInstall')}</p>
       <code>https://cli.github.com</code>
     </div>
   </div>
@@ -152,8 +153,8 @@
   <div class="status-msg">
     <span class="status-icon">!</span>
     <div>
-      <strong>Nicht angemeldet</strong>
-      <p>Bitte anmelden:</p>
+      <strong>{$t('issues.notAuthenticated')}</strong>
+      <p>{$t('issues.loginPrompt')}</p>
       <code>gh auth login</code>
     </div>
   </div>
@@ -170,22 +171,22 @@
   <!-- List View -->
   <div class="list-controls">
     <div class="filter-row">
-      <button class="filter-btn" class:active={stateFilter === 'open'} on:click={() => (stateFilter = 'open')}>Open</button>
-      <button class="filter-btn" class:active={stateFilter === 'closed'} on:click={() => (stateFilter = 'closed')}>Closed</button>
-      <button class="filter-btn" class:active={stateFilter === 'all'} on:click={() => (stateFilter = 'all')}>Alle</button>
-      <button class="icon-btn" on:click={loadIssues} title="Aktualisieren">&#8635;</button>
-      <button class="icon-btn create-btn" on:click={() => dispatch('createIssue')} title="Neues Issue">+</button>
+      <button class="filter-btn" class:active={stateFilter === 'open'} on:click={() => (stateFilter = 'open')}>{$t('issues.filterOpen')}</button>
+      <button class="filter-btn" class:active={stateFilter === 'closed'} on:click={() => (stateFilter = 'closed')}>{$t('issues.filterClosed')}</button>
+      <button class="filter-btn" class:active={stateFilter === 'all'} on:click={() => (stateFilter = 'all')}>{$t('issues.filterAll')}</button>
+      <button class="icon-btn" on:click={loadIssues} title={$t('issues.refresh')}>&#8635;</button>
+      <button class="icon-btn create-btn" on:click={() => dispatch('createIssue')} title={$t('issues.createIssue')}>+</button>
     </div>
     <div class="search-box">
-      <input type="text" placeholder="Issues filtern..." bind:value={searchQuery} />
+      <input type="text" placeholder={$t('issues.filterPlaceholder')} bind:value={searchQuery} />
     </div>
   </div>
 
   <div class="issue-list">
     {#if loading}
-      <div class="no-results">Laden...</div>
+      <div class="no-results">{$t('issues.loading')}</div>
     {:else if filteredIssues.length === 0}
-      <div class="no-results">Keine Issues</div>
+      <div class="no-results">{$t('issues.noIssues')}</div>
     {:else}
       {#each filteredIssues as issue (issue.number)}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -193,7 +194,7 @@
         <div class="issue-item" draggable="true" on:dragstart={(e) => handleDragStart(e, issue)} on:click={() => openIssue(issue.number)}>
           <div class="issue-icon" class:open={issue.state === 'OPEN'} class:closed={issue.state !== 'OPEN'}>
             {#if paneIssues[issue.number]}
-              <span class="activity-dot" class:active={paneIssues[issue.number].activity === 'active'} class:done={paneIssues[issue.number].activity === 'done'} class:needs-input={paneIssues[issue.number].activity === 'waitingPermission' || paneIssues[issue.number].activity === 'waitingAnswer'} title="Agent: {paneIssues[issue.number].activity}">●</span>
+              <span class="activity-dot" class:active={paneIssues[issue.number].activity === 'active'} class:done={paneIssues[issue.number].activity === 'done'} class:needs-input={paneIssues[issue.number].activity === 'waitingPermission' || paneIssues[issue.number].activity === 'waitingAnswer'} title={$t('issues.agentActivity', { activity: paneIssues[issue.number].activity })}>●</span>
             {:else}
               {issue.state === 'OPEN' ? '●' : '✓'}
             {/if}
@@ -223,10 +224,10 @@
           </div>
           <div class="issue-actions">
             {#if issue.url}
-              <button class="action-btn open-btn" on:click|stopPropagation={() => BrowserOpenURL(issue.url)} title="Im Browser öffnen">&#8599;</button>
+              <button class="action-btn open-btn" on:click|stopPropagation={() => BrowserOpenURL(issue.url)} title={$t('issues.openInBrowser')}>&#8599;</button>
             {/if}
             {#if issue.state === 'OPEN' && !paneIssues[issue.number]}
-              <button class="action-btn launch-btn" on:click={(e) => launchForIssue(e, issue)} title="Claude für dieses Issue starten">▶</button>
+              <button class="action-btn launch-btn" on:click={(e) => launchForIssue(e, issue)} title={$t('issues.launchForIssue')}>▶</button>
             {/if}
           </div>
         </div>

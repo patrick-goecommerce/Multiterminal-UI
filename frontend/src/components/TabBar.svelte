@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { tabStore, allTabs } from '../stores/tabs';
+  import { t } from '../stores/i18n';
   import * as App from '../../wailsjs/go/backend/App';
   import { EventsOn } from '../../wailsjs/runtime/runtime';
   import { getWindowId, isMainWindow } from '../lib/window';
@@ -52,7 +53,7 @@
   }
 
   function handleTabDblClick(tabId: string) {
-    const name = prompt('Tab umbenennen:');
+    const name = prompt($t('tabBar.rename'));
     if (name) tabStore.renameTab(tabId, name);
   }
 
@@ -185,7 +186,7 @@
       </button>
     {/each}
   </div>
-  <button class="tab-add" on:click={handleAddTab} title="Neuer Tab (Ctrl+T)">
+  <button class="tab-add" on:click={handleAddTab} title={$t('tabBar.newTab')}>
     +
   </button>
 </div>

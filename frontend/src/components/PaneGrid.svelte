@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import TerminalPane from './TerminalPane.svelte';
   import type { Pane } from '../stores/tabs';
 
@@ -80,8 +81,8 @@
 
   {#if panes.length === 0}
     <div class="empty-state">
-      <p>Kein Terminal offen.</p>
-      <p class="hint">Drücke <kbd>Ctrl+N</kbd> oder klicke <strong>+ New Terminal</strong> (max. 10 pro Tab)</p>
+      <p>{$t('paneGrid.empty')}</p>
+      <p class="hint">{$t('paneGrid.emptyHint', { max: 10 })}</p>
     </div>
   {/if}
 </div>

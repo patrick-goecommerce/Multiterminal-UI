@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { config } from '../stores/config';
+  import { t } from '../stores/i18n';
   import type { PaneMode } from '../stores/tabs';
 
   export let visible: boolean = false;
@@ -28,19 +29,19 @@
   function buildOptions(issue: typeof issueContext, cfg: typeof $config): LaunchOption[] {
     const opts: LaunchOption[] = [];
     if (!issue) {
-      opts.push({ mode: 'shell', label: 'Shell', desc: 'Standard-Terminal', icon: '&#9000;', cssClass: '' });
+      opts.push({ mode: 'shell', label: $t('launch.shell'), desc: $t('launch.shellDesc'), icon: '&#9000;', cssClass: '' });
     }
     if (cfg.claude_enabled !== false) {
-      opts.push({ mode: 'claude', label: 'Claude Code', desc: 'Normal-Modus', icon: '&#10024;', cssClass: '' });
-      opts.push({ mode: 'claude-yolo', label: 'Claude YOLO', desc: 'Alle Berechtigungen', icon: '&#9889;', cssClass: 'yolo' });
+      opts.push({ mode: 'claude', label: $t('launch.claude'), desc: $t('launch.claudeDesc'), icon: '&#10024;', cssClass: '' });
+      opts.push({ mode: 'claude-yolo', label: $t('launch.claudeYolo'), desc: $t('launch.claudeYoloDesc'), icon: '&#9889;', cssClass: 'yolo' });
     }
     if (cfg.codex_enabled) {
-      opts.push({ mode: 'codex', label: 'Codex', desc: 'OpenAI Codex CLI', icon: '&#129302;', cssClass: 'codex' });
-      opts.push({ mode: 'codex-auto', label: 'Codex Auto', desc: 'Full-Auto Modus', icon: '&#9889;', cssClass: 'codex-auto' });
+      opts.push({ mode: 'codex', label: $t('launch.codex'), desc: $t('launch.codexDesc'), icon: '&#129302;', cssClass: 'codex' });
+      opts.push({ mode: 'codex-auto', label: $t('launch.codexAuto'), desc: $t('launch.codexAutoDesc'), icon: '&#9889;', cssClass: 'codex-auto' });
     }
     if (cfg.gemini_enabled) {
-      opts.push({ mode: 'gemini', label: 'Gemini', desc: 'Google Gemini CLI', icon: '&#9733;', cssClass: 'gemini' });
-      opts.push({ mode: 'gemini-yolo', label: 'Gemini Sandbox', desc: 'Sandbox-Modus', icon: '&#9889;', cssClass: 'gemini-yolo' });
+      opts.push({ mode: 'gemini', label: $t('launch.gemini'), desc: $t('launch.geminiDesc'), icon: '&#9733;', cssClass: 'gemini' });
+      opts.push({ mode: 'gemini-yolo', label: $t('launch.geminiYolo'), desc: $t('launch.geminiYoloDesc'), icon: '&#9889;', cssClass: 'gemini-yolo' });
     }
     return opts;
   }
@@ -93,7 +94,7 @@
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="dialog" on:click|stopPropagation bind:this={dialogEl} tabindex="-1" on:keydown={handleKeydown}>
-      <h3>{issueContext ? `Agent für #${issueContext.number}` : 'Neues Terminal'}</h3>
+      <h3>{issueContext ? $t('launch.titleIssue', { number: issueContext.number }) : $t('launch.titleNew')}</h3>
       {#if issueContext}
         <div class="issue-context">
           <span class="issue-ctx-num">#{issueContext.number}</span>
@@ -104,22 +105,22 @@
       {#if showClaudeWarning}
         <div class="cli-warning">
           <span class="warning-icon">&#9888;</span>
-          <span>Claude CLI nicht gefunden.</span>
-          <button class="warning-link" on:click={() => dispatch('openSettings')}>Einstellungen</button>
+          <span>{$t('launch.claudeNotFound')}</span>
+          <button class="warning-link" on:click={() => dispatch('openSettings')}>{$t('launch.settingsLink')}</button>
         </div>
       {/if}
 
       {#if showCodexWarning}
         <div class="cli-warning">
           <span class="warning-icon">&#9888;</span>
-          <span>Codex CLI nicht gefunden. <code>npm i -g @openai/codex</code></span>
+          <span>{$t('launch.codexNotFound')} <code>{$t('launch.codexInstall')}</code></span>
         </div>
       {/if}
 
       {#if showGeminiWarning}
         <div class="cli-warning">
           <span class="warning-icon">&#9888;</span>
-          <span>Gemini CLI nicht gefunden. <code>npm i -g @google/gemini-cli</code></span>
+          <span>{$t('launch.geminiNotFound')} <code>{$t('launch.geminiInstall')}</code></span>
         </div>
       {/if}
 
@@ -141,7 +142,7 @@
 
       {#if showModelPicker}
         <div class="model-picker">
-          <label>Claude Modell:</label>
+          <label>{$t('launch.modelLabel')}</label>
           <select bind:value={selectedModel}>
             {#each $config.claude_models as model}
               <option value={model.id}>{model.label}</option>
@@ -151,7 +152,7 @@
       {/if}
 
       <div class="dialog-footer">
-        <button class="cancel-btn" on:click={close}>Abbrechen (Esc)</button>
+        <button class="cancel-btn" on:click={close}>{$t('launch.cancel')}</button>
       </div>
     </div>
   </div>

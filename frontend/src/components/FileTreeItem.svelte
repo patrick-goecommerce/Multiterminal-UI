@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import { ClipboardSetText } from '../../wailsjs/runtime/runtime';
   import * as App from '../../wailsjs/go/backend/App';
 
@@ -111,16 +112,16 @@
   </span>
   <span class="file-name">{entry.name}</span>
   {#if copiedPath === entry.path}
-    <span class="copied-badge">kopiert!</span>
+    <span class="copied-badge">{$t('fileTree.copied')}</span>
   {:else if status}
     <span class="git-badge {getStatusClass(status)}">{getStatusLabel(status)}</span>
   {/if}
-  <button class="copy-btn" on:click={handleCopy} title="Pfad kopieren">
+  <button class="copy-btn" on:click={handleCopy} title={$t('fileTree.copyPath')}>
     <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
       <path d="M4 4v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2v2a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2zm2-2v2h2a2 2 0 0 1 2 2v2h2V2H6zM2 6v6h6V6H2z"/>
     </svg>
   </button>
-  <button class="star-btn" class:active={isFavorite} on:click={handleToggleFavorite} title={isFavorite ? 'Favorit entfernen' : 'Als Favorit markieren'}>
+  <button class="star-btn" class:active={isFavorite} on:click={handleToggleFavorite} title={isFavorite ? $t('fileTree.removeFavorite') : $t('fileTree.addFavorite')}>
     <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
       {#if isFavorite}
         <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25z"/>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import type { Pane } from '../stores/tabs';
   import WorktreeDropdown from './WorktreeDropdown.svelte';
   import WorktreeCreateDialog from './WorktreeCreateDialog.svelte';
@@ -117,7 +118,7 @@
       />
     {:else}
       <!-- svelte-ignore a11y-no-static-element-interactions -->
-      <span class="pane-name" on:dblclick|stopPropagation={startRename} title="Doppelklick zum Umbenennen">{pane.name}</span>
+      <span class="pane-name" on:dblclick|stopPropagation={startRename} title={$t('titlebar.doubleClickRename')}>{pane.name}</span>
     {/if}
     <span class="mode-badge {getModeBadgeClass(pane.mode)}">{getModeLabel(pane.mode)}</span>
     {#if pane.issueNumber}
@@ -156,14 +157,14 @@
     </button>
     {#if pane.issueNumber}
       <div class="issue-actions-wrap">
-        <button class="pane-btn issue-actions-btn" on:click|stopPropagation={() => (showIssueActions = !showIssueActions)} title="Issue-Aktionen">
+        <button class="pane-btn issue-actions-btn" on:click|stopPropagation={() => (showIssueActions = !showIssueActions)} title={$t('titlebar.issueActions')}>
           &#8943;
         </button>
         {#if showIssueActions}
           <div class="issue-actions-menu">
-            <button on:click|stopPropagation={() => issueAction('commit')}>Commit & Push</button>
-            <button on:click|stopPropagation={() => issueAction('pr')}>PR erstellen</button>
-            <button on:click|stopPropagation={() => issueAction('closeIssue')}>Issue schließen</button>
+            <button on:click|stopPropagation={() => issueAction('commit')}>{$t('titlebar.commitPush')}</button>
+            <button on:click|stopPropagation={() => issueAction('pr')}>{$t('titlebar.createPR')}</button>
+            <button on:click|stopPropagation={() => issueAction('closeIssue')}>{$t('titlebar.closeIssue')}</button>
           </div>
         {/if}
       </div>
@@ -171,13 +172,13 @@
     {#if pane.cost}
       <span class="cost-label">{pane.cost}</span>
     {/if}
-    <button class="pane-btn queue-toggle" class:queue-active={queueCount > 0} on:click|stopPropagation={() => dispatch('toggleQueue')} title="Pipeline Queue">
+    <button class="pane-btn queue-toggle" class:queue-active={queueCount > 0} on:click|stopPropagation={() => dispatch('toggleQueue')} title={$t('titlebar.pipelineQueue')}>
       &#9654;{#if queueCount > 0}<span class="queue-badge">{queueCount}</span>{/if}
     </button>
-    <button class="pane-btn" on:click|stopPropagation={() => dispatch('maximize', { paneId: pane.id })} title="Maximize">
+    <button class="pane-btn" on:click|stopPropagation={() => dispatch('maximize', { paneId: pane.id })} title={$t('titlebar.maximize')}>
       &#x26F6;
     </button>
-    <button class="pane-btn close" on:click|stopPropagation={() => dispatch('close', { paneId: pane.id, sessionId: pane.sessionId })} title="Close">
+    <button class="pane-btn close" on:click|stopPropagation={() => dispatch('close', { paneId: pane.id, sessionId: pane.sessionId })} title={$t('titlebar.closePane')}>
       &times;
     </button>
   </div>

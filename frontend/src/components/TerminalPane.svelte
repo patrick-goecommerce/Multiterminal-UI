@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import { createTerminal, getTerminalTheme, buildFontFamily, attachWebglRenderer } from '../lib/terminal';
   import { pasteToSession, copySelection, writeTextToSession } from '../lib/clipboard';
   import { encodeForPty } from '../lib/claude';
@@ -266,9 +267,9 @@
               seenLocalhostUrls.add(url);
               if (mode === 'auto') {
                 BrowserOpenURL(url);
-                sendNotification('Dev Server', url + ' geöffnet');
+                sendNotification($t('terminal.devServer'), $t('terminal.urlOpened', { url }));
               } else {
-                sendNotification('Dev Server', url + ' erkannt');
+                sendNotification($t('terminal.devServer'), $t('terminal.urlDetected', { url }));
               }
             }
           }
@@ -497,13 +498,13 @@
 
       if (pane.activity === 'done' && prev === 'active') {
         if (!document.hasFocus()) {
-          sendNotification(`${pane.name} - Fertig`, 'Claude ist fertig. Prompt bereit.');
+          sendNotification($t('app.notifyDone', { name: pane.name }), $t('app.notifyDoneBody'));
         }
         if (shouldPlayAudio) playBell('done', audio.volume, audio.done_sound || undefined);
       } else if ((pane.activity === 'waitingPermission' || pane.activity === 'waitingAnswer') && !needsInputAlerted) {
         needsInputAlerted = true;
         if (!document.hasFocus()) {
-          sendNotification(`${pane.name} - Eingabe nötig`, 'Claude wartet auf Bestätigung.');
+          sendNotification($t('app.notifyInput', { name: pane.name }), $t('app.notifyInputBody'));
         }
         if (shouldPlayAudio) playBell('needsInput', audio.volume, audio.input_sound || undefined);
       }
@@ -551,9 +552,9 @@
   <div class="terminal-container" bind:this={containerEl} on:contextmenu={handleContextMenu}></div>
   {#if !pane.running}
     <div class="exited-overlay">
-      <div class="exited-msg">Prozess beendet</div>
-      <button class="restart-btn" on:click|stopPropagation={() => dispatch('restart', { paneId: pane.id, sessionId: pane.sessionId, mode: pane.mode, model: pane.model, name: pane.name })}>Neu starten</button>
-      <button class="close-btn-overlay" on:click|stopPropagation={() => dispatch('close', { paneId: pane.id, sessionId: pane.sessionId })}>Schließen</button>
+      <div class="exited-msg">{$t('terminal.processExited')}</div>
+      <button class="restart-btn" on:click|stopPropagation={() => dispatch('restart', { paneId: pane.id, sessionId: pane.sessionId, mode: pane.mode, model: pane.model, name: pane.name })}>{$t('terminal.restart')}</button>
+      <button class="close-btn-overlay" on:click|stopPropagation={() => dispatch('close', { paneId: pane.id, sessionId: pane.sessionId })}>{$t('terminal.close')}</button>
     </div>
   {/if}
   <ContextMenu

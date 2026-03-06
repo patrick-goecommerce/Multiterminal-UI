@@ -15,6 +15,7 @@
   import sql from 'highlight.js/lib/languages/sql';
   import dockerfile from 'highlight.js/lib/languages/dockerfile';
   import * as App from '../../wailsjs/go/backend/App';
+  import { t } from '../stores/i18n';
 
   hljs.registerLanguage('javascript', javascript);
   hljs.registerLanguage('typescript', typescript);
@@ -135,32 +136,32 @@
         </div>
         <div class="preview-actions">
           <div class="view-toggle">
-            <button class="toggle-btn" class:active={viewMode === 'view'} on:click={() => viewMode = 'view'}>Datei</button>
+            <button class="toggle-btn" class:active={viewMode === 'view'} on:click={() => viewMode = 'view'}>{$t('filePreview.file')}</button>
             <button class="toggle-btn" class:active={viewMode === 'diff'} on:click={() => viewMode = 'diff'}>Diff</button>
           </div>
-          <button class="preview-btn" on:click={openInEditor} title="Im Editor öffnen">
+          <button class="preview-btn" on:click={openInEditor} title={$t('filePreview.openInEditor')}>
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
               <path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>
             </svg>
-            Im Editor
+            {$t('filePreview.edit')}
           </button>
-          <button class="preview-close" on:click={close} title="Schließen">&times;</button>
+          <button class="preview-close" on:click={close} title={$t('filePreview.close')}>&times;</button>
         </div>
       </div>
 
       <div class="preview-content">
         {#if loading}
-          <div class="preview-message">Laden...</div>
+          <div class="preview-message">{$t('filePreview.loading')}</div>
         {:else if error}
           <div class="preview-message">
             <p>{error}</p>
-            <button class="preview-btn" on:click={openInEditor}>Im Editor öffnen</button>
+            <button class="preview-btn" on:click={openInEditor}>{$t('filePreview.openInEditor')}</button>
           </div>
         {:else if binary}
           <div class="preview-message">
-            <p>Binärdatei kann nicht angezeigt werden</p>
-            <button class="preview-btn" on:click={openInEditor}>Im Editor öffnen</button>
+            <p>{$t('filePreview.binaryFile')}</p>
+            <button class="preview-btn" on:click={openInEditor}>{$t('filePreview.openInEditor')}</button>
           </div>
         {:else if viewMode === 'diff'}
           {#if diffContent}
