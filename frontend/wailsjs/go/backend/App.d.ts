@@ -154,4 +154,6 @@ export function UpdateIssue(arg1:string,arg2:number,arg3:string,arg4:string,arg5
 
 export function ValidateClaudePath(arg1:string):Promise<boolean>;
 
+export function ValidateCodexPath(arg1:string):Promise<boolean>;
+
 export function WriteToSession(arg1:number,arg2:string):Promise<void>;

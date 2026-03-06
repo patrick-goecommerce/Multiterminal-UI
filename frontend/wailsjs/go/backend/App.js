@@ -327,6 +327,10 @@ export function ValidateClaudePath(arg1) {
   return $Call.ByID(688761244, arg1);
 }
 
+export function ValidateCodexPath(arg1) {
+  return window['go']['backend']['App']['ValidateCodexPath'](arg1);
+}
+
 export function WriteToSession(arg1, arg2) {
   return $Call.ByID(2058166105, arg1, arg2);
 }
