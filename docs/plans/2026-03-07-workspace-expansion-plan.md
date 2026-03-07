@@ -1,8 +1,8 @@
-# Workspace Expansion Plan: Left Navigation + Kanban + Chat + Multi-Agent
+# Workspace Expansion Plan: Left Navigation + Kanban + Chat + Multi-Agent + Skills
 
 **Datum:** 2026-03-07
-**Status:** Draft v2 (überarbeitet)
-**Scope:** Major UI/UX expansion — Left Navigation Pane, Kanban Board (mit integrierter Planung & Automation), Chat View, Multi-Agent Orchestration, Ask-User Bridging
+**Status:** Draft v3 (überarbeitet)
+**Scope:** Major UI/UX expansion — `.mtui/` Projektverzeichnis, Skills-as-a-Service (28 Specialist Skills), Left Navigation Pane, Kanban Board (mit integrierter Planung & Automation), Chat View, Multi-Agent Orchestration, Ask-User Bridging
 
 ---
 
@@ -10,12 +10,15 @@
 
 Multiterminal wird von einem Terminal-Multiplexer zu einer vollwertigen **Workspace-Plattform** erweitert. Die bestehende Sidebar (Explorer/SourceControl/Issues) wird durch eine **Left Navigation Pane** ersetzt, die als Hub für alle Workspace-Funktionen dient. Chat wird als **eigene Main-Content-View** integriert (nicht als rechte Sidebar), um den Terminal-Panes keinen Platz zu stehlen.
 
-**Kernänderungen gegenüber v1:**
+**Kernänderungen gegenüber v1/v2:**
+- `.mtui/` Verzeichnis als Projektmarker + projektspezifischer Datenspeicher
+- 28 Specialist Skills mit Auto-Detection + CLAUDE.md Injection
 - Planning + Scheduler in Kanban integriert (weniger Views, weniger Komplexität)
 - Chat als Main-Content-View statt rechte Sidebar
-- ask_user Bridging als neues Feature aufgenommen
+- Ask-User Bridging (Claude Studio Feature #4)
 - "Alle Projekte" nur im Dashboard, nicht überall
 - LeftNav reduziert auf 4 Workspace-Views statt 6
+- Projektspezifische Persistenz in `.mtui/` statt globale JSON-Dateien
 
 ```
 ┌─ Window ──────────────────────────────────────────────────────┐
@@ -34,6 +37,228 @@ Multiterminal wird von einem Terminal-Multiplexer zu einer vollwertigen **Worksp
 │  Footer                                                        │
 └────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Phase 0: `.mtui/` Projektverzeichnis + Skills-as-a-Service
+
+Das `.mtui/` Verzeichnis ist das Herzstück der neuen Architektur. Es markiert ein Verzeichnis als MTUI-Projekt und speichert alle projektspezifischen Daten.
+
+### 0.1 `.mtui/` Verzeichnisstruktur
+
+```
+project-root/
+├── .mtui/
+│   ├── config.json          # Projektspezifische Einstellungen
+│   ├── skills.md            # Aktive Skills für dieses Projekt (generiert)
+│   ├── skills.json          # Skill-Auswahl (welche aktiv, wann zuletzt aktualisiert)
+│   ├── kanban.json          # Kanban-State (Spalten, Karten, Pläne, Schedules)
+│   └── chat/                # Chat-Konversationen
+│       ├── conv-abc123.json
+│       └── conv-def456.json
+├── CLAUDE.md                # ← Skills werden hier injiziert (Marker-Block)
+└── ...
+```
+
+**Wichtig:** `.mtui/` sollte in `.gitignore` aufgenommen werden (enthält lokalen State). Die CLAUDE.md-Änderungen hingegen werden commited — so profitiert das ganze Team.
+
+### 0.2 Projekt-Erkennung
+
+Wenn ein Tab-Verzeichnis geöffnet wird, prüft MTUI:
+1. Existiert `.mtui/`? → Bekanntes Projekt, State laden
+2. Existiert `.mtui/` nicht? → Neues Projekt, SkillPicker anzeigen
+
+```go
+// app_project.go
+func (a *AppService) IsProjectInitialized(dir string) bool
+func (a *AppService) InitProject(dir string, skillIDs []string) error
+func (a *AppService) GetProjectConfig(dir string) (*ProjectConfig, error)
+```
+
+### 0.3 Skill-Templates (28 Stück, embedded)
+
+Skills werden als Markdown-Dateien im Go-Binary eingebettet via `go:embed`.
+
+```go
+// internal/skills/skills.go
+//go:embed templates/*.md
+var skillFS embed.FS
+
+type Skill struct {
+    ID          string   `json:"id" yaml:"id"`
+    Name        string   `json:"name" yaml:"name"`          // z.B. "Frontend Specialist"
+    Description string   `json:"description" yaml:"description"` // Kurzbeschreibung
+    Category    string   `json:"category" yaml:"category"`    // frontend/backend/devops/data/quality
+    DetectFiles []string `json:"detect_files" yaml:"detect_files"` // Auto-Detection Patterns
+    Content     string   `json:"content" yaml:"content"`      // Markdown-Inhalt
+}
+```
+
+### 0.4 Die 28 Skills
+
+| # | ID | Name | Kategorie | Auto-Detect |
+|---|-----|------|-----------|-------------|
+| 1 | `frontend-react` | React/Next.js Specialist | frontend | `package.json` → react |
+| 2 | `frontend-vue` | Vue/Nuxt Specialist | frontend | `package.json` → vue |
+| 3 | `frontend-svelte` | Svelte/SvelteKit Specialist | frontend | `package.json` → svelte |
+| 4 | `frontend-angular` | Angular Specialist | frontend | `angular.json` |
+| 5 | `frontend-css` | CSS/Tailwind Specialist | frontend | `tailwind.config.*` |
+| 6 | `backend-go` | Go Backend Specialist | backend | `go.mod` |
+| 7 | `backend-node` | Node.js/Express Specialist | backend | `package.json` → express |
+| 8 | `backend-python` | Python/FastAPI Specialist | backend | `requirements.txt`, `pyproject.toml` |
+| 9 | `backend-rust` | Rust Specialist | backend | `Cargo.toml` |
+| 10 | `backend-java` | Java/Spring Specialist | backend | `pom.xml`, `build.gradle` |
+| 11 | `backend-csharp` | C#/.NET Specialist | backend | `*.csproj`, `*.sln` |
+| 12 | `backend-ruby` | Ruby/Rails Specialist | backend | `Gemfile` |
+| 13 | `backend-php` | PHP/Laravel Specialist | backend | `composer.json` |
+| 14 | `api-design` | API Design Specialist | backend | `openapi.*`, `swagger.*` |
+| 15 | `database-sql` | SQL/Postgres Specialist | data | `*.sql`, `prisma/`, `migrations/` |
+| 16 | `database-nosql` | NoSQL/MongoDB Specialist | data | `package.json` → mongoose |
+| 17 | `devops-docker` | Docker/Container Specialist | devops | `Dockerfile`, `docker-compose.*` |
+| 18 | `devops-k8s` | Kubernetes Specialist | devops | `k8s/`, `*.yaml` → kind:Deployment |
+| 19 | `devops-ci` | CI/CD Specialist | devops | `.github/workflows/`, `.gitlab-ci.yml` |
+| 20 | `devops-terraform` | Terraform/IaC Specialist | devops | `*.tf`, `terraform/` |
+| 21 | `devops-aws` | AWS Specialist | devops | `cdk.json`, `serverless.yml` |
+| 22 | `security` | Security Specialist | quality | immer verfügbar |
+| 23 | `testing` | Testing Specialist | quality | `*_test.go`, `*.test.ts`, `*.spec.ts` |
+| 24 | `performance` | Performance Specialist | quality | immer verfügbar |
+| 25 | `accessibility` | Accessibility Specialist | quality | `*.html`, `*.jsx`, `*.tsx` |
+| 26 | `mobile-rn` | React Native/Mobile Specialist | frontend | `react-native` in package.json |
+| 27 | `mobile-flutter` | Flutter/Dart Specialist | frontend | `pubspec.yaml` |
+| 28 | `docs-technical` | Technical Writing Specialist | quality | `docs/`, `README.md` |
+
+### 0.5 Auto-Detection
+
+```go
+// internal/skills/detect.go
+func DetectSkills(dir string) []string {
+    var detected []string
+    for _, skill := range AllSkills() {
+        for _, pattern := range skill.DetectFiles {
+            if matchesProject(dir, pattern) {
+                detected = append(detected, skill.ID)
+                break
+            }
+        }
+    }
+    return detected
+}
+
+// Pattern-Matching:
+// - Dateiname: "go.mod" → Datei existiert?
+// - Glob: "*.csproj" → irgendeine .csproj Datei?
+// - Package-Check: "package.json" → react → package.json enthält "react"?
+// - Dir-Check: "k8s/" → Verzeichnis existiert?
+```
+
+### 0.6 CLAUDE.md Injection
+
+Skills werden als markierter Block in die CLAUDE.md des Projekts eingefügt:
+
+```markdown
+<!-- MTUI:SKILLS:BEGIN — Auto-generated by Multiterminal, do not edit manually -->
+## Projekt-Skills
+
+### Frontend Specialist (Svelte)
+You are an expert in Svelte and SvelteKit development. You follow these principles:
+- Component composition over inheritance
+- Reactive declarations ($:) for derived state
+- ...
+
+### Go Backend Specialist
+You are an expert in Go backend development. You follow these principles:
+- Explicit error handling, no panic in library code
+- Table-driven tests
+- ...
+
+<!-- MTUI:SKILLS:END -->
+```
+
+**Regeln:**
+- Block wird zwischen `MTUI:SKILLS:BEGIN` und `MTUI:SKILLS:END` Markern eingefügt
+- Wenn keine CLAUDE.md existiert → wird erstellt
+- Wenn CLAUDE.md existiert, aber ohne Marker → Block wird am Anfang eingefügt
+- Wenn Marker vorhanden → Block wird ersetzt (Update)
+- User-Content außerhalb der Marker bleibt unberührt
+- Zusätzlich wird die vollständige Datei nach `.mtui/skills.md` geschrieben (Backup + Referenz)
+
+```go
+// internal/skills/inject.go
+func InjectIntoCLAUDEMD(dir string, skillIDs []string) error
+func RemoveFromCLAUDEMD(dir string) error
+func GetActiveSkills(dir string) ([]string, error) // liest .mtui/skills.json
+```
+
+### 0.7 SkillPicker Dialog
+
+```
+┌─ Projekt einrichten ─────────────────────────────────────────┐
+│                                                               │
+│  Erkannter Projekttyp: Svelte + Go                           │
+│                                                               │
+│  Empfohlene Skills:                      Weitere Skills:      │
+│  ☑ Svelte/SvelteKit Specialist          ☐ Security            │
+│  ☑ Go Backend Specialist                ☐ Performance          │
+│  ☑ Testing Specialist                   ☐ Docker/Container     │
+│  ☑ CI/CD Specialist                     ☐ API Design           │
+│                                          ☐ Technical Writing   │
+│                                          ☐ ...                 │
+│                                                               │
+│  [Alle empfohlenen]  [Keine]  [Übernehmen]  [Überspringen]   │
+└───────────────────────────────────────────────────────────────┘
+```
+
+### 0.8 Dateien
+
+| Datei | Aktion | Beschreibung |
+|-------|--------|--------------|
+| `internal/skills/skills.go` | NEU | Skill-Registry, Embed, Laden |
+| `internal/skills/detect.go` | NEU | Auto-Detection (Projekttyp-Erkennung) |
+| `internal/skills/inject.go` | NEU | CLAUDE.md Injection + .mtui/skills.md |
+| `internal/skills/templates/frontend-react.md` | NEU | React Skill Template |
+| `internal/skills/templates/frontend-vue.md` | NEU | Vue Skill Template |
+| `internal/skills/templates/frontend-svelte.md` | NEU | Svelte Skill Template |
+| `internal/skills/templates/frontend-angular.md` | NEU | Angular Skill Template |
+| `internal/skills/templates/frontend-css.md` | NEU | CSS/Tailwind Skill Template |
+| `internal/skills/templates/backend-go.md` | NEU | Go Skill Template |
+| `internal/skills/templates/backend-node.md` | NEU | Node.js Skill Template |
+| `internal/skills/templates/backend-python.md` | NEU | Python Skill Template |
+| `internal/skills/templates/backend-rust.md` | NEU | Rust Skill Template |
+| `internal/skills/templates/backend-java.md` | NEU | Java Skill Template |
+| `internal/skills/templates/backend-csharp.md` | NEU | C# Skill Template |
+| `internal/skills/templates/backend-ruby.md` | NEU | Ruby Skill Template |
+| `internal/skills/templates/backend-php.md` | NEU | PHP Skill Template |
+| `internal/skills/templates/api-design.md` | NEU | API Design Skill Template |
+| `internal/skills/templates/database-sql.md` | NEU | SQL/Postgres Skill Template |
+| `internal/skills/templates/database-nosql.md` | NEU | NoSQL Skill Template |
+| `internal/skills/templates/devops-docker.md` | NEU | Docker Skill Template |
+| `internal/skills/templates/devops-k8s.md` | NEU | Kubernetes Skill Template |
+| `internal/skills/templates/devops-ci.md` | NEU | CI/CD Skill Template |
+| `internal/skills/templates/devops-terraform.md` | NEU | Terraform Skill Template |
+| `internal/skills/templates/devops-aws.md` | NEU | AWS Skill Template |
+| `internal/skills/templates/security.md` | NEU | Security Skill Template |
+| `internal/skills/templates/testing.md` | NEU | Testing Skill Template |
+| `internal/skills/templates/performance.md` | NEU | Performance Skill Template |
+| `internal/skills/templates/accessibility.md` | NEU | Accessibility Skill Template |
+| `internal/skills/templates/mobile-rn.md` | NEU | React Native Skill Template |
+| `internal/skills/templates/mobile-flutter.md` | NEU | Flutter Skill Template |
+| `internal/skills/templates/docs-technical.md` | NEU | Technical Writing Skill Template |
+| `internal/backend/app_project.go` | NEU | Projekt-Init, .mtui/ Management |
+| `frontend/src/components/SkillPicker.svelte` | NEU | Skill-Auswahl-Dialog |
+
+### 0.9 Projektspezifische Persistenz
+
+**Bisherige Planung (v2):**
+- Kanban: `~/.multiterminal-kanban.json` (global)
+- Chat: `~/.multiterminal-chat/` (global)
+
+**Neue Planung (v3) — alles in `.mtui/`:**
+- Kanban: `<project>/.mtui/kanban.json`
+- Chat: `<project>/.mtui/chat/conv-*.json`
+- Skills: `<project>/.mtui/skills.json` + `<project>/.mtui/skills.md`
+- Config: `<project>/.mtui/config.json` (projektspezifische Overrides)
+
+Globale Config bleibt in `~/.multiterminal.yaml` (Themes, Shortcuts, Provider-Settings).
 
 ---
 
@@ -521,22 +746,24 @@ func (a *AppService) GetAllQueues() []QueueOverviewItem
 ## Implementierungs-Reihenfolge
 
 ```
-Phase 1: Left Navigation Pane          ████░░░░░░  Basis-Infrastruktur
-Phase 2: Dashboard (erweitert)          ██░░░░░░░░  Schneller Gewinn
-Phase 3: Kanban + Planung + Scheduler   ██████████  Kernfeature (alles integriert)
-Phase 4: Chat View                      ████████░░  Eigene Main-Content-View
-Phase 5: Multi-Agent + Ask-User         ██████░░░░  Aufbauend auf Kanban
-Phase 6: Queue-Übersicht                ██░░░░░░░░  Erweitert bestehend
+Phase 0: .mtui/ + Skills-as-a-Service   ██████░░░░  Fundament (Projekt-Erkennung + 28 Skills)
+Phase 1: Left Navigation Pane           ████░░░░░░  Basis-Infrastruktur
+Phase 2: Dashboard (erweitert)           ██░░░░░░░░  Schneller Gewinn
+Phase 3: Kanban + Planung + Scheduler    ██████████  Kernfeature (alles integriert)
+Phase 4: Chat View                       ████████░░  Eigene Main-Content-View
+Phase 5: Multi-Agent + Ask-User          ██████░░░░  Aufbauend auf Kanban
+Phase 6: Queue-Übersicht                 ██░░░░░░░░  Erweitert bestehend
 ```
 
 **Abhängigkeiten:**
-- Phase 1 → alle anderen (Layout-Basis)
+- Phase 0 → alle anderen (`.mtui/` ist der Datenspeicher für Kanban, Chat, etc.)
+- Phase 1 → Phasen 2-6 (Layout-Basis)
 - Phase 3 → Phase 5 (Kanban-Pläne werden vom Orchestrator ausgeführt)
 - Phase 2, 4, 6 sind untereinander unabhängig
 
 **Empfohlene Umsetzung:**
-1. **Sprint 1:** Phase 1 (LeftNav) + Phase 2 (Dashboard)
-2. **Sprint 2:** Phase 3 (Kanban inkl. Planung + Scheduler)
+1. **Sprint 1:** Phase 0 (.mtui/ + Skills) + Phase 1 (LeftNav)
+2. **Sprint 2:** Phase 2 (Dashboard) + Phase 3 (Kanban inkl. Planung + Scheduler)
 3. **Sprint 3:** Phase 4 (Chat) + Phase 6 (Queue) parallel
 4. **Sprint 4:** Phase 5 (Multi-Agent + Ask-User)
 
@@ -544,9 +771,10 @@ Phase 6: Queue-Übersicht                ██░░░░░░░░  Erweite
 
 ## Neue Dateien (Gesamt)
 
-### Frontend (10 neue Dateien)
+### Frontend (11 neue Dateien)
 ```
 frontend/src/components/LeftNav.svelte
+frontend/src/components/SkillPicker.svelte
 frontend/src/components/KanbanBoard.svelte
 frontend/src/components/KanbanColumn.svelte
 frontend/src/components/KanbanCard.svelte
@@ -560,8 +788,13 @@ frontend/src/stores/kanban.ts
 frontend/src/stores/chat.ts
 ```
 
-### Backend (9 neue Dateien)
+### Backend (12 neue Dateien + 28 Skill-Templates)
 ```
+internal/skills/skills.go                  — Skill-Registry, Embed, Laden
+internal/skills/detect.go                  — Auto-Detection (Projekttyp-Erkennung)
+internal/skills/inject.go                  — CLAUDE.md Injection + .mtui/skills.md
+internal/skills/templates/*.md             — 28 Skill-Template-Dateien (embedded)
+internal/backend/app_project.go            — .mtui/ Management, Projekt-Init
 internal/backend/app_dashboard.go
 internal/backend/app_kanban.go
 internal/backend/app_kanban_plan.go
@@ -570,17 +803,16 @@ internal/backend/app_chat.go
 internal/backend/app_chat_stream.go
 internal/backend/app_orchestrator.go
 internal/backend/app_ask_user.go
-internal/config/kanban.go
-internal/config/chat.go
 ```
 
-### Geänderte Dateien (5)
+### Geänderte Dateien (6)
 ```
-frontend/src/App.svelte                  — Layout-Umbau + View-Routing
+frontend/src/App.svelte                  — Layout-Umbau + View-Routing + Projekt-Init
 frontend/src/components/Sidebar.svelte   — Integration mit LeftNav
-frontend/wailsjs/go/models.ts           — Neue Klassen
+frontend/wailsjs/go/models.ts           — Neue Klassen (Skill, ProjectConfig, etc.)
 internal/config/config.go               — Neue Config-Sections
 internal/backend/app_queue.go           — GetAllQueues()
+.gitignore                               — .mtui/ Empfehlung dokumentieren
 ```
 
 ---
@@ -613,6 +845,7 @@ chat:
 | 2 | **Scheduled Automation** | Im Kanban integriert als "Zeitpläne"-Tab | Phase 3 |
 | 3 | **Multi-Agent Orchestration** | Orchestrator über Kanban-Pläne | Phase 5 |
 | 4 | **Ask-User Bridging** | Screen-Buffer-Analyse → Dialog + Chat + Notification | Phase 5 |
+| 5 | **28 Specialist Skills** | go:embed Templates + Auto-Detection + CLAUDE.md Injection | Phase 0 |
 
 ---
 
@@ -625,5 +858,7 @@ chat:
 5. **Kein externer Web-Zugriff:** Chat nutzt lokale CLI-Tools, kein API-Direktzugriff
 6. **Svelte Reactive-Regel:** Keine Variable-Zuweisungen in `$:` Blöcken
 7. **Concurrency:** Neue Mutexe für Kanban-State, Chat-State, Orchestrator-State
-8. **Persistenz:** Kanban in `~/.multiterminal-kanban.json`, Chat in `~/.multiterminal-chat/` (pro Konversation eine JSON-Datei)
+8. **Persistenz:** Alles projektspezifisch in `<project>/.mtui/` — Kanban, Chat, Skills, Config
 9. **Projekt-Kontext:** Ergibt sich immer aus dem aktiven Tab-Verzeichnis. Nur Dashboard zeigt aggregiert.
+10. **`.mtui/` in `.gitignore`:** Lokaler State (kanban.json, chat/) sollte nicht commited werden. Skills-Injection in CLAUDE.md hingegen schon.
+11. **Skill-Templates:** Embedded via `go:embed`, dadurch immer mit der App ausgeliefert, kein Download nötig.
