@@ -35,7 +35,7 @@ func (a *AppService) IsProjectInitialized(dir string) bool {
 	return skills.IsMTUIProject(dir)
 }
 
-// GetAllSkills returns metadata for all 28 available skills.
+// GetAllSkills returns metadata for all available skills.
 func (a *AppService) GetAllSkills() []SkillInfo {
 	all := skills.AllSkills()
 	result := make([]SkillInfo, len(all))
@@ -59,12 +59,13 @@ func (a *AppService) DetectProjectSkills(dir string) []string {
 }
 
 // GetActiveSkills returns the currently active skill IDs for a project.
+// Automatically migrates legacy (pre-consolidation) skill IDs.
 func (a *AppService) GetActiveSkills(dir string) []string {
 	sel, err := skills.LoadSkillSelection(dir)
 	if err != nil {
 		return nil
 	}
-	return sel.ActiveSkills
+	return skills.MigrateLegacySkills(sel.ActiveSkills)
 }
 
 // InitProject initializes the .mtui directory and injects skills into CLAUDE.md.

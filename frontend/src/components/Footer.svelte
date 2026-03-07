@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
   import { t } from '../stores/i18n';
 
   export let branch: string = '';
@@ -10,6 +11,9 @@
   export let updateAvailable: boolean = false;
   export let latestVersion: string = '';
   export let downloadURL: string = '';
+  export let projectInitialized: boolean = false;
+
+  const dispatch = createEventDispatcher();
 
   $: commitLabel = (() => {
     if (commitAgeMinutes < 0) return '';
@@ -51,6 +55,12 @@
       <span class="footer-item cost">
         <span class="label">total:</span> {totalCost}
       </span>
+    {/if}
+    {#if projectInitialized}
+      <button class="footer-btn skills-btn" title={$t('footer.editSkills')} on:click={() => dispatch('editSkills')}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Skills
+      </button>
     {/if}
   </div>
   <div class="footer-center">
@@ -171,5 +181,29 @@
     color: var(--fg-muted);
     font-family: monospace;
     font-size: 12px;
+  }
+
+  .footer-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--fg-muted);
+    cursor: pointer;
+    padding: 1px 6px;
+    font-size: 11px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s;
+  }
+
+  .footer-btn:hover {
+    color: var(--fg);
+    border-color: var(--border);
+    background: var(--bg-tertiary);
+  }
+
+  .skills-btn {
+    color: var(--accent);
   }
 </style>

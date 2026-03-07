@@ -198,6 +198,9 @@
     <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
     <div class="ctx-menu" style="left:{contextMenuX}px; top:{contextMenuY}px"
          on:click|stopPropagation>
+      <button class="ctx-item" on:click={() => { dispatch('editSkills', { tabId: _ctxTabId }); closeContextMenu(); }}>
+        {$t('tabBar.editSkills')}
+      </button>
       <button class="ctx-item" on:click={() => { detachTab(_ctxTabId); closeContextMenu(); }}>
         {$t('tabBar.detachWindow')}
       </button>

@@ -4,6 +4,7 @@
 
   export let visible = false;
   export let dir = '';
+  export let mode: 'init' | 'edit' = 'init';
 
   const dispatch = createEventDispatcher<{
     done: { skillIds: string[] };
@@ -29,19 +30,22 @@
     data: 'Datenbank',
     devops: 'DevOps',
     quality: 'Qualität',
+    workflow: 'Workflow',
   };
 
-  const categoryOrder = ['frontend', 'backend', 'data', 'devops', 'quality'];
+  const categoryOrder = ['frontend', 'backend', 'data', 'devops', 'quality', 'workflow'];
 
   function initDialog() {
     loading = true;
     Promise.all([
       App.GetAllSkills(),
       dir ? App.DetectProjectSkills(dir) : Promise.resolve([]),
-    ]).then(([skills, detectedIds]) => {
+      mode === 'edit' && dir ? App.GetActiveSkills(dir) : Promise.resolve([]),
+    ]).then(([skills, detectedIds, activeIds]) => {
       allSkills = skills || [];
       detected = new Set(detectedIds || []);
-      selected = new Set(detectedIds || []);
+      // In edit mode: pre-select active skills; in init mode: pre-select detected
+      selected = new Set(mode === 'edit' && activeIds?.length ? activeIds : (detectedIds || []));
       loading = false;
     }).catch(() => { loading = false; });
   }
@@ -93,7 +97,7 @@
   <div class="backdrop" on:click={() => dispatch('close')}>
     <div class="dialog" on:click|stopPropagation>
       <div class="header">
-        <h2>Projekt einrichten</h2>
+        <h2>{mode === 'edit' ? 'Projekt-Skills bearbeiten' : 'Projekt einrichten'}</h2>
         <p class="subtitle">Skills für KI-Agenten auswählen</p>
         {#if dir}
           <p class="dir-label">{dir}</p>
@@ -144,9 +148,13 @@
       {/if}
 
       <div class="actions">
-        <button class="btn-skip" on:click={() => dispatch('skip')}>Überspringen</button>
+        {#if mode === 'init'}
+          <button class="btn-skip" on:click={() => dispatch('skip')}>Überspringen</button>
+        {:else}
+          <button class="btn-skip" on:click={() => dispatch('close')}>Abbrechen</button>
+        {/if}
         <button class="btn-confirm" on:click={handleConfirm}>
-          Übernehmen ({selected.size})
+          {mode === 'edit' ? 'Speichern' : 'Übernehmen'} ({selected.size})
         </button>
       </div>
     </div>

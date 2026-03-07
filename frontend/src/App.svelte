@@ -61,6 +61,8 @@
   let showDashboard = false;
   let showSkillPicker = false;
   let skillPickerDir = '';
+  let skillPickerMode: 'init' | 'edit' = 'init';
+  let projectInitialized = false;
   let showAskUser = false;
   let askUserSessionId = 0;
   let askUserSessionName = '';
@@ -520,8 +522,10 @@
     if (!dir) return;
     try {
       const initialized = await App.IsProjectInitialized(dir);
+      projectInitialized = initialized;
       if (!initialized) {
         skillPickerDir = dir;
+        skillPickerMode = 'init';
         showSkillPicker = true;
       }
     } catch {}
@@ -530,9 +534,17 @@
   async function handleSkillPickerDone(e: CustomEvent<{ skillIds: string[] }>) {
     showSkillPicker = false;
     const dir = skillPickerDir;
+    const mode = skillPickerMode;
     skillPickerDir = '';
     if (dir) {
-      try { await App.InitProject(dir, e.detail.skillIds); } catch (err) { console.error('[InitProject]', err); }
+      try {
+        if (mode === 'edit') {
+          await App.UpdateProjectSkills(dir, e.detail.skillIds);
+        } else {
+          await App.InitProject(dir, e.detail.skillIds);
+          projectInitialized = true;
+        }
+      } catch (err) { console.error('[SkillPicker]', err); }
     }
   }
 
@@ -542,7 +554,16 @@
     skillPickerDir = '';
     if (dir) {
       App.InitProject(dir, []).catch(() => {});
+      projectInitialized = true;
     }
+  }
+
+  function openSkillEditor() {
+    const dir = $activeTab?.dir ?? '';
+    if (!dir) return;
+    skillPickerDir = dir;
+    skillPickerMode = 'edit';
+    showSkillPicker = true;
   }
 
   function handleClosePane(e: CustomEvent<{ paneId: string; sessionId: number }>) {
@@ -779,6 +800,7 @@
     on:addTab={() => (showProjectDialog = true)}
     on:showDashboard={() => workspace.setView('dashboard')}
     on:closeDashboard={() => workspace.setView('terminals')}
+    on:editSkills={openSkillEditor}
   />
   <Toolbar
     paneCount={currentPanes}
@@ -834,7 +856,7 @@
     {/if}
   </div>
 
-  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} />
+  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} {projectInitialized} on:editSkills={openSkillEditor} />
   <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} {codexDetected} {geminiDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
   <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} try { resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex'; codexDetected = await App.IsCodexDetected(); } catch {} try { resolvedGeminiPath = (await App.GetResolvedGeminiPath()) || 'gemini'; geminiDetected = await App.IsGeminiDetected(); } catch {} }} />
@@ -842,7 +864,7 @@
   <SetupDialog visible={showSetupDialog} {claudeDetected} {codexDetected} {geminiDetected} on:finish={handleSetupFinish} on:langChange={handleSetupLangChange} on:close={() => { showSetupDialog = false; }} />
   <CrashDialog visible={showCrashDialog} on:enable={handleCrashEnable} on:dismiss={() => (showCrashDialog = false)} />
   <IssueDialog visible={showIssueDialog} dir={$activeTab?.dir ?? ''} editIssue={editIssueData} on:saved={handleIssueSaved} on:close={() => { showIssueDialog = false; editIssueData = null; }} />
-  <SkillPicker visible={showSkillPicker} dir={skillPickerDir} on:done={handleSkillPickerDone} on:skip={handleSkillPickerSkip} on:close={() => { showSkillPicker = false; skillPickerDir = ''; }} />
+  <SkillPicker visible={showSkillPicker} dir={skillPickerDir} mode={skillPickerMode} on:done={handleSkillPickerDone} on:skip={handleSkillPickerSkip} on:close={() => { showSkillPicker = false; skillPickerDir = ''; }} />
   <BranchConflictDialog
     visible={showBranchConflict}
     currentBranch={branchConflictData?.currentBranch ?? ''}

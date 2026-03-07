@@ -67,37 +67,82 @@ type skillDef struct {
 	DetectFiles []string
 }
 
-// allDefs returns metadata for all 28 skills.
+// LegacySkillMap maps old granular skill IDs to their consolidated replacements.
+// Used for migrating existing projects to the new consolidated skill set.
+var LegacySkillMap = map[string]string{
+	"frontend-react":   "frontend",
+	"frontend-vue":     "frontend",
+	"frontend-svelte":  "frontend",
+	"frontend-angular": "frontend",
+	"frontend-css":     "frontend",
+	"mobile-rn":        "frontend",
+	"mobile-flutter":   "frontend",
+	"backend-go":       "backend",
+	"backend-node":     "backend",
+	"backend-python":   "backend",
+	"backend-rust":     "backend",
+	"backend-java":     "backend",
+	"backend-csharp":   "backend",
+	"backend-ruby":     "backend",
+	"backend-php":      "backend",
+	"database-sql":     "database",
+	"database-nosql":   "database",
+	"devops-docker":    "devops",
+	"devops-k8s":       "devops",
+	"devops-ci":        "devops",
+	"devops-terraform": "devops",
+	"devops-aws":       "devops",
+}
+
+// MigrateLegacySkills converts old skill IDs to consolidated IDs, deduplicating.
+func MigrateLegacySkills(ids []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+	for _, id := range ids {
+		newID := id
+		if mapped, ok := LegacySkillMap[id]; ok {
+			newID = mapped
+		}
+		if !seen[newID] {
+			seen[newID] = true
+			result = append(result, newID)
+		}
+	}
+	return result
+}
+
+// allDefs returns metadata for all 13 consolidated skills.
 func allDefs() []skillDef {
 	return []skillDef{
-		{"frontend-react", "React/Next.js Specialist", "React, Next.js, hooks, SSR/SSG patterns", "frontend", []string{"package.json:react"}},
-		{"frontend-vue", "Vue/Nuxt Specialist", "Vue 3, Nuxt, Composition API", "frontend", []string{"package.json:vue"}},
-		{"frontend-svelte", "Svelte/SvelteKit Specialist", "Svelte 4/5, SvelteKit, stores", "frontend", []string{"package.json:svelte"}},
-		{"frontend-angular", "Angular Specialist", "Angular, RxJS, NgModules", "frontend", []string{"angular.json"}},
-		{"frontend-css", "CSS/Tailwind Specialist", "CSS architecture, Tailwind, responsive design", "frontend", []string{"tailwind.config.*"}},
-		{"backend-go", "Go Backend Specialist", "Go idioms, concurrency, stdlib patterns", "backend", []string{"go.mod"}},
-		{"backend-node", "Node.js/Express Specialist", "Node.js, Express, middleware patterns", "backend", []string{"package.json:express"}},
-		{"backend-python", "Python/FastAPI Specialist", "Python, FastAPI, Django, type hints", "backend", []string{"requirements.txt", "pyproject.toml"}},
-		{"backend-rust", "Rust Specialist", "Rust, ownership, async, crates", "backend", []string{"Cargo.toml"}},
-		{"backend-java", "Java/Spring Specialist", "Java, Spring Boot, Maven/Gradle", "backend", []string{"pom.xml", "build.gradle"}},
-		{"backend-csharp", "C#/.NET Specialist", "C#, .NET, ASP.NET Core, Entity Framework", "backend", []string{"*.csproj", "*.sln"}},
-		{"backend-ruby", "Ruby/Rails Specialist", "Ruby, Rails, ActiveRecord, gems", "backend", []string{"Gemfile"}},
-		{"backend-php", "PHP/Laravel Specialist", "PHP 8, Laravel, Composer", "backend", []string{"composer.json"}},
-		{"api-design", "API Design Specialist", "REST, GraphQL, OpenAPI, versioning", "backend", []string{"openapi.*", "swagger.*"}},
-		{"database-sql", "SQL/Postgres Specialist", "PostgreSQL, SQL optimization, migrations", "data", []string{"*.sql", "prisma/", "migrations/"}},
-		{"database-nosql", "NoSQL/MongoDB Specialist", "MongoDB, Redis, document modeling", "data", []string{"package.json:mongoose"}},
-		{"devops-docker", "Docker/Container Specialist", "Dockerfile optimization, multi-stage builds", "devops", []string{"Dockerfile", "docker-compose.*"}},
-		{"devops-k8s", "Kubernetes Specialist", "K8s manifests, Helm, operators", "devops", []string{"k8s/", "helm/"}},
-		{"devops-ci", "CI/CD Specialist", "GitHub Actions, GitLab CI, pipelines", "devops", []string{".github/workflows/", ".gitlab-ci.yml"}},
-		{"devops-terraform", "Terraform/IaC Specialist", "Terraform, modules, state management", "devops", []string{"*.tf", "terraform/"}},
-		{"devops-aws", "AWS Specialist", "AWS services, CDK, serverless", "devops", []string{"cdk.json", "serverless.yml"}},
-		{"security", "Security Specialist", "OWASP, auth, encryption, vulnerability assessment", "quality", nil},
-		{"testing", "Testing Specialist", "Unit, integration, e2e testing strategies", "quality", []string{"*_test.go", "*.test.ts", "*.spec.ts"}},
-		{"performance", "Performance Specialist", "Profiling, optimization, caching, load testing", "quality", nil},
-		{"accessibility", "Accessibility Specialist", "WCAG, ARIA, screen readers, a11y testing", "quality", []string{"*.html", "*.jsx", "*.tsx"}},
-		{"mobile-rn", "React Native Specialist", "React Native, Expo, mobile patterns", "frontend", []string{"package.json:react-native"}},
-		{"mobile-flutter", "Flutter/Dart Specialist", "Flutter, Dart, widgets, state management", "frontend", []string{"pubspec.yaml"}},
-		{"docs-technical", "Technical Writing Specialist", "Documentation, ADRs, API docs, READMEs", "quality", []string{"docs/"}},
+		// Development
+		{"frontend", "Frontend Specialist", "React, Vue, Svelte, Angular, CSS, Mobile – framework-agnostisch", "frontend",
+			[]string{"package.json:react", "package.json:vue", "package.json:svelte", "angular.json", "pubspec.yaml", "package.json:react-native"}},
+		{"backend", "Backend Specialist", "Go, Node, Python, Rust, Java, C#, Ruby, PHP – sprachübergreifend", "backend",
+			[]string{"go.mod", "package.json:express", "requirements.txt", "pyproject.toml", "Cargo.toml", "pom.xml", "build.gradle", "*.csproj", "Gemfile", "composer.json"}},
+		{"api-design", "API Design Specialist", "REST, GraphQL, OpenAPI, Versionierung", "backend",
+			[]string{"openapi.*", "swagger.*"}},
+		{"database", "Datenbank Specialist", "SQL, PostgreSQL, MongoDB, Redis, Migrationen", "data",
+			[]string{"*.sql", "prisma/", "migrations/", "package.json:mongoose"}},
+
+		// Operations
+		{"devops", "DevOps Specialist", "Docker, Kubernetes, CI/CD, Terraform, AWS", "devops",
+			[]string{"Dockerfile", "docker-compose.*", "k8s/", "helm/", ".github/workflows/", ".gitlab-ci.yml", "*.tf", "cdk.json", "serverless.yml"}},
+
+		// Quality
+		{"testing", "Testing Specialist", "Unit, Integration, E2E Testing Strategien", "quality",
+			[]string{"*_test.go", "*.test.ts", "*.spec.ts"}},
+		{"security", "Security Specialist", "OWASP, Auth, Verschlüsselung, Schwachstellenanalyse", "quality", nil},
+		{"performance", "Performance Specialist", "Profiling, Optimierung, Caching, Lasttest", "quality", nil},
+		{"accessibility", "Accessibility Specialist", "WCAG, ARIA, Screenreader, a11y Testing", "quality",
+			[]string{"*.html", "*.jsx", "*.tsx"}},
+		{"docs-technical", "Technical Writing Specialist", "Dokumentation, ADRs, API Docs, READMEs", "quality",
+			[]string{"docs/"}},
+
+		// Workflow
+		{"git-workflow", "Git Workflow Specialist", "Branching, Conventional Commits, PRs, Code Review", "workflow",
+			[]string{".git/"}},
+		{"refactoring", "Refactoring Specialist", "Code-Restructuring, DRY, SOLID, Extract Method", "workflow", nil},
+		{"code-review", "Code Review Specialist", "Review-Perspektive, PR-Feedback, Code Smells", "workflow", nil},
 	}
 }
 

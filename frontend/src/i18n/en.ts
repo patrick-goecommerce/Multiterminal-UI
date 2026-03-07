@@ -13,6 +13,7 @@ const en = {
   tabBar: {
     rename: 'Rename tab:',
     newTab: 'New tab (Ctrl+T)',
+    editSkills: 'Edit project skills',
     detachWindow: 'Open in new window',
     closeTab: 'Close tab',
   },
@@ -41,6 +42,7 @@ const en = {
     commitHours: 'Last commit: {h}h {m}m',
     conflicts: '\u26A0 {count} conflict(s){op}',
     updateAvailable: 'Update v{version} available',
+    editSkills: 'Edit project skills',
   },
   launch: {
     titleIssue: 'Agent for #{number}',

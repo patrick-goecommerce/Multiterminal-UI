@@ -16,6 +16,7 @@ const de = {
   tabBar: {
     rename: 'Tab umbenennen:',
     newTab: 'Neuer Tab (Ctrl+T)',
+    editSkills: 'Projekt-Skills bearbeiten',
     detachWindow: 'In neuem Fenster öffnen',
     closeTab: 'Tab schließen',
   },
@@ -50,6 +51,7 @@ const de = {
     commitHours: 'Letzter Commit: {h}h {m}m',
     conflicts: '\u26A0 {count} Konflikt(e){op}',
     updateAvailable: 'Update v{version} verfügbar',
+    editSkills: 'Projekt-Skills bearbeiten',
   },
 
   // LaunchDialog
