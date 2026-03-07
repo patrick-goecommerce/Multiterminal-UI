@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
@@ -50,6 +49,7 @@ type AppService struct {
 	codexDetected      bool
 	resolvedGeminiPath string
 	geminiDetected     bool
+	tmuxAPIPort        int // port for the tmux shim HTTP API
 }
 
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
@@ -102,10 +102,19 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	a.batcher = newOutputBatcher()
 	go a.scanLoop(scanCtx)
 	go a.batchLoop(scanCtx)
+	go a.scheduleLoop(scanCtx)
 
 	// Start focus listener and register custom protocol for notification clicks
 	a.startFocusListener()
 	registerProtocol()
+
+	// Start tmux shim API server
+	if port, err := a.startTmuxAPI(); err != nil {
+		log.Printf("[tmux-api] failed to start: %v", err)
+	} else {
+		a.tmuxAPIPort = port
+	}
+
 	return nil
 }
 
@@ -181,8 +190,11 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 		argv = []string{a.cfg.DefaultShell}
 	}
 
-	// Inject session ID so Claude Code hook scripts can match events back.
+	// Inject env vars for all sessions
 	var env []string
+	if a.tmuxAPIPort > 0 {
+		env = append(env, fmt.Sprintf("MTUI_PORT=%d", a.tmuxAPIPort))
+	}
 	if mode == "claude" || mode == "claude-yolo" {
 		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
 	}
@@ -293,27 +305,4 @@ func (a *AppService) LoadTabs() *config.SessionState {
 	return state
 }
 
-// GetGlobalLastActivityUnix returns the Unix timestamp (seconds) of the most
-// recent PTY output across all active sessions. Returns 0 if no sessions exist
-// or if no output has been received yet.
-func (a *AppService) GetGlobalLastActivityUnix() int64 {
-	a.mu.Lock()
-	sessions := make([]*terminal.Session, 0, len(a.sessions))
-	for _, s := range a.sessions {
-		sessions = append(sessions, s)
-	}
-	a.mu.Unlock()
-
-	var latest time.Time
-	for _, s := range sessions {
-		t := s.GetLastOutputAt()
-		if t.After(latest) {
-			latest = t
-		}
-	}
-	if latest.IsZero() {
-		return 0
-	}
-	return latest.Unix()
-}
 

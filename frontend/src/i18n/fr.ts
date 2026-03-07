@@ -13,6 +13,7 @@ const fr = {
   tabBar: {
     rename: 'Renommer l\'onglet :',
     newTab: 'Nouvel onglet (Ctrl+T)',
+    editSkills: 'Modifier les skills du projet',
     detachWindow: 'Ouvrir dans une nouvelle fenêtre',
     closeTab: 'Fermer l\'onglet',
   },
@@ -41,6 +42,7 @@ const fr = {
     commitHours: 'Dernier commit : {h}h {m}m',
     conflicts: '\u26A0 {count} conflit(s){op}',
     updateAvailable: 'Mise à jour v{version} disponible',
+    editSkills: 'Modifier les skills du projet',
   },
   launch: {
     titleIssue: 'Agent pour #{number}',
@@ -330,6 +332,7 @@ const fr = {
     zoom: 'Ctrl+Z:zoom',
     files: 'Ctrl+B:fichiers',
     issues: 'Ctrl+I:issues',
+    skills: 'Ctrl+⇧+S:skills',
   },
   common: {
     cancel: 'Annuler',

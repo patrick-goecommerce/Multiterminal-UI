@@ -1,0 +1,607 @@
+{
+  "columns": {
+    "backlog": [
+      {
+        "id": "1772908768504527500",
+        "issue_number": 89,
+        "title": "F-040: Multi-Window Support (Tab Drag \u0026 Drop)",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "ui"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 62,
+        "title": "F-039: Error Boundaries im Frontend",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "code-quality"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 60,
+        "title": "F-038: E2E-Tests",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "code-quality"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 59,
+        "title": "F-018: Datei erstellen/löschen/umbenennen im Sidebar",
+        "labels": [
+          "enhancement",
+          "priority: medium",
+          "sidebar",
+          "milestone: v1.19"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 57,
+        "title": "F-017: Tab-Vorschau beim Hover",
+        "labels": [
+          "enhancement",
+          "priority: medium",
+          "ui"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 56,
+        "title": "F-036: Session-Sharing (Remote)",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "integration"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 54,
+        "title": "F-035: Performance-Metriken Dashboard",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "reporting"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 53,
+        "title": "F-030: Docker/Container-Sessions",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "integration"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 51,
+        "title": "F-034: Activity-Timeline",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "reporting"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 50,
+        "title": "F-029: SSH-Sessions",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "integration"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 48,
+        "title": "F-033: Cost-Report Export",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "reporting"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 47,
+        "title": "F-013: Token-Zähler pro Nachricht",
+        "labels": [
+          "enhancement",
+          "priority: medium",
+          "ai-detection"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 46,
+        "title": "F-028: Terminal Bell / Audio-Feedback",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "terminal"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 45,
+        "title": "F-032: Slack/Discord Notification",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "integration"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 44,
+        "title": "F-027: Drag \u0026 Drop zwischen Panes und Tabs",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "terminal"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 43,
+        "title": "F-031: Localhost Auto-Open",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "integration"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 42,
+        "title": "F-026: Shell-Auswahl beim Pane-Start",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "terminal"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 41,
+        "title": "F-025: Pane-Synchronisation",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "terminal"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 40,
+        "title": "F-024: Session-Aufzeichnung (asciinema-Style)",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "terminal"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 39,
+        "title": "F-023: Tag-Management",
+        "labels": [
+          "enhancement",
+          "priority: low",
+          "git-integration"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 38,
+        "title": "F-010: Session-Export (Terminal-Output)",
+        "labels": [
+          "enhancement",
+          "priority: high",
+          "workflow",
+          "milestone: v1.18"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 36,
+        "title": "F-009: Cost-Schwellenwert-Warnung",
+        "labels": [
+          "enhancement",
+          "priority: high",
+          "workflow",
+          "milestone: v1.18"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 35,
+        "title": "F-021: Stash-Verwaltung",
+        "labels": [
+          "enhancement",
+          "priority: medium",
+          "git-integration"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 34,
+        "title": "F-008: Pane Broadcast (Send to All)",
+        "labels": [
+          "enhancement",
+          "priority: high",
+          "workflow",
+          "milestone: v1.18"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 33,
+        "title": "F-007: Workspace Layouts speichern/laden",
+        "labels": [
+          "enhancement",
+          "priority: high",
+          "workflow",
+          "milestone: v1.18"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 32,
+        "title": "F-006: PR-Erstellung und -Verwaltung",
+        "labels": [
+          "enhancement",
+          "priority: high",
+          "workflow",
+          "milestone: v1.18"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 30,
+        "title": "F-012: Custom Activity Patterns",
+        "labels": [
+          "enhancement",
+          "priority: medium",
+          "ai-detection",
+          "milestone: v1.19"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 29,
+        "title": "F-004: Scrollback-Größe konfigurierbar",
+        "labels": [
+          "enhancement",
+          "priority: high",
+          "terminal",
+          "milestone: v1.17"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 28,
+        "title": "F-011: Erweiterte AI-Tool-Erkennung",
+        "labels": [
+          "enhancement",
+          "priority: medium",
+          "ai-detection",
+          "milestone: v1.19"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 27,
+        "title": "F-003: Font-Größe anpassen",
+        "labels": [
+          "enhancement",
+          "priority: high",
+          "terminal",
+          "milestone: v1.17"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 25,
+        "title": "F-001: Resize-Handles zwischen Panes",
+        "labels": [
+          "enhancement",
+          "priority: high",
+          "terminal",
+          "milestone: v1.17"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      }
+    ],
+    "done": [
+      {
+        "id": "1772908768504527500",
+        "issue_number": 96,
+        "title": "Auto Session Start beim starten von mtui",
+        "labels": [],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      },
+      {
+        "id": "1772908768504527500",
+        "issue_number": 94,
+        "title": "feat: integrated browser pane for localhost previews",
+        "labels": [],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      }
+    ],
+    "in_progress": [
+      {
+        "id": "1772908768504527500",
+        "issue_number": 91,
+        "title": "Bei issues kann der Status nicht manuell geclosed werden.",
+        "labels": [],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      }
+    ],
+    "planned": [
+      {
+        "id": "1772908768504527500",
+        "issue_number": 97,
+        "title": "feat: Multi-Agent Orchestration — Plan, Review \u0026 Test im Hintergrund",
+        "labels": [
+          "enhancement"
+        ],
+        "dir": "D:\\repos\\Multiterminal",
+        "session_id": 0,
+        "priority": 0,
+        "dependencies": null,
+        "plan_id": "",
+        "schedule_id": "",
+        "created_at": "2026-03-07T19:39:28+01:00"
+      }
+    ],
+    "review": []
+  },
+  "plans": [],
+  "schedules": []
+}

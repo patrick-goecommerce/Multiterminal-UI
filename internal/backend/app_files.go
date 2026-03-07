@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // FileEntry represents a file or directory in the sidebar.
@@ -102,12 +103,14 @@ const maxPreviewSize = 1 << 20
 
 // FileContent holds the result of reading a file for preview.
 type FileContent struct {
-	Path    string `json:"path"`
-	Name    string `json:"name"`
-	Content string `json:"content"`
-	Size    int64  `json:"size"`
-	Error   string `json:"error"`
-	Binary  bool   `json:"binary"`
+	Path       string `json:"path"`
+	Name       string `json:"name"`
+	Content    string `json:"content"`
+	Size       int64  `json:"size"`
+	Error      string `json:"error"`
+	Binary     bool   `json:"binary"`
+	CreatedAt  string `json:"created_at"`
+	ModifiedAt string `json:"modified_at"`
 }
 
 // ReadFile reads a file and returns its content for preview.
@@ -148,11 +151,29 @@ func (a *AppService) ReadFile(path string) FileContent {
 	}
 
 	return FileContent{
-		Path:    path,
-		Name:    info.Name(),
-		Content: string(data),
-		Size:    size,
+		Path:       path,
+		Name:       info.Name(),
+		Content:    string(data),
+		Size:       size,
+		CreatedAt:  fileCreationTime(info).Format(time.RFC3339),
+		ModifiedAt: info.ModTime().Format(time.RFC3339),
 	}
+}
+
+// OpenDirectory opens the parent directory of the given path in the OS file manager.
+func (a *AppService) OpenDirectory(path string) string {
+	dir := filepath.Dir(path)
+	var cmd *exec.Cmd
+	switch {
+	case isWindows():
+		cmd = exec.Command("explorer", dir)
+	default:
+		cmd = exec.Command("xdg-open", dir)
+	}
+	if err := cmd.Start(); err != nil {
+		return err.Error()
+	}
+	return ""
 }
 
 // OpenFileInEditor opens the file in the system default editor.

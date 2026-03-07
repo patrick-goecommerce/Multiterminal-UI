@@ -8,6 +8,7 @@ package terminal
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ type Session struct {
 	Screen *Screen       // VT100 virtual screen buffer
 	Status SessionStatus // current lifecycle status
 	Title  string        // derived from OSC or user-set
+	Dir    string        // working directory the session was started in
 
 	p   gopty.Pty  // cross-platform PTY (Unix PTY or Windows ConPTY)
 	cmd *gopty.Cmd // the spawned child process
@@ -85,6 +87,8 @@ func (s *Session) Start(argv []string, dir string, env []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	s.Dir = dir
+
 	if len(argv) == 0 {
 		argv = defaultShell()
 	} else if runtime.GOOS == "windows" {
@@ -112,6 +116,23 @@ func (s *Session) Start(argv []string, dir string, env []string) error {
 	}
 	fullEnv = append(fullEnv, "TERM=xterm-256color", "COLORTERM=truecolor")
 	fullEnv = append(fullEnv, env...)
+
+	// Prepend executable directory to PATH so the tmux shim is found first.
+	// On Windows the env var is often "Path" not "PATH", so check case-insensitively.
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		found := false
+		for i, e := range fullEnv {
+			if len(e) > 5 && strings.EqualFold(e[:5], "PATH=") {
+				fullEnv[i] = e[:5] + exeDir + string(os.PathListSeparator) + e[5:]
+				found = true
+				break
+			}
+		}
+		if !found {
+			fullEnv = append(fullEnv, "PATH="+exeDir)
+		}
+	}
 
 	rows := s.Screen.Rows()
 	cols := s.Screen.Cols()

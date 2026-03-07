@@ -29,3 +29,6 @@ FEATURE_IDEAS.md
 
 # IDE
 .claude/
+
+# MTUI project data — chat logs are session-specific
+.mtui/chat/
