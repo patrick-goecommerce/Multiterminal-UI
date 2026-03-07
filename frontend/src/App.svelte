@@ -18,8 +18,6 @@
   import LeftNav from './components/LeftNav.svelte';
   import SkillPicker from './components/SkillPicker.svelte';
   import KanbanBoard from './components/KanbanBoard.svelte';
-  import ChatView from './components/ChatView.svelte';
-  import QueueOverview from './components/QueueOverview.svelte';
   import AskUserDialog from './components/AskUserDialog.svelte';
   import { get } from 'svelte/store';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
@@ -30,8 +28,7 @@
   import { initI18n, setLanguage, t, type Language } from './stores/i18n';
   import type { PaneMode } from './stores/tabs';
   import { buildClaudeArgv, getClaudeName, encodeForPty } from './lib/claude';
-  import { chat as chatStore } from './stores/chat';
-  import { getWindowId, isMainWindow, getInitialTabs } from './lib/window';
+  import { getWindowId, isMainWindow, getInitialTabs, getInitialView } from './lib/window';
   import { createGlobalKeyHandler } from './lib/shortcuts';
   import { sendNotification } from './lib/notifications';
   import { restoreSession, saveSession } from './lib/session';
@@ -49,6 +46,12 @@
   const _isMain = isMainWindow();
   // TODO: use _initialTabs to populate secondary window tabs (pending implementation)
   const _initialTabs = getInitialTabs();
+  const _initialView = getInitialView();
+
+  // If opened with ?view=dashboard, switch to that view on load
+  if (_initialView === 'dashboard') {
+    workspace.setView('dashboard');
+  }
 
   let showLaunchDialog = false;
   let showProjectDialog = false;
@@ -284,20 +287,6 @@
       showAskUser = true;
     });
 
-    // Chat streaming events
-    EventsOn('chat:stream', (event: any) => {
-      const data = event.data || event;
-      chatStore.appendStream(data.conversationId || data.conversation_id, data.delta);
-    });
-    EventsOn('chat:done', (event: any) => {
-      const data = event.data || event;
-      chatStore.completeStream(data.conversationId || data.conversation_id, data.message);
-    });
-    EventsOn('chat:error', (event: any) => {
-      const data = event.data || event;
-      chatStore.streamError(data.conversationId || data.conversation_id);
-    });
-
     // Orchestrator events: reload kanban board when plan steps change
     EventsOn('orchestrator:update', (event: any) => {
       const data = event.data || event;
@@ -306,7 +295,7 @@
       // Reload kanban state when orchestrator changes plan/step status
       const dir = get(activeTab)?.dir || '';
       if (dir) {
-        import('../../wailsjs/go/backend/App').then(({ GetKanbanState }) => {
+        import('../wailsjs/go/backend/App').then(({ GetKanbanState }) => {
           GetKanbanState(dir).then(state => {
             kanban.setState(state);
           }).catch(() => {});
@@ -319,7 +308,7 @@
       const data = event.data || event;
       const dir = data.dir || get(activeTab)?.dir || '';
       if (dir) {
-        import('../../wailsjs/go/backend/App').then(({ GetKanbanState }) => {
+        import('../wailsjs/go/backend/App').then(({ GetKanbanState }) => {
           GetKanbanState(dir).then(state => {
             kanban.setState(state);
           }).catch(() => {});
@@ -816,15 +805,14 @@
     on:newTerminal={() => (showLaunchDialog = true)}
     on:toggleSidebar={() => workspace.toggleSidebar()}
     on:changeDir={handleChangeDir}
-    on:openSettings={() => (showSettingsDialog = true)}
     on:openCommands={() => (showCommandPalette = true)}
   />
 
   <div class="content">
-    <LeftNav {issueCount} queueCount={0} chatUnread={0} />
+    <LeftNav {issueCount} on:openSettings={() => (showSettingsDialog = true)} />
     <Sidebar visible={$workspace.activeView === 'terminals' && $workspace.sidebarView !== null} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={$workspace.sidebarView || 'explorer'} pinned={$config.sidebar_pinned} on:close={() => workspace.closeSidebar()} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
     {#if $workspace.activeView === 'dashboard'}
-      <DashboardView on:navigate={handleDashboardNavigate} />
+      <DashboardView on:navigate={handleDashboardNavigate} on:undock={() => App.OpenDashboardWindow()} />
     {:else if $workspace.activeView === 'terminals'}
       <div class="tab-layers">
         {#each $allTabs as tab (tab.id)}
@@ -855,10 +843,6 @@
       </div>
     {:else if $workspace.activeView === 'kanban'}
       <KanbanBoard dir={$activeTab?.dir ?? ''} />
-    {:else if $workspace.activeView === 'chat'}
-      <ChatView dir={$activeTab?.dir ?? ''} {claudeDetected} {codexDetected} {geminiDetected} />
-    {:else if $workspace.activeView === 'queue'}
-      <QueueOverview dir={$activeTab?.dir ?? ''} />
     {/if}
   </div>
 

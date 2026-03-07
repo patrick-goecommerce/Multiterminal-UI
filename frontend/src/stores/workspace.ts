@@ -4,9 +4,7 @@ import { writable, derived } from 'svelte/store';
 export type NavItem =
   | 'terminals'      // Default: Terminal panes
   | 'dashboard'      // Cross-project overview
-  | 'kanban'         // Kanban board with planning + automation
-  | 'chat'           // Chat view
-  | 'queue';         // Queue overview
+  | 'kanban';        // Kanban board with planning + automation
 
 /** Sidebar views (open as side panel next to terminals) */
 export type SidebarView = 'explorer' | 'source-control' | 'issues';

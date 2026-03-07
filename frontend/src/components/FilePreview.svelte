@@ -46,6 +46,8 @@
   let lines: string[] = [];
   let viewMode: 'view' | 'diff' = 'view';
   let diffContent: string = '';
+  let createdAt: string = '';
+  let modifiedAt: string = '';
 
   $: if (filePath) { loadFile(filePath); loadDiff(filePath); }
 
@@ -58,6 +60,20 @@
     lines = [];
     diffContent = '';
     viewMode = 'view';
+    createdAt = '';
+    modifiedAt = '';
+  }
+
+  function formatDate(iso: string): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  async function openDir() {
+    const result = await App.OpenDirectory(filePath);
+    if (result) console.error('[FilePreview] openDir failed:', result);
   }
 
   async function loadFile(path: string) {
@@ -73,6 +89,8 @@
         binary = true;
       } else {
         content = result.content;
+        createdAt = result.created_at || '';
+        modifiedAt = result.modified_at || '';
         const highlighted = hljs.highlightAuto(content);
         highlightedHtml = highlighted.value;
         lines = content.split('\n');
@@ -133,8 +151,17 @@
         <div class="preview-title">
           <span class="preview-filename">{fileName}</span>
           <span class="preview-path">{filePath}</span>
+          {#if createdAt || modifiedAt}
+            <div class="preview-meta">
+              {#if createdAt}<span title="Erstellt">&#128197; {formatDate(createdAt)}</span>{/if}
+              {#if modifiedAt}<span title="Geändert">&#9998; {formatDate(modifiedAt)}</span>{/if}
+            </div>
+          {/if}
         </div>
         <div class="preview-actions">
+          <button class="preview-btn" on:click={openDir} title="Verzeichnis öffnen">
+            &#128193; Ordner
+          </button>
           <div class="view-toggle">
             <button class="toggle-btn" class:active={viewMode === 'view'} on:click={() => viewMode = 'view'}>{$t('filePreview.file')}</button>
             <button class="toggle-btn" class:active={viewMode === 'diff'} on:click={() => viewMode = 'diff'}>Diff</button>
@@ -212,6 +239,11 @@
   .preview-path {
     font-size: 11px; color: var(--fg-muted);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .preview-meta {
+    display: flex; gap: 12px; font-size: 10px; color: var(--fg-muted);
+    margin-top: 1px;
   }
 
   .preview-actions {

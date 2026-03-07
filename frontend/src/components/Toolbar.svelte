@@ -1,6 +1,5 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { audioMuted } from '../lib/audio';
   import { t } from '../stores/i18n';
 
   const dispatch = createEventDispatcher();
@@ -20,10 +19,6 @@
 
   function changeDir() {
     dispatch('changeDir');
-  }
-
-  function openSettings() {
-    dispatch('openSettings');
   }
 
   function openCommands() {
@@ -70,17 +65,6 @@
     </button>
     <button class="toolbar-btn" on:click={toggleSidebar} title={$t('toolbar.files')}>
       <span class="icon">&#128193;</span> {$t('toolbar.files').replace(/ *\(.*\)/, '')}
-    </button>
-    <button
-      class="toolbar-btn mute-btn"
-      class:muted={$audioMuted}
-      on:click={() => $audioMuted = !$audioMuted}
-      title={$audioMuted ? $t('toolbar.audioOn') : $t('toolbar.audioOff')}
-    >
-      <span class="icon">{$audioMuted ? '🔇' : '🔊'}</span>
-    </button>
-    <button class="toolbar-btn" on:click={openSettings} title={$t('toolbar.settings')}>
-      <span class="icon">&#9881;</span>
     </button>
   </div>
 </div>

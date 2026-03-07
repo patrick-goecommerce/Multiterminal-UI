@@ -55,11 +55,13 @@ export namespace backend {
 	    size: number;
 	    error: string;
 	    binary: boolean;
-	
+	    created_at: string;
+	    modified_at: string;
+
 	    static createFrom(source: any = {}) {
 	        return new FileContent(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
@@ -68,6 +70,8 @@ export namespace backend {
 	        this.size = source["size"];
 	        this.error = source["error"];
 	        this.binary = source["binary"];
+	        this.created_at = source["created_at"];
+	        this.modified_at = source["modified_at"];
 	    }
 	}
 	export class FileEntry {

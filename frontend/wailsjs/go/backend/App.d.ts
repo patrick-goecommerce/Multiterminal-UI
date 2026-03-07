@@ -134,6 +134,10 @@ export function MergeWindowToMain(arg1:string,arg2:string):Promise<void>;
 
 export function LoadTabs():Promise<config.SessionState>;
 
+export function OpenDashboardWindow():Promise<string>;
+
+export function OpenDirectory(arg1:string):Promise<string>;
+
 export function OpenFileInEditor(arg1:string):Promise<string>;
 
 export function OpenLogDir():Promise<void>;

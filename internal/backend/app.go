@@ -49,6 +49,7 @@ type AppService struct {
 	codexDetected      bool
 	resolvedGeminiPath string
 	geminiDetected     bool
+	tmuxAPIPort        int // port for the tmux shim HTTP API
 }
 
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
@@ -106,6 +107,14 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	// Start focus listener and register custom protocol for notification clicks
 	a.startFocusListener()
 	registerProtocol()
+
+	// Start tmux shim API server
+	if port, err := a.startTmuxAPI(); err != nil {
+		log.Printf("[tmux-api] failed to start: %v", err)
+	} else {
+		a.tmuxAPIPort = port
+	}
+
 	return nil
 }
 
@@ -181,8 +190,11 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 		argv = []string{a.cfg.DefaultShell}
 	}
 
-	// Inject session ID so Claude Code hook scripts can match events back.
+	// Inject env vars for all sessions
 	var env []string
+	if a.tmuxAPIPort > 0 {
+		env = append(env, fmt.Sprintf("MTUI_PORT=%d", a.tmuxAPIPort))
+	}
 	if mode == "claude" || mode == "claude-yolo" {
 		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
 	}

@@ -21,3 +21,9 @@ export function getInitialTabs(): string[] {
   const tabs = params.get('tabs');
   return tabs ? tabs.split(',').filter(Boolean) : [];
 }
+
+/** Returns the initial view from URL params (e.g. "dashboard"), or null. */
+export function getInitialView(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('view');
+}

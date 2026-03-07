@@ -9,6 +9,7 @@
 
   const dispatch = createEventDispatcher<{
     navigate: { tabId: string; paneId: string };
+    undock: void;
   }>();
 
   interface ProjectStat {
@@ -136,7 +137,12 @@
         {#if totalCost}<span class="dash-cost">{totalCost}</span>{/if}
       </span>
     </div>
-    <div class="dash-tabs-count">{$allTabs.length === 1 ? $t('dashboard.tabs', { count: $allTabs.length }).split(' | ')[0] : $t('dashboard.tabs', { count: $allTabs.length }).split(' | ')[1]}</div>
+    <div class="dash-right">
+      <span class="dash-tabs-count">{$allTabs.length === 1 ? $t('dashboard.tabs', { count: $allTabs.length }).split(' | ')[0] : $t('dashboard.tabs', { count: $allTabs.length }).split(' | ')[1]}</span>
+      <button class="undock-btn" on:click={() => dispatch('undock')} title="Dashboard in neuem Fenster öffnen">
+        &#10064;
+      </button>
+    </div>
   </header>
 
   <!-- Project overview cards -->
@@ -393,7 +399,17 @@
     font-size: 11px;
   }
 
+  .dash-right {
+    display: flex; align-items: center; gap: 8px;
+  }
   .dash-tabs-count { font-size: 12px; opacity: 0.5; }
+  .undock-btn {
+    background: none; border: 1px solid var(--border, #45475a);
+    border-radius: 4px; color: var(--fg-muted); cursor: pointer;
+    font-size: 14px; padding: 2px 6px; line-height: 1;
+    transition: all 0.15s;
+  }
+  .undock-btn:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ── Project cards ─────────────────────────── */
   .project-cards {

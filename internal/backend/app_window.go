@@ -213,6 +213,29 @@ func (a *AppService) GetOpenWindows() []WindowInfo {
 	return result
 }
 
+// OpenDashboardWindow opens the dashboard in a new window.
+func (a *AppService) OpenDashboardWindow() (string, error) {
+	newID := fmt.Sprintf("win-%d", a.nextDetachID())
+	url := fmt.Sprintf("/?windowId=%s&view=dashboard", newID)
+
+	win := a.app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:  "Multiterminal — Dashboard",
+		Width:  900,
+		Height: 600,
+		URL:    url,
+	})
+
+	a.winMgr.register(newID, win, nil)
+
+	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		a.winMgr.unregister(newID)
+	})
+
+	win.Show()
+	log.Printf("[OpenDashboardWindow] created window %s", newID)
+	return newID, nil
+}
+
 // nextDetachID returns a monotonically increasing ID for new windows.
 func (a *AppService) nextDetachID() int {
 	a.mu.Lock()

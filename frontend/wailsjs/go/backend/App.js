@@ -271,6 +271,14 @@ export function LoadTabs() {
   return $Call.ByID(542856639);
 }
 
+export function OpenDashboardWindow() {
+  return $Call.ByID(4209662349);
+}
+
+export function OpenDirectory(arg1) {
+  return $Call.ByID(3978030314, arg1);
+}
+
 export function OpenFileInEditor(arg1) {
   return $Call.ByID(386585087, arg1);
 }

@@ -1,20 +1,20 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { workspace, type NavItem, type SidebarView } from '../stores/workspace';
+  import { audioMuted } from '../lib/audio';
+  import { t } from '../stores/i18n';
 
   export let issueCount = 0;
-  export let queueCount = 0;
-  export let chatUnread = 0;
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{
+    openSettings: void;
+  }>();
 
   // Main content views (replace pane grid)
   const mainViews: { id: NavItem; label: string; icon: string }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: 'home' },
     { id: 'terminals', label: 'Terminals', icon: 'terminal' },
-    { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { id: 'kanban', label: 'Kanban', icon: 'kanban' },
-    { id: 'chat', label: 'Chat', icon: 'chat' },
-    { id: 'queue', label: 'Queue', icon: 'queue' },
   ];
 
   // Sidebar views (open as side panel)
@@ -34,8 +34,6 @@
 
   function getBadge(id: string): number {
     if (id === 'issues') return issueCount;
-    if (id === 'queue') return queueCount;
-    if (id === 'chat') return chatUnread;
     return 0;
   }
 </script>
@@ -82,6 +80,30 @@
   </div>
 
   <div class="nav-spacer"></div>
+
+  <div class="nav-section bottom-actions">
+    <button
+      class="nav-item"
+      class:muted={$audioMuted}
+      title={$audioMuted ? $t('toolbar.audioOn') : $t('toolbar.audioOff')}
+      on:click={() => $audioMuted = !$audioMuted}
+    >
+      <span class="icon icon-audio">{$audioMuted ? '🔇' : '🔊'}</span>
+      {#if !$workspace.leftNavCollapsed}
+        <span class="label">{$audioMuted ? 'Ton an' : 'Ton aus'}</span>
+      {/if}
+    </button>
+    <button
+      class="nav-item"
+      title={$t('toolbar.settings')}
+      on:click={() => dispatch('openSettings')}
+    >
+      <span class="icon icon-settings"></span>
+      {#if !$workspace.leftNavCollapsed}
+        <span class="label">Einstellungen</span>
+      {/if}
+    </button>
+  </div>
 
   <button
     class="nav-item collapse-toggle"
@@ -169,15 +191,22 @@
   }
   /* SVG icons as pseudo-content using unicode/emoji placeholders */
   .icon-terminal::before { content: '>_'; font-family: monospace; font-size: 0.7rem; font-weight: 700; }
-  .icon-dashboard::before { content: '\25A3'; }
+  .icon-home::before { content: '\2302'; }
   .icon-kanban::before { content: '\2630'; }
-  .icon-chat::before { content: '\1F4AC'; font-size: 0.75rem; }
-  .icon-queue::before { content: '\2261'; font-size: 1.1rem; }
   .icon-explorer::before { content: '\1F4C1'; font-size: 0.75rem; }
   .icon-git::before { content: '\2387'; }
   .icon-issues::before { content: '\25CB'; }
+  .icon-settings::before { content: '\2699'; }
+  .icon-audio { font-size: 0.75rem; }
   .icon-collapse::before { content: '\276E'; font-size: 0.7rem; }
   .icon-collapse.rotated::before { content: '\276F'; }
+
+  .bottom-actions {
+    border-top: 1px solid var(--border, #45475a);
+    padding-top: 0.4rem;
+    margin-top: 0.25rem;
+  }
+  .nav-item.muted { opacity: 0.5; }
 
   .label {
     flex: 1;
