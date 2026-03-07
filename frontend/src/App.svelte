@@ -18,6 +18,8 @@
   import LeftNav from './components/LeftNav.svelte';
   import SkillPicker from './components/SkillPicker.svelte';
   import KanbanBoard from './components/KanbanBoard.svelte';
+  import ChatView from './components/ChatView.svelte';
+  import QueueOverview from './components/QueueOverview.svelte';
   import { get } from 'svelte/store';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { workspace } from './stores/workspace';
@@ -755,17 +757,9 @@
     {:else if $workspace.activeView === 'kanban'}
       <KanbanBoard dir={$activeTab?.dir ?? ''} />
     {:else if $workspace.activeView === 'chat'}
-      <div class="placeholder-view">
-        <div class="placeholder-icon">&#128172;</div>
-        <h3>Chat</h3>
-        <p>Wird in Sprint 3 implementiert</p>
-      </div>
+      <ChatView dir={$activeTab?.dir ?? ''} {claudeDetected} {codexDetected} {geminiDetected} />
     {:else if $workspace.activeView === 'queue'}
-      <div class="placeholder-view">
-        <div class="placeholder-icon">&#8801;</div>
-        <h3>Queue-Übersicht</h3>
-        <p>Wird in Sprint 3 implementiert</p>
-      </div>
+      <QueueOverview dir={$activeTab?.dir ?? ''} />
     {/if}
   </div>
 

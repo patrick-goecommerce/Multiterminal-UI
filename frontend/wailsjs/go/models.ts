@@ -575,6 +575,91 @@ export namespace backend {
 		}
 	}
 
+	// --- Sprint 3: Chat & Queue ---
+
+	export class ChatMessage {
+	    id: string;
+	    role: string;
+	    content: string;
+	    timestamp: string;
+	    cost: string;
+	    tokens: number;
+
+	    static createFrom(source: any = {}) {
+	        return new ChatMessage(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.role = source["role"];
+	        this.content = source["content"];
+	        this.timestamp = source["timestamp"];
+	        this.cost = source["cost"];
+	        this.tokens = source["tokens"];
+	    }
+	}
+	export class Conversation {
+	    id: string;
+	    title: string;
+	    provider: string;
+	    model: string;
+	    scope: string;
+	    created_at: string;
+	    updated_at: string;
+	    messages: ChatMessage[];
+
+	    static createFrom(source: any = {}) {
+	        return new Conversation(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.provider = source["provider"];
+	        this.model = source["model"];
+	        this.scope = source["scope"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	        this.messages = this.convertValues(source["messages"], ChatMessage);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) { return a; }
+		    if (a.slice && a.map) { return (a as any[]).map(elem => this.convertValues(elem, classs)); }
+		    if ("object" === typeof a) { if (asMap) { for (const key of Object.keys(a)) { a[key] = new classs(a[key]); } return a; } return new classs(a); }
+		    return a;
+		}
+	}
+	export class QueueOverviewItem {
+	    session_id: number;
+	    session_name: string;
+	    dir: string;
+	    activity: string;
+	    items: QueueItem[];
+
+	    static createFrom(source: any = {}) {
+	        return new QueueOverviewItem(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.session_id = source["session_id"];
+	        this.session_name = source["session_name"];
+	        this.dir = source["dir"];
+	        this.activity = source["activity"];
+	        this.items = this.convertValues(source["items"], QueueItem);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) { return a; }
+		    if (a.slice && a.map) { return (a as any[]).map(elem => this.convertValues(elem, classs)); }
+		    if ("object" === typeof a) { if (asMap) { for (const key of Object.keys(a)) { a[key] = new classs(a[key]); } return a; } return new classs(a); }
+		    return a;
+		}
+	}
+
 }
 
 export namespace config {

@@ -462,3 +462,33 @@ export function DeleteSchedule(arg1, arg2) {
 export function ToggleSchedule(arg1, arg2) {
   return $Call.ByID(4210589378, arg1, arg2);
 }
+
+// --- Sprint 3: Chat & Queue ---
+
+export function CreateConversation(arg1, arg2, arg3) {
+  return $Call.ByID(2019553056, arg1, arg2, arg3);
+}
+
+export function GetConversations(arg1) {
+  return $Call.ByID(1958099275, arg1);
+}
+
+export function GetConversation(arg1, arg2) {
+  return $Call.ByID(2185272346, arg1, arg2);
+}
+
+export function DeleteConversation(arg1, arg2) {
+  return $Call.ByID(1744474467, arg1, arg2);
+}
+
+export function AddChatMessage(arg1, arg2, arg3) {
+  return $Call.ByID(4010796075, arg1, arg2, arg3);
+}
+
+export function RenameConversation(arg1, arg2, arg3) {
+  return $Call.ByID(2597828302, arg1, arg2, arg3);
+}
+
+export function GetAllQueues() {
+  return $Call.ByID(841983868);
+}
