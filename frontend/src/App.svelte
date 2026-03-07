@@ -63,6 +63,7 @@
   let skillPickerDir = '';
   let skillPickerMode: 'init' | 'edit' = 'init';
   let projectInitialized = false;
+  let activeSkillCount = 0;
   let showAskUser = false;
   let askUserSessionId = 0;
   let askUserSessionName = '';
@@ -523,7 +524,10 @@
     try {
       const initialized = await App.IsProjectInitialized(dir);
       projectInitialized = initialized;
-      if (!initialized) {
+      if (initialized) {
+        App.GetActiveSkills(dir).then(ids => { activeSkillCount = ids?.length ?? 0; }).catch(() => {});
+      } else {
+        activeSkillCount = 0;
         skillPickerDir = dir;
         skillPickerMode = 'init';
         showSkillPicker = true;
@@ -544,6 +548,7 @@
           await App.InitProject(dir, e.detail.skillIds);
           projectInitialized = true;
         }
+        activeSkillCount = e.detail.skillIds.length;
       } catch (err) { console.error('[SkillPicker]', err); }
     }
   }
@@ -856,7 +861,7 @@
     {/if}
   </div>
 
-  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} {projectInitialized} on:editSkills={openSkillEditor} />
+  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} {projectInitialized} skillCount={activeSkillCount} on:editSkills={openSkillEditor} />
   <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} {codexDetected} {geminiDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
   <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} try { resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex'; codexDetected = await App.IsCodexDetected(); } catch {} try { resolvedGeminiPath = (await App.GetResolvedGeminiPath()) || 'gemini'; geminiDetected = await App.IsGeminiDetected(); } catch {} }} />
