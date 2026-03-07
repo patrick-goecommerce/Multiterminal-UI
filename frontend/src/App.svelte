@@ -20,6 +20,7 @@
   import KanbanBoard from './components/KanbanBoard.svelte';
   import ChatView from './components/ChatView.svelte';
   import QueueOverview from './components/QueueOverview.svelte';
+  import AskUserDialog from './components/AskUserDialog.svelte';
   import { get } from 'svelte/store';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { workspace } from './stores/workspace';
@@ -28,6 +29,7 @@
   import { initI18n, setLanguage, t, type Language } from './stores/i18n';
   import type { PaneMode } from './stores/tabs';
   import { buildClaudeArgv, getClaudeName, encodeForPty } from './lib/claude';
+  import { chat as chatStore } from './stores/chat';
   import { getWindowId, isMainWindow, getInitialTabs } from './lib/window';
   import { createGlobalKeyHandler } from './lib/shortcuts';
   import { sendNotification } from './lib/notifications';
@@ -58,6 +60,11 @@
   let showDashboard = false;
   let showSkillPicker = false;
   let skillPickerDir = '';
+  let showAskUser = false;
+  let askUserSessionId = 0;
+  let askUserSessionName = '';
+  let askUserQuestion = '';
+  let askUserOptions: string[] = [];
   let previewFilePath = '';
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
   let launchIssueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
@@ -260,6 +267,30 @@
       const msg: string = event.data.message;
       console.error('[terminal:error]', id, msg);
       alert($t('app.terminalError', { id: String(id), msg }));
+    });
+
+    // Ask-User Bridging: show dialog when agent needs input
+    EventsOn('ask_user:question', (event: any) => {
+      const q = event.data || event;
+      askUserSessionId = q.session_id || q.sessionId || 0;
+      askUserSessionName = q.session_name || q.sessionName || '';
+      askUserQuestion = q.question || '';
+      askUserOptions = q.options || [];
+      showAskUser = true;
+    });
+
+    // Chat streaming events
+    EventsOn('chat:stream', (event: any) => {
+      const data = event.data || event;
+      chatStore.appendStream(data.conversationId || data.conversation_id, data.delta);
+    });
+    EventsOn('chat:done', (event: any) => {
+      const data = event.data || event;
+      chatStore.completeStream(data.conversationId || data.conversation_id, data.message);
+    });
+    EventsOn('chat:error', (event: any) => {
+      const data = event.data || event;
+      chatStore.streamError(data.conversationId || data.conversation_id);
     });
 
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -633,6 +664,16 @@
     issueCount = await fetchIssueCount(tab?.dir || '');
   }
 
+  function handleAskUserAnswer(e: CustomEvent<{ sessionId: number; answer: string }>) {
+    showAskUser = false;
+    App.AnswerAskUser(e.detail.sessionId, e.detail.answer).catch(err => console.error('[AnswerAskUser]', err));
+  }
+
+  function handleAskUserDismiss(e: CustomEvent<{ sessionId: number }>) {
+    showAskUser = false;
+    App.DismissAskUser(e.detail.sessionId).catch(() => {});
+  }
+
   function handleCreateIssue() {
     editIssueData = null;
     showIssueDialog = true;
@@ -781,6 +822,15 @@
     dirtyWorkingTree={branchConflictData?.dirtyWorkingTree ?? false}
     on:choose={handleBranchConflictChoice}
     on:close={() => { showBranchConflict = false; pendingLaunch = null; branchConflictData = null; }}
+  />
+  <AskUserDialog
+    visible={showAskUser}
+    sessionId={askUserSessionId}
+    sessionName={askUserSessionName}
+    question={askUserQuestion}
+    options={askUserOptions}
+    on:answer={handleAskUserAnswer}
+    on:dismiss={handleAskUserDismiss}
   />
 </div>
 

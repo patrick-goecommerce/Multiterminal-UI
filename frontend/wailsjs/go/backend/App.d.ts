@@ -239,3 +239,15 @@ export function AddChatMessage(arg1:string,arg2:string,arg3:string):Promise<void
 export function RenameConversation(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function GetAllQueues():Promise<Array<backend.QueueOverviewItem>>;
+
+// --- Sprint 4: Orchestrator & Ask-User ---
+
+export function ExecutePlan(arg1:string,arg2:string):Promise<void>;
+
+export function StopPlan(arg1:string,arg2:string):Promise<void>;
+
+export function CheckAskUser(arg1:number):Promise<backend.AskUserQuestion>;
+
+export function AnswerAskUser(arg1:number,arg2:string):Promise<void>;
+
+export function DismissAskUser(arg1:number):Promise<void>;

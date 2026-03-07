@@ -575,6 +575,29 @@ export namespace backend {
 		}
 	}
 
+	// --- Sprint 4: Orchestrator & Ask-User ---
+
+	export class AskUserQuestion {
+	    session_id: number;
+	    session_name: string;
+	    question: string;
+	    options: string[];
+	    timestamp: string;
+
+	    static createFrom(source: any = {}) {
+	        return new AskUserQuestion(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.session_id = source["session_id"];
+	        this.session_name = source["session_name"];
+	        this.question = source["question"];
+	        this.options = source["options"];
+	        this.timestamp = source["timestamp"];
+	    }
+	}
+
 	// --- Sprint 3: Chat & Queue ---
 
 	export class ChatMessage {

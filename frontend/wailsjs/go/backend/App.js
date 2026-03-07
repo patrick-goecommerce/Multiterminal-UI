@@ -492,3 +492,25 @@ export function RenameConversation(arg1, arg2, arg3) {
 export function GetAllQueues() {
   return $Call.ByID(841983868);
 }
+
+// --- Sprint 4: Orchestrator & Ask-User ---
+
+export function ExecutePlan(arg1, arg2) {
+  return $Call.ByID(1612785377, arg1, arg2);
+}
+
+export function StopPlan(arg1, arg2) {
+  return $Call.ByID(3092214552, arg1, arg2);
+}
+
+export function CheckAskUser(arg1) {
+  return $Call.ByID(679366657, arg1);
+}
+
+export function AnswerAskUser(arg1, arg2) {
+  return $Call.ByID(350168537, arg1, arg2);
+}
+
+export function DismissAskUser(arg1) {
+  return $Call.ByID(3219400565, arg1);
+}
