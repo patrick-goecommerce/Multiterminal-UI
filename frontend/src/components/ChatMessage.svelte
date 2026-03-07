@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ChatMessage } from '../stores/chat';
+  import { renderMarkdown } from '../lib/markdown';
 
   export let message: ChatMessage;
   export let isStreaming = false;
@@ -7,6 +8,7 @@
 
   $: displayContent = isStreaming ? streamContent : message.content;
   $: isUser = message.role === 'user';
+  $: renderedHtml = !isUser && !isStreaming ? renderMarkdown(displayContent) : '';
   $: timeStr = (() => {
     try {
       return new Date(message.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -32,8 +34,10 @@
   <div class="msg-content">
     {#if isStreaming}
       <pre class="msg-text">{streamContent}<span class="cursor-blink">|</span></pre>
-    {:else}
+    {:else if isUser}
       <pre class="msg-text">{displayContent}</pre>
+    {:else}
+      <div class="msg-rendered">{@html renderedHtml}</div>
     {/if}
   </div>
 </div>
@@ -86,6 +90,76 @@
     word-wrap: break-word;
     font-family: inherit;
     margin: 0;
+  }
+
+  /* Rendered markdown for assistant messages */
+  .msg-rendered {
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: var(--fg, #cdd6f4);
+  }
+  .msg-rendered :global(.md-p) {
+    margin: 0 0 0.4em 0;
+  }
+  .msg-rendered :global(.md-p:last-child) {
+    margin-bottom: 0;
+  }
+  .msg-rendered :global(br) {
+    display: block;
+    content: '';
+    margin-top: 0.2em;
+  }
+  .msg-rendered :global(.md-h1),
+  .msg-rendered :global(.md-h2),
+  .msg-rendered :global(.md-h3) {
+    margin: 0.6em 0 0.3em 0;
+    font-weight: 700;
+    color: var(--fg, #cdd6f4);
+  }
+  .msg-rendered :global(.md-h1) { font-size: 1.1rem; }
+  .msg-rendered :global(.md-h2) { font-size: 1rem; }
+  .msg-rendered :global(.md-h3) { font-size: 0.9rem; }
+  .msg-rendered :global(.md-inline-code) {
+    background: var(--bg-tertiary, #313244);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 0.78rem;
+  }
+  .msg-rendered :global(.md-code-block) {
+    background: var(--bg, #11111b);
+    border: 1px solid var(--border, #45475a);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 0.5em 0;
+    overflow-x: auto;
+  }
+  .msg-rendered :global(.md-code-block code) {
+    font-family: monospace;
+    font-size: 0.78rem;
+    line-height: 1.45;
+  }
+  .msg-rendered :global(.md-list) {
+    margin: 0.3em 0;
+    padding-left: 1.4em;
+  }
+  .msg-rendered :global(.md-list li) {
+    margin: 0.15em 0;
+  }
+  .msg-rendered :global(.md-link) {
+    color: var(--accent, #39ff14);
+    text-decoration: none;
+  }
+  .msg-rendered :global(.md-link:hover) {
+    text-decoration: underline;
+  }
+  .msg-rendered :global(strong) {
+    font-weight: 700;
+    color: var(--fg, #cdd6f4);
+  }
+  .msg-rendered :global(em) {
+    font-style: italic;
+    opacity: 0.9;
   }
 
   .cursor-blink {

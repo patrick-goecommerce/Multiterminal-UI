@@ -24,6 +24,7 @@
   import { get } from 'svelte/store';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { workspace } from './stores/workspace';
+  import { kanban } from './stores/kanban';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
   import { initI18n, setLanguage, t, type Language } from './stores/i18n';
@@ -291,6 +292,35 @@
     EventsOn('chat:error', (event: any) => {
       const data = event.data || event;
       chatStore.streamError(data.conversationId || data.conversation_id);
+    });
+
+    // Orchestrator events: reload kanban board when plan steps change
+    EventsOn('orchestrator:update', (event: any) => {
+      const data = event.data || event;
+      const eventType = data.type || '';
+      console.log('[orchestrator]', eventType, 'plan:', data.planId || data.plan_id);
+      // Reload kanban state when orchestrator changes plan/step status
+      const dir = get(activeTab)?.dir || '';
+      if (dir) {
+        import('../../wailsjs/go/backend/App').then(({ GetKanbanState }) => {
+          GetKanbanState(dir).then(state => {
+            kanban.setState(state);
+          }).catch(() => {});
+        });
+      }
+    });
+
+    // Schedule runner events: reload kanban schedules when a task runs
+    EventsOn('kanban:schedules_updated', (event: any) => {
+      const data = event.data || event;
+      const dir = data.dir || get(activeTab)?.dir || '';
+      if (dir) {
+        import('../../wailsjs/go/backend/App').then(({ GetKanbanState }) => {
+          GetKanbanState(dir).then(state => {
+            kanban.setState(state);
+          }).catch(() => {});
+        });
+      }
     });
 
     let saveTimer: ReturnType<typeof setTimeout> | null = null;

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import * as App from '../../wailsjs/go/backend/App';
   import KanbanColumn from './KanbanColumn.svelte';
-  import { kanban, COLUMN_IDS, type ColumnID, type KanbanCard } from '../stores/kanban';
+  import { kanban, COLUMN_IDS, activePlans, type ColumnID, type KanbanCard } from '../stores/kanban';
 
   export let dir = '';
 
@@ -136,6 +136,23 @@
       >Zeitpläne</button>
     </div>
   </div>
+
+  {#if $activePlans.length > 0}
+    <div class="plans-bar">
+      {#each $activePlans as plan (plan.id)}
+        <div class="plan-badge" class:running={plan.status === 'running'} class:draft={plan.status === 'draft'}>
+          <span class="plan-status-dot"></span>
+          <span class="plan-label">
+            {plan.status === 'running' ? 'Ausführung' : plan.status === 'draft' ? 'Entwurf' : 'Genehmigt'}:
+            {plan.steps.length} Schritte
+          </span>
+          <span class="plan-progress">
+            ({plan.steps.filter(s => s.status === 'done').length}/{plan.steps.length})
+          </span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   {#if showAddCard}
     <div class="add-card-row">
@@ -383,4 +400,51 @@
     background: rgba(57, 255, 20, 0.15);
     color: var(--accent, #39ff14);
   }
+
+  /* Plans bar */
+  .plans-bar {
+    display: flex;
+    gap: 8px;
+    padding: 6px 16px;
+    background: var(--bg-secondary, #1e1e2e);
+    border-bottom: 1px solid var(--border, #45475a);
+    flex-wrap: wrap;
+  }
+  .plan-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    background: rgba(137, 180, 250, 0.1);
+    border: 1px solid rgba(137, 180, 250, 0.2);
+    color: #89b4fa;
+  }
+  .plan-badge.running {
+    background: rgba(57, 255, 20, 0.08);
+    border-color: rgba(57, 255, 20, 0.25);
+    color: var(--accent, #39ff14);
+  }
+  .plan-badge.draft {
+    background: rgba(166, 173, 200, 0.08);
+    border-color: rgba(166, 173, 200, 0.2);
+    color: var(--fg-muted, #a6adc8);
+  }
+  .plan-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+  .plan-badge.running .plan-status-dot {
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .plan-label { font-weight: 500; }
+  .plan-progress { opacity: 0.7; }
 </style>
