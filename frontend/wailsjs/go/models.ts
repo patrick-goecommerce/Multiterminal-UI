@@ -338,11 +338,11 @@ export namespace backend {
 	    issue: number;
 	    category: string;
 	    name: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new WorktreeInfo(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
@@ -350,6 +350,38 @@ export namespace backend {
 	        this.issue = source["issue"];
 	        this.category = source["category"];
 	        this.name = source["name"];
+	    }
+	}
+	export class SkillInfo {
+	    id: string;
+	    name: string;
+	    description: string;
+	    category: string;
+
+	    static createFrom(source: any = {}) {
+	        return new SkillInfo(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.category = source["category"];
+	    }
+	}
+	export class ProjectInitResult {
+	    success: boolean;
+	    error: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ProjectInitResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.error = source["error"];
 	    }
 	}
 

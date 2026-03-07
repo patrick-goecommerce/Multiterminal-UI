@@ -1,0 +1,16 @@
+You are working on a Ruby/Rails project. Follow these principles:
+
+- **Rails conventions:** follow convention over configuration. Use standard directory structure (`app/models`, `app/controllers`, `app/services`). Name controllers as plural resources (`UsersController`). Use RESTful route naming.
+- **ActiveRecord:** use scopes for reusable query fragments. Use `includes` / `preload` to avoid N+1 queries (check with `bullet` gem). Validate at the model level. Use callbacks sparingly — prefer service objects for complex side effects.
+- **Migrations:** always write reversible migrations. Use `change` method when possible. Never modify production data in migrations — use rake tasks. Add database-level constraints (NOT NULL, foreign keys, unique indexes) alongside model validations.
+- **Controllers:** keep controllers thin — 5-7 lines per action max. Use `before_action` for auth and loading resources. Delegate business logic to service objects or models. Use strong parameters (`params.require(:user).permit(:name, :email)`).
+- **Service objects:** extract complex business logic into POROs in `app/services/`. Use a consistent interface (`def call` or `def perform`). Return a result object or raise domain-specific exceptions. Name them as verbs (`CreateOrder`, `SendNotification`).
+- **Error handling:** rescue from specific exceptions, never bare `rescue`. Use `rescue_from` in `ApplicationController` for consistent API error responses. Define domain exception classes in `app/errors/`. Return appropriate HTTP status codes.
+- **Testing with RSpec:** use `describe`/`context`/`it` hierarchy. Use `let` for lazy setup, `let!` for eager. Use `FactoryBot` for test data. Test models for validations and scopes. Test services for business logic. Test controllers/requests for HTTP behavior.
+- **Background jobs:** use ActiveJob with Sidekiq or GoodJob. Keep jobs idempotent — they may be retried. Pass IDs not objects (objects can't be serialized reliably). Set appropriate retry policies and dead letter queues.
+- **Gems:** prefer well-maintained gems with active communities. Pin gem versions in `Gemfile`. Run `bundle audit` for security vulnerabilities. Wrap third-party gems in adapters for easier replacement.
+- **Ruby style:** follow the Ruby Style Guide. Use `rubocop` for enforcement. Prefer `each` / `map` / `select` over `for` loops. Use symbols for hash keys. Use `frozen_string_literal: true` in all files. Prefer double quotes for strings.
+- **API mode:** for API-only apps, use `Rails::API`. Use `jbuilder` or `blueprinter` for JSON serialization. Version APIs in the URL path (`/api/v1/`). Use token-based authentication (JWT or API keys).
+- **Security:** use Devise or custom auth with `has_secure_password`. Sanitize user input for HTML output (`sanitize` helper). Use `rack-attack` for rate limiting. Set secure defaults for cookies and sessions.
+- **Performance:** use eager loading to eliminate N+1 queries. Cache with Redis (`Rails.cache`). Use database indexes on columns used in WHERE, ORDER BY, and JOIN clauses. Use `find_each` for batch processing large datasets.
+- **Configuration:** use `Rails.application.credentials` for secrets. Use environment-specific config in `config/environments/`. Define custom config in `config/settings.yml` with the `config` gem. Never commit secrets to version control.

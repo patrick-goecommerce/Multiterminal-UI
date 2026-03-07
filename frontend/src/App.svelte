@@ -15,8 +15,11 @@
   import FilePreview from './components/FilePreview.svelte';
   import DashboardView from './components/DashboardView.svelte';
   import SetupDialog from './components/SetupDialog.svelte';
+  import LeftNav from './components/LeftNav.svelte';
+  import SkillPicker from './components/SkillPicker.svelte';
   import { get } from 'svelte/store';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
+  import { workspace } from './stores/workspace';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
   import { initI18n, setLanguage, t, type Language } from './stores/i18n';
@@ -50,6 +53,8 @@
   let showSetupDialog = false;
   let showIssueDialog = false;
   let showDashboard = false;
+  let showSkillPicker = false;
+  let skillPickerDir = '';
   let previewFilePath = '';
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
   let launchIssueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
@@ -100,8 +105,8 @@
     onNewPane: () => { showLaunchDialog = true; },
     onNewTab: () => { showProjectDialog = true; },
     onCloseTab: () => { if ($activeTab) tabStore.closeTab($activeTab.id); },
-    onToggleSidebar: () => { if ($config.sidebar_pinned && showSidebar) return; showSidebar = !showSidebar; },
-    onOpenIssues: () => { showSidebar = true; sidebarView = 'issues'; },
+    onToggleSidebar: () => workspace.toggleSidebar(),
+    onOpenIssues: () => workspace.openSidebar('issues'),
     onToggleMaximize: () => {
       const tab = $activeTab;
       if (tab?.focusedPaneId) tabStore.toggleMaximize(tab.id, tab.focusedPaneId);
@@ -111,7 +116,10 @@
       if (tab && idx < tab.panes.length) tabStore.focusPane(tab.id, tab.panes[idx].id);
     },
     canAddPane: () => ($activeTab?.panes.length ?? 0) < MAX_PANES_PER_TAB,
-    onToggleDashboard: () => { showDashboard = !showDashboard; },
+    onToggleDashboard: () => {
+      if ($workspace.activeView === 'dashboard') workspace.setView('terminals');
+      else workspace.setView('dashboard');
+    },
   });
 
   onMount(async () => {
@@ -153,7 +161,7 @@
       config.set(cfg);
       applyTheme(cfg.theme || 'dark');
       if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
-      if (cfg.sidebar_pinned) showSidebar = true;
+      if (cfg.sidebar_pinned) { workspace.setSidebarPinned(true); workspace.openSidebar('explorer'); }
       await initI18n((cfg.language || 'de') as Language);
       if (!cfg.setup_done) showSetupDialog = true;
     } catch { applyTheme('dark'); await initI18n('de'); }
@@ -288,7 +296,7 @@
     try { allWorktrees = await App.ListAllWorktrees(tab.dir); } catch {}
   }
 
-  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); updateConflicts(); loadWorktrees(); }
+  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); updateConflicts(); loadWorktrees(); checkProjectInit($activeTab.dir); }
 
   async function updateCommitAge() {
     const tab = $activeTab;
@@ -439,8 +447,38 @@
   function handleDashboardNavigate(e: CustomEvent<{ tabId: string; paneId: string }>) {
     const { tabId, paneId } = e.detail;
     showDashboard = false;
+    workspace.setView('terminals');
     tabStore.setActiveTab(tabId);
     tabStore.focusPane(tabId, paneId);
+  }
+
+  async function checkProjectInit(dir: string) {
+    if (!dir) return;
+    try {
+      const initialized = await App.IsProjectInitialized(dir);
+      if (!initialized) {
+        skillPickerDir = dir;
+        showSkillPicker = true;
+      }
+    } catch {}
+  }
+
+  async function handleSkillPickerDone(e: CustomEvent<{ skillIds: string[] }>) {
+    showSkillPicker = false;
+    const dir = skillPickerDir;
+    skillPickerDir = '';
+    if (dir) {
+      try { await App.InitProject(dir, e.detail.skillIds); } catch (err) { console.error('[InitProject]', err); }
+    }
+  }
+
+  function handleSkillPickerSkip() {
+    showSkillPicker = false;
+    const dir = skillPickerDir;
+    skillPickerDir = '';
+    if (dir) {
+      App.InitProject(dir, []).catch(() => {});
+    }
   }
 
   function handleClosePane(e: CustomEvent<{ paneId: string; sessionId: number }>) {
@@ -499,9 +537,9 @@
   async function handleTogglePin() {
     const pinned = !$config.sidebar_pinned;
     config.update(c => ({ ...c, sidebar_pinned: pinned }));
+    workspace.setSidebarPinned(pinned);
     try { await App.SaveConfig({ ...$config, sidebar_pinned: pinned }); } catch {}
-    if (!pinned && !showSidebar) return;
-    if (pinned) showSidebar = true;
+    if (pinned) workspace.openSidebar($workspace.sidebarView || 'explorer');
   }
 
   function handleSidebarFile(e: CustomEvent<{ path: string }>) {
@@ -512,10 +550,13 @@
   $: {
     const id = $activeTab?.id ?? '';
     if (id && id !== _prevActiveTabId) {
-      if (_prevActiveTabId !== '') showDashboard = false;
+      if (_prevActiveTabId !== '' && $workspace.activeView === 'dashboard') workspace.setView('terminals');
       _prevActiveTabId = id;
     }
   }
+
+  // Sync showDashboard with workspace store for backward compatibility
+  $: showDashboard = $workspace.activeView === 'dashboard';
 
   $: totalCost = (() => {
     let sum = 0;
@@ -660,10 +701,10 @@
 <div class="app">
   <TabBar
     activeTabId={$activeTab?.id ?? ''}
-    isDashboard={showDashboard}
+    isDashboard={$workspace.activeView === 'dashboard'}
     on:addTab={() => (showProjectDialog = true)}
-    on:showDashboard={() => { showDashboard = true; }}
-    on:closeDashboard={() => { showDashboard = false; }}
+    on:showDashboard={() => workspace.setView('dashboard')}
+    on:closeDashboard={() => workspace.setView('terminals')}
   />
   <Toolbar
     paneCount={currentPanes}
@@ -671,17 +712,18 @@
     tabDir={$activeTab?.dir ?? ''}
     {canChangeDir}
     on:newTerminal={() => (showLaunchDialog = true)}
-    on:toggleSidebar={() => { if ($config.sidebar_pinned && showSidebar) return; showSidebar = !showSidebar; }}
+    on:toggleSidebar={() => workspace.toggleSidebar()}
     on:changeDir={handleChangeDir}
     on:openSettings={() => (showSettingsDialog = true)}
     on:openCommands={() => (showCommandPalette = true)}
   />
 
   <div class="content">
-    <Sidebar visible={showSidebar && !showDashboard} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} pinned={$config.sidebar_pinned} on:close={() => { if (!$config.sidebar_pinned) showSidebar = false; }} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
-    {#if showDashboard}
+    <LeftNav {issueCount} queueCount={0} chatUnread={0} />
+    <Sidebar visible={$workspace.activeView === 'terminals' && $workspace.sidebarView !== null} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={$workspace.sidebarView || 'explorer'} pinned={$config.sidebar_pinned} on:close={() => workspace.closeSidebar()} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
+    {#if $workspace.activeView === 'dashboard'}
       <DashboardView on:navigate={handleDashboardNavigate} />
-    {:else}
+    {:else if $workspace.activeView === 'terminals'}
       <div class="tab-layers">
         {#each $allTabs as tab (tab.id)}
           <div class="tab-layer" class:active={tab.id === $activeTab?.id}>
@@ -709,6 +751,24 @@
           <FilePreview filePath={previewFilePath} dir={$activeTab?.dir ?? ''} on:close={() => (previewFilePath = '')} />
         {/if}
       </div>
+    {:else if $workspace.activeView === 'kanban'}
+      <div class="placeholder-view">
+        <div class="placeholder-icon">&#9635;</div>
+        <h3>Kanban Board</h3>
+        <p>Wird in Sprint 2 implementiert</p>
+      </div>
+    {:else if $workspace.activeView === 'chat'}
+      <div class="placeholder-view">
+        <div class="placeholder-icon">&#128172;</div>
+        <h3>Chat</h3>
+        <p>Wird in Sprint 3 implementiert</p>
+      </div>
+    {:else if $workspace.activeView === 'queue'}
+      <div class="placeholder-view">
+        <div class="placeholder-icon">&#8801;</div>
+        <h3>Queue-Übersicht</h3>
+        <p>Wird in Sprint 3 implementiert</p>
+      </div>
     {/if}
   </div>
 
@@ -720,6 +780,7 @@
   <SetupDialog visible={showSetupDialog} {claudeDetected} {codexDetected} {geminiDetected} on:finish={handleSetupFinish} on:langChange={handleSetupLangChange} on:close={() => { showSetupDialog = false; }} />
   <CrashDialog visible={showCrashDialog} on:enable={handleCrashEnable} on:dismiss={() => (showCrashDialog = false)} />
   <IssueDialog visible={showIssueDialog} dir={$activeTab?.dir ?? ''} editIssue={editIssueData} on:saved={handleIssueSaved} on:close={() => { showIssueDialog = false; editIssueData = null; }} />
+  <SkillPicker visible={showSkillPicker} dir={skillPickerDir} on:done={handleSkillPickerDone} on:skip={handleSkillPickerSkip} on:close={() => { showSkillPicker = false; skillPickerDir = ''; }} />
   <BranchConflictDialog
     visible={showBranchConflict}
     currentBranch={branchConflictData?.currentBranch ?? ''}
@@ -747,4 +808,12 @@
     visibility: hidden; pointer-events: none;
   }
   .tab-layer.active { visibility: visible; pointer-events: auto; }
+  .placeholder-view {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: var(--fg-muted, #a6adc8); gap: 0.5rem;
+  }
+  .placeholder-icon { font-size: 3rem; opacity: 0.3; }
+  .placeholder-view h3 { color: var(--fg, #cdd6f4); font-size: 1.2rem; }
+  .placeholder-view p { font-size: 0.85rem; }
 </style>

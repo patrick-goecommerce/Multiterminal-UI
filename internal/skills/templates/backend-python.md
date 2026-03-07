@@ -1,0 +1,16 @@
+You are working on a Python backend project. Follow these principles:
+
+- **Type hints everywhere.** Annotate all function signatures and return types. Use `str | None` (Python 3.10+) over `Optional[str]`. Run `mypy --strict` or `pyright` in CI. Use `TypedDict` for dict shapes, `dataclass` or Pydantic models for structured data.
+- **FastAPI:** define request/response models with Pydantic `BaseModel`. Use dependency injection (`Depends`) for database sessions, auth, and config. Use `status_code` parameter on route decorators. Return typed response models, not raw dicts.
+- **Django:** follow the MTV pattern. Keep views thin — move logic to model methods, managers, or service modules. Use `select_related`/`prefetch_related` to avoid N+1 queries. Define custom managers for complex querysets.
+- **Project structure:** organize by domain/feature. Example: `users/models.py`, `users/services.py`, `users/api.py`, `users/tests/`. Keep `__init__.py` files minimal — avoid circular imports by keeping them empty or with explicit re-exports.
+- **Virtual environments:** always use `venv`, `poetry`, or `uv` for dependency isolation. Pin exact versions in `requirements.txt` or `poetry.lock`. Never install packages globally. Define dev dependencies separately.
+- **Async:** use `async def` with `await` for I/O-bound operations in FastAPI. Use `asyncio.gather` for concurrent tasks. Use async database drivers (asyncpg, motor) when the framework supports async. Never mix sync and async database calls.
+- **Error handling:** define custom exception classes inheriting from a base app exception. Use FastAPI exception handlers or Django middleware for consistent error responses. Log exceptions with tracebacks at `error` level. Never return 500 with raw tracebacks to clients.
+- **Database:** use SQLAlchemy 2.0 (with `select()` syntax) or Django ORM. Always use migrations (Alembic or Django). Write queries through the ORM — use raw SQL only for complex analytics. Use transactions for multi-step writes.
+- **Testing:** use `pytest` with fixtures for setup/teardown. Use `factory_boy` for test data. Mock external services with `unittest.mock.patch` or `respx`/`responses`. Test at the API level with `TestClient` (FastAPI) or `Client` (Django). Aim for behavior tests, not implementation tests.
+- **Configuration:** use Pydantic `BaseSettings` for environment-based config with validation. Define `.env.example` with all required variables. Fail fast on missing config at startup.
+- **Security:** use parameterized queries (ORM handles this). Hash passwords with bcrypt or Argon2. Validate and sanitize all input through Pydantic models. Use CORS middleware with explicit origins.
+- **Logging:** use the `logging` module with structured output (JSON in production). Configure via `logging.config.dictConfig`. Use `logger = logging.getLogger(__name__)` per module. Include request IDs for tracing.
+- **Code style:** follow PEP 8. Use `ruff` for linting and formatting. Maximum line length 100-120 characters. Use f-strings for string formatting. Prefer list/dict comprehensions over `map`/`filter`.
+- **Dependencies:** prefer standard library (`pathlib`, `dataclasses`, `enum`, `contextlib`) before third-party packages. Audit dependencies for security vulnerabilities with `pip-audit` or `safety`.

@@ -1,0 +1,16 @@
+You are working on a Java/Spring Boot project. Follow these principles:
+
+- **Spring Boot conventions:** use `@RestController` for API endpoints, `@Service` for business logic, `@Repository` for data access. Keep controllers thin — delegate to services. Use constructor injection (not `@Autowired` on fields).
+- **Dependency injection:** prefer constructor injection with `final` fields. Use `@RequiredArgsConstructor` (Lombok) to reduce boilerplate. Define interfaces for services only when multiple implementations exist or for testing boundaries.
+- **JPA/Hibernate:** define entities with `@Entity`. Use `FetchType.LAZY` by default — never `EAGER` on `@OneToMany` or `@ManyToMany`. Use `@EntityGraph` or JPQL `JOIN FETCH` to avoid N+1 queries. Always use `@Transactional` on service methods that write.
+- **Repository pattern:** extend `JpaRepository<T, ID>` for standard CRUD. Use derived query methods (`findByStatusAndCreatedAfter`) for simple queries. Use `@Query` with JPQL for complex queries. Prefer `Specification` for dynamic filtering.
+- **DTOs:** separate API models from entities. Use records (Java 16+) for immutable DTOs. Map between entities and DTOs in the service layer using manual mapping or MapStruct. Never expose entities directly in API responses.
+- **Validation:** use Bean Validation annotations (`@NotBlank`, `@Size`, `@Email`) on DTOs. Create custom validators for complex rules. Handle `MethodArgumentNotValidException` in `@ControllerAdvice` to return structured error responses.
+- **Error handling:** create a global `@ControllerAdvice` with `@ExceptionHandler` methods. Define domain exceptions extending `RuntimeException`. Return consistent error response bodies with status, message, and timestamp.
+- **Configuration:** use `application.yml` with profiles (`dev`, `prod`). Bind config to `@ConfigurationProperties` classes. Validate config with `@Validated`. Use `@Value` only for simple single values.
+- **Security:** use Spring Security with `SecurityFilterChain` bean configuration (not `WebSecurityConfigurerAdapter`). Use BCrypt for password hashing. Secure endpoints with method-level `@PreAuthorize`. Use JWT or OAuth2 for stateless auth.
+- **Testing:** use `@SpringBootTest` sparingly — prefer slice tests (`@WebMvcTest`, `@DataJpaTest`). Use `MockMvc` for controller tests. Mock dependencies with `@MockBean` or Mockito. Use Testcontainers for integration tests with real databases.
+- **Build:** use Maven or Gradle with a wrapper (`mvnw`/`gradlew`). Define dependency versions in the parent POM or `gradle.properties`. Use the Spring Boot BOM for version management.
+- **Logging:** use SLF4J (`LoggerFactory.getLogger`) — never `System.out.println`. Use structured logging with MDC for request tracing. Log at appropriate levels: `error` for failures, `info` for business events, `debug` for development.
+- **Java version:** use modern Java features — records, sealed classes, pattern matching (`instanceof`), text blocks, `var` for local variables with obvious types. Target Java 17+ for new projects.
+- **Performance:** use pagination for list endpoints (`Pageable`). Enable Hibernate second-level cache for read-heavy entities. Use `@Async` for non-blocking operations. Profile with JMX or Micrometer metrics.
