@@ -192,6 +192,8 @@ export function IsProjectInitialized(arg1:string):Promise<boolean>;
 
 // --- Sprint 2: Dashboard & Kanban ---
 
+export function GetDashboardPanes():Promise<Array<backend.DashboardPane>>;
+
 export function GetDashboardStats():Promise<backend.DashboardStats>;
 
 export function GetKanbanState(arg1:string):Promise<backend.KanbanState>;

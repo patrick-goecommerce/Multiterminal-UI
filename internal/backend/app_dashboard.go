@@ -123,6 +123,65 @@ func readGitHeadBranch(dir string) string {
 	return head
 }
 
+// DashboardPane holds per-session data for the dashboard swim lanes.
+// The frontend uses this to render pane cards without needing local store data.
+type DashboardPane struct {
+	SessionID   int    `json:"session_id" yaml:"session_id"`
+	Name        string `json:"name" yaml:"name"`
+	Activity    string `json:"activity" yaml:"activity"` // idle, active, done, waitingPermission, waitingAnswer, error, starting
+	Cost        string `json:"cost" yaml:"cost"`
+	Dir         string `json:"dir" yaml:"dir"`
+	Branch      string `json:"branch" yaml:"branch"`
+	Running     bool   `json:"running" yaml:"running"`
+	IssueNumber int    `json:"issue_number" yaml:"issue_number"`
+	IssueTitle  string `json:"issue_title" yaml:"issue_title"`
+}
+
+// GetDashboardPanes returns all sessions as pane cards for the dashboard view.
+// This works in any window (main or secondary) since it reads from the backend.
+func (a *AppService) GetDashboardPanes() []DashboardPane {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	panes := make([]DashboardPane, 0, len(a.sessions))
+	for id, sess := range a.sessions {
+		activity := activityString(sess.GetActivity())
+		running := sess.IsRunning()
+
+		tokens := sess.GetTokens()
+		costStr := ""
+		if tokens.TotalCost > 0 {
+			costStr = fmt.Sprintf("$%.2f", tokens.TotalCost)
+		}
+
+		dp := DashboardPane{
+			SessionID: id,
+			Name:      sess.Title,
+			Activity:  activity,
+			Cost:      costStr,
+			Dir:       sess.Dir,
+			Branch:    readGitHeadBranch(sess.Dir),
+			Running:   running,
+		}
+
+		if dp.Name == "" {
+			dp.Name = fmt.Sprintf("Session %d", id)
+		}
+
+		// Attach linked issue info
+		if issue, ok := a.sessionIssues[id]; ok {
+			dp.IssueNumber = issue.Number
+			dp.IssueTitle = issue.Title
+			if dp.Branch == "" && issue.Branch != "" {
+				dp.Branch = issue.Branch
+			}
+		}
+
+		panes = append(panes, dp)
+	}
+	return panes
+}
+
 // formatDashCost formats a float cost as dollar string.
 func formatDashCost(cost float64) string {
 	return fmt.Sprintf("$%.2f", cost)

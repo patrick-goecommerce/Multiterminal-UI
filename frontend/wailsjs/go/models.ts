@@ -389,6 +389,35 @@ export namespace backend {
 	    }
 	}
 
+	export class DashboardPane {
+	    session_id: number;
+	    name: string;
+	    activity: string;
+	    cost: string;
+	    dir: string;
+	    branch: string;
+	    running: boolean;
+	    issue_number: number;
+	    issue_title: string;
+
+	    static createFrom(source: any = {}) {
+	        return new DashboardPane(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.session_id = source["session_id"];
+	        this.name = source["name"];
+	        this.activity = source["activity"];
+	        this.cost = source["cost"];
+	        this.dir = source["dir"];
+	        this.branch = source["branch"];
+	        this.running = source["running"];
+	        this.issue_number = source["issue_number"];
+	        this.issue_title = source["issue_title"];
+	    }
+	}
+
 	// --- Sprint 2: Dashboard & Kanban ---
 
 	export class ProjectStats {

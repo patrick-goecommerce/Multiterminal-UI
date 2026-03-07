@@ -1,16 +1,18 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import { allTabs, activeTab } from '../stores/tabs';
   import { t } from '../stores/i18n';
-  import { groupPanesByActivity } from '../lib/dashboard';
-  import type { PaneWithContext } from '../lib/dashboard';
   import * as App from '../../wailsjs/go/backend/App';
   import { workspace } from '../stores/workspace';
+  import { isMainWindow } from '../lib/window';
+  import type { backend } from '../../wailsjs/go/models';
 
   const dispatch = createEventDispatcher<{
     navigate: { tabId: string; paneId: string };
     undock: void;
   }>();
+
+  const _isMain = isMainWindow();
 
   interface ProjectStat {
     dir: string;
@@ -22,59 +24,130 @@
     is_initialized: boolean;
   }
 
+  // Unified card type used by swim lanes (works from both stores and backend)
+  interface DashCard {
+    id: string;           // sessionId or paneId
+    sessionId: number;
+    name: string;
+    activity: string;
+    cost: string;
+    branch: string;
+    running: boolean;
+    issueNumber: number;
+    issueTitle: string;
+    dir: string;
+    // Only available when using store data (main window):
+    tabId?: string;
+    tabName?: string;
+  }
+
+  interface CardGroups {
+    starting: DashCard[];
+    needsAttention: DashCard[];
+    active: DashCard[];
+    done: DashCard[];
+    idle: DashCard[];
+  }
+
   let projectStats: ProjectStat[] = [];
   let dashTotalCostBackend = '';
+  let backendPanes: backend.DashboardPane[] = [];
+  let statsInterval: ReturnType<typeof setInterval> | null = null;
 
-  function loadDashboardStats() {
+  function loadDashboardData() {
     App.GetDashboardStats().then(stats => {
       projectStats = stats.projects || [];
       dashTotalCostBackend = stats.total_cost || '';
     }).catch(() => {});
+
+    App.GetDashboardPanes().then(panes => {
+      backendPanes = panes || [];
+    }).catch(() => {});
   }
 
-  onMount(loadDashboardStats);
+  onMount(loadDashboardData);
+  onDestroy(() => { if (statsInterval) clearInterval(statsInterval); });
 
-  // Reload stats periodically while dashboard is visible
-  let statsInterval: ReturnType<typeof setInterval>;
+  // Reload data periodically while dashboard is visible
   $: if ($workspace.activeView === 'dashboard') {
-    loadDashboardStats();
-    statsInterval = setInterval(loadDashboardStats, 10000);
+    loadDashboardData();
+    statsInterval = setInterval(loadDashboardData, 5000);
   } else {
-    clearInterval(statsInterval);
+    if (statsInterval) clearInterval(statsInterval);
+    statsInterval = null;
   }
 
-  $: groups = groupPanesByActivity($allTabs);
-  $: totalPanes = $allTabs.reduce((n, t) => n + t.panes.length, 0);
-  $: totalCost = (() => {
-    let sum = 0;
-    for (const tab of $allTabs) {
-      for (const pane of tab.panes) {
-        if (pane.cost) {
-          const v = parseFloat(pane.cost.replace('$', ''));
-          if (!isNaN(v)) sum += v;
+  // Build card groups: in main window, enrich backend data with store info (tabId, tabName).
+  // In secondary window, use pure backend data.
+  function buildGroups(bPanes: backend.DashboardPane[], tabs: typeof $allTabs): CardGroups {
+    const groups: CardGroups = { starting: [], needsAttention: [], active: [], done: [], idle: [] };
+
+    // Build a sessionId → pane/tab lookup from stores (only populated in main window)
+    const storeMap = new Map<number, { paneId: string; tabId: string; tabName: string }>();
+    if (_isMain) {
+      for (const tab of tabs) {
+        for (const pane of tab.panes) {
+          if (pane.sessionId != null) {
+            storeMap.set(pane.sessionId, { paneId: pane.id, tabId: tab.id, tabName: tab.name });
+          }
         }
       }
     }
-    return sum > 0 ? `$${sum.toFixed(2)}` : '';
-  })();
 
-  // Derive the "active project" label like SlayZone's "project: api-v2 — 14 tasks"
-  $: activeProjectName = $activeTab?.name ?? '';
+    for (const bp of bPanes) {
+      const storeInfo = storeMap.get(bp.session_id);
+      const card: DashCard = {
+        id: storeInfo?.paneId ?? `s-${bp.session_id}`,
+        sessionId: bp.session_id,
+        name: bp.name,
+        activity: bp.activity,
+        cost: bp.cost,
+        branch: bp.branch,
+        running: bp.running,
+        issueNumber: bp.issue_number,
+        issueTitle: bp.issue_title,
+        dir: bp.dir,
+        tabId: storeInfo?.tabId,
+        tabName: storeInfo?.tabName,
+      };
+
+      if (card.activity === 'starting' && card.running) {
+        groups.starting.push(card);
+      } else if (card.activity === 'waitingPermission' || card.activity === 'waitingAnswer' || card.activity === 'error') {
+        groups.needsAttention.push(card);
+      } else if (card.activity === 'active') {
+        groups.active.push(card);
+      } else if (card.activity === 'done') {
+        groups.done.push(card);
+      } else {
+        groups.idle.push(card);
+      }
+    }
+
+    return groups;
+  }
+
+  $: groups = buildGroups(backendPanes, $allTabs);
+  $: totalPanes = backendPanes.length;
+  $: totalCost = dashTotalCostBackend;
+
+  // Derive the "active project" label
+  $: activeProjectName = _isMain ? ($activeTab?.name ?? '') : (projectStats[0]?.name ?? '');
   $: activeProjectDir = (() => {
-    const d = $activeTab?.dir ?? '';
-    // Show only the last path segment
+    const d = _isMain ? ($activeTab?.dir ?? '') : (projectStats[0]?.dir ?? '');
     return d.split(/[/\\]/).filter(Boolean).pop() ?? d;
   })();
 
-  function handleCardClick(pane: PaneWithContext) {
-    dispatch('navigate', { tabId: pane.tabId, paneId: pane.id });
+  function handleCardClick(card: DashCard) {
+    if (card.tabId) {
+      dispatch('navigate', { tabId: card.tabId, paneId: card.id });
+    }
   }
 
-  // Returns the primary display label for a card (issue title if linked, else pane name)
-  function cardTitle(pane: PaneWithContext): string {
-    if (pane.issueNumber && pane.issueTitle) return `#${pane.issueNumber} ${pane.issueTitle}`;
-    if (pane.issueNumber) return `#${pane.issueNumber}`;
-    return pane.name;
+  function cardTitle(card: DashCard): string {
+    if (card.issueNumber && card.issueTitle) return `#${card.issueNumber} ${card.issueTitle}`;
+    if (card.issueNumber) return `#${card.issueNumber}`;
+    return card.name;
   }
 
   function statusDotClass(activity: string): string {
@@ -101,18 +174,10 @@
     }
   }
 
-  function modeLabel(mode: string): string {
-    switch (mode) {
-      case 'claude':      return 'claude';
-      case 'claude-yolo': return 'yolo';
-      default:            return 'shell';
-    }
-  }
-
-  // A pane is "focused" if it's in the active tab AND is the focused pane of that tab
-  function isFocused(pane: PaneWithContext): boolean {
-    const tab = $allTabs.find(t => t.id === pane.tabId);
-    return tab?.focusedPaneId === pane.id && tab?.id === $activeTab?.id;
+  function cardProject(card: DashCard): string {
+    if (card.tabName) return card.tabName;
+    // Fallback: show last dir segment
+    return card.dir.split(/[/\\]/).filter(Boolean).pop() ?? '';
   }
 </script>
 
@@ -183,14 +248,13 @@
         <span class="lane-count">{groups.starting.length}</span>
       </div>
       <div class="lane-cards">
-        {#each groups.starting as pane (pane.id)}
-          {@const focused = isFocused(pane)}
-          <button class="card card-starting" class:card-focused={focused} on:click={() => handleCardClick(pane)}>
-            <div class="card-title card-title-muted">{cardTitle(pane)}</div>
-            <div class="card-project">{pane.tabName}</div>
+        {#each groups.starting as card (card.id)}
+          <button class="card card-starting" on:click={() => handleCardClick(card)}>
+            <div class="card-title card-title-muted">{cardTitle(card)}</div>
+            <div class="card-project">{cardProject(card)}</div>
             <div class="card-footer">
-              {#if pane.branch}
-                <span class="card-branch">⎇ {pane.branch}</span>
+              {#if card.branch}
+                <span class="card-branch">{card.branch}</span>
               {/if}
               <span class="card-status-row">
                 <span class="dot dot-starting"></span>
@@ -211,30 +275,29 @@
         <span class="lane-count">{groups.needsAttention.length}</span>
       </div>
       <div class="lane-cards">
-        {#each groups.needsAttention as pane (pane.id)}
-          {@const focused = isFocused(pane)}
-          <button class="card card-attention" class:card-focused={focused} on:click={() => handleCardClick(pane)}>
-            <div class="card-title">{cardTitle(pane)}</div>
-            {#if pane.issueNumber}
-              <div class="card-pane-name">{pane.name}</div>
+        {#each groups.needsAttention as card (card.id)}
+          <button class="card card-attention" on:click={() => handleCardClick(card)}>
+            <div class="card-title">{cardTitle(card)}</div>
+            {#if card.issueNumber}
+              <div class="card-pane-name">{card.name}</div>
             {/if}
-            <div class="card-project">{pane.tabName}</div>
+            <div class="card-project">{cardProject(card)}</div>
             <div class="card-footer">
-              {#if pane.branch}
-                <span class="card-branch">⎇ {pane.branch}</span>
+              {#if card.branch}
+                <span class="card-branch">{card.branch}</span>
               {/if}
-              {#if pane.cost}
-                <span class="card-cost">{pane.cost}</span>
+              {#if card.cost}
+                <span class="card-cost">{card.cost}</span>
               {/if}
               <span class="card-status-row">
-                <span class="dot {statusDotClass(pane.activity)}"></span>
-                <span class="status-text status-{pane.activity}">{statusLabel(pane.activity)}</span>
+                <span class="dot {statusDotClass(card.activity)}"></span>
+                <span class="status-text status-{card.activity}">{statusLabel(card.activity)}</span>
               </span>
             </div>
           </button>
         {/each}
         {#if groups.needsAttention.length === 0}
-          <div class="lane-empty">–</div>
+          <div class="lane-empty">&ndash;</div>
         {/if}
       </div>
     </div>
@@ -247,20 +310,19 @@
         <span class="lane-count">{groups.active.length}</span>
       </div>
       <div class="lane-cards">
-        {#each groups.active as pane (pane.id)}
-          {@const focused = isFocused(pane)}
-          <button class="card card-active" class:card-focused={focused} on:click={() => handleCardClick(pane)}>
-            <div class="card-title">{cardTitle(pane)}</div>
-            {#if pane.issueNumber}
-              <div class="card-pane-name">{pane.name}</div>
+        {#each groups.active as card (card.id)}
+          <button class="card card-active" on:click={() => handleCardClick(card)}>
+            <div class="card-title">{cardTitle(card)}</div>
+            {#if card.issueNumber}
+              <div class="card-pane-name">{card.name}</div>
             {/if}
-            <div class="card-project">{pane.tabName}</div>
+            <div class="card-project">{cardProject(card)}</div>
             <div class="card-footer">
-              {#if pane.branch}
-                <span class="card-branch">⎇ {pane.branch}</span>
+              {#if card.branch}
+                <span class="card-branch">{card.branch}</span>
               {/if}
-              {#if pane.cost}
-                <span class="card-cost">{pane.cost}</span>
+              {#if card.cost}
+                <span class="card-cost">{card.cost}</span>
               {/if}
               <span class="card-status-row">
                 <span class="dot dot-active"></span>
@@ -270,7 +332,7 @@
           </button>
         {/each}
         {#if groups.active.length === 0}
-          <div class="lane-empty">–</div>
+          <div class="lane-empty">&ndash;</div>
         {/if}
       </div>
     </div>
@@ -283,20 +345,19 @@
         <span class="lane-count">{groups.done.length}</span>
       </div>
       <div class="lane-cards">
-        {#each groups.done as pane (pane.id)}
-          {@const focused = isFocused(pane)}
-          <button class="card card-done" class:card-focused={focused} on:click={() => handleCardClick(pane)}>
-            <div class="card-title">{cardTitle(pane)}</div>
-            {#if pane.issueNumber}
-              <div class="card-pane-name">{pane.name}</div>
+        {#each groups.done as card (card.id)}
+          <button class="card card-done" on:click={() => handleCardClick(card)}>
+            <div class="card-title">{cardTitle(card)}</div>
+            {#if card.issueNumber}
+              <div class="card-pane-name">{card.name}</div>
             {/if}
-            <div class="card-project">{pane.tabName}</div>
+            <div class="card-project">{cardProject(card)}</div>
             <div class="card-footer">
-              {#if pane.branch}
-                <span class="card-branch">⎇ {pane.branch}</span>
+              {#if card.branch}
+                <span class="card-branch">{card.branch}</span>
               {/if}
-              {#if pane.cost}
-                <span class="card-cost">{pane.cost}</span>
+              {#if card.cost}
+                <span class="card-cost">{card.cost}</span>
               {/if}
               <span class="card-status-row">
                 <span class="dot dot-done"></span>
@@ -306,7 +367,7 @@
           </button>
         {/each}
         {#if groups.done.length === 0}
-          <div class="lane-empty">–</div>
+          <div class="lane-empty">&ndash;</div>
         {/if}
       </div>
     </div>
@@ -319,26 +380,25 @@
         <span class="lane-count">{groups.idle.length}</span>
       </div>
       <div class="lane-cards">
-        {#each groups.idle as pane (pane.id)}
-          {@const focused = isFocused(pane)}
-          <button class="card card-idle" class:card-focused={focused} on:click={() => handleCardClick(pane)}>
-            <div class="card-title card-title-muted">{cardTitle(pane)}</div>
-            <div class="card-project">{pane.tabName}</div>
+        {#each groups.idle as card (card.id)}
+          <button class="card card-idle" on:click={() => handleCardClick(card)}>
+            <div class="card-title card-title-muted">{cardTitle(card)}</div>
+            <div class="card-project">{cardProject(card)}</div>
             <div class="card-footer">
-              {#if pane.branch}
-                <span class="card-branch">⎇ {pane.branch}</span>
+              {#if card.branch}
+                <span class="card-branch">{card.branch}</span>
               {/if}
-              {#if pane.cost}
-                <span class="card-cost">{pane.cost}</span>
+              {#if card.cost}
+                <span class="card-cost">{card.cost}</span>
               {/if}
               <span class="card-status-row">
-                <span class="status-text status-idle">{modeLabel(pane.mode)}</span>
+                <span class="status-text status-idle">{statusLabel('idle')}</span>
               </span>
             </div>
           </button>
         {/each}
         {#if groups.idle.length === 0}
-          <div class="lane-empty">–</div>
+          <div class="lane-empty">&ndash;</div>
         {/if}
       </div>
     </div>

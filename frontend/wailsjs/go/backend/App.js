@@ -399,6 +399,10 @@ export function IsProjectInitialized(arg1) {
 
 // --- Sprint 2: Dashboard & Kanban ---
 
+export function GetDashboardPanes() {
+  return $Call.ByID(3829734430);
+}
+
 export function GetDashboardStats() {
   return $Call.ByID(686669050);
 }
