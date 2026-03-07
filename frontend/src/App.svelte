@@ -134,6 +134,7 @@
       if ($workspace.activeView === 'dashboard') workspace.setView('terminals');
       else workspace.setView('dashboard');
     },
+    onOpenSkills: () => { if (projectInitialized) openSkillEditor(); },
   });
 
   onMount(async () => {

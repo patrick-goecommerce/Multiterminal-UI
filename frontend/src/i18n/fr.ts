@@ -332,6 +332,7 @@ const fr = {
     zoom: 'Ctrl+Z:zoom',
     files: 'Ctrl+B:fichiers',
     issues: 'Ctrl+I:issues',
+    skills: 'Ctrl+⇧+S:skills',
   },
   common: {
     cancel: 'Annuler',

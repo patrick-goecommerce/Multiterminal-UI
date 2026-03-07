@@ -86,6 +86,7 @@
     <span class="shortcut">{$t('footerShortcuts.zoom')}</span>
     <span class="shortcut">{$t('footerShortcuts.files')}</span>
     <span class="shortcut">{$t('footerShortcuts.issues')}</span>
+    <span class="shortcut">{$t('footerShortcuts.skills')}</span>
   </div>
 </div>
 

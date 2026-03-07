@@ -388,6 +388,7 @@ const de = {
     zoom: 'Ctrl+Z:Zoom',
     files: 'Ctrl+B:Dateien',
     issues: 'Ctrl+I:Issues',
+    skills: 'Ctrl+⇧+S:Skills',
   },
 
   // Common

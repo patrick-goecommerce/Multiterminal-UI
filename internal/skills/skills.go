@@ -111,32 +111,43 @@ func MigrateLegacySkills(ids []string) []string {
 	return result
 }
 
-// allDefs returns metadata for all 13 consolidated skills.
+// allDefs returns metadata for all 18 skills.
 func allDefs() []skillDef {
 	return []skillDef{
 		// Development
-		{"frontend", "Frontend Specialist", "React, Vue, Svelte, Angular, CSS, Mobile – framework-agnostisch", "frontend",
-			[]string{"package.json:react", "package.json:vue", "package.json:svelte", "angular.json", "pubspec.yaml", "package.json:react-native"}},
+		{"frontend", "Frontend Specialist", "React, Vue, Svelte, Angular, CSS – framework-agnostisch", "frontend",
+			[]string{"package.json:react", "package.json:vue", "package.json:svelte", "angular.json"}},
+		{"mobile", "Mobile Specialist", "iOS, Android, React Native, Flutter – App Store & Push", "frontend",
+			[]string{"pubspec.yaml", "package.json:react-native", "ios/", "android/"}},
 		{"backend", "Backend Specialist", "Go, Node, Python, Rust, Java, C#, Ruby, PHP – sprachübergreifend", "backend",
 			[]string{"go.mod", "package.json:express", "requirements.txt", "pyproject.toml", "Cargo.toml", "pom.xml", "build.gradle", "*.csproj", "Gemfile", "composer.json"}},
 		{"api-design", "API Design Specialist", "REST, GraphQL, OpenAPI, Versionierung", "backend",
 			[]string{"openapi.*", "swagger.*"}},
 		{"database", "Datenbank Specialist", "SQL, PostgreSQL, MongoDB, Redis, Migrationen", "data",
 			[]string{"*.sql", "prisma/", "migrations/", "package.json:mongoose"}},
+		{"architecture", "Architektur Specialist", "System Design, Clean Architecture, DDD, Microservices", "data",
+			[]string{"docs/architecture", "docs/adr"}},
 
 		// Operations
 		{"devops", "DevOps Specialist", "Docker, Kubernetes, CI/CD, Terraform, AWS", "devops",
 			[]string{"Dockerfile", "docker-compose.*", "k8s/", "helm/", ".github/workflows/", ".gitlab-ci.yml", "*.tf", "cdk.json", "serverless.yml"}},
+		{"monitoring", "Monitoring Specialist", "Observability, Metriken, Tracing, Alerting, SLOs", "devops",
+			[]string{"prometheus.*", "grafana/", "datadog.*", "*.rules.yml"}},
 
 		// Quality
 		{"testing", "Testing Specialist", "Unit, Integration, E2E Testing Strategien", "quality",
 			[]string{"*_test.go", "*.test.ts", "*.spec.ts"}},
 		{"security", "Security Specialist", "OWASP, Auth, Verschlüsselung, Schwachstellenanalyse", "quality", nil},
 		{"performance", "Performance Specialist", "Profiling, Optimierung, Caching, Lasttest", "quality", nil},
+		{"debugging", "Debugging Specialist", "Root Cause Analysis, Profiling, Troubleshooting", "quality", nil},
 		{"accessibility", "Accessibility Specialist", "WCAG, ARIA, Screenreader, a11y Testing", "quality",
 			[]string{"*.html", "*.jsx", "*.tsx"}},
 		{"docs-technical", "Technical Writing Specialist", "Dokumentation, ADRs, API Docs, READMEs", "quality",
 			[]string{"docs/"}},
+
+		// AI
+		{"ai-integration", "AI Integration Specialist", "LLM APIs, Prompt Engineering, RAG, Embeddings", "ai",
+			[]string{"package.json:openai", "package.json:@anthropic-ai", "requirements.txt:anthropic", "requirements.txt:openai"}},
 
 		// Workflow
 		{"git-workflow", "Git Workflow Specialist", "Branching, Conventional Commits, PRs, Code Review", "workflow",

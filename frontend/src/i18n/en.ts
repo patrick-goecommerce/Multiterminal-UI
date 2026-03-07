@@ -332,6 +332,7 @@ const en = {
     zoom: 'Ctrl+Z:zoom',
     files: 'Ctrl+B:files',
     issues: 'Ctrl+I:issues',
+    skills: 'Ctrl+⇧+S:skills',
   },
   common: {
     cancel: 'Cancel',

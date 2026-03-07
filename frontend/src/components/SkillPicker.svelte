@@ -25,15 +25,16 @@
   let loading = true;
 
   const categoryLabels: Record<string, string> = {
-    frontend: 'Frontend',
-    backend: 'Backend',
-    data: 'Datenbank',
-    devops: 'DevOps',
-    quality: 'Qualität',
+    frontend: 'Frontend & Mobile',
+    backend: 'Backend & API',
+    data: 'Daten & Architektur',
+    devops: 'DevOps & Monitoring',
+    quality: 'Qualität & Testing',
+    ai: 'KI / AI',
     workflow: 'Workflow',
   };
 
-  const categoryOrder = ['frontend', 'backend', 'data', 'devops', 'quality', 'workflow'];
+  const categoryOrder = ['frontend', 'backend', 'data', 'devops', 'quality', 'ai', 'workflow'];
 
   function initDialog() {
     loading = true;
