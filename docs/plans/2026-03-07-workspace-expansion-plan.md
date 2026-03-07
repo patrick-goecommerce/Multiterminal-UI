@@ -1,32 +1,38 @@
 # Workspace Expansion Plan: Left Navigation + Kanban + Chat + Multi-Agent
 
 **Datum:** 2026-03-07
-**Status:** Draft
-**Scope:** Major UI/UX expansion — Left Navigation Pane, Kanban Board, Auto-Planning, Cross-Project Chat, Multi-Agent Orchestration, Scheduled Automation
+**Status:** Draft v2 (überarbeitet)
+**Scope:** Major UI/UX expansion — Left Navigation Pane, Kanban Board (mit integrierter Planung & Automation), Chat View, Multi-Agent Orchestration, Ask-User Bridging
 
 ---
 
 ## Übersicht
 
-Multiterminal wird von einem Terminal-Multiplexer zu einer vollwertigen **Workspace-Plattform** erweitert. Die bestehende Sidebar (Explorer/SourceControl/Issues) wird durch eine **Left Navigation Pane** ersetzt, die als Hub für alle Workspace-Funktionen dient. Zusätzlich wird eine **Right Chat Pane** eingeführt für projektübergreifende KI-Konversationen.
+Multiterminal wird von einem Terminal-Multiplexer zu einer vollwertigen **Workspace-Plattform** erweitert. Die bestehende Sidebar (Explorer/SourceControl/Issues) wird durch eine **Left Navigation Pane** ersetzt, die als Hub für alle Workspace-Funktionen dient. Chat wird als **eigene Main-Content-View** integriert (nicht als rechte Sidebar), um den Terminal-Panes keinen Platz zu stehlen.
+
+**Kernänderungen gegenüber v1:**
+- Planning + Scheduler in Kanban integriert (weniger Views, weniger Komplexität)
+- Chat als Main-Content-View statt rechte Sidebar
+- ask_user Bridging als neues Feature aufgenommen
+- "Alle Projekte" nur im Dashboard, nicht überall
+- LeftNav reduziert auf 4 Workspace-Views statt 6
 
 ```
-┌─ Window ──────────────────────────────────────────────────────────┐
-│  TabBar                                                           │
-│  Toolbar                                                          │
-│ ┌─ Left Nav ─┐ ┌─ Main Content ──────────────────┐ ┌─ Chat ────┐│
-│ │ Dashboard   │ │                                  │ │ Provider  ││
-│ │ Kanban      │ │  Terminal Panes / Dashboard /     │ │ ▼ Claude  ││
-│ │ Planung     │ │  Kanban Board / Queue Overview    │ │           ││
-│ │ Queue       │ │                                  │ │ Messages  ││
-│ │ Chat        │ │                                  │ │ ...       ││
-│ │ ─────────── │ │                                  │ │           ││
-│ │ Explorer    │ │                                  │ │ Input     ││
-│ │ Source Ctrl │ │                                  │ │ [Send]    ││
-│ │ Issues      │ │                                  │ └───────────┘│
-│ └─────────────┘ └──────────────────────────────────┘              │
-│  Footer                                                           │
-└───────────────────────────────────────────────────────────────────┘
+┌─ Window ──────────────────────────────────────────────────────┐
+│  TabBar                                                        │
+│  Toolbar                                                       │
+│ ┌─ Left Nav ─┐ ┌─ Main Content ─────────────────────────────┐ │
+│ │ Dashboard   │ │                                             │ │
+│ │ Kanban      │ │  Terminal Panes / Dashboard / Kanban Board  │ │
+│ │ Chat        │ │  / Chat View / Queue Overview               │ │
+│ │ Queue       │ │                                             │ │
+│ │ ─────────── │ │                                             │ │
+│ │ Explorer    │ │                                             │ │
+│ │ Source Ctrl │ │                                             │ │
+│ │ Issues      │ │                                             │ │
+│ └─────────────┘ └─────────────────────────────────────────────┘ │
+│  Footer                                                        │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -38,12 +44,9 @@ Multiterminal wird von einem Terminal-Multiplexer zu einer vollwertigen **Worksp
 - **Breite:** 48px collapsed (Icons only) / 220px expanded
 - **Toggle:** Ctrl+B (wie bisher Sidebar)
 - **Sections:**
-  - **Workspace** (oberer Bereich): Dashboard, Kanban, Planung, Queue, Chat
+  - **Workspace** (oberer Bereich): Dashboard, Kanban, Chat, Queue
   - **Projekt** (unterer Bereich): Explorer, Source Control, Issues (bestehende Views)
-- **Projekt-Kontext-Switcher:** Dropdown oben im LeftNav
-  - "Alle Projekte" — zeigt aggregierte Daten
-  - Einzelnes Projekt — gefilterte Ansicht (basierend auf Tab-Verzeichnissen)
-  - Projekte werden automatisch aus den offenen Tab-Verzeichnissen erkannt
+- **Kein globaler Projekt-Switcher.** Projekt-Kontext ergibt sich aus dem aktiven Tab-Verzeichnis. Nur das Dashboard zeigt projektübergreifende Daten.
 
 ### 1.2 Dateien
 
@@ -51,69 +54,82 @@ Multiterminal wird von einem Terminal-Multiplexer zu einer vollwertigen **Worksp
 |-------|--------|--------------|
 | `frontend/src/components/LeftNav.svelte` | NEU | Navigationsleiste mit Icons + Labels |
 | `frontend/src/components/Sidebar.svelte` | EDIT | Wird zum "Content Panel" — zeigt die vom LeftNav gewählte View |
-| `frontend/src/stores/workspace.ts` | NEU | Store für activeView, projectFilter, collapsed-State |
-| `frontend/src/App.svelte` | EDIT | Layout-Integration: LeftNav + Content Area + Chat Pane |
+| `frontend/src/stores/workspace.ts` | NEU | Store für activeView, collapsed-State |
+| `frontend/src/App.svelte` | EDIT | Layout-Integration: LeftNav ersetzt alte Sidebar-Icons |
 
 ### 1.3 Navigation-Items
 
 ```typescript
 type NavItem =
-  | 'dashboard'      // Übersichts-Dashboard
-  | 'kanban'         // Kanban-Board für Issues
-  | 'planning'       // Auto-Planung
-  | 'queue'          // Queue-Übersicht (alle Sessions)
-  | 'chat'           // Konversations-Liste
-  | 'explorer'       // Datei-Explorer (bestehend)
-  | 'source-control' // Git (bestehend)
-  | 'issues';        // Issue-Liste (bestehend)
+  | 'terminals'      // Standard-Ansicht: Terminal Panes (default)
+  | 'dashboard'      // Übersichts-Dashboard (einzige projektübergreifende View)
+  | 'kanban'         // Kanban-Board mit Planung + Automation
+  | 'chat'           // Konversations-View
+  | 'queue'          // Queue-Übersicht (aktives Projekt)
+  | 'explorer'       // Datei-Explorer (bestehend, öffnet Sidebar)
+  | 'source-control' // Git (bestehend, öffnet Sidebar)
+  | 'issues';        // Issue-Liste (bestehend, öffnet Sidebar)
 ```
 
-### 1.4 Implementierung
+### 1.4 View-Routing
+
+**Zwei Arten von Navigation:**
+- **Main-Content-Views** (`terminals`, `dashboard`, `kanban`, `chat`, `queue`): Ersetzen den PaneGrid-Bereich komplett
+- **Sidebar-Views** (`explorer`, `source-control`, `issues`): Öffnen als Sidebar neben dem PaneGrid (wie bisher)
+
+Das bedeutet: Klick auf "Explorer" wechselt zurück zu Terminals + öffnet die Sidebar. Klick auf "Kanban" zeigt das Kanban-Board im Hauptbereich.
+
+### 1.5 Implementierung
 
 **`LeftNav.svelte`:**
 - Vertikale Icon-Leiste (ähnlich VS Code Activity Bar)
 - Jedes Item: SVG-Icon + Tooltip (collapsed) / Label (expanded)
 - Active-State mit farbiger Seitenleiste
 - Badge-Counts: Queue (pending), Issues (open), Chat (unread)
-- Projekt-Kontext-Dropdown ganz oben
 - Collapse/Expand-Toggle am unteren Rand
 
 **`workspace.ts` Store:**
 ```typescript
 interface WorkspaceState {
-  activeView: NavItem;
-  projectFilter: string | 'all'; // directory path or 'all'
-  leftNavCollapsed: boolean;
-  chatPaneVisible: boolean;
+  activeView: NavItem;         // welche Main-Content-View ist aktiv
+  leftNavCollapsed: boolean;   // Icons-only Modus
+  sidebarView: string | null;  // welche Sidebar-View ist offen (null = zu)
 }
 ```
 
-**Layout-Änderung in `App.svelte`:**
+**Layout-Logik in `App.svelte`:**
+```svelte
+{#if activeView === 'terminals'}
+  <!-- Bestehend: Sidebar + PaneGrid -->
+{:else if activeView === 'dashboard'}
+  <DashboardView />
+{:else if activeView === 'kanban'}
+  <KanbanBoard dir={currentDir} />
+{:else if activeView === 'chat'}
+  <ChatView />
+{:else if activeView === 'queue'}
+  <QueueOverview />
+{/if}
 ```
-Bisher:  [Sidebar?] [PaneGrid]
-Neu:     [LeftNav] [SideContent?] [PaneGrid] [ChatPane?]
-```
-- LeftNav ist immer sichtbar (48px collapsed)
-- SideContent öffnet sich bei Klick auf ein Nav-Item (wie bisher Sidebar)
-- Einige Views (Dashboard, Kanban) ersetzen den PaneGrid-Bereich statt als Sidebar zu öffnen
 
 ---
 
 ## Phase 2: Dashboard View
 
-### 2.1 Neue Komponente: `DashboardView.svelte` (Erweiterung)
+### 2.1 Komponente: `DashboardView.svelte` (Erweiterung)
 - Bestehende `DashboardView.svelte` wird erweitert
-- **Projekt-Karten** mit Status-Ampel pro Projekt
+- **Einzige projektübergreifende View** — zeigt alle Projekte
+- **Projekt-Karten** mit Status-Ampel pro Projekt (aus offenen Tab-Verzeichnissen)
 - **Aggregierte Metriken:** Gesamtkosten, aktive Sessions, offene Issues, Queue-Tiefe
-- **Schnellaktionen:** Neues Terminal, Issue erstellen, Queue leeren
-- **Letzte Aktivitäten:** Timeline der letzten Session-Events
+- **Schnellaktionen:** Neues Terminal, Issue erstellen, zum Projekt wechseln
+- **Agent-Fortschritt:** Laufende Orchestrator-Pläne mit Fortschrittsbalken
 
 ### 2.2 Dateien
 
 | Datei | Aktion | Beschreibung |
 |-------|--------|--------------|
 | `frontend/src/components/DashboardView.svelte` | EDIT | Erweitern um Projekt-Karten + Metriken |
-| `internal/backend/app_dashboard.go` | NEU | Aggregierte Statistiken (Kosten, Sessions, Issues pro Projekt) |
+| `internal/backend/app_dashboard.go` | NEU | Aggregierte Statistiken pro Projekt |
 | `frontend/wailsjs/go/models.ts` | EDIT | DashboardStats-Klasse hinzufügen |
 
 ### 2.3 Dashboard-Datenstruktur
@@ -124,7 +140,6 @@ type DashboardStats struct {
     Projects      []ProjectStats `json:"projects" yaml:"projects"`
     TotalCost     string         `json:"total_cost" yaml:"total_cost"`
     TotalSessions int            `json:"total_sessions" yaml:"total_sessions"`
-    TotalIssues   int            `json:"total_issues" yaml:"total_issues"`
 }
 
 type ProjectStats struct {
@@ -140,197 +155,196 @@ type ProjectStats struct {
 
 ---
 
-## Phase 3: Kanban Board
+## Phase 3: Kanban Board (mit Planung + Automation)
 
-### 3.1 Neue Komponenten
+Das Kanban-Board ist die zentrale Planungs- und Automatisierungsansicht. Statt separater Planning- und Scheduler-Views werden diese Funktionen direkt in das Kanban integriert.
+
+### 3.1 Dateien
 
 | Datei | Aktion | Beschreibung |
 |-------|--------|--------------|
-| `frontend/src/components/KanbanBoard.svelte` | NEU | Hauptkomponente: Spalten + Karten |
-| `frontend/src/components/KanbanColumn.svelte` | NEU | Einzelne Spalte (Backlog/Todo/InProgress/Done) |
-| `frontend/src/components/KanbanCard.svelte` | NEU | Issue-Karte mit Drag-Handle |
-| `frontend/src/stores/kanban.ts` | NEU | Kanban-State, Drag&Drop-Logik |
-| `internal/backend/app_kanban.go` | NEU | Kanban-State-Persistenz + Issue-Mapping |
-| `internal/config/kanban.go` | NEU | Kanban-State in JSON (~/.multiterminal-kanban.json) |
+| `frontend/src/components/KanbanBoard.svelte` | NEU | Hauptkomponente: Spalten + Karten + Toolbar |
+| `frontend/src/components/KanbanColumn.svelte` | NEU | Einzelne Spalte mit Drop-Zone |
+| `frontend/src/components/KanbanCard.svelte` | NEU | Issue-Karte mit Status, Agent-Indicator, Schedule-Badge |
+| `frontend/src/stores/kanban.ts` | NEU | Kanban-State, Drag&Drop, Planung, Schedules |
+| `internal/backend/app_kanban.go` | NEU | Kanban-State + Issue-Sync + Planung |
+| `internal/backend/app_kanban_plan.go` | NEU | Auto-Planung: Reihenfolge + Parallelisierung |
+| `internal/backend/app_kanban_schedule.go` | NEU | Wiederkehrende Aufgaben (Scheduler) |
+| `internal/config/kanban.go` | NEU | Persistenz (~/.multiterminal-kanban.json) |
 
-### 3.2 Kanban-Architektur
+### 3.2 Kanban-Spalten
 
-**Spalten (fest):**
-1. **Backlog** — Unpriorisierte Issues
-2. **Geplant** — Priorisiert, noch nicht begonnen
-3. **In Arbeit** — Aktiv bearbeitet (mit verknüpfter Session)
-4. **Review** — PR erstellt, wartet auf Review
-5. **Erledigt** — Geschlossen
+| Spalte | Automatik | Beschreibung |
+|--------|-----------|--------------|
+| **Backlog** | Neue Issues landen hier | Unpriorisiert |
+| **Geplant** | Manuell oder via Auto-Plan | Priorisiert, Reihenfolge festgelegt |
+| **In Arbeit** | Session verknüpft → auto-move | Agent arbeitet aktiv |
+| **Review** | PR erkannt → auto-move | Wartet auf Review |
+| **Erledigt** | Issue geschlossen → auto-move | Abgeschlossen |
 
-**Karten-Datenstruktur:**
+### 3.3 Karten-Datenstruktur
+
 ```go
-// app_kanban.go
 type KanbanState struct {
-    Columns map[string][]KanbanCard `json:"columns" yaml:"columns"`
+    Columns   map[string][]KanbanCard `json:"columns" yaml:"columns"`
+    Plans     []Plan                  `json:"plans" yaml:"plans"`
+    Schedules []ScheduledTask         `json:"schedules" yaml:"schedules"`
 }
 
 type KanbanCard struct {
-    IssueNumber   int      `json:"issue_number" yaml:"issue_number"`
-    Title         string   `json:"title" yaml:"title"`
-    Labels        []string `json:"labels" yaml:"labels"`
-    Dir           string   `json:"dir" yaml:"dir"`           // Projekt-Verzeichnis
-    SessionID     int      `json:"session_id" yaml:"session_id"` // 0 = keine Session
-    Priority      int      `json:"priority" yaml:"priority"`     // Sortierung innerhalb Spalte
-    Dependencies  []int    `json:"dependencies" yaml:"dependencies"` // Issue-Nummern
+    IssueNumber  int      `json:"issue_number" yaml:"issue_number"`
+    Title        string   `json:"title" yaml:"title"`
+    Labels       []string `json:"labels" yaml:"labels"`
+    Dir          string   `json:"dir" yaml:"dir"`
+    SessionID    int      `json:"session_id" yaml:"session_id"`
+    Priority     int      `json:"priority" yaml:"priority"`
+    Dependencies []int    `json:"dependencies" yaml:"dependencies"`
+    PlanID       string   `json:"plan_id" yaml:"plan_id"`       // gehört zu welchem Plan
+    ScheduleID   string   `json:"schedule_id" yaml:"schedule_id"` // wiederkehrend?
 }
 ```
 
-**Automatische Spalten-Zuordnung:**
-- Neue Issues → Backlog
-- Issue mit verknüpfter Session → In Arbeit (automatisch)
-- Session fertig + PR erkannt → Review (automatisch)
-- Issue geschlossen → Erledigt (automatisch)
+### 3.4 Integrierte Planung (ersetzt separate Phase 4)
 
-**Drag & Drop:**
-- Native HTML5 Drag & Drop (kein Framework)
-- Karte zwischen Spalten ziehen
-- Sortierung innerhalb Spalte
-- Karten-Klick → Issue-Detail + Aktionen (Session starten, Branch erstellen)
+**Toolbar im Kanban-Board:**
+- **"Auto-Plan" Button:** Wählt Issues aus Backlog, schlägt Reihenfolge + Parallelisierung vor
+- **Plan-Ansicht:** Toggle zwischen Kanban-Ansicht und Plan-Ansicht (Gantt-artige Reihenfolge)
+- **"Ausführen" Button:** Startet den Orchestrator für den aktiven Plan
 
-**Backend-Methoden:**
-```go
-func (a *AppService) GetKanbanState(dir string) KanbanState
-func (a *AppService) MoveKanbanCard(issueNumber int, toColumn string, position int) error
-func (a *AppService) SyncKanbanWithIssues(dir string) KanbanState // GitHub-Sync
-func (a *AppService) GetKanbanForAllProjects() map[string]KanbanState
-```
-
-### 3.3 Integration mit bestehenden Issues
-- `SyncKanbanWithIssues()` holt Issues via `gh` CLI und mappt auf Spalten
-- Labels können als Spalten-Hints dienen (z.B. Label "in-progress" → In Arbeit)
-- Bestehende IssuesView im LeftNav zeigt weiterhin die Listenansicht
-- Kanban ist die visuelle Alternative mit Drag&Drop
-
----
-
-## Phase 4: Auto-Planung
-
-### 4.1 Neue Komponenten
-
-| Datei | Aktion | Beschreibung |
-|-------|--------|--------------|
-| `frontend/src/components/PlanningView.svelte` | NEU | Auto-Planungs-UI |
-| `frontend/src/components/PlanningCard.svelte` | NEU | Einzelner Planungsvorschlag |
-| `internal/backend/app_planning.go` | NEU | Issue-Analyse + Planungsgenerierung |
-
-### 4.2 Funktionsweise
-
-**Auto-Planung analysiert offene Issues und erstellt Ausführungspläne:**
-
-1. **Issue-Analyse:** Liest Issue-Body, Labels, Abhängigkeiten
-2. **Vorschlag generiert:** Reihenfolge, geschätzte Komplexität, empfohlene Parallelisierung
-3. **Benutzer bestätigt:** Plan kann angepasst werden
-4. **Ausführung:** Issues werden als Queue-Items in die richtige Reihenfolge gebracht
-
-**Planungsstruktur:**
 ```go
 type Plan struct {
-    ID        string      `json:"id" yaml:"id"`
-    Dir       string      `json:"dir" yaml:"dir"`
-    CreatedAt string      `json:"created_at" yaml:"created_at"`
-    Steps     []PlanStep  `json:"steps" yaml:"steps"`
-    Status    string      `json:"status" yaml:"status"` // draft/approved/running/done
+    ID        string     `json:"id" yaml:"id"`
+    Dir       string     `json:"dir" yaml:"dir"`
+    CreatedAt string     `json:"created_at" yaml:"created_at"`
+    Steps     []PlanStep `json:"steps" yaml:"steps"`
+    Status    string     `json:"status" yaml:"status"` // draft/approved/running/done
 }
 
 type PlanStep struct {
     IssueNumber int    `json:"issue_number" yaml:"issue_number"`
     Title       string `json:"title" yaml:"title"`
     Order       int    `json:"order" yaml:"order"`
-    Parallel    bool   `json:"parallel" yaml:"parallel"` // kann parallel laufen
+    Parallel    bool   `json:"parallel" yaml:"parallel"`
     SessionID   int    `json:"session_id" yaml:"session_id"`
     Status      string `json:"status" yaml:"status"` // pending/running/done/skipped
-    Prompt      string `json:"prompt" yaml:"prompt"` // generierter Prompt für Claude
+    Prompt      string `json:"prompt" yaml:"prompt"`
 }
 ```
 
-**Backend-Methoden:**
+**UI-Flow:**
+1. User klickt "Auto-Plan" → Issues aus Backlog werden analysiert
+2. Vorschlag erscheint als sortierte Liste mit Parallel-Markierungen
+3. User kann Drag&Drop die Reihenfolge ändern, Parallel-Toggles setzen
+4. "Genehmigen" → Karten wandern in "Geplant"-Spalte in der richtigen Reihenfolge
+5. "Ausführen" → Orchestrator startet Sessions (→ Phase 5)
+
+### 3.5 Integrierte Automation (ersetzt separate Phase 8)
+
+**Schedule-Tab im Kanban-Board:**
+- Zweiter Tab neben der Kanban-Ansicht: "Board" | "Zeitpläne"
+- Wiederkehrende Aufgaben konfigurieren, die automatisch Karten/Sessions erzeugen
+
 ```go
+type ScheduledTask struct {
+    ID       string `json:"id" yaml:"id"`
+    Name     string `json:"name" yaml:"name"`
+    Dir      string `json:"dir" yaml:"dir"`
+    Prompt   string `json:"prompt" yaml:"prompt"`
+    Schedule string `json:"schedule" yaml:"schedule"` // hourly/daily/weekly/cron
+    Mode     string `json:"mode" yaml:"mode"`         // claude/claude-yolo
+    Model    string `json:"model" yaml:"model"`
+    Enabled  bool   `json:"enabled" yaml:"enabled"`
+    LastRun  string `json:"last_run" yaml:"last_run"`
+    NextRun  string `json:"next_run" yaml:"next_run"`
+}
+```
+
+**Anwendungsfälle:**
+- Täglicher Code-Review aller offenen PRs
+- Stündliche Dependency-Check
+- Wöchentlicher Security-Scan
+
+**Backend:**
+```go
+func (a *AppService) GetKanbanState(dir string) KanbanState
+func (a *AppService) MoveKanbanCard(issueNumber int, toColumn string, position int) error
+func (a *AppService) SyncKanbanWithIssues(dir string) KanbanState
 func (a *AppService) GeneratePlan(dir string, issueNumbers []int) (*Plan, error)
 func (a *AppService) ApprovePlan(planID string) error
-func (a *AppService) ExecutePlan(planID string) error // startet Sessions + Queue
+func (a *AppService) ExecutePlan(planID string) error
 func (a *AppService) GetPlans(dir string) []Plan
 func (a *AppService) CancelPlan(planID string) error
+func (a *AppService) CreateSchedule(task ScheduledTask) (*ScheduledTask, error)
+func (a *AppService) GetSchedules(dir string) []ScheduledTask
+func (a *AppService) UpdateSchedule(task ScheduledTask) error
+func (a *AppService) DeleteSchedule(id string) error
+func (a *AppService) ToggleSchedule(id string) error
 ```
 
-**UI (PlanningView.svelte):**
-- Liste offener Issues mit Checkboxen zur Auswahl
-- "Plan erstellen" Button → ruft `GeneratePlan()` auf
-- Drag&Drop-Sortierung der Schritte
-- Parallel-Toggle pro Schritt
-- "Ausführen" Button → startet Sessions automatisch
-- Fortschrittsanzeige während Ausführung
+### 3.6 Drag & Drop
+- Native HTML5 Drag & Drop (kein Framework)
+- Karte zwischen Spalten ziehen
+- Sortierung innerhalb Spalte
+- Karten-Klick → Issue-Detail-Popup mit Aktionen (Session starten, Branch erstellen)
+- Visuelle Indikatoren: Agent-Status-Dot, Schedule-Badge, Dependency-Linien
 
 ---
 
-## Phase 5: Queue-Übersicht (Cross-Project)
+## Phase 4: Chat View (Main Content)
 
-### 5.1 Neue Komponente: `QueueOverview.svelte`
+Chat wird als **eigene Main-Content-View** im Hauptbereich angezeigt — nicht als rechte Sidebar. So bleibt der volle Platz für Terminal-Panes erhalten.
 
-| Datei | Aktion | Beschreibung |
-|-------|--------|--------------|
-| `frontend/src/components/QueueOverview.svelte` | NEU | Projektübergreifende Queue-Ansicht |
-| `internal/backend/app_queue.go` | EDIT | `GetAllQueues()` Methode hinzufügen |
-
-### 5.2 Funktionalität
-
-- Zeigt alle Queue-Items über alle Sessions/Projekte hinweg
-- Gruppiert nach Projekt oder Session
-- Status-Filter (pending/sent/done)
-- Drag&Drop-Priorisierung
-- Bulk-Aktionen (alle pending löschen, Queue pausieren)
-
-**Neue Backend-Methode:**
-```go
-type QueueOverviewItem struct {
-    SessionID   int       `json:"session_id" yaml:"session_id"`
-    SessionName string    `json:"session_name" yaml:"session_name"`
-    Dir         string    `json:"dir" yaml:"dir"`
-    Items       []QueueItem `json:"items" yaml:"items"`
-}
-
-func (a *AppService) GetAllQueues() []QueueOverviewItem
-```
-
----
-
-## Phase 6: Chat Pane (Right Side)
-
-### 6.1 Neue Komponenten
+### 4.1 Dateien
 
 | Datei | Aktion | Beschreibung |
 |-------|--------|--------------|
-| `frontend/src/components/ChatPane.svelte` | NEU | Chat-Container (rechte Seite) |
-| `frontend/src/components/ChatMessage.svelte` | NEU | Einzelne Nachricht (User/Assistant) |
+| `frontend/src/components/ChatView.svelte` | NEU | Chat-Hauptansicht (Konversationsliste + aktiver Chat) |
+| `frontend/src/components/ChatMessage.svelte` | NEU | Einzelne Nachricht (User/Assistant) mit Markdown |
 | `frontend/src/components/ChatInput.svelte` | NEU | Eingabefeld mit Provider-Auswahl |
-| `frontend/src/components/ChatList.svelte` | NEU | Konversations-Liste (im LeftNav Content) |
 | `frontend/src/stores/chat.ts` | NEU | Chat-State, Nachrichten, Konversationen |
 | `internal/backend/app_chat.go` | NEU | Chat-Backend (CLI-Aufruf, Streaming) |
 | `internal/backend/app_chat_stream.go` | NEU | Stream-JSON-Parsing für Chat-Responses |
-| `internal/config/chat.go` | NEU | Chat-Persistenz (SQLite oder JSON) |
+| `internal/config/chat.go` | NEU | Chat-Persistenz (JSON-Dateien) |
 
-### 6.2 Chat-Architektur
+### 4.2 Layout
+
+```
+┌─ ChatView ──────────────────────────────────────────────────┐
+│ ┌─ Konversationen ─┐ ┌─ Aktiver Chat ────────────────────┐ │
+│ │ [+ Neu]           │ │ Header: Titel | Provider | Scope  │ │
+│ │                   │ │                                    │ │
+│ │ ● Projekt-Review  │ │ ┌─ Assistant ──────────────────┐  │ │
+│ │   Claude · 14:30  │ │ │ Hier ist meine Analyse...    │  │ │
+│ │                   │ │ └──────────────────────────────┘  │ │
+│ │ ● Architektur     │ │                                    │ │
+│ │   Gemini · 13:15  │ │ ┌─ User ───────────────────────┐  │ │
+│ │                   │ │ │ Kannst du das genauer...      │  │ │
+│ │ ● Debug-Hilfe     │ │ └──────────────────────────────┘  │ │
+│ │   Claude · 12:00  │ │                                    │ │
+│ │                   │ │ ┌──────────────────────────────┐  │ │
+│ │                   │ │ │ Nachricht eingeben...    [↵] │  │ │
+│ └───────────────────┘ └────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 4.3 Chat-Architektur
 
 **Konversationen:**
 ```go
 type Conversation struct {
-    ID        string    `json:"id" yaml:"id"`
-    Title     string    `json:"title" yaml:"title"`
-    Provider  string    `json:"provider" yaml:"provider"`  // claude/codex/gemini
-    Model     string    `json:"model" yaml:"model"`
-    Scope     string    `json:"scope" yaml:"scope"`        // "all" oder Projekt-Pfad
-    CreatedAt string    `json:"created_at" yaml:"created_at"`
-    UpdatedAt string    `json:"updated_at" yaml:"updated_at"`
+    ID        string        `json:"id" yaml:"id"`
+    Title     string        `json:"title" yaml:"title"`
+    Provider  string        `json:"provider" yaml:"provider"`  // claude/codex/gemini
+    Model     string        `json:"model" yaml:"model"`
+    Scope     string        `json:"scope" yaml:"scope"`        // Projekt-Pfad (immer ein Projekt)
+    CreatedAt string        `json:"created_at" yaml:"created_at"`
+    UpdatedAt string        `json:"updated_at" yaml:"updated_at"`
     Messages  []ChatMessage `json:"messages" yaml:"messages"`
 }
 
 type ChatMessage struct {
     ID        string `json:"id" yaml:"id"`
-    Role      string `json:"role" yaml:"role"`       // user/assistant
+    Role      string `json:"role" yaml:"role"`       // user/assistant/ask_user
     Content   string `json:"content" yaml:"content"`
     Timestamp string `json:"timestamp" yaml:"timestamp"`
     Cost      string `json:"cost" yaml:"cost"`
@@ -344,10 +358,7 @@ type ChatMessage struct {
 - Parsed Stream-JSON für progressive Anzeige
 - Unterstützt Claude, Codex, Gemini (wie bei Terminal-Sessions)
 
-**Scope-Konzept:**
-- **Projekt-Scope:** Chat kennt das Arbeitsverzeichnis, kann auf Dateien verweisen
-- **All-Scope:** Kein spezifisches Verzeichnis, allgemeine Fragen
-- Scope wird bei Konversations-Erstellung gewählt
+**Scope:** Immer ein konkretes Projekt (Verzeichnis aus den offenen Tabs). Kein "Alle Projekte"-Scope — das wäre technisch unsauber, da CLI-Tools ein Arbeitsverzeichnis brauchen.
 
 **Backend-Methoden:**
 ```go
@@ -360,36 +371,14 @@ func (a *AppService) DeleteConversation(id string) error
 
 **Events:**
 ```
-chat:message    → { conversationId, message: ChatMessage }
 chat:stream     → { conversationId, delta: string }        // progressive Anzeige
-chat:done       → { conversationId, totalCost: string }
+chat:done       → { conversationId, message: ChatMessage }  // fertige Nachricht
 chat:error      → { conversationId, error: string }
 ```
 
-### 6.3 Chat UI
+### 4.4 Provider-Auswahl bei neuer Konversation
 
-**ChatPane.svelte (Right Side):**
-- Breite: 350px (resizable)
-- Toggle: Ctrl+Shift+C oder Klick auf "Chat" im LeftNav
-- Header: Konversations-Titel + Provider-Badge + Scope-Badge
-- Message-Liste: Scrollbar, Markdown-Rendering
-- Input: Textarea + Send-Button (Enter = senden, Shift+Enter = Newline)
-- Provider-Selector im Header (wechselbar pro Konversation)
-
-**ChatList.svelte (LeftNav Content View):**
-- Liste aller Konversationen, sortiert nach UpdatedAt
-- Filter: Provider, Scope
-- "Neue Konversation" Button mit Provider + Scope Auswahl
-- Klick auf Konversation → öffnet ChatPane rechts + zeigt Verlauf
-
-**ChatMessage.svelte:**
-- User-Nachrichten: rechts-ausgerichtet, themed
-- Assistant-Nachrichten: links-ausgerichtet, mit Provider-Icon
-- Markdown-Rendering (Code-Blöcke, Listen, etc.)
-- Kostenanzeige pro Nachricht
-- Copy-Button für Code-Blöcke
-
-### 6.4 Provider-Auswahl bei neuer Konversation
+Im Header der ChatView oder über den [+ Neu] Button:
 
 ```
 ┌─ Neue Konversation ──────────────┐
@@ -400,33 +389,38 @@ chat:error      → { conversationId, error: string }
 │  Modell:                          │
 │  [Dropdown aus config.models]     │
 │                                   │
-│  Kontext:                         │
-│  ○ Alle Projekte                  │
-│  ○ Projekt: /path/to/project      │
-│     [Dropdown aus offenen Tabs]   │
+│  Projekt:                         │
+│  [Dropdown aus offenen Tabs]      │
 │                                   │
 │  [Erstellen]  [Abbrechen]         │
 └───────────────────────────────────┘
 ```
 
+### 4.5 Markdown-Rendering
+- Code-Blöcke mit Syntax-Highlighting + Copy-Button
+- Listen, Tabellen, Links
+- User-Nachrichten: rechts-ausgerichtet, themed
+- Assistant-Nachrichten: links-ausgerichtet, mit Provider-Icon
+- Kostenanzeige pro Nachricht (optional, aus Stream-JSON)
+
 ---
 
-## Phase 7: Multi-Agent Orchestration
+## Phase 5: Multi-Agent Orchestration + Ask-User Bridging
 
-### 7.1 Dateien
+### 5.1 Dateien
 
 | Datei | Aktion | Beschreibung |
 |-------|--------|--------------|
 | `internal/backend/app_orchestrator.go` | NEU | Multi-Agent-Koordination |
-| `internal/backend/app_orchestrator_worker.go` | NEU | Worker-Management |
-| `frontend/src/components/OrchestratorPanel.svelte` | NEU | Orchestrator-UI im Dashboard |
+| `internal/backend/app_ask_user.go` | NEU | Ask-User Bridging: Agent-Fragen → Chat |
+| `frontend/src/components/AskUserDialog.svelte` | NEU | Strukturierte Frage-Antwort-UI |
 
-### 7.2 Konzept
+### 5.2 Multi-Agent Orchestration
 
-**Multi-Agent = mehrere Claude-Sessions die koordiniert an einem Plan arbeiten:**
+**Multi-Agent = mehrere Claude-Sessions die koordiniert an einem Kanban-Plan arbeiten.**
 
 - Nutzt das bestehende Session-System (`CreateSession`)
-- Orchestrator ist eine Schicht über dem Planungs-System (Phase 4)
+- Orchestrator ist eine Schicht über dem Planungs-System (Phase 3)
 - Startet parallele Sessions für unabhängige Plan-Schritte
 - Überwacht Fortschritt via `terminal:activity` Events
 - Startet nächsten Schritt wenn Vorgänger fertig
@@ -440,68 +434,86 @@ type OrchestratorConfig struct {
 ```
 
 **Ablauf:**
-1. Plan wird genehmigt (Phase 4)
+1. Plan wird im Kanban genehmigt (Phase 3)
 2. Orchestrator startet erste(n) Schritt(e)
 3. Jeder Schritt = 1 Claude-Session mit generiertem Prompt
 4. Bei `activity: done` → nächsten Schritt starten
-5. Bei `activity: waitingPermission` → Benachrichtigung an User
-6. Dashboard zeigt Fortschritt als Gantt-ähnliche Ansicht
+5. Bei `activity: waitingPermission` oder `waitingAnswer` → Ask-User Bridging
+6. Kanban-Karten zeigen Agent-Status in Echtzeit (Dot-Indicator)
+7. Dashboard zeigt Gesamt-Fortschritt
 
-### 7.3 Abhängigkeiten zwischen Phasen
+### 5.3 Ask-User Bridging (neues Feature)
 
-```
-Phase 4 (Auto-Planung) ──────► Phase 7 (Multi-Agent)
-                                  │
-Phase 3 (Kanban) ────────────► Karten zeigen Agent-Status
-                                  │
-Phase 5 (Queue) ─────────────► Queue-Items werden automatisch erstellt
-```
+**Problem:** Wenn ein Agent im Hintergrund läuft und Input braucht (`waitingPermission`, `waitingAnswer`), merkt der User das nur am blinkenden Pane-Rand — leicht zu übersehen.
 
----
+**Lösung:** Agent-Fragen werden strukturiert in den Chat und als Dialog-Notification weitergeleitet.
 
-## Phase 8: Scheduled Automation
+**Ablauf:**
+1. `terminal:activity` meldet `waitingPermission` oder `waitingAnswer`
+2. Backend analysiert den Screen-Buffer der Session (letzte Zeilen)
+3. Extrahiert die Frage (z.B. "Allow tool: Read file.txt? [Y/n]")
+4. Emittiert `ask_user:question` Event mit SessionID + Frage
+5. Frontend zeigt:
+   - **Desktop-Notification** (bestehend, erweitert)
+   - **Badge im LeftNav** auf der Session-Karte
+   - **AskUserDialog** — Popup mit Frage + Antwort-Buttons (Ja/Nein/Custom)
+   - **Chat-Integration** — Frage erscheint als Nachricht im Chat (optional)
+6. User antwortet → Antwort wird via `WriteToSession()` an die PTY gesendet
 
-### 8.1 Dateien
-
-| Datei | Aktion | Beschreibung |
-|-------|--------|--------------|
-| `internal/backend/app_scheduler.go` | NEU | Cron-artiger Scheduler |
-| `internal/config/scheduler.go` | NEU | Schedule-Persistenz |
-| `frontend/src/components/SchedulerView.svelte` | NEU | Schedule-Verwaltung |
-
-### 8.2 Konzept
-
-**Wiederkehrende Aufgaben die automatisch als Claude-Sessions gestartet werden:**
-
+**Datenstruktur:**
 ```go
-type ScheduledTask struct {
-    ID        string `json:"id" yaml:"id"`
-    Name      string `json:"name" yaml:"name"`
-    Dir       string `json:"dir" yaml:"dir"`
-    Prompt    string `json:"prompt" yaml:"prompt"`
-    Schedule  string `json:"schedule" yaml:"schedule"` // "hourly", "daily", "weekly", cron
-    Mode      string `json:"mode" yaml:"mode"`         // claude, claude-yolo
-    Model     string `json:"model" yaml:"model"`
-    Enabled   bool   `json:"enabled" yaml:"enabled"`
-    LastRun   string `json:"last_run" yaml:"last_run"`
-    NextRun   string `json:"next_run" yaml:"next_run"`
+type AskUserQuestion struct {
+    SessionID   int      `json:"session_id" yaml:"session_id"`
+    SessionName string   `json:"session_name" yaml:"session_name"`
+    Question    string   `json:"question" yaml:"question"`
+    Options     []string `json:"options" yaml:"options"`     // ["Y", "n"] oder frei
+    Timestamp   string   `json:"timestamp" yaml:"timestamp"`
 }
 ```
 
-**Anwendungsfälle:**
-- Täglicher Code-Review aller offenen PRs
-- Stündliche Dependency-Check
-- Wöchentlicher Security-Scan
-- Nach jedem Commit: Tests laufen lassen
+**Events:**
+```
+ask_user:question  → AskUserQuestion   // Agent braucht Input
+ask_user:answered  → { sessionId, answer: string }  // User hat geantwortet
+```
 
-**Backend:**
+**Screen-Buffer-Analyse:**
+- Nutzt bestehende `PlainTextRows()` Methode
+- Pattern-Matching auf letzte 3-5 Zeilen
+- Erkennt: `[Y/n]`, `[y/N]`, `Allow`, `Confirm`, `?` am Zeilenende
+- Fallback: zeigt die letzten 3 Zeilen als Freitext
+
+---
+
+## Phase 6: Queue-Übersicht
+
+### 6.1 Dateien
+
+| Datei | Aktion | Beschreibung |
+|-------|--------|--------------|
+| `frontend/src/components/QueueOverview.svelte` | NEU | Queue-View im Main Content |
+| `internal/backend/app_queue.go` | EDIT | `GetAllQueues()` Methode hinzufügen |
+
+### 6.2 Funktionalität
+
+- Zeigt Queue-Items des aktuellen Projekts (nicht projektübergreifend)
+- Gruppiert nach Session
+- Status-Filter (pending/sent/done)
+- Drag&Drop-Priorisierung innerhalb einer Session
+- Bulk-Aktionen (alle done löschen, neuen Prompt hinzufügen)
+- Direkt-Link zur Session (Klick → wechselt zu Terminals-View + fokussiert Pane)
+
+**Neue Backend-Methode:**
 ```go
-func (a *AppService) CreateSchedule(task ScheduledTask) (*ScheduledTask, error)
-func (a *AppService) GetSchedules() []ScheduledTask
-func (a *AppService) UpdateSchedule(task ScheduledTask) error
-func (a *AppService) DeleteSchedule(id string) error
-func (a *AppService) ToggleSchedule(id string) error
-// Internal: scheduler goroutine checks every minute
+type QueueOverviewItem struct {
+    SessionID   int         `json:"session_id" yaml:"session_id"`
+    SessionName string      `json:"session_name" yaml:"session_name"`
+    Dir         string      `json:"dir" yaml:"dir"`
+    Activity    string      `json:"activity" yaml:"activity"`
+    Items       []QueueItem `json:"items" yaml:"items"`
+}
+
+func (a *AppService) GetAllQueues() []QueueOverviewItem
 ```
 
 ---
@@ -511,69 +523,61 @@ func (a *AppService) ToggleSchedule(id string) error
 ```
 Phase 1: Left Navigation Pane          ████░░░░░░  Basis-Infrastruktur
 Phase 2: Dashboard (erweitert)          ██░░░░░░░░  Schneller Gewinn
-Phase 3: Kanban Board                   ████████░░  Kernfeature
-Phase 4: Auto-Planung                   ██████░░░░  Aufbauend auf Kanban
-Phase 5: Queue-Übersicht                ██░░░░░░░░  Erweitert bestehend
-Phase 6: Chat Pane                      ████████░░  Unabhängig, parallel möglich
-Phase 7: Multi-Agent Orchestration      ██████░░░░  Aufbauend auf Planung
-Phase 8: Scheduled Automation           ████░░░░░░  Unabhängig
+Phase 3: Kanban + Planung + Scheduler   ██████████  Kernfeature (alles integriert)
+Phase 4: Chat View                      ████████░░  Eigene Main-Content-View
+Phase 5: Multi-Agent + Ask-User         ██████░░░░  Aufbauend auf Kanban
+Phase 6: Queue-Übersicht                ██░░░░░░░░  Erweitert bestehend
 ```
 
 **Abhängigkeiten:**
 - Phase 1 → alle anderen (Layout-Basis)
-- Phase 3 → Phase 4 → Phase 7 (aufeinander aufbauend)
-- Phase 2, 5, 6, 8 sind untereinander unabhängig
+- Phase 3 → Phase 5 (Kanban-Pläne werden vom Orchestrator ausgeführt)
+- Phase 2, 4, 6 sind untereinander unabhängig
 
 **Empfohlene Umsetzung:**
 1. **Sprint 1:** Phase 1 (LeftNav) + Phase 2 (Dashboard)
-2. **Sprint 2:** Phase 3 (Kanban) + Phase 6 (Chat) parallel
-3. **Sprint 3:** Phase 4 (Planung) + Phase 5 (Queue)
-4. **Sprint 4:** Phase 7 (Multi-Agent) + Phase 8 (Scheduler)
+2. **Sprint 2:** Phase 3 (Kanban inkl. Planung + Scheduler)
+3. **Sprint 3:** Phase 4 (Chat) + Phase 6 (Queue) parallel
+4. **Sprint 4:** Phase 5 (Multi-Agent + Ask-User)
 
 ---
 
 ## Neue Dateien (Gesamt)
 
-### Frontend (14 neue Dateien)
+### Frontend (10 neue Dateien)
 ```
 frontend/src/components/LeftNav.svelte
 frontend/src/components/KanbanBoard.svelte
 frontend/src/components/KanbanColumn.svelte
 frontend/src/components/KanbanCard.svelte
-frontend/src/components/PlanningView.svelte
-frontend/src/components/PlanningCard.svelte
-frontend/src/components/QueueOverview.svelte
-frontend/src/components/ChatPane.svelte
+frontend/src/components/ChatView.svelte
 frontend/src/components/ChatMessage.svelte
 frontend/src/components/ChatInput.svelte
-frontend/src/components/ChatList.svelte
-frontend/src/components/OrchestratorPanel.svelte
-frontend/src/components/SchedulerView.svelte
+frontend/src/components/QueueOverview.svelte
+frontend/src/components/AskUserDialog.svelte
 frontend/src/stores/workspace.ts
 frontend/src/stores/kanban.ts
 frontend/src/stores/chat.ts
 ```
 
-### Backend (10 neue Dateien)
+### Backend (9 neue Dateien)
 ```
 internal/backend/app_dashboard.go
 internal/backend/app_kanban.go
-internal/backend/app_planning.go
+internal/backend/app_kanban_plan.go
+internal/backend/app_kanban_schedule.go
 internal/backend/app_chat.go
 internal/backend/app_chat_stream.go
 internal/backend/app_orchestrator.go
-internal/backend/app_orchestrator_worker.go
-internal/backend/app_scheduler.go
+internal/backend/app_ask_user.go
 internal/config/kanban.go
 internal/config/chat.go
-internal/config/scheduler.go
 ```
 
-### Geänderte Dateien (6)
+### Geänderte Dateien (5)
 ```
-frontend/src/App.svelte                  — Layout-Umbau
-frontend/src/components/Sidebar.svelte   — Wird Content-Panel
-frontend/src/stores/config.ts            — Neue Config-Felder
+frontend/src/App.svelte                  — Layout-Umbau + View-Routing
+frontend/src/components/Sidebar.svelte   — Integration mit LeftNav
 frontend/wailsjs/go/models.ts           — Neue Klassen
 internal/config/config.go               — Neue Config-Sections
 internal/backend/app_queue.go           — GetAllQueues()
@@ -587,20 +591,28 @@ internal/backend/app_queue.go           — GetAllQueues()
 # ~/.multiterminal.yaml (neue Sections)
 workspace:
   left_nav_collapsed: false
-  default_view: dashboard
+  default_view: terminals
 
 orchestrator:
   max_parallel_agents: 3
   auto_start_next: true
-
-scheduler:
-  enabled: true
 
 chat:
   default_provider: claude
   default_model: ""
   history_limit: 100  # max conversations to keep
 ```
+
+---
+
+## Claude Studio Feature-Abdeckung
+
+| # | Claude Studio Feature | Unser Plan | Phase |
+|---|----------------------|------------|-------|
+| 1 | **Kanban Task Board** | Kanban mit Drag&Drop, Auto-Spalten, Issue-Sync | Phase 3 |
+| 2 | **Scheduled Automation** | Im Kanban integriert als "Zeitpläne"-Tab | Phase 3 |
+| 3 | **Multi-Agent Orchestration** | Orchestrator über Kanban-Pläne | Phase 5 |
+| 4 | **Ask-User Bridging** | Screen-Buffer-Analyse → Dialog + Chat + Notification | Phase 5 |
 
 ---
 
@@ -612,5 +624,6 @@ chat:
 4. **UI-Text Deutsch:** Alle Labels, Tooltips, Dialoge auf Deutsch
 5. **Kein externer Web-Zugriff:** Chat nutzt lokale CLI-Tools, kein API-Direktzugriff
 6. **Svelte Reactive-Regel:** Keine Variable-Zuweisungen in `$:` Blöcken
-7. **Concurrency:** Neue Mutexe für Kanban-State, Chat-State, Scheduler-State
-8. **Persistenz:** Kanban + Chat in separaten JSON-Dateien (nicht in config.yaml)
+7. **Concurrency:** Neue Mutexe für Kanban-State, Chat-State, Orchestrator-State
+8. **Persistenz:** Kanban in `~/.multiterminal-kanban.json`, Chat in `~/.multiterminal-chat/` (pro Konversation eine JSON-Datei)
+9. **Projekt-Kontext:** Ergibt sich immer aus dem aktiven Tab-Verzeichnis. Nur Dashboard zeigt aggregiert.
