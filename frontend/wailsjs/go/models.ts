@@ -385,6 +385,196 @@ export namespace backend {
 	    }
 	}
 
+	// --- Sprint 2: Dashboard & Kanban ---
+
+	export class ProjectStats {
+	    dir: string;
+	    name: string;
+	    active_sessions: number;
+	    total_cost: string;
+	    cost_value: number;
+	    branch: string;
+	    queue_depth: number;
+	    is_initialized: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new ProjectStats(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dir = source["dir"];
+	        this.name = source["name"];
+	        this.active_sessions = source["active_sessions"];
+	        this.total_cost = source["total_cost"];
+	        this.cost_value = source["cost_value"];
+	        this.branch = source["branch"];
+	        this.queue_depth = source["queue_depth"];
+	        this.is_initialized = source["is_initialized"];
+	    }
+	}
+	export class DashboardStats {
+	    projects: ProjectStats[];
+	    total_cost: string;
+	    total_sessions: number;
+
+	    static createFrom(source: any = {}) {
+	        return new DashboardStats(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.projects = this.convertValues(source["projects"], ProjectStats);
+	        this.total_cost = source["total_cost"];
+	        this.total_sessions = source["total_sessions"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) { return a; }
+		    if (a.slice && a.map) { return (a as any[]).map(elem => this.convertValues(elem, classs)); }
+		    if ("object" === typeof a) { if (asMap) { for (const key of Object.keys(a)) { a[key] = new classs(a[key]); } return a; } return new classs(a); }
+		    return a;
+		}
+	}
+	export class KanbanCard {
+	    id: string;
+	    issue_number: number;
+	    title: string;
+	    labels: string[];
+	    dir: string;
+	    session_id: number;
+	    priority: number;
+	    dependencies: number[];
+	    plan_id: string;
+	    schedule_id: string;
+	    created_at: string;
+
+	    static createFrom(source: any = {}) {
+	        return new KanbanCard(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.issue_number = source["issue_number"];
+	        this.title = source["title"];
+	        this.labels = source["labels"];
+	        this.dir = source["dir"];
+	        this.session_id = source["session_id"];
+	        this.priority = source["priority"];
+	        this.dependencies = source["dependencies"];
+	        this.plan_id = source["plan_id"];
+	        this.schedule_id = source["schedule_id"];
+	        this.created_at = source["created_at"];
+	    }
+	}
+	export class PlanStep {
+	    issue_number: number;
+	    card_id: string;
+	    title: string;
+	    order: number;
+	    parallel: boolean;
+	    session_id: number;
+	    status: string;
+	    prompt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PlanStep(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.issue_number = source["issue_number"];
+	        this.card_id = source["card_id"];
+	        this.title = source["title"];
+	        this.order = source["order"];
+	        this.parallel = source["parallel"];
+	        this.session_id = source["session_id"];
+	        this.status = source["status"];
+	        this.prompt = source["prompt"];
+	    }
+	}
+	export class Plan {
+	    id: string;
+	    dir: string;
+	    created_at: string;
+	    steps: PlanStep[];
+	    status: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Plan(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.dir = source["dir"];
+	        this.created_at = source["created_at"];
+	        this.steps = this.convertValues(source["steps"], PlanStep);
+	        this.status = source["status"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) { return a; }
+		    if (a.slice && a.map) { return (a as any[]).map(elem => this.convertValues(elem, classs)); }
+		    if ("object" === typeof a) { if (asMap) { for (const key of Object.keys(a)) { a[key] = new classs(a[key]); } return a; } return new classs(a); }
+		    return a;
+		}
+	}
+	export class ScheduledTask {
+	    id: string;
+	    name: string;
+	    dir: string;
+	    prompt: string;
+	    schedule: string;
+	    mode: string;
+	    model: string;
+	    enabled: boolean;
+	    last_run: string;
+	    next_run: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ScheduledTask(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.dir = source["dir"];
+	        this.prompt = source["prompt"];
+	        this.schedule = source["schedule"];
+	        this.mode = source["mode"];
+	        this.model = source["model"];
+	        this.enabled = source["enabled"];
+	        this.last_run = source["last_run"];
+	        this.next_run = source["next_run"];
+	    }
+	}
+	export class KanbanState {
+	    columns: Record<string, KanbanCard[]>;
+	    plans: Plan[];
+	    schedules: ScheduledTask[];
+
+	    static createFrom(source: any = {}) {
+	        return new KanbanState(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.columns = source["columns"];
+	        this.plans = this.convertValues(source["plans"], Plan);
+	        this.schedules = this.convertValues(source["schedules"], ScheduledTask);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) { return a; }
+		    if (a.slice && a.map) { return (a as any[]).map(elem => this.convertValues(elem, classs)); }
+		    if ("object" === typeof a) { if (asMap) { for (const key of Object.keys(a)) { a[key] = new classs(a[key]); } return a; } return new classs(a); }
+		    return a;
+		}
+	}
+
 }
 
 export namespace config {

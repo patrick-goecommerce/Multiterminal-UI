@@ -362,3 +362,103 @@ export function ValidateGeminiPath(arg1) {
 export function WriteToSession(arg1, arg2) {
   return $Call.ByID(2058166105, arg1, arg2);
 }
+
+// --- Sprint 1: Skills & Project ---
+
+export function GetAllSkills() {
+  return $Call.ByID(185667762);
+}
+
+export function DetectProjectSkills(arg1) {
+  return $Call.ByID(1259502175, arg1);
+}
+
+export function GetActiveSkills(arg1) {
+  return $Call.ByID(2895186329, arg1);
+}
+
+export function InitProject(arg1, arg2) {
+  return $Call.ByID(2249000730, arg1, arg2);
+}
+
+export function UpdateProjectSkills(arg1, arg2) {
+  return $Call.ByID(18054413, arg1, arg2);
+}
+
+export function IsProjectInitialized(arg1) {
+  return $Call.ByID(3139499694, arg1);
+}
+
+// --- Sprint 2: Dashboard & Kanban ---
+
+export function GetDashboardStats() {
+  return $Call.ByID(686669050);
+}
+
+export function GetKanbanState(arg1) {
+  return $Call.ByID(79316911, arg1);
+}
+
+export function SaveKanbanState(arg1, arg2) {
+  return $Call.ByID(4252869218, arg1, arg2);
+}
+
+export function MoveKanbanCard(arg1, arg2, arg3, arg4) {
+  return $Call.ByID(2892390087, arg1, arg2, arg3, arg4);
+}
+
+export function AddKanbanCard(arg1, arg2) {
+  return $Call.ByID(2966990003, arg1, arg2);
+}
+
+export function RemoveKanbanCard(arg1, arg2) {
+  return $Call.ByID(3626901330, arg1, arg2);
+}
+
+export function SyncKanbanWithIssues(arg1) {
+  return $Call.ByID(146449503, arg1);
+}
+
+export function GeneratePlan(arg1, arg2) {
+  return $Call.ByID(716985523, arg1, arg2);
+}
+
+export function GetPlans(arg1) {
+  return $Call.ByID(1106968791, arg1);
+}
+
+export function ApprovePlan(arg1, arg2) {
+  return $Call.ByID(195422847, arg1, arg2);
+}
+
+export function CancelPlan(arg1, arg2) {
+  return $Call.ByID(797937358, arg1, arg2);
+}
+
+export function DeletePlan(arg1, arg2) {
+  return $Call.ByID(2632421671, arg1, arg2);
+}
+
+export function UpdatePlanStep(arg1, arg2, arg3) {
+  return $Call.ByID(3495455239, arg1, arg2, arg3);
+}
+
+export function CreateSchedule(arg1, arg2) {
+  return $Call.ByID(1879309326, arg1, arg2);
+}
+
+export function GetSchedules(arg1) {
+  return $Call.ByID(2525528361, arg1);
+}
+
+export function UpdateSchedule(arg1, arg2) {
+  return $Call.ByID(986255363, arg1, arg2);
+}
+
+export function DeleteSchedule(arg1, arg2) {
+  return $Call.ByID(3346650489, arg1, arg2);
+}
+
+export function ToggleSchedule(arg1, arg2) {
+  return $Call.ByID(4210589378, arg1, arg2);
+}

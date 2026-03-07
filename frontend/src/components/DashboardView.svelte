@@ -1,13 +1,46 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { allTabs, activeTab } from '../stores/tabs';
   import { t } from '../stores/i18n';
   import { groupPanesByActivity } from '../lib/dashboard';
   import type { PaneWithContext } from '../lib/dashboard';
+  import * as App from '../../wailsjs/go/backend/App';
+  import { workspace } from '../stores/workspace';
 
   const dispatch = createEventDispatcher<{
     navigate: { tabId: string; paneId: string };
   }>();
+
+  interface ProjectStat {
+    dir: string;
+    name: string;
+    active_sessions: number;
+    total_cost: string;
+    branch: string;
+    queue_depth: number;
+    is_initialized: boolean;
+  }
+
+  let projectStats: ProjectStat[] = [];
+  let dashTotalCostBackend = '';
+
+  function loadDashboardStats() {
+    App.GetDashboardStats().then(stats => {
+      projectStats = stats.projects || [];
+      dashTotalCostBackend = stats.total_cost || '';
+    }).catch(() => {});
+  }
+
+  onMount(loadDashboardStats);
+
+  // Reload stats periodically while dashboard is visible
+  let statsInterval: ReturnType<typeof setInterval>;
+  $: if ($workspace.activeView === 'dashboard') {
+    loadDashboardStats();
+    statsInterval = setInterval(loadDashboardStats, 10000);
+  } else {
+    clearInterval(statsInterval);
+  }
 
   $: groups = groupPanesByActivity($allTabs);
   $: totalPanes = $allTabs.reduce((n, t) => n + t.panes.length, 0);
@@ -105,6 +138,32 @@
     </div>
     <div class="dash-tabs-count">{$allTabs.length === 1 ? $t('dashboard.tabs', { count: $allTabs.length }).split(' | ')[0] : $t('dashboard.tabs', { count: $allTabs.length }).split(' | ')[1]}</div>
   </header>
+
+  <!-- Project overview cards -->
+  {#if projectStats.length > 1}
+    <div class="project-cards">
+      {#each projectStats as proj}
+        <div class="project-card">
+          <div class="project-name">{proj.name}</div>
+          <div class="project-meta">
+            {#if proj.branch}
+              <span class="project-branch">&#8983; {proj.branch}</span>
+            {/if}
+            <span class="project-sessions">{proj.active_sessions} {proj.active_sessions === 1 ? 'Session' : 'Sessions'}</span>
+            {#if proj.total_cost}
+              <span class="project-cost">{proj.total_cost}</span>
+            {/if}
+            {#if proj.queue_depth > 0}
+              <span class="project-queue">{proj.queue_depth} in Queue</span>
+            {/if}
+          </div>
+          {#if proj.is_initialized}
+            <span class="project-mtui-badge">.mtui</span>
+          {/if}
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   <!-- Swim lanes: [STARTET] ATTENTION | IN PROGRESS | DONE | IDLE -->
   <div class="swim-lanes" class:has-starting={groups.starting.length > 0}>
@@ -335,6 +394,71 @@
   }
 
   .dash-tabs-count { font-size: 12px; opacity: 0.5; }
+
+  /* ── Project cards ─────────────────────────── */
+  .project-cards {
+    display: flex;
+    gap: 8px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .project-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-width: 160px;
+    position: relative;
+  }
+  .project-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg);
+  }
+  .project-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .project-branch {
+    font-size: 10px;
+    color: var(--fg-muted);
+    background: var(--bg-tertiary);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .project-sessions {
+    font-size: 10px;
+    color: var(--fg-muted);
+  }
+  .project-cost {
+    font-size: 10px;
+    color: var(--fg-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .project-queue {
+    font-size: 10px;
+    color: #f5a623;
+  }
+  .project-mtui-badge {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 8px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(57, 255, 20, 0.15);
+    color: var(--accent);
+    font-weight: 600;
+    font-family: monospace;
+  }
 
   /* ── Swim lanes ──────────────────────────── */
   .swim-lanes {

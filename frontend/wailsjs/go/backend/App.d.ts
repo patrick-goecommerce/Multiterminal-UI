@@ -171,3 +171,55 @@ export function ValidateCodexPath(arg1:string):Promise<boolean>;
 export function ValidateGeminiPath(arg1:string):Promise<boolean>;
 
 export function WriteToSession(arg1:number,arg2:string):Promise<void>;
+
+// --- Sprint 1: Skills & Project ---
+
+export function GetAllSkills():Promise<Array<backend.SkillInfo>>;
+
+export function DetectProjectSkills(arg1:string):Promise<Array<string>>;
+
+export function GetActiveSkills(arg1:string):Promise<Array<string>>;
+
+export function InitProject(arg1:string,arg2:Array<string>):Promise<backend.ProjectInitResult>;
+
+export function UpdateProjectSkills(arg1:string,arg2:Array<string>):Promise<backend.ProjectInitResult>;
+
+export function IsProjectInitialized(arg1:string):Promise<boolean>;
+
+// --- Sprint 2: Dashboard & Kanban ---
+
+export function GetDashboardStats():Promise<backend.DashboardStats>;
+
+export function GetKanbanState(arg1:string):Promise<backend.KanbanState>;
+
+export function SaveKanbanState(arg1:string,arg2:backend.KanbanState):Promise<void>;
+
+export function MoveKanbanCard(arg1:string,arg2:string,arg3:string,arg4:number):Promise<void>;
+
+export function AddKanbanCard(arg1:string,arg2:backend.KanbanCard):Promise<backend.KanbanCard>;
+
+export function RemoveKanbanCard(arg1:string,arg2:string):Promise<void>;
+
+export function SyncKanbanWithIssues(arg1:string):Promise<backend.KanbanState>;
+
+export function GeneratePlan(arg1:string,arg2:Array<string>):Promise<backend.Plan>;
+
+export function GetPlans(arg1:string):Promise<Array<backend.Plan>>;
+
+export function ApprovePlan(arg1:string,arg2:string):Promise<void>;
+
+export function CancelPlan(arg1:string,arg2:string):Promise<void>;
+
+export function DeletePlan(arg1:string,arg2:string):Promise<void>;
+
+export function UpdatePlanStep(arg1:string,arg2:string,arg3:backend.PlanStep):Promise<void>;
+
+export function CreateSchedule(arg1:string,arg2:backend.ScheduledTask):Promise<backend.ScheduledTask>;
+
+export function GetSchedules(arg1:string):Promise<Array<backend.ScheduledTask>>;
+
+export function UpdateSchedule(arg1:string,arg2:backend.ScheduledTask):Promise<void>;
+
+export function DeleteSchedule(arg1:string,arg2:string):Promise<void>;
+
+export function ToggleSchedule(arg1:string,arg2:string):Promise<void>;

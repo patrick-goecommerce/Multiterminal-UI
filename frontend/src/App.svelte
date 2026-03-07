@@ -17,6 +17,7 @@
   import SetupDialog from './components/SetupDialog.svelte';
   import LeftNav from './components/LeftNav.svelte';
   import SkillPicker from './components/SkillPicker.svelte';
+  import KanbanBoard from './components/KanbanBoard.svelte';
   import { get } from 'svelte/store';
   import { tabStore, activeTab, allTabs } from './stores/tabs';
   import { workspace } from './stores/workspace';
@@ -752,11 +753,7 @@
         {/if}
       </div>
     {:else if $workspace.activeView === 'kanban'}
-      <div class="placeholder-view">
-        <div class="placeholder-icon">&#9635;</div>
-        <h3>Kanban Board</h3>
-        <p>Wird in Sprint 2 implementiert</p>
-      </div>
+      <KanbanBoard dir={$activeTab?.dir ?? ''} />
     {:else if $workspace.activeView === 'chat'}
       <div class="placeholder-view">
         <div class="placeholder-icon">&#128172;</div>
