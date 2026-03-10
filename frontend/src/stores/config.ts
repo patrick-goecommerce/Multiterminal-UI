@@ -44,6 +44,15 @@ export interface BackgroundAgentsConfig {
   test_command: string;
 }
 
+export interface OrchestratorConfig {
+  max_parallel_agents: number;
+  default_auto_merge: boolean;
+  default_auto_start: boolean;
+  max_retries: number;
+  review_command: string;
+  sync_subtasks_to_github: boolean;
+}
+
 export interface AppConfig {
   default_shell: string;
   default_dir: string;
@@ -73,6 +82,7 @@ export interface AppConfig {
   font_size: number;
   favorites: Record<string, string[]>;
   background_agents: BackgroundAgentsConfig;
+  orchestrator: OrchestratorConfig;
   language: string;
   setup_done: boolean;
 }
@@ -146,6 +156,14 @@ export const config = writable<AppConfig>({
   font_family: '',
   font_size: 10,
   favorites: {},
+  orchestrator: {
+    max_parallel_agents: 3,
+    default_auto_merge: false,
+    default_auto_start: false,
+    max_retries: 2,
+    review_command: '',
+    sync_subtasks_to_github: false,
+  },
   language: 'de',
   setup_done: false,
 });

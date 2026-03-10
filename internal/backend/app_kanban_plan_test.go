@@ -52,7 +52,7 @@ func TestSortCards_SingleCard(t *testing.T) {
 func TestGeneratePlan_Basic(t *testing.T) {
 	dir := t.TempDir()
 	state := newKanbanState()
-	state.Columns[ColBacklog] = []KanbanCard{
+	state.Columns[ColDefine] = []KanbanCard{
 		{ID: "c1", Title: "Task 1", Priority: 2, IssueNumber: 5},
 		{ID: "c2", Title: "Task 2", Priority: 1},
 	}
@@ -100,7 +100,7 @@ func TestGeneratePlan_NoCards(t *testing.T) {
 func TestApprovePlan(t *testing.T) {
 	dir := t.TempDir()
 	state := newKanbanState()
-	state.Columns[ColBacklog] = []KanbanCard{
+	state.Columns[ColDefine] = []KanbanCard{
 		{ID: "c1", Title: "Task 1"},
 	}
 	state.Plans = []Plan{
@@ -120,7 +120,7 @@ func TestApprovePlan(t *testing.T) {
 		t.Errorf("plan status = %q, want %q", loaded.Plans[0].Status, "approved")
 	}
 	// Card should have moved to planned
-	if len(loaded.Columns[ColPlanned]) != 1 {
+	if len(loaded.Columns[ColApproved]) != 1 {
 		t.Error("card should be in planned column")
 	}
 }
@@ -163,7 +163,7 @@ func TestCancelPlan(t *testing.T) {
 		t.Errorf("plan status = %q, want %q", loaded.Plans[0].Status, "cancelled")
 	}
 	// Non-done cards should be back in backlog
-	if len(loaded.Columns[ColBacklog]) != 1 {
+	if len(loaded.Columns[ColDefine]) != 1 {
 		t.Error("card should be back in backlog")
 	}
 }
@@ -195,15 +195,15 @@ func TestDeletePlan(t *testing.T) {
 
 func TestMoveCardToColumn(t *testing.T) {
 	state := newKanbanState()
-	state.Columns[ColBacklog] = []KanbanCard{{ID: "c1", Title: "T"}}
+	state.Columns[ColDefine] = []KanbanCard{{ID: "c1", Title: "T"}}
 
 	app := newTestApp()
-	app.moveCardToColumn(&state, "c1", ColReview)
+	app.moveCardToColumn(&state, "c1", ColAutoReview)
 
-	if len(state.Columns[ColBacklog]) != 0 {
+	if len(state.Columns[ColDefine]) != 0 {
 		t.Error("card should be removed from backlog")
 	}
-	if len(state.Columns[ColReview]) != 1 {
+	if len(state.Columns[ColAutoReview]) != 1 {
 		t.Error("card should be in review")
 	}
 }

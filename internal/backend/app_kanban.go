@@ -19,31 +19,44 @@ type KanbanState struct {
 
 // KanbanCard represents a single card on the board.
 type KanbanCard struct {
-	ID           string   `json:"id" yaml:"id"`
-	IssueNumber  int      `json:"issue_number" yaml:"issue_number"`
-	Title        string   `json:"title" yaml:"title"`
-	Labels       []string `json:"labels" yaml:"labels"`
-	Dir          string   `json:"dir" yaml:"dir"`
-	SessionID    int      `json:"session_id" yaml:"session_id"`
-	Priority     int      `json:"priority" yaml:"priority"`
-	Dependencies []int    `json:"dependencies" yaml:"dependencies"`
-	PlanID       string   `json:"plan_id" yaml:"plan_id"`
-	ScheduleID   string   `json:"schedule_id" yaml:"schedule_id"`
-	CreatedAt    string   `json:"created_at" yaml:"created_at"`
+	ID             string   `json:"id" yaml:"id"`
+	IssueNumber    int      `json:"issue_number" yaml:"issue_number"`
+	Title          string   `json:"title" yaml:"title"`
+	Labels         []string `json:"labels" yaml:"labels"`
+	Dir            string   `json:"dir" yaml:"dir"`
+	SessionID      int      `json:"session_id" yaml:"session_id"`
+	Priority       int      `json:"priority" yaml:"priority"`
+	Dependencies   []int    `json:"dependencies" yaml:"dependencies"`
+	PlanID         string   `json:"plan_id" yaml:"plan_id"`
+	ScheduleID     string   `json:"schedule_id" yaml:"schedule_id"`
+	CreatedAt      string   `json:"created_at" yaml:"created_at"`
+	ParentIssue    int      `json:"parent_issue" yaml:"parent_issue"`
+	Prompt         string   `json:"prompt" yaml:"prompt"`
+	AutoMerge      bool     `json:"auto_merge" yaml:"auto_merge"`
+	AutoStart      bool     `json:"auto_start" yaml:"auto_start"`
+	WorktreePath   string   `json:"worktree_path" yaml:"worktree_path"`
+	WorktreeBranch string   `json:"worktree_branch" yaml:"worktree_branch"`
+	AgentSessionID int      `json:"agent_session_id" yaml:"agent_session_id"`
+	ReviewResult   string   `json:"review_result" yaml:"review_result"`
+	PRNumber       int      `json:"pr_number" yaml:"pr_number"`
+	RetryCount     int      `json:"retry_count" yaml:"retry_count"`
+	MaxRetries     int      `json:"max_retries" yaml:"max_retries"`
 }
 
 // Column IDs used by the Kanban board.
 const (
-	ColBacklog    = "backlog"
-	ColPlanned    = "planned"
+	ColDefine     = "define"
+	ColRefine     = "refine"
+	ColApproved   = "approved"
+	ColReady      = "ready"
 	ColInProgress = "in_progress"
-	ColReview     = "review"
+	ColAutoReview = "auto_review"
 	ColDone       = "done"
 )
 
 // defaultColumns returns the ordered column list.
 func defaultColumns() []string {
-	return []string{ColBacklog, ColPlanned, ColInProgress, ColReview, ColDone}
+	return []string{ColDefine, ColRefine, ColApproved, ColReady, ColInProgress, ColAutoReview, ColDone}
 }
 
 // GetKanbanState loads the Kanban state for a project directory.
@@ -116,7 +129,7 @@ func (a *AppService) AddKanbanCard(dir string, card KanbanCard) (KanbanCard, err
 		card.CreatedAt = time.Now().Format(time.RFC3339)
 	}
 
-	col := ColBacklog
+	col := ColDefine
 	state.Columns[col] = append(state.Columns[col], card)
 
 	if err := saveKanbanState(dir, state); err != nil {
@@ -175,7 +188,7 @@ func (a *AppService) SyncKanbanWithIssues(dir string) KanbanState {
 			Dir:         dir,
 			CreatedAt:   time.Now().Format(time.RFC3339),
 		}
-		state.Columns[ColBacklog] = append(state.Columns[ColBacklog], card)
+		state.Columns[ColDefine] = append(state.Columns[ColDefine], card)
 	}
 
 	// Move closed issues to done
@@ -237,6 +250,8 @@ func loadKanbanState(dir string) (KanbanState, error) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return KanbanState{}, fmt.Errorf("parse kanban: %w", err)
 	}
+	// Migrate old column names to new ones
+	migrateColumns(&state)
 	// Ensure all columns exist
 	for _, c := range defaultColumns() {
 		if state.Columns[c] == nil {
@@ -263,6 +278,21 @@ func saveKanbanState(dir string, state KanbanState) error {
 		return fmt.Errorf("marshal kanban: %w", err)
 	}
 	return os.WriteFile(kanbanPath(dir), data, 0o644)
+}
+
+// migrateColumns renames old 5-column layout to new 7-column layout.
+func migrateColumns(state *KanbanState) {
+	migrations := map[string]string{
+		"backlog": ColDefine,
+		"planned": ColApproved,
+		"review":  ColAutoReview,
+	}
+	for old, newCol := range migrations {
+		if cards, ok := state.Columns[old]; ok && len(cards) > 0 {
+			state.Columns[newCol] = append(state.Columns[newCol], cards...)
+		}
+		delete(state.Columns, old)
+	}
 }
 
 // generateID creates a simple unique ID from timestamp.

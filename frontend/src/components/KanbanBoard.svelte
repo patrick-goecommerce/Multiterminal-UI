@@ -84,6 +84,17 @@
       plan_id: '',
       schedule_id: '',
       created_at: '',
+      parent_issue: 0,
+      prompt: '',
+      auto_merge: false,
+      auto_start: false,
+      worktree_path: '',
+      worktree_branch: '',
+      agent_session_id: 0,
+      review_result: '',
+      pr_number: 0,
+      retry_count: 0,
+      max_retries: 0,
     };
     try {
       const saved = await App.AddKanbanCard(dir, card);
@@ -325,7 +336,7 @@
 
   .columns-container {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 8px;
     padding: 12px;
     flex: 1;

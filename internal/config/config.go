@@ -43,6 +43,7 @@ type Config struct {
 	FontFamily            string         `yaml:"font_family" json:"font_family"`
 	FontSize              int            `yaml:"font_size"   json:"font_size"`
 	BackgroundAgents      BackgroundAgents `yaml:"background_agents" json:"background_agents"`
+	Orchestrator          OrchestratorSettings `yaml:"orchestrator" json:"orchestrator"`
 	Language              string         `yaml:"language" json:"language"`
 	SetupDone             bool           `yaml:"setup_done" json:"setup_done"`
 }
@@ -104,6 +105,16 @@ type BackgroundAgents struct {
 	ReviewPrompt  string `yaml:"review_prompt" json:"review_prompt"`
 	TestEnabled   *bool  `yaml:"test_enabled" json:"test_enabled"`
 	TestCommand   string `yaml:"test_command" json:"test_command"`
+}
+
+// OrchestratorSettings holds agent orchestration configuration.
+type OrchestratorSettings struct {
+	MaxParallelAgents    int    `yaml:"max_parallel_agents" json:"max_parallel_agents"`
+	DefaultAutoMerge     bool   `yaml:"default_auto_merge" json:"default_auto_merge"`
+	DefaultAutoStart     bool   `yaml:"default_auto_start" json:"default_auto_start"`
+	MaxRetries           int    `yaml:"max_retries" json:"max_retries"`
+	ReviewCommand        string `yaml:"review_command" json:"review_command"`
+	SyncSubtasksToGitHub bool   `yaml:"sync_subtasks_to_github" json:"sync_subtasks_to_github"`
 }
 
 // DefaultConfig returns the built-in defaults.
@@ -182,7 +193,15 @@ func DefaultConfig() Config {
 		LocalhostAutoOpen: "notify",
 		FontFamily:        "",
 		FontSize:          10,
-		Language:          "de",
+		Orchestrator: OrchestratorSettings{
+			MaxParallelAgents:    3,
+			DefaultAutoMerge:     false,
+			DefaultAutoStart:     false,
+			MaxRetries:           2,
+			ReviewCommand:        "go test ./... && go vet ./...",
+			SyncSubtasksToGitHub: false,
+		},
+		Language: "de",
 		SetupDone:         false,
 	}
 }
@@ -311,6 +330,20 @@ func Load() Config {
 	if ba.ReviewModel == "" { ba.ReviewModel = "claude-haiku-4-5-20251001" }
 	if ba.ReviewPrompt == "" { ba.ReviewPrompt = "Review the following commit diff. Flag bugs, security issues, and code quality problems:\n\n{diff}" }
 	if ba.TestEnabled == nil { ba.TestEnabled = boolPtr(false) }
+
+	// Validate orchestrator settings
+	if cfg.Orchestrator.MaxParallelAgents < 1 {
+		cfg.Orchestrator.MaxParallelAgents = 1
+	}
+	if cfg.Orchestrator.MaxParallelAgents > 8 {
+		cfg.Orchestrator.MaxParallelAgents = 8
+	}
+	if cfg.Orchestrator.MaxRetries < 0 {
+		cfg.Orchestrator.MaxRetries = 0
+	}
+	if cfg.Orchestrator.MaxRetries > 5 {
+		cfg.Orchestrator.MaxRetries = 5
+	}
 
 	// Validate language
 	validLangs := map[string]bool{"de": true, "en": true, "it": true, "es": true, "fr": true}

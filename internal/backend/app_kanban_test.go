@@ -50,7 +50,7 @@ func TestLoadKanbanState_NonExistentDir(t *testing.T) {
 func TestSaveAndLoadKanbanState(t *testing.T) {
 	dir := t.TempDir()
 	state := newKanbanState()
-	state.Columns[ColBacklog] = []KanbanCard{
+	state.Columns[ColDefine] = []KanbanCard{
 		{ID: "card-1", Title: "Test card", Priority: 3},
 	}
 
@@ -62,14 +62,14 @@ func TestSaveAndLoadKanbanState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load error: %v", err)
 	}
-	if len(loaded.Columns[ColBacklog]) != 1 {
-		t.Fatalf("expected 1 card in backlog, got %d", len(loaded.Columns[ColBacklog]))
+	if len(loaded.Columns[ColDefine]) != 1 {
+		t.Fatalf("expected 1 card in backlog, got %d", len(loaded.Columns[ColDefine]))
 	}
-	if loaded.Columns[ColBacklog][0].Title != "Test card" {
-		t.Errorf("title mismatch: got %q", loaded.Columns[ColBacklog][0].Title)
+	if loaded.Columns[ColDefine][0].Title != "Test card" {
+		t.Errorf("title mismatch: got %q", loaded.Columns[ColDefine][0].Title)
 	}
-	if loaded.Columns[ColBacklog][0].Priority != 3 {
-		t.Errorf("priority mismatch: got %d", loaded.Columns[ColBacklog][0].Priority)
+	if loaded.Columns[ColDefine][0].Priority != 3 {
+		t.Errorf("priority mismatch: got %d", loaded.Columns[ColDefine][0].Priority)
 	}
 }
 
@@ -80,7 +80,7 @@ func TestSaveAndLoadKanbanState(t *testing.T) {
 func TestMoveKanbanCard(t *testing.T) {
 	dir := t.TempDir()
 	state := newKanbanState()
-	state.Columns[ColBacklog] = []KanbanCard{
+	state.Columns[ColDefine] = []KanbanCard{
 		{ID: "c1", Title: "Card 1"},
 		{ID: "c2", Title: "Card 2"},
 	}
@@ -94,8 +94,8 @@ func TestMoveKanbanCard(t *testing.T) {
 	}
 
 	loaded, _ := loadKanbanState(dir)
-	if len(loaded.Columns[ColBacklog]) != 1 {
-		t.Errorf("backlog should have 1 card, got %d", len(loaded.Columns[ColBacklog]))
+	if len(loaded.Columns[ColDefine]) != 1 {
+		t.Errorf("backlog should have 1 card, got %d", len(loaded.Columns[ColDefine]))
 	}
 	if len(loaded.Columns[ColInProgress]) != 1 {
 		t.Errorf("in_progress should have 1 card, got %d", len(loaded.Columns[ColInProgress]))
@@ -140,8 +140,8 @@ func TestAddKanbanCard(t *testing.T) {
 	}
 
 	loaded, _ := loadKanbanState(dir)
-	if len(loaded.Columns[ColBacklog]) != 1 {
-		t.Errorf("expected 1 card in backlog, got %d", len(loaded.Columns[ColBacklog]))
+	if len(loaded.Columns[ColDefine]) != 1 {
+		t.Errorf("expected 1 card in backlog, got %d", len(loaded.Columns[ColDefine]))
 	}
 }
 
@@ -152,7 +152,7 @@ func TestAddKanbanCard(t *testing.T) {
 func TestRemoveKanbanCard(t *testing.T) {
 	dir := t.TempDir()
 	state := newKanbanState()
-	state.Columns[ColBacklog] = []KanbanCard{{ID: "rm1", Title: "Remove me"}}
+	state.Columns[ColDefine] = []KanbanCard{{ID: "rm1", Title: "Remove me"}}
 	if err := saveKanbanState(dir, state); err != nil {
 		t.Fatal(err)
 	}
@@ -163,8 +163,8 @@ func TestRemoveKanbanCard(t *testing.T) {
 	}
 
 	loaded, _ := loadKanbanState(dir)
-	if len(loaded.Columns[ColBacklog]) != 0 {
-		t.Errorf("expected 0 cards, got %d", len(loaded.Columns[ColBacklog]))
+	if len(loaded.Columns[ColDefine]) != 0 {
+		t.Errorf("expected 0 cards, got %d", len(loaded.Columns[ColDefine]))
 	}
 }
 
@@ -201,7 +201,7 @@ func TestGenerateID_Unique(t *testing.T) {
 
 func TestDefaultColumns(t *testing.T) {
 	cols := defaultColumns()
-	expected := []string{ColBacklog, ColPlanned, ColInProgress, ColReview, ColDone}
+	expected := []string{ColDefine, ColRefine, ColApproved, ColReady, ColInProgress, ColAutoReview, ColDone}
 	if len(cols) != len(expected) {
 		t.Fatalf("expected %d columns, got %d", len(expected), len(cols))
 	}

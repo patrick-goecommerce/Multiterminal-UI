@@ -1,24 +1,31 @@
 import { writable, derived } from 'svelte/store';
 
 /** Column IDs matching the Go backend constants */
-export const COLUMN_IDS = ['backlog', 'planned', 'in_progress', 'review', 'done'] as const;
+export const COLUMN_IDS = [
+  'define', 'refine', 'approved', 'ready',
+  'in_progress', 'auto_review', 'done'
+] as const;
 export type ColumnID = typeof COLUMN_IDS[number];
 
 /** Column display labels (German UI) */
 export const COLUMN_LABELS: Record<ColumnID, string> = {
-  backlog: 'Backlog',
-  planned: 'Geplant',
+  define: 'Definieren',
+  refine: 'Verfeinern',
+  approved: 'Genehmigt',
+  ready: 'Bereit',
   in_progress: 'In Arbeit',
-  review: 'Review',
+  auto_review: 'Auto-Review',
   done: 'Erledigt',
 };
 
 /** Column accent colors */
 export const COLUMN_COLORS: Record<ColumnID, string> = {
-  backlog: '#a6adc8',
-  planned: '#89b4fa',
-  in_progress: '#39ff14',
-  review: '#f5a623',
+  define: '#9ca3af',
+  refine: '#f59e0b',
+  approved: '#8b5cf6',
+  ready: '#3b82f6',
+  in_progress: '#f97316',
+  auto_review: '#06b6d4',
   done: '#22c55e',
 };
 
@@ -34,6 +41,18 @@ export interface KanbanCard {
   plan_id: string;
   schedule_id: string;
   created_at: string;
+  // Agent orchestration fields
+  parent_issue: number;
+  prompt: string;
+  auto_merge: boolean;
+  auto_start: boolean;
+  worktree_path: string;
+  worktree_branch: string;
+  agent_session_id: number;
+  review_result: string;
+  pr_number: number;
+  retry_count: number;
+  max_retries: number;
 }
 
 export interface PlanStep {
@@ -85,10 +104,12 @@ export interface KanbanStore {
 
 const emptyState: KanbanState = {
   columns: {
-    backlog: [],
-    planned: [],
+    define: [],
+    refine: [],
+    approved: [],
+    ready: [],
     in_progress: [],
-    review: [],
+    auto_review: [],
     done: [],
   },
   plans: [],
@@ -170,11 +191,11 @@ function createKanbanStore() {
       });
     },
 
-    /** Add a card to backlog */
+    /** Add a card to define column */
     addCard(card: KanbanCard) {
       update(s => {
         const newState = { ...s.state, columns: { ...s.state.columns } };
-        newState.columns.backlog = [...(newState.columns.backlog || []), card];
+        newState.columns.define = [...(newState.columns.define || []), card];
         return { ...s, state: newState };
       });
     },

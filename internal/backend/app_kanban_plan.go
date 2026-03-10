@@ -116,7 +116,7 @@ func (a *AppService) ApprovePlan(dir string, planID string) error {
 
 			// Move cards to planned column
 			for _, step := range p.Steps {
-				a.moveCardToColumn(&state, step.CardID, ColPlanned)
+				a.moveCardToColumn(&state, step.CardID, ColApproved)
 			}
 
 			return saveKanbanState(dir, state)
@@ -137,7 +137,7 @@ func (a *AppService) CancelPlan(dir string, planID string) error {
 			// Move non-done cards back to backlog
 			for _, step := range p.Steps {
 				if step.Status != "done" {
-					a.moveCardToColumn(&state, step.CardID, ColBacklog)
+					a.moveCardToColumn(&state, step.CardID, ColDefine)
 				}
 			}
 			state.Plans[i].Status = "cancelled"

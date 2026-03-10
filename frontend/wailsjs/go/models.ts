@@ -16,38 +16,6 @@ export namespace backend {
 	        this.valid = source["valid"];
 	    }
 	}
-	export class CodexDetectResult {
-	    path: string;
-	    source: string;
-	    valid: boolean;
-
-	    static createFrom(source: any = {}) {
-	        return new CodexDetectResult(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.path = source["path"];
-	        this.source = source["source"];
-	        this.valid = source["valid"];
-	    }
-	}
-	export class GeminiDetectResult {
-	    path: string;
-	    source: string;
-	    valid: boolean;
-
-	    static createFrom(source: any = {}) {
-	        return new GeminiDetectResult(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.path = source["path"];
-	        this.source = source["source"];
-	        this.valid = source["valid"];
-	    }
-	}
 	export class FileContent {
 	    path: string;
 	    name: string;
@@ -55,13 +23,11 @@ export namespace backend {
 	    size: number;
 	    error: string;
 	    binary: boolean;
-	    created_at: string;
-	    modified_at: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new FileContent(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
@@ -70,8 +36,6 @@ export namespace backend {
 	        this.size = source["size"];
 	        this.error = source["error"];
 	        this.binary = source["binary"];
-	        this.created_at = source["created_at"];
-	        this.modified_at = source["modified_at"];
 	    }
 	}
 	export class FileEntry {
@@ -220,6 +184,72 @@ export namespace backend {
 		    return a;
 		}
 	}
+	export class KanbanCard {
+	    id: string;
+	    issue_number: number;
+	    title: string;
+	    labels: string[];
+	    dir: string;
+	    session_id: number;
+	    priority: number;
+	    dependencies: number[];
+	    plan_id: string;
+	    schedule_id: string;
+	    created_at: string;
+	    parent_issue: number;
+	    prompt: string;
+	    auto_merge: boolean;
+	    auto_start: boolean;
+	    worktree_path: string;
+	    worktree_branch: string;
+	    agent_session_id: number;
+	    review_result: string;
+	    pr_number: number;
+	    retry_count: number;
+	    max_retries: number;
+
+	    static createFrom(source: any = {}) {
+	        return new KanbanCard(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.issue_number = source["issue_number"];
+	        this.title = source["title"];
+	        this.labels = source["labels"];
+	        this.dir = source["dir"];
+	        this.session_id = source["session_id"];
+	        this.priority = source["priority"];
+	        this.dependencies = source["dependencies"];
+	        this.plan_id = source["plan_id"];
+	        this.schedule_id = source["schedule_id"];
+	        this.created_at = source["created_at"];
+	        this.parent_issue = source["parent_issue"];
+	        this.prompt = source["prompt"];
+	        this.auto_merge = source["auto_merge"];
+	        this.auto_start = source["auto_start"];
+	        this.worktree_path = source["worktree_path"];
+	        this.worktree_branch = source["worktree_branch"];
+	        this.agent_session_id = source["agent_session_id"];
+	        this.review_result = source["review_result"];
+	        this.pr_number = source["pr_number"];
+	        this.retry_count = source["retry_count"];
+	        this.max_retries = source["max_retries"];
+	    }
+	}
+	export class KanbanState {
+	    columns: Record<string, KanbanCard[]>;
+
+	    static createFrom(source: any = {}) {
+	        return new KanbanState(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.columns = source["columns"];
+	    }
+	}
 	export class IssueLabel {
 	    name: string;
 	    color: string;
@@ -284,480 +314,27 @@ export namespace backend {
 	        this.downloadURL = source["downloadURL"];
 	    }
 	}
-	export class StatusLineStatus {
-	    has_existing: boolean;
-	    is_ours: boolean;
-	    existing_command: string;
-
-	    static createFrom(source: any = {}) {
-	        return new StatusLineStatus(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.has_existing = source["has_existing"];
-	        this.is_ours = source["is_ours"];
-	        this.existing_command = source["existing_command"];
-	    }
-	}
-	export class CommitSuggestion {
-	    type: string;
-	    scope: string;
-	    description: string;
-	    full: string;
-
-	    static createFrom(source: any = {}) {
-	        return new CommitSuggestion(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.type = source["type"];
-	        this.scope = source["scope"];
-	        this.description = source["description"];
-	        this.full = source["full"];
-	    }
-	}
-	export class DiffFileStat {
-	    path: string;
-	    status: string;
-	    insertions: number;
-	    deletions: number;
-
-	    static createFrom(source: any = {}) {
-	        return new DiffFileStat(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.path = source["path"];
-	        this.status = source["status"];
-	        this.insertions = source["insertions"];
-	        this.deletions = source["deletions"];
-	    }
-	}
 	export class WorktreeInfo {
 	    path: string;
 	    branch: string;
 	    issue: number;
-	    category: string;
-	    name: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new WorktreeInfo(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
 	        this.branch = source["branch"];
 	        this.issue = source["issue"];
-	        this.category = source["category"];
-	        this.name = source["name"];
 	    }
-	}
-	export class SkillInfo {
-	    id: string;
-	    name: string;
-	    description: string;
-	    category: string;
-
-	    static createFrom(source: any = {}) {
-	        return new SkillInfo(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.description = source["description"];
-	        this.category = source["category"];
-	    }
-	}
-	export class ProjectInitResult {
-	    success: boolean;
-	    error: string;
-
-	    static createFrom(source: any = {}) {
-	        return new ProjectInitResult(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.success = source["success"];
-	        this.error = source["error"];
-	    }
-	}
-
-	export class DashboardPane {
-	    session_id: number;
-	    name: string;
-	    activity: string;
-	    cost: string;
-	    dir: string;
-	    branch: string;
-	    running: boolean;
-	    issue_number: number;
-	    issue_title: string;
-
-	    static createFrom(source: any = {}) {
-	        return new DashboardPane(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.session_id = source["session_id"];
-	        this.name = source["name"];
-	        this.activity = source["activity"];
-	        this.cost = source["cost"];
-	        this.dir = source["dir"];
-	        this.branch = source["branch"];
-	        this.running = source["running"];
-	        this.issue_number = source["issue_number"];
-	        this.issue_title = source["issue_title"];
-	    }
-	}
-
-	// --- Sprint 2: Dashboard & Kanban ---
-
-	export class ProjectStats {
-	    dir: string;
-	    name: string;
-	    active_sessions: number;
-	    total_cost: string;
-	    cost_value: number;
-	    branch: string;
-	    queue_depth: number;
-	    is_initialized: boolean;
-
-	    static createFrom(source: any = {}) {
-	        return new ProjectStats(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.dir = source["dir"];
-	        this.name = source["name"];
-	        this.active_sessions = source["active_sessions"];
-	        this.total_cost = source["total_cost"];
-	        this.cost_value = source["cost_value"];
-	        this.branch = source["branch"];
-	        this.queue_depth = source["queue_depth"];
-	        this.is_initialized = source["is_initialized"];
-	    }
-	}
-	export class DashboardStats {
-	    projects: ProjectStats[];
-	    total_cost: string;
-	    total_sessions: number;
-
-	    static createFrom(source: any = {}) {
-	        return new DashboardStats(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.projects = this.convertValues(source["projects"], ProjectStats);
-	        this.total_cost = source["total_cost"];
-	        this.total_sessions = source["total_sessions"];
-	    }
-
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) { return a; }
-		    if (a.slice && a.map) { return (a as any[]).map(elem => this.convertValues(elem, classs)); }
-		    if ("object" === typeof a) { if (asMap) { for (const key of Object.keys(a)) { a[key] = new classs(a[key]); } return a; } return new classs(a); }
-		    return a;
-		}
-	}
-	export class KanbanCard {
-	    id: string;
-	    issue_number: number;
-	    title: string;
-	    labels: string[];
-	    dir: string;
-	    session_id: number;
-	    priority: number;
-	    dependencies: number[];
-	    plan_id: string;
-	    schedule_id: string;
-	    created_at: string;
-
-	    static createFrom(source: any = {}) {
-	        return new KanbanCard(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.issue_number = source["issue_number"];
-	        this.title = source["title"];
-	        this.labels = source["labels"];
-	        this.dir = source["dir"];
-	        this.session_id = source["session_id"];
-	        this.priority = source["priority"];
-	        this.dependencies = source["dependencies"];
-	        this.plan_id = source["plan_id"];
-	        this.schedule_id = source["schedule_id"];
-	        this.created_at = source["created_at"];
-	    }
-	}
-	export class PlanStep {
-	    issue_number: number;
-	    card_id: string;
-	    title: string;
-	    order: number;
-	    parallel: boolean;
-	    session_id: number;
-	    status: string;
-	    prompt: string;
-
-	    static createFrom(source: any = {}) {
-	        return new PlanStep(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.issue_number = source["issue_number"];
-	        this.card_id = source["card_id"];
-	        this.title = source["title"];
-	        this.order = source["order"];
-	        this.parallel = source["parallel"];
-	        this.session_id = source["session_id"];
-	        this.status = source["status"];
-	        this.prompt = source["prompt"];
-	    }
-	}
-	export class Plan {
-	    id: string;
-	    dir: string;
-	    created_at: string;
-	    steps: PlanStep[];
-	    status: string;
-
-	    static createFrom(source: any = {}) {
-	        return new Plan(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.dir = source["dir"];
-	        this.created_at = source["created_at"];
-	        this.steps = this.convertValues(source["steps"], PlanStep);
-	        this.status = source["status"];
-	    }
-
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) { return a; }
-		    if (a.slice && a.map) { return (a as any[]).map(elem => this.convertValues(elem, classs)); }
-		    if ("object" === typeof a) { if (asMap) { for (const key of Object.keys(a)) { a[key] = new classs(a[key]); } return a; } return new classs(a); }
-		    return a;
-		}
-	}
-	export class ScheduledTask {
-	    id: string;
-	    name: string;
-	    dir: string;
-	    prompt: string;
-	    schedule: string;
-	    mode: string;
-	    model: string;
-	    enabled: boolean;
-	    last_run: string;
-	    next_run: string;
-
-	    static createFrom(source: any = {}) {
-	        return new ScheduledTask(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.dir = source["dir"];
-	        this.prompt = source["prompt"];
-	        this.schedule = source["schedule"];
-	        this.mode = source["mode"];
-	        this.model = source["model"];
-	        this.enabled = source["enabled"];
-	        this.last_run = source["last_run"];
-	        this.next_run = source["next_run"];
-	    }
-	}
-	export class KanbanState {
-	    columns: Record<string, KanbanCard[]>;
-	    plans: Plan[];
-	    schedules: ScheduledTask[];
-
-	    static createFrom(source: any = {}) {
-	        return new KanbanState(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.columns = source["columns"];
-	        this.plans = this.convertValues(source["plans"], Plan);
-	        this.schedules = this.convertValues(source["schedules"], ScheduledTask);
-	    }
-
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) { return a; }
-		    if (a.slice && a.map) { return (a as any[]).map(elem => this.convertValues(elem, classs)); }
-		    if ("object" === typeof a) { if (asMap) { for (const key of Object.keys(a)) { a[key] = new classs(a[key]); } return a; } return new classs(a); }
-		    return a;
-		}
-	}
-
-	// --- Sprint 4: Orchestrator & Ask-User ---
-
-	export class AskUserQuestion {
-	    session_id: number;
-	    session_name: string;
-	    question: string;
-	    options: string[];
-	    timestamp: string;
-
-	    static createFrom(source: any = {}) {
-	        return new AskUserQuestion(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.session_id = source["session_id"];
-	        this.session_name = source["session_name"];
-	        this.question = source["question"];
-	        this.options = source["options"];
-	        this.timestamp = source["timestamp"];
-	    }
-	}
-
-	// --- Sprint 3: Chat & Queue ---
-
-	export class ChatMessage {
-	    id: string;
-	    role: string;
-	    content: string;
-	    timestamp: string;
-	    cost: string;
-	    tokens: number;
-
-	    static createFrom(source: any = {}) {
-	        return new ChatMessage(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.role = source["role"];
-	        this.content = source["content"];
-	        this.timestamp = source["timestamp"];
-	        this.cost = source["cost"];
-	        this.tokens = source["tokens"];
-	    }
-	}
-	export class Conversation {
-	    id: string;
-	    title: string;
-	    provider: string;
-	    model: string;
-	    scope: string;
-	    created_at: string;
-	    updated_at: string;
-	    messages: ChatMessage[];
-
-	    static createFrom(source: any = {}) {
-	        return new Conversation(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.title = source["title"];
-	        this.provider = source["provider"];
-	        this.model = source["model"];
-	        this.scope = source["scope"];
-	        this.created_at = source["created_at"];
-	        this.updated_at = source["updated_at"];
-	        this.messages = this.convertValues(source["messages"], ChatMessage);
-	    }
-
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) { return a; }
-		    if (a.slice && a.map) { return (a as any[]).map(elem => this.convertValues(elem, classs)); }
-		    if ("object" === typeof a) { if (asMap) { for (const key of Object.keys(a)) { a[key] = new classs(a[key]); } return a; } return new classs(a); }
-		    return a;
-		}
-	}
-	export class QueueOverviewItem {
-	    session_id: number;
-	    session_name: string;
-	    dir: string;
-	    activity: string;
-	    items: QueueItem[];
-
-	    static createFrom(source: any = {}) {
-	        return new QueueOverviewItem(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.session_id = source["session_id"];
-	        this.session_name = source["session_name"];
-	        this.dir = source["dir"];
-	        this.activity = source["activity"];
-	        this.items = this.convertValues(source["items"], QueueItem);
-	    }
-
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) { return a; }
-		    if (a.slice && a.map) { return (a as any[]).map(elem => this.convertValues(elem, classs)); }
-		    if ("object" === typeof a) { if (asMap) { for (const key of Object.keys(a)) { a[key] = new classs(a[key]); } return a; } return new classs(a); }
-		    return a;
-		}
 	}
 
 }
 
 export namespace config {
 	
-	export class BackgroundAgents {
-	    review_enabled?: boolean;
-	    review_tool: string;
-	    review_model: string;
-	    review_prompt: string;
-	    test_enabled?: boolean;
-	    test_command: string;
-
-	    static createFrom(source: any = {}) {
-	        return new BackgroundAgents(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.review_enabled = source["review_enabled"];
-	        this.review_tool = source["review_tool"];
-	        this.review_model = source["review_model"];
-	        this.review_prompt = source["review_prompt"];
-	        this.test_enabled = source["test_enabled"];
-	        this.test_command = source["test_command"];
-	    }
-	}
-	export class KeepAliveSettings {
-	    enabled?: boolean;
-	    interval_minutes: number;
-	    message: string;
-
-	    static createFrom(source: any = {}) {
-	        return new KeepAliveSettings(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.enabled = source["enabled"];
-	        this.interval_minutes = source["interval_minutes"];
-	        this.message = source["message"];
-	    }
-	}
 	export class AudioSettings {
 	    enabled?: boolean;
 	    volume: number;
@@ -814,30 +391,28 @@ export namespace config {
 	        this.include_cost_in_report = source["include_cost_in_report"];
 	    }
 	}
-	export class StatusLineSettings {
-    enabled: boolean;
-    template: string;
-    show_model: boolean;
-    show_context: boolean;
-    show_cost: boolean;
-    show_git_branch: boolean;
-    show_duration: boolean;
+	export class OrchestratorSettings {
+	    max_parallel_agents: number;
+	    default_auto_merge: boolean;
+	    default_auto_start: boolean;
+	    max_retries: number;
+	    review_command: string;
+	    sync_subtasks_to_github: boolean;
 
-    static createFrom(source: any = {}) {
-        return new StatusLineSettings(source);
-    }
+	    static createFrom(source: any = {}) {
+	        return new OrchestratorSettings(source);
+	    }
 
-    constructor(source: any = {}) {
-        if ('string' === typeof source) source = JSON.parse(source);
-        this.enabled = source["enabled"];
-        this.template = source["template"];
-        this.show_model = source["show_model"];
-        this.show_context = source["show_context"];
-        this.show_cost = source["show_cost"];
-        this.show_git_branch = source["show_git_branch"];
-        this.show_duration = source["show_duration"];
-    }
-}
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.max_parallel_agents = source["max_parallel_agents"];
+	        this.default_auto_merge = source["default_auto_merge"];
+	        this.default_auto_start = source["default_auto_start"];
+	        this.max_retries = source["max_retries"];
+	        this.review_command = source["review_command"];
+	        this.sync_subtasks_to_github = source["sync_subtasks_to_github"];
+	    }
+	}
 	export class ModelEntry {
 	    label: string;
 	    id: string;
@@ -861,35 +436,25 @@ export namespace config {
 	    sidebar_width: number;
 	    claude_command: string;
 	    claude_models: ModelEntry[];
-	    claude_enabled?: boolean;
-	    codex_command: string;
-	    codex_models: ModelEntry[];
-	    codex_enabled?: boolean;
-	    gemini_command: string;
-	    gemini_models: ModelEntry[];
-	    gemini_enabled?: boolean;
 	    commit_reminder_minutes: number;
 	    restore_session?: boolean;
 	    logging_enabled: boolean;
 	    auto_branch_on_issue?: boolean;
+	    use_worktrees?: boolean;
 	    issue_tracking: IssueTracking;
 	    commands: CommandEntry[];
 	    audio: AudioSettings;
-	    keep_alive: KeepAliveSettings;
-	    background_agents: BackgroundAgents;
-	    status_line: StatusLineSettings;
 	    localhost_auto_open: string;
 	    sidebar_pinned: boolean;
 	    favorites?: Record<string, Array<string>>;
 	    font_family: string;
 	    font_size: number;
-	    language: string;
-	    setup_done: boolean;
+	    orchestrator: OrchestratorSettings;
 
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.default_shell = source["default_shell"];
@@ -900,32 +465,22 @@ export namespace config {
 	        this.sidebar_width = source["sidebar_width"];
 	        this.claude_command = source["claude_command"];
 	        this.claude_models = this.convertValues(source["claude_models"], ModelEntry);
-	        this.claude_enabled = source["claude_enabled"];
-	        this.codex_command = source["codex_command"];
-	        this.codex_models = this.convertValues(source["codex_models"], ModelEntry);
-	        this.codex_enabled = source["codex_enabled"];
-	        this.gemini_command = source["gemini_command"];
-	        this.gemini_models = this.convertValues(source["gemini_models"], ModelEntry);
-	        this.gemini_enabled = source["gemini_enabled"];
 	        this.commit_reminder_minutes = source["commit_reminder_minutes"];
 	        this.restore_session = source["restore_session"];
 	        this.logging_enabled = source["logging_enabled"];
 	        this.auto_branch_on_issue = source["auto_branch_on_issue"];
+	        this.use_worktrees = source["use_worktrees"];
 	        this.issue_tracking = this.convertValues(source["issue_tracking"], IssueTracking);
 	        this.commands = this.convertValues(source["commands"], CommandEntry);
 	        this.audio = this.convertValues(source["audio"], AudioSettings);
-	        this.keep_alive = this.convertValues(source["keep_alive"], KeepAliveSettings);
-	        this.background_agents = this.convertValues(source["background_agents"], BackgroundAgents);
-	        this.status_line = this.convertValues(source["status_line"], StatusLineSettings);
 	        this.localhost_auto_open = source["localhost_auto_open"];
 	        this.sidebar_pinned = source["sidebar_pinned"];
 	        this.favorites = source["favorites"];
 	        this.font_family = source["font_family"];
 	        this.font_size = source["font_size"];
-	        this.language = source["language"];
-	        this.setup_done = source["setup_done"];
+	        this.orchestrator = this.convertValues(source["orchestrator"], OrchestratorSettings);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;

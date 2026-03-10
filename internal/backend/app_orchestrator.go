@@ -266,7 +266,7 @@ func (a *AppService) markStepDone(orch *orchestratorState, cardID string) {
 		}
 	}
 
-	a.moveCardToColumn(&state, cardID, ColReview)
+	a.moveCardToColumn(&state, cardID, ColAutoReview)
 	saveKanbanState(orch.dir, state)
 	a.emitOrchestratorEvent(orch.planID, "step_done")
 }
