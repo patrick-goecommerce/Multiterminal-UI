@@ -148,6 +148,8 @@ func (a *AppService) scanAllSessions() {
 		// Trigger pipeline queue on fresh "done" transition
 		if activityChanged && actStr == "done" && a.app != nil {
 			a.processQueue(id)
+			// Notify orchestrator that this agent finished
+			a.notifyOrchestratorDone(id)
 		}
 
 		// Report issue progress on activity transitions

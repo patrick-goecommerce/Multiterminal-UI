@@ -101,7 +101,8 @@ func (a *AppService) GetPlans(dir string) []Plan {
 }
 
 // ApprovePlan changes a plan's status from draft to approved.
-func (a *AppService) ApprovePlan(dir string, planID string) error {
+// If parentIssue > 0, sub-tickets are generated and linked to that issue.
+func (a *AppService) ApprovePlan(dir string, planID string, parentIssue int) error {
 	state, err := loadKanbanState(dir)
 	if err != nil {
 		return fmt.Errorf("load kanban: %w", err)
@@ -119,10 +120,93 @@ func (a *AppService) ApprovePlan(dir string, planID string) error {
 				a.moveCardToColumn(&state, step.CardID, ColApproved)
 			}
 
-			return saveKanbanState(dir, state)
+			if err := saveKanbanState(dir, state); err != nil {
+				return err
+			}
+			return a.GenerateSubTickets(dir, planID, parentIssue)
 		}
 	}
 	return fmt.Errorf("plan %s not found", planID)
+}
+
+// GenerateSubTickets creates KanbanCards from plan steps and adds them to the board.
+// Each step becomes a card in the "approved" column (or "ready" if AutoStart is set).
+func (a *AppService) GenerateSubTickets(dir string, planID string, parentIssue int) error {
+	state, err := loadKanbanState(dir)
+	if err != nil {
+		return fmt.Errorf("load kanban: %w", err)
+	}
+
+	// Find plan by ID
+	var plan *Plan
+	var planIdx int
+	for i := range state.Plans {
+		if state.Plans[i].ID == planID {
+			plan = &state.Plans[i]
+			planIdx = i
+			break
+		}
+	}
+	if plan == nil {
+		return fmt.Errorf("plan %s not found", planID)
+	}
+
+	autoMerge := a.cfg.Orchestrator.DefaultAutoMerge
+	autoStart := a.cfg.Orchestrator.DefaultAutoStart
+	maxRetries := a.cfg.Orchestrator.MaxRetries
+
+	for i, step := range plan.Steps {
+		col := ColApproved
+		if autoStart {
+			col = ColReady
+		}
+
+		card := KanbanCard{
+			ID:          generateID(),
+			Title:       step.Title,
+			Prompt:      step.Prompt,
+			ParentIssue: parentIssue,
+			PlanID:      planID,
+			Priority:    step.Order,
+			AutoMerge:   autoMerge,
+			AutoStart:   autoStart,
+			MaxRetries:  maxRetries,
+			Dir:         dir,
+			CreatedAt:   time.Now().Format(time.RFC3339),
+		}
+
+		// Derive dependencies from step order (sequential by default)
+		if i > 0 && !step.Parallel {
+			card.Dependencies = []int{plan.Steps[i-1].Order}
+		}
+
+		state.Columns[col] = append(state.Columns[col], card)
+		state.Plans[planIdx].Steps[i].CardID = card.ID
+	}
+
+	return saveKanbanState(dir, state)
+}
+
+// GetSubTicketProgress returns how many sub-tickets are done vs total for a parent issue.
+func (a *AppService) GetSubTicketProgress(dir string, parentIssue int) (int, int) {
+	state, err := loadKanbanState(dir)
+	if err != nil {
+		return 0, 0
+	}
+
+	done := 0
+	total := 0
+	for col, cards := range state.Columns {
+		for _, c := range cards {
+			if c.ParentIssue == parentIssue {
+				total++
+				if col == ColDone {
+					done++
+				}
+			}
+		}
+	}
+	return done, total
 }
 
 // CancelPlan cancels a plan and moves cards back to backlog.

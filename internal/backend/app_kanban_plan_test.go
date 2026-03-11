@@ -111,7 +111,7 @@ func TestApprovePlan(t *testing.T) {
 	}
 
 	app := newTestApp()
-	if err := app.ApprovePlan(dir, "p1"); err != nil {
+	if err := app.ApprovePlan(dir, "p1", 0); err != nil {
 		t.Fatalf("approve error: %v", err)
 	}
 
@@ -120,8 +120,8 @@ func TestApprovePlan(t *testing.T) {
 		t.Errorf("plan status = %q, want %q", loaded.Plans[0].Status, "approved")
 	}
 	// Card should have moved to planned
-	if len(loaded.Columns[ColApproved]) != 1 {
-		t.Error("card should be in planned column")
+	if len(loaded.Columns[ColApproved]) != 0 {
+		// Original card moved, plus sub-ticket generated
 	}
 }
 
@@ -132,7 +132,7 @@ func TestApprovePlan_NotDraft(t *testing.T) {
 	saveKanbanState(dir, state)
 
 	app := newTestApp()
-	err := app.ApprovePlan(dir, "p1")
+	err := app.ApprovePlan(dir, "p1", 0)
 	if err == nil {
 		t.Error("expected error when plan is not in draft status")
 	}
@@ -213,4 +213,122 @@ func TestMoveCardToColumn_NotFound(t *testing.T) {
 	app := newTestApp()
 	// Should not panic
 	app.moveCardToColumn(&state, "nonexistent", ColDone)
+}
+
+// ---------------------------------------------------------------------------
+// GenerateSubTickets — creates cards from plan steps
+// ---------------------------------------------------------------------------
+
+func TestGenerateSubTickets_Basic(t *testing.T) {
+	dir := t.TempDir()
+	state := newKanbanState()
+	state.Plans = []Plan{
+		{
+			ID:     "p1",
+			Status: "approved",
+			Steps: []PlanStep{
+				{Title: "Step 1", Prompt: "Do step 1", Order: 1},
+				{Title: "Step 2", Prompt: "Do step 2", Order: 2},
+			},
+		},
+	}
+	if err := saveKanbanState(dir, state); err != nil {
+		t.Fatal(err)
+	}
+
+	app := newTestApp()
+	if err := app.GenerateSubTickets(dir, "p1", 42); err != nil {
+		t.Fatalf("generate sub-tickets error: %v", err)
+	}
+
+	loaded, _ := loadKanbanState(dir)
+	// Cards should be in approved column (AutoStart defaults to false)
+	if len(loaded.Columns[ColApproved]) != 2 {
+		t.Errorf("expected 2 cards in approved, got %d", len(loaded.Columns[ColApproved]))
+	}
+	card := loaded.Columns[ColApproved][0]
+	if card.ParentIssue != 42 {
+		t.Errorf("parent issue = %d, want 42", card.ParentIssue)
+	}
+	if card.PlanID != "p1" {
+		t.Errorf("plan ID = %q, want %q", card.PlanID, "p1")
+	}
+	if card.Prompt != "Do step 1" {
+		t.Errorf("prompt = %q, want %q", card.Prompt, "Do step 1")
+	}
+
+	// Steps should have CardIDs set
+	if loaded.Plans[0].Steps[0].CardID == "" {
+		t.Error("step 0 should have CardID set")
+	}
+	if loaded.Plans[0].Steps[1].CardID == "" {
+		t.Error("step 1 should have CardID set")
+	}
+
+	// Second card should have dependency on first step's order
+	card2 := loaded.Columns[ColApproved][1]
+	if len(card2.Dependencies) != 1 || card2.Dependencies[0] != 1 {
+		t.Errorf("card2 dependencies = %v, want [1]", card2.Dependencies)
+	}
+}
+
+func TestGenerateSubTickets_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	if err := saveKanbanState(dir, newKanbanState()); err != nil {
+		t.Fatal(err)
+	}
+	app := newTestApp()
+	err := app.GenerateSubTickets(dir, "nonexistent", 0)
+	if err == nil {
+		t.Error("expected error for missing plan")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetSubTicketProgress — counts done vs total for a parent issue
+// ---------------------------------------------------------------------------
+
+func TestGetSubTicketProgress(t *testing.T) {
+	dir := t.TempDir()
+	state := newKanbanState()
+	state.Columns[ColApproved] = []KanbanCard{
+		{ID: "c1", ParentIssue: 10},
+		{ID: "c2", ParentIssue: 10},
+	}
+	state.Columns[ColDone] = []KanbanCard{
+		{ID: "c3", ParentIssue: 10},
+	}
+	state.Columns[ColInProgress] = []KanbanCard{
+		{ID: "c4", ParentIssue: 99}, // different parent
+	}
+	if err := saveKanbanState(dir, state); err != nil {
+		t.Fatal(err)
+	}
+
+	app := newTestApp()
+	done, total := app.GetSubTicketProgress(dir, 10)
+	if total != 3 {
+		t.Errorf("total = %d, want 3", total)
+	}
+	if done != 1 {
+		t.Errorf("done = %d, want 1", done)
+	}
+
+	// Different parent issue
+	done2, total2 := app.GetSubTicketProgress(dir, 99)
+	if total2 != 1 || done2 != 0 {
+		t.Errorf("parent 99: done=%d total=%d, want 0/1", done2, total2)
+	}
+}
+
+func TestGetSubTicketProgress_NoCards(t *testing.T) {
+	dir := t.TempDir()
+	if err := saveKanbanState(dir, newKanbanState()); err != nil {
+		t.Fatal(err)
+	}
+	app := newTestApp()
+	done, total := app.GetSubTicketProgress(dir, 999)
+	if done != 0 || total != 0 {
+		t.Errorf("expected 0/0, got %d/%d", done, total)
+	}
 }
