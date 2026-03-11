@@ -1,13 +1,21 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import * as App from '../../wailsjs/go/backend/App';
+  import { EventsOn } from '../../wailsjs/runtime/runtime';
   import KanbanColumn from './KanbanColumn.svelte';
-  import { kanban, COLUMN_IDS, activePlans, type ColumnID, type KanbanCard } from '../stores/kanban';
+  import { kanban, COLUMN_IDS, activePlans, parentIssueProgress, type ColumnID, type KanbanCard } from '../stores/kanban';
 
   export let dir = '';
 
   let addCardTitle = '';
   let showAddCard = false;
+
+  // Orchestration status
+  let orchStatus = { active: false, running_agents: 0, max_agents: 3, pending_tickets: 0, review_tickets: 0, done_tickets: 0 };
+  let orchLoading = false;
+
+  // Event cleanup
+  let eventCleanup: (() => void) | null = null;
 
   function loadBoard() {
     if (!dir) return;
@@ -20,8 +28,56 @@
       });
   }
 
+  async function refreshOrchStatus() {
+    if (!dir) return;
+    try {
+      orchStatus = await App.GetOrchestrationStatus(dir);
+    } catch (e) { console.error('[kanban] orchestration status error:', e); }
+  }
+
+  onMount(() => {
+    // Listen for orchestrator events
+    eventCleanup = EventsOn('orchestrator:update', (payload: any) => {
+      if (payload?.dir === dir || !payload?.dir) {
+        loadBoard();
+        refreshOrchStatus();
+      }
+    });
+    refreshOrchStatus();
+  });
+
+  onDestroy(() => {
+    if (eventCleanup) eventCleanup();
+  });
+
   // Reload when dir changes
-  $: if (dir) loadBoard();
+  $: if (dir) { loadBoard(); refreshOrchStatus(); }
+
+  async function handleStartOrchestration() {
+    if (!dir) return;
+    orchLoading = true;
+    try {
+      await App.StartOrchestration(dir);
+      await refreshOrchStatus();
+    } catch (err) {
+      console.error('[kanban] start orchestration error:', err);
+    } finally {
+      orchLoading = false;
+    }
+  }
+
+  async function handleStopOrchestration() {
+    if (!dir) return;
+    orchLoading = true;
+    try {
+      await App.StopOrchestration(dir);
+      await refreshOrchStatus();
+    } catch (err) {
+      console.error('[kanban] stop orchestration error:', err);
+    } finally {
+      orchLoading = false;
+    }
+  }
 
   async function handleSync() {
     if (!dir) return;
@@ -135,6 +191,15 @@
       <button class="btn-toolbar" on:click={handleSync} title="Issues synchronisieren">
         &#8635; Sync
       </button>
+      {#if orchStatus.active}
+        <button class="btn-toolbar btn-stop" on:click={handleStopOrchestration} disabled={orchLoading} title="Orchestrierung stoppen">
+          &#9724; Stoppen
+        </button>
+      {:else}
+        <button class="btn-toolbar btn-start" on:click={handleStartOrchestration} disabled={orchLoading} title="Orchestrierung starten">
+          &#9654; Starten
+        </button>
+      {/if}
       <button
         class="btn-tab"
         class:active={$kanban.activeTab === 'board'}
@@ -160,6 +225,35 @@
           <span class="plan-progress">
             ({plan.steps.filter(s => s.status === 'done').length}/{plan.steps.length})
           </span>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
+  {#if orchStatus.active || orchStatus.done_tickets > 0}
+    <div class="orch-status-bar">
+      <span class="orch-indicator" class:active={orchStatus.active}></span>
+      <span class="orch-label">
+        Agenten: {orchStatus.running_agents}/{orchStatus.max_agents}
+      </span>
+      <span class="orch-sep">|</span>
+      <span class="orch-label">Bereit: {orchStatus.pending_tickets}</span>
+      <span class="orch-sep">|</span>
+      <span class="orch-label">Review: {orchStatus.review_tickets}</span>
+      <span class="orch-sep">|</span>
+      <span class="orch-label">Erledigt: {orchStatus.done_tickets}</span>
+    </div>
+  {/if}
+
+  {#if Object.keys($parentIssueProgress).length > 0}
+    <div class="parent-progress-bar">
+      {#each Object.entries($parentIssueProgress) as [issueNum, prog]}
+        <div class="parent-progress-badge">
+          <span class="parent-issue-num">#{issueNum}</span>
+          <span class="parent-progress-text">{prog.done}/{prog.total} Sub-Tickets erledigt</span>
+          <div class="parent-progress-track">
+            <div class="parent-progress-fill" style="width: {prog.total > 0 ? (prog.done / prog.total * 100) : 0}%"></div>
+          </div>
         </div>
       {/each}
     </div>
@@ -458,4 +552,92 @@
   }
   .plan-label { font-weight: 500; }
   .plan-progress { opacity: 0.7; }
+
+  /* Orchestration controls */
+  .btn-start {
+    border-color: rgba(57, 255, 20, 0.4);
+    color: var(--accent, #39ff14);
+  }
+  .btn-start:hover { border-color: var(--accent, #39ff14); background: rgba(57, 255, 20, 0.08); }
+  .btn-stop {
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+  }
+  .btn-stop:hover { border-color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+  .btn-toolbar:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Orchestration status bar */
+  .orch-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: var(--bg-secondary, #1e1e2e);
+    border-bottom: 1px solid var(--border, #45475a);
+    font-size: 0.72rem;
+    color: var(--fg-muted, #a6adc8);
+    flex-shrink: 0;
+  }
+  .orch-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--fg-muted, #a6adc8);
+    flex-shrink: 0;
+  }
+  .orch-indicator.active {
+    background: var(--accent, #39ff14);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+  .orch-label {
+    white-space: nowrap;
+  }
+  .orch-sep {
+    opacity: 0.3;
+  }
+
+  /* Parent issue progress */
+  .parent-progress-bar {
+    display: flex;
+    gap: 8px;
+    padding: 6px 16px;
+    background: var(--bg-secondary, #1e1e2e);
+    border-bottom: 1px solid var(--border, #45475a);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .parent-progress-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+  }
+  .parent-issue-num {
+    font-weight: 700;
+  }
+  .parent-progress-text {
+    font-weight: 500;
+    opacity: 0.9;
+  }
+  .parent-progress-track {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(139, 92, 246, 0.15);
+    overflow: hidden;
+  }
+  .parent-progress-fill {
+    height: 100%;
+    background: #a78bfa;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
 </style>

@@ -233,3 +233,18 @@ export const totalCards = derived(kanban, $k => {
 export const activePlans = derived(kanban, $k =>
   $k.state.plans.filter(p => p.status === 'draft' || p.status === 'approved' || p.status === 'running')
 );
+
+/** Derived: parent issue progress (done/total for each parent_issue) */
+export const parentIssueProgress = derived(kanban, $k => {
+  const progress: Record<number, { done: number; total: number }> = {};
+  for (const [col, cards] of Object.entries($k.state.columns)) {
+    for (const card of cards) {
+      if (card.parent_issue > 0) {
+        if (!progress[card.parent_issue]) progress[card.parent_issue] = { done: 0, total: 0 };
+        progress[card.parent_issue].total++;
+        if (col === 'done') progress[card.parent_issue].done++;
+      }
+    }
+  }
+  return progress;
+});
