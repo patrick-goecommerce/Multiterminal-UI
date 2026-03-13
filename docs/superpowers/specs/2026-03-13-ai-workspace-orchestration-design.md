@@ -18,8 +18,11 @@ This is an additive layer — existing single-terminal and manual multi-pane wor
 
 - User opens a project, starts an issue from Kanban → a configured Agent Team launches automatically
 - Lead agent coordinates teammates via MCP tools (no file polling, no race conditions)
+- Before starting autonomous work, the Lead asks bundled clarifying questions — user answers once, then the team goes
+- Agent roles are backed by deep, researched skills (not one-liners); skills are evaluated and adapted per issue
 - Kanban board reflects agent state live
 - Works with or without `.mtui.yml` (backwards compatible)
+- Minimal team state persisted across app restarts (resume option)
 
 ---
 
@@ -114,9 +117,15 @@ team:
   model: claude-opus-4-6        # optional model override
   max_messages: 200             # optional, default 200; older messages evicted when exceeded
   roles:
+    # String form: inline system prompt (simple / backwards compatible)
     lead: "You are the lead developer. Coordinate the team. Use spawn_teammate() for complex sub-tasks."
-    reviewer: "You review the lead's code and report issues via update_task()."
+    # Object form: references a named skill file + role-specific focus
+    reviewer:
+      skill: code-reviewer       # loads from .mtui/skills/ or ~/.multiterminal/skills/
+      focus: "Review the lead's code and report issues via update_task()."
 ```
+
+**Both role formats are supported by the YAML parser.** A plain string value is treated as an inline prompt; an object with `skill` + `focus` loads a skill file and appends the focus. This allows gradual migration from inline prompts to full skill-backed roles.
 
 **Rules:**
 - `.mtui.yml` is optional. Without it, mtui works exactly as today.
@@ -165,7 +174,7 @@ Lives in `internal/backend/app_mcp_state.go` (not in `app_kanban.go`, which is a
 type TeamSession struct {
     ID          string            `json:"id"          yaml:"id"`
     IssueID     string            `json:"issue_id"    yaml:"issue_id"`
-    Token       string            `json:"token"       yaml:"-"`        // never serialized to frontend
+    Token       string            `json:"-"           yaml:"-"`        // never serialized (frontend or disk); regenerated on resume
     Tasks       []TeamTask        `json:"tasks"       yaml:"tasks"`
     Messages    []TeamMessage     `json:"messages"    yaml:"messages"`
     Agents      map[string]string `json:"agents"      yaml:"agents"`   // role → pane sessionID
@@ -208,19 +217,101 @@ type TeamMessage struct {
 
 ---
 
+## Planning Dialog (Clarifying Questions Before Go)
+
+Before autonomous execution begins, the Lead enters a **planning phase**:
+
+1. Lead pane spawns with a planning prompt: analyze the issue, then output **3–5 bundled clarifying questions** in a structured format (JSON block that mtui can parse).
+2. `app_mcp.go` registers a screen-content hook on the Lead session; after each `ActivityDone` event, it scans the screen buffer for the JSON sentinel (`{"mtui_planning":`). When found, it emits a Wails `team:planning_ready` event with the parsed questions. The activity scanner (`app_scan.go`) remains unaware of planning — separation of concerns is preserved.
+3. User answers all questions in one dialog — no back-and-forth.
+4. mtui injects the answers back into the Lead's session via `WriteToSession`.
+5. Lead acknowledges ("Got it, starting...") and begins autonomous work.
+
+**Structured question format** (Lead outputs this, mtui parses it):
+```json
+{"mtui_planning": [
+  {"id": "1", "question": "Should the fix include tests?", "default": "yes"},
+  {"id": "2", "question": "Target Go version constraint?", "default": "1.21+"}
+]}
+```
+
+`TeamPlanningDialog.svelte` — modal dialog, props: `questions: PlanningQuestion[]`, emits `answered(answers: Record<string, string>)`. Displayed over the Kanban board. User can accept defaults or type custom answers.
+
+---
+
+## Agent Skills
+
+### Current State
+
+Existing mtui skills (`backend`, `devops`, `docs-technical`, `git-workflow`) are one-liners — not deep enough for effective agent roles in autonomous AI development.
+
+### Skill Loading (B+C Mix)
+
+**B — Role-referenced skills:** `.mtui.yml` role definitions reference a skill by name:
+
+```yaml
+team:
+  roles:
+    lead:
+      skill: backend-lead          # loads from .mtui/skills/ or built-in
+      focus: "coordinate and implement"
+    reviewer:
+      skill: code-reviewer
+      focus: "review and catch regressions"
+```
+
+The skill file provides a deep system prompt (architecture principles, best practices, tooling knowledge). The `focus` field adds role-specific context on top.
+
+**C — Issue-adaptive generation:** When a team session starts, mtui generates an **issue-specific addendum** appended to the base skill:
+
+```
+## Current Task Context
+Issue: {title} (#{number})
+Stack: {detected_stack}
+Key files involved: {top_N_relevant_files from git/search}
+Constraints from planning answers: {user_answers}
+```
+
+This gives each agent accurate context without rewriting the base skill per issue.
+
+### Pre-Implementation Research Requirement
+
+**⚠️ Before implementing agent skills, the following research must be completed:**
+
+1. Search for current best practices in multi-agent AI development system prompts (e.g., Anthropic docs, research papers, community resources like Awesome-Claude-Prompts).
+2. Evaluate the 4 existing mtui skills — are they reusable as a base, or should they be rewritten?
+3. Write deep skill files for at minimum: `backend-lead`, `code-reviewer`, `frontend-specialist`. Each should cover: mental model of the role, decision-making heuristics, tool usage patterns, communication norms with teammates.
+4. Skills are stored as markdown files in `.mtui/skills/{name}.md` (project-local) or `~/.multiterminal/skills/{name}.md` (global). Global skills ship with mtui as built-ins.
+
+---
+
 ## Initial Prompt Injection
 
-After spawning the lead pane, mtui waits for the `ActivityIdle` state (Claude prompt is ready) using the existing activity scanner. Then it calls `WriteToSession(sessionID, prompt)` where `prompt` is:
+After the planning dialog completes, mtui waits for `ActivityIdle` (Claude prompt is ready, via activity scanner), then calls `WriteToSession(sessionID, prompt)` where prompt combines:
 
 ```
 Working on: {issue.Title} (#{issue.Number})
 
 {issue.Body}
 
+## Answers to your planning questions
+{formatted_planning_answers}
+
 Use your MCP tools (get_tasks, claim_task, update_task, spawn_teammate) to coordinate the team.
+Begin by breaking this into tasks and claiming the first one.
 ```
 
-This is the same pattern used by the existing pipeline queue (`app_queue.go`). YOLO mode is not required but recommended for autonomous operation.
+This is the same pattern used by the existing pipeline queue (`app_queue.go`). YOLO mode recommended for autonomous operation.
+
+---
+
+## Session Persistence (Minimal)
+
+On app shutdown, the active `TeamSession` state (tasks + statuses + messages, no PTY content) is saved to `~/.multiterminal/team-sessions/{sessionID}.json`.
+
+On next startup, if a saved session exists whose `IssueID` matches a `KanbanCard.ID` currently in the board, a **"Team fortsetzen?"** banner appears in the Kanban. `IssueID` is always the `KanbanCard.ID` string — this is the stable resume key. `ServiceStartup` creates `~/.multiterminal/` and `~/.multiterminal/team-sessions/` via `os.MkdirAll` if they do not exist. User can resume (re-spawn agents with prior task context) or dismiss (discard saved state).
+
+Persistence format: same `TeamSession` struct serialized to JSON. No PTY replay — agents start fresh with a context summary injected as initial prompt.
 
 ---
 
@@ -229,6 +320,7 @@ This is the same pattern used by the existing pipeline queue (`app_queue.go`). Y
 ### New Components
 
 - `KanbanTeamView.svelte` — team status panel within Kanban. Props: `session: TeamSession`. Displays: agent list (role + status badge), task list (claimed by / status), messages log (last N). Emits no events; read-only view driven by Wails `team:update` events. Design detail TBD during implementation.
+- `TeamPlanningDialog.svelte` — modal over Kanban. Props: `questions: PlanningQuestion[]`. Emits: `answered(Record<string, string>)`. Shows Lead's parsed questions with input fields (pre-filled with defaults). "Los gehts" button submits. **Distinct from the existing `KanbanPlanDialog.svelte`** (which handles orchestration plan approval — different purpose).
 
 ### Extended Components
 
@@ -243,6 +335,7 @@ This is the same pattern used by the existing pipeline queue (`app_queue.go`). Y
 | `internal/backend/app_mcp.go` | MCP HTTP/SSE server, tool handlers, request routing | ~250 |
 | `internal/backend/app_mcp_state.go` | `TeamSession` CRUD, token store, message eviction | ~200 |
 | `internal/backend/app_workspace.go` | `.mtui.yml` parser, stack auto-detection | ~150 |
+| `internal/backend/app_skills.go` | Skill file loading (project-local + global), issue-adaptive addendum generation | ~150 |
 
 ### Extended Backend Files
 
@@ -279,7 +372,6 @@ Detection runs in order; first match wins.
 ## Out of Scope
 
 - Cross-machine agent teams
-- Persistent team state across app restarts
 - Agent-to-agent direct messaging without MCP
 - Visual workflow editor for `.mtui.yml`
-- Merging `TeamSession` with `orchestratorState`
+- Merging `TeamSession` with `orchestratorState` (future unification path, not now)
