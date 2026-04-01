@@ -33,5 +33,10 @@ FEATURE_IDEAS.md
 # MTUI project data — chat logs are session-specific
 .mtui/chat/
 
+# MTUI volatile data (not board state — that's in git refs)
+.mtui/qa/
+.mtui/logs/
+.mtui/worktrees/
+
 # Git worktrees
 .worktrees/
