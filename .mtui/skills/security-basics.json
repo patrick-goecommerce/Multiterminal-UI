@@ -1,0 +1,13 @@
+{
+    "name": "security-basics",
+    "detect": [],
+    "priority": 90,
+    "stackable": true,
+    "prompt_file": "security-basics.md",
+    "policies": {
+        "preferred_model": "",
+        "verify": [],
+        "scope_limits": {},
+        "qa_rules": ["no-hardcoded-secrets", "no-sql-injection", "validate-input"]
+    }
+}

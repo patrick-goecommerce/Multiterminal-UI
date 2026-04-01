@@ -1,0 +1,13 @@
+{
+    "name": "superpowers-core",
+    "detect": [],
+    "priority": 100,
+    "stackable": true,
+    "prompt_file": "superpowers-core.md",
+    "policies": {
+        "preferred_model": "",
+        "verify": [],
+        "scope_limits": {},
+        "qa_rules": ["verify-before-done", "tdd-first", "yagni"]
+    }
+}
