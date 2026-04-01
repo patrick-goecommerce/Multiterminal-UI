@@ -13,6 +13,15 @@
 **GitHub Milestone:** "Kanban Orchestration v3"
 **Label-Schema:** `phase:0` bis `phase:3`, `type:infra`, `type:backend`, `type:frontend`, `type:test`
 
+### Wichtige Hinweise
+
+- **Phase 2 arbeitet gegen MockEngine** — HeadlessEngine kommt erst Phase 3. Task v3-2.0 liefert die Mock.
+- **Board Sync (Task 1.5) ist optional** — Board funktioniert lokal ohne Sync. Sync-Probleme duerfen Kernentwicklung nicht blockieren.
+- **stuck und human_review sind Overlay-Badges** im Frontend, keine eigenen Spalten. Die State Machine kennt sie als echte States, die UI rendert sie als Badges auf der executing/qa Spalte.
+- **Wave-Merge geht in den Card-Branch** (nicht Hauptbranch). Finaler Merge Card→Hauptbranch ist der `merging` State.
+- **app.go duenn halten** — Wails Bindings in separate Dateien (app_board.go, app_orchestrate_v3.go). app.go nur fuer Struct-Definition + Lifecycle.
+- **Skill MVP:** superpowers-core, security-basics, go-backend, typescript, svelte-frontend. Mehr erst spaeter.
+
 ---
 
 ## File Structure
@@ -49,6 +58,7 @@
 | `internal/orchestrator/skills.go` | Skill registry, tech detection, policy merging |
 | `internal/orchestrator/skills_test.go` | Unit tests for skill matching + conflict resolution |
 | `internal/orchestrator/prompt.go` | Prompt assembly (system + skill + step context) |
+| `internal/orchestrator/context.go` | Context Builder (minimale Dateiauswahl fuer Agent-Prompts) |
 | `internal/orchestrator/types.go` | ExecutionRequest, ExecutionResult, Plan types |
 
 ### New Packages/Files (Execution Engine)
@@ -67,6 +77,8 @@
 | `internal/engine/checkpoint_test.go` | Unit tests with simulated snapshots |
 | `internal/engine/briefing.go` | DecisionBriefing, SecretScanner, ScopeCheck |
 | `internal/engine/briefing_test.go` | Unit tests for risk scoring + secret detection |
+| `internal/engine/manifest.go` | ManifestChange Parser (go.mod, package.json diff analysis) |
+| `internal/engine/manifest_test.go` | Unit tests for manifest parsing |
 | `internal/engine/merge.go` | Wave merge + conflict avoidance + dependency reconciliation |
 | `internal/engine/merge_test.go` | Unit tests for merge decisions |
 
