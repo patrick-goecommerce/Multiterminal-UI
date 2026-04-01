@@ -81,13 +81,13 @@ func TestResumeAfterReview_AllStepsSucceed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Card should be in QA state.
+	// Card should be in done state (QA passes — no must_haves artifacts).
 	card, err := b.GetTask("card-resume")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if card.State != board.StateQA {
-		t.Errorf("state: got %q, want %q", card.State, board.StateQA)
+	if card.State != board.StateDone {
+		t.Errorf("state: got %q, want %q", card.State, board.StateDone)
 	}
 }
 
@@ -223,8 +223,8 @@ func TestResumeAfterReview_MultiWaveOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if card.State != board.StateQA {
-		t.Errorf("state: got %q, want %q", card.State, board.StateQA)
+	if card.State != board.StateDone {
+		t.Errorf("state: got %q, want %q", card.State, board.StateDone)
 	}
 }
 

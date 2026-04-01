@@ -186,8 +186,8 @@ func (o *Orchestrator) ResumeAfterReview(ctx context.Context, dir, cardID string
 		return fmt.Errorf("update card: %w", err)
 	}
 
-	// TODO(2.8c): QA phase, Decision Briefing, Merge
-	return nil
+	// 8. QA phase → Decision Briefing → Merge
+	return o.RunQA(ctx, dir, cardID)
 }
 
 // Budget returns the orchestrator's budget tracker for external inspection.
@@ -218,6 +218,10 @@ func buildTechContext(detected []string, skills []Skill) string {
 func toBoardPlan(p Plan) board.Plan {
 	steps := make([]board.PlanStep, len(p.Steps))
 	for i, s := range p.Steps {
+		arts := make([]board.ArtifactRequirement, len(s.MustHaves.Artifacts))
+		for j, a := range s.MustHaves.Artifacts {
+			arts[j] = board.ArtifactRequirement{Path: a.Path, MinLines: a.MinLines}
+		}
 		steps[i] = board.PlanStep{
 			ID:          s.ID,
 			Title:       s.Title,
@@ -227,6 +231,7 @@ func toBoardPlan(p Plan) board.Plan {
 			Model:       s.Model,
 			FilesModify: s.FilesModify,
 			FilesCreate: s.FilesCreate,
+			MustHaves:   board.MustHaves{Truths: s.MustHaves.Truths, Artifacts: arts},
 			Status:      s.Status,
 		}
 	}
@@ -241,6 +246,10 @@ func toBoardPlan(p Plan) board.Plan {
 func fromBoardPlan(bp board.Plan) Plan {
 	steps := make([]PlanStep, len(bp.Steps))
 	for i, s := range bp.Steps {
+		arts := make([]ArtifactRequirement, len(s.MustHaves.Artifacts))
+		for j, a := range s.MustHaves.Artifacts {
+			arts[j] = ArtifactRequirement{Path: a.Path, MinLines: a.MinLines}
+		}
 		steps[i] = PlanStep{
 			ID:          s.ID,
 			Title:       s.Title,
@@ -250,6 +259,7 @@ func fromBoardPlan(bp board.Plan) Plan {
 			Model:       s.Model,
 			FilesModify: s.FilesModify,
 			FilesCreate: s.FilesCreate,
+			MustHaves:   MustHaves{Truths: s.MustHaves.Truths, Artifacts: arts},
 			Status:      s.Status,
 		}
 	}

@@ -56,6 +56,18 @@ type TaskCard struct {
 	CostUSD       float64 `yaml:"cost_usd" json:"cost_usd"`
 }
 
+// ArtifactRequirement defines a file that must exist after a step.
+type ArtifactRequirement struct {
+	Path     string `yaml:"path" json:"path"`
+	MinLines int    `yaml:"min_lines,omitempty" json:"min_lines,omitempty"`
+}
+
+// MustHaves defines the required outcomes for a plan step.
+type MustHaves struct {
+	Truths    []string              `yaml:"truths" json:"truths"`
+	Artifacts []ArtifactRequirement `yaml:"artifacts" json:"artifacts"`
+}
+
 // PlanStep represents one step in an execution plan.
 type PlanStep struct {
 	ID          string   `yaml:"id" json:"id"`
@@ -66,6 +78,7 @@ type PlanStep struct {
 	Model       string   `yaml:"model" json:"model"`
 	FilesModify []string `yaml:"files_modify" json:"files_modify"`
 	FilesCreate []string `yaml:"files_create" json:"files_create"`
+	MustHaves   MustHaves `yaml:"must_haves" json:"must_haves"`
 	Status      string   `yaml:"status" json:"status"`
 }
 
