@@ -40,9 +40,9 @@ var (
 
 // TransitionResult contains the outcome of a transition attempt.
 type TransitionResult struct {
-	OldState TaskState
-	NewState TaskState
-	Event    Event
+	OldState TaskState `yaml:"old_state" json:"old_state"`
+	NewState TaskState `yaml:"new_state" json:"new_state"`
+	Event    Event     `yaml:"event" json:"event"`
 }
 
 // guardFunc returns nil if the guard passes, or an error describing why not.

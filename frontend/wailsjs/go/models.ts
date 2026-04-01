@@ -1,5 +1,168 @@
+export namespace board {
+
+	// TaskState enum values
+	export type TaskState = "backlog" | "triage" | "planning" | "review" | "executing" | "stuck" | "qa" | "merging" | "human_review" | "done";
+
+	// CardType enum values
+	export type CardType = "bugfix" | "feature" | "refactor" | "docs";
+
+	// Complexity enum values
+	export type Complexity = "trivial" | "medium" | "complex";
+
+	// Event enum values
+	export type Event = "start_triage" | "complexity_trivial" | "complexity_non_trivial" | "plan_ready" | "approved" | "rejected" | "step_stuck" | "model_escalated" | "replan_completed" | "scope_expansion_required" | "max_escalations" | "all_steps_done" | "qa_passed" | "qa_failed" | "merge_success" | "merge_conflict" | "user_resolved_executing" | "user_resolved_done" | "user_resolved_backlog";
+
+	export class TaskCard {
+	    id: string;
+	    title: string;
+	    description: string;
+	    state: TaskState;
+	    card_type: CardType;
+	    complexity: Complexity;
+	    created_at: string;
+	    updated_at: string;
+	    execution_mode: string;
+	    review_reason: string;
+	    qa_attempts: number;
+	    esc_attempts: number;
+	    cost_usd: number;
+
+	    static createFrom(source: any = {}) {
+	        return new TaskCard(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.state = source["state"];
+	        this.card_type = source["card_type"];
+	        this.complexity = source["complexity"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	        this.execution_mode = source["execution_mode"];
+	        this.review_reason = source["review_reason"];
+	        this.qa_attempts = source["qa_attempts"];
+	        this.esc_attempts = source["esc_attempts"];
+	        this.cost_usd = source["cost_usd"];
+	    }
+	}
+	export class PlanStep {
+	    id: string;
+	    title: string;
+	    wave: number;
+	    depends_on: string[];
+	    parallel_ok: boolean;
+	    model: string;
+	    files_modify: string[];
+	    files_create: string[];
+	    status: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PlanStep(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.wave = source["wave"];
+	        this.depends_on = source["depends_on"];
+	        this.parallel_ok = source["parallel_ok"];
+	        this.model = source["model"];
+	        this.files_modify = source["files_modify"];
+	        this.files_create = source["files_create"];
+	        this.status = source["status"];
+	    }
+	}
+	export class Plan {
+	    card_id: string;
+	    complexity: Complexity;
+	    steps: PlanStep[];
+
+	    static createFrom(source: any = {}) {
+	        return new Plan(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.card_id = source["card_id"];
+	        this.complexity = source["complexity"];
+	        this.steps = this.convertValues(source["steps"], PlanStep);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TransitionResult {
+	    old_state: TaskState;
+	    new_state: TaskState;
+	    event: Event;
+
+	    static createFrom(source: any = {}) {
+	        return new TransitionResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.old_state = source["old_state"];
+	        this.new_state = source["new_state"];
+	        this.event = source["event"];
+	    }
+	}
+	export class LockInfo {
+	    agent_name: string;
+	    locked_at: string;
+
+	    static createFrom(source: any = {}) {
+	        return new LockInfo(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.agent_name = source["agent_name"];
+	        this.locked_at = source["locked_at"];
+	    }
+	}
+
+}
+
 export namespace backend {
-	
+
+	export class BoardTransitionEvent {
+	    card_id: string;
+	    old_state: board.TaskState;
+	    new_state: board.TaskState;
+	    event: board.Event;
+
+	    static createFrom(source: any = {}) {
+	        return new BoardTransitionEvent(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.card_id = source["card_id"];
+	        this.old_state = source["old_state"];
+	        this.new_state = source["new_state"];
+	        this.event = source["event"];
+	    }
+	}
 	export class ClaudeDetectResult {
 	    path: string;
 	    source: string;
