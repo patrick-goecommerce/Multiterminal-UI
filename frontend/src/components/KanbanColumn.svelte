@@ -1,70 +1,32 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import KanbanCard from './KanbanCard.svelte';
-  import { COLUMN_LABELS, COLUMN_COLORS, type ColumnID, type KanbanCard as KanbanCardType } from '../stores/kanban';
+  import { COLUMN_LABELS, COLUMN_COLORS, type ColumnID } from '../stores/kanban';
+  import type { board } from '../../wailsjs/go/models';
 
   export let columnId: ColumnID;
-  export let cards: KanbanCardType[] = [];
+  export let cards: board.TaskCard[] = [];
 
   const dispatch = createEventDispatcher<{
-    drop: { cardId: string; columnId: string; position: number };
-    cardClick: { card: KanbanCardType };
-    cardDragStart: { card: KanbanCardType; columnId: string };
+    cardClick: { card: board.TaskCard };
+    removeCard: { cardId: string };
+    transition: { cardId: string; event: board.Event };
   }>();
 
-  let dropTarget = false;
-  let dropPosition = -1;
-
-  function handleDragOver(e: DragEvent) {
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    dropTarget = true;
-
-    // Calculate drop position from mouse Y
-    const container = e.currentTarget as HTMLElement;
-    const cards = container.querySelectorAll('.kanban-card');
-    let pos = cards.length;
-    for (let i = 0; i < cards.length; i++) {
-      const rect = cards[i].getBoundingClientRect();
-      if (e.clientY < rect.top + rect.height / 2) {
-        pos = i;
-        break;
-      }
-    }
-    dropPosition = pos;
-  }
-
-  function handleDragLeave() {
-    dropTarget = false;
-    dropPosition = -1;
-  }
-
-  function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    const cardId = e.dataTransfer?.getData('text/plain');
-    if (cardId) {
-      dispatch('drop', { cardId, columnId, position: dropPosition >= 0 ? dropPosition : cards.length });
-    }
-    dropTarget = false;
-    dropPosition = -1;
-  }
-
-  function handleCardClick(e: CustomEvent<{ card: KanbanCardType }>) {
+  function handleCardClick(e: CustomEvent<{ card: board.TaskCard }>) {
     dispatch('cardClick', e.detail);
   }
 
-  function handleCardDragStart(e: CustomEvent<{ card: KanbanCardType; columnId: string }>) {
-    dispatch('cardDragStart', e.detail);
+  function handleRemoveCard(e: CustomEvent<{ cardId: string }>) {
+    dispatch('removeCard', e.detail);
+  }
+
+  function handleTransition(e: CustomEvent<{ cardId: string; event: board.Event }>) {
+    dispatch('transition', e.detail);
   }
 </script>
 
-<div
-  class="kanban-column"
-  class:drop-target={dropTarget}
-  on:dragover={handleDragOver}
-  on:dragleave={handleDragLeave}
-  on:drop={handleDrop}
->
+<div class="kanban-column">
   <div class="column-header">
     <span class="column-dot" style="background: {COLUMN_COLORS[columnId]}"></span>
     <span class="column-label">{COLUMN_LABELS[columnId]}</span>
@@ -72,13 +34,16 @@
   </div>
   <div class="column-cards">
     {#each cards as card (card.id)}
-      <KanbanCard {card} {columnId} on:click={handleCardClick} on:dragstart={handleCardDragStart} />
+      <KanbanCard
+        {card}
+        {columnId}
+        on:click={handleCardClick}
+        on:remove={handleRemoveCard}
+        on:transition={handleTransition}
+      />
     {/each}
     {#if cards.length === 0}
       <div class="column-empty">Keine Karten</div>
-    {/if}
-    {#if dropTarget}
-      <div class="drop-indicator"></div>
     {/if}
   </div>
 </div>
@@ -92,11 +57,6 @@
     border-radius: 8px;
     border: 1px solid var(--border, #45475a);
     overflow: hidden;
-    transition: border-color 0.15s;
-  }
-  .kanban-column.drop-target {
-    border-color: var(--accent, #39ff14);
-    background: rgba(57, 255, 20, 0.03);
   }
 
   .column-header {
@@ -146,12 +106,5 @@
     font-size: 0.75rem;
     padding: 20px 0;
     opacity: 0.5;
-  }
-
-  .drop-indicator {
-    height: 2px;
-    background: var(--accent, #39ff14);
-    border-radius: 1px;
-    margin: 2px 0;
   }
 </style>

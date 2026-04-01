@@ -1,250 +1,121 @@
 import { writable, derived } from 'svelte/store';
+import { board } from '../../wailsjs/go/models';
 
-/** Column IDs matching the Go backend constants */
-export const COLUMN_IDS = [
-  'define', 'refine', 'approved', 'ready',
-  'in_progress', 'auto_review', 'done'
-] as const;
+// Column IDs for the v3 state machine board
+export const COLUMN_IDS = ['backlog', 'planning', 'review', 'executing', 'qa', 'done'] as const;
 export type ColumnID = typeof COLUMN_IDS[number];
 
-/** Column display labels (German UI) */
+// German labels
 export const COLUMN_LABELS: Record<ColumnID, string> = {
-  define: 'Definieren',
-  refine: 'Verfeinern',
-  approved: 'Genehmigt',
-  ready: 'Bereit',
-  in_progress: 'In Arbeit',
-  auto_review: 'Auto-Review',
+  backlog: 'Backlog',
+  planning: 'Planung',
+  review: 'Review',
+  executing: 'Ausführung',
+  qa: 'Qualität',
   done: 'Erledigt',
 };
 
-/** Column accent colors */
 export const COLUMN_COLORS: Record<ColumnID, string> = {
-  define: '#9ca3af',
-  refine: '#f59e0b',
-  approved: '#8b5cf6',
-  ready: '#3b82f6',
-  in_progress: '#f97316',
-  auto_review: '#06b6d4',
+  backlog: '#9ca3af',
+  planning: '#8b5cf6',
+  review: '#3b82f6',
+  executing: '#f97316',
+  qa: '#06b6d4',
   done: '#22c55e',
 };
 
-export interface KanbanCard {
-  id: string;
-  issue_number: number;
-  title: string;
-  labels: string[];
-  dir: string;
-  session_id: number;
-  priority: number;
-  dependencies: number[];
-  plan_id: string;
-  schedule_id: string;
-  created_at: string;
-  // Agent orchestration fields
-  parent_issue: number;
-  prompt: string;
-  auto_merge: boolean;
-  auto_start: boolean;
-  worktree_path: string;
-  worktree_branch: string;
-  agent_session_id: number;
-  review_result: string;
-  pr_number: number;
-  retry_count: number;
-  max_retries: number;
+// States that show as badges, not columns
+export const BADGE_STATES: Record<string, { label: string; color: string }> = {
+  triage: { label: 'Triage', color: '#f59e0b' },
+  stuck: { label: 'Blockiert', color: '#ef4444' },
+  human_review: { label: 'Review nötig', color: '#f97316' },
+  merging: { label: 'Merge', color: '#06b6d4' },
+};
+
+// Map task state to display column
+export function stateToColumn(state: board.TaskState): ColumnID {
+  switch (state) {
+    case 'backlog':
+    case 'triage':
+      return 'backlog';
+    case 'planning':
+      return 'planning';
+    case 'review':
+      return 'review';
+    case 'executing':
+    case 'stuck':
+    case 'human_review':
+      return 'executing';
+    case 'qa':
+    case 'merging':
+      return 'qa';
+    case 'done':
+      return 'done';
+    default:
+      return 'backlog';
+  }
 }
 
-export interface PlanStep {
-  issue_number: number;
-  card_id: string;
-  title: string;
-  order: number;
-  parallel: boolean;
-  session_id: number;
-  status: string;
-  prompt: string;
+// Check if a state should show a badge
+export function getBadge(state: board.TaskState): { label: string; color: string } | null {
+  return BADGE_STATES[state] || null;
 }
 
-export interface Plan {
-  id: string;
-  dir: string;
-  created_at: string;
-  steps: PlanStep[];
-  status: string;
-}
-
-export interface ScheduledTask {
-  id: string;
-  name: string;
-  dir: string;
-  prompt: string;
-  schedule: string;
-  mode: string;
-  model: string;
-  enabled: boolean;
-  last_run: string;
-  next_run: string;
-}
-
-export interface KanbanState {
-  columns: Record<string, KanbanCard[]>;
-  plans: Plan[];
-  schedules: ScheduledTask[];
-}
-
-export interface KanbanStore {
-  state: KanbanState;
+interface KanbanStoreState {
+  tasks: board.TaskCard[];
   loading: boolean;
   dir: string;
-  activeTab: 'board' | 'schedules';
-  dragCard: KanbanCard | null;
-  dragSourceCol: string | null;
+  dragCard: board.TaskCard | null;
+  dragSourceCol: ColumnID | null;
 }
 
-const emptyState: KanbanState = {
-  columns: {
-    define: [],
-    refine: [],
-    approved: [],
-    ready: [],
-    in_progress: [],
-    auto_review: [],
-    done: [],
-  },
-  plans: [],
-  schedules: [],
-};
-
-const initialStore: KanbanStore = {
-  state: emptyState,
-  loading: false,
-  dir: '',
-  activeTab: 'board',
-  dragCard: null,
-  dragSourceCol: null,
-};
-
 function createKanbanStore() {
-  const { subscribe, set, update } = writable<KanbanStore>(initialStore);
+  const { subscribe, set, update } = writable<KanbanStoreState>({
+    tasks: [],
+    loading: false,
+    dir: '',
+    dragCard: null,
+    dragSourceCol: null,
+  });
 
   return {
     subscribe,
-
-    /** Set the project directory and reset state */
-    setDir(dir: string) {
-      update(s => ({ ...s, dir, state: emptyState, loading: true }));
-    },
-
-    /** Update state from backend response */
-    setState(state: KanbanState) {
-      update(s => ({
-        ...s,
-        state: {
-          columns: state.columns || emptyState.columns,
-          plans: state.plans || [],
-          schedules: state.schedules || [],
-        },
-        loading: false,
-      }));
-    },
-
-    /** Set loading state */
-    setLoading(loading: boolean) {
-      update(s => ({ ...s, loading }));
-    },
-
-    /** Switch between board and schedules tab */
-    setActiveTab(tab: 'board' | 'schedules') {
-      update(s => ({ ...s, activeTab: tab }));
-    },
-
-    /** Start dragging a card */
-    startDrag(card: KanbanCard, sourceCol: string) {
-      update(s => ({ ...s, dragCard: card, dragSourceCol: sourceCol }));
-    },
-
-    /** End drag operation */
-    endDrag() {
-      update(s => ({ ...s, dragCard: null, dragSourceCol: null }));
-    },
-
-    /** Optimistically move a card between columns */
-    moveCard(cardId: string, fromCol: string, toCol: string, position: number) {
-      update(s => {
-        const newState = { ...s.state, columns: { ...s.state.columns } };
-
-        // Remove from source
-        const sourceCards = [...(newState.columns[fromCol] || [])];
-        const cardIdx = sourceCards.findIndex(c => c.id === cardId);
-        if (cardIdx === -1) return s;
-        const [card] = sourceCards.splice(cardIdx, 1);
-        newState.columns[fromCol] = sourceCards;
-
-        // Insert at target
-        const targetCards = [...(newState.columns[toCol] || [])];
-        const insertAt = Math.min(position, targetCards.length);
-        targetCards.splice(insertAt, 0, card);
-        newState.columns[toCol] = targetCards;
-
-        return { ...s, state: newState, dragCard: null, dragSourceCol: null };
-      });
-    },
-
-    /** Add a card to define column */
-    addCard(card: KanbanCard) {
-      update(s => {
-        const newState = { ...s.state, columns: { ...s.state.columns } };
-        newState.columns.define = [...(newState.columns.define || []), card];
-        return { ...s, state: newState };
-      });
-    },
-
-    /** Remove a card from the board */
-    removeCard(cardId: string) {
-      update(s => {
-        const newState = { ...s.state, columns: { ...s.state.columns } };
-        for (const col of Object.keys(newState.columns)) {
-          newState.columns[col] = newState.columns[col].filter(c => c.id !== cardId);
-        }
-        return { ...s, state: newState };
-      });
-    },
-
-    /** Reset to initial state */
-    reset() {
-      set(initialStore);
-    },
+    setDir: (dir: string) => update(s => ({ ...s, dir })),
+    setTasks: (tasks: board.TaskCard[]) => update(s => ({ ...s, tasks, loading: false })),
+    setLoading: (loading: boolean) => update(s => ({ ...s, loading })),
+    addTask: (task: board.TaskCard) => update(s => ({ ...s, tasks: [...s.tasks, task] })),
+    removeTask: (id: string) => update(s => ({ ...s, tasks: s.tasks.filter(t => t.id !== id) })),
+    updateTask: (updated: board.TaskCard) => update(s => ({
+      ...s,
+      tasks: s.tasks.map(t => t.id === updated.id ? updated : t),
+    })),
+    startDrag: (card: board.TaskCard, col: ColumnID) => update(s => ({ ...s, dragCard: card, dragSourceCol: col })),
+    endDrag: () => update(s => ({ ...s, dragCard: null, dragSourceCol: null })),
+    reset: () => set({ tasks: [], loading: false, dir: '', dragCard: null, dragSourceCol: null }),
   };
 }
 
 export const kanban = createKanbanStore();
 
-/** Derived: total card count */
-export const totalCards = derived(kanban, $k => {
-  let count = 0;
-  for (const cards of Object.values($k.state.columns)) {
-    count += cards.length;
+// Derived: tasks grouped by display column
+export const tasksByColumn = derived(kanban, ($k) => {
+  const grouped: Record<ColumnID, board.TaskCard[]> = {
+    backlog: [], planning: [], review: [], executing: [], qa: [], done: [],
+  };
+  for (const task of $k.tasks) {
+    const col = stateToColumn(task.state as board.TaskState);
+    grouped[col].push(task);
   }
-  return count;
+  return grouped;
 });
 
-/** Derived: active plans (not done/cancelled) */
-export const activePlans = derived(kanban, $k =>
-  $k.state.plans.filter(p => p.status === 'draft' || p.status === 'approved' || p.status === 'running')
-);
+// Derived: total task count
+export const totalTasks = derived(kanban, ($k) => $k.tasks.length);
 
-/** Derived: parent issue progress (done/total for each parent_issue) */
-export const parentIssueProgress = derived(kanban, $k => {
-  const progress: Record<number, { done: number; total: number }> = {};
-  for (const [col, cards] of Object.entries($k.state.columns)) {
-    for (const card of cards) {
-      if (card.parent_issue > 0) {
-        if (!progress[card.parent_issue]) progress[card.parent_issue] = { done: 0, total: 0 };
-        progress[card.parent_issue].total++;
-        if (col === 'done') progress[card.parent_issue].done++;
-      }
-    }
-  }
-  return progress;
-});
+// Backward-compat stubs for components that import these
+export type KanbanCard = board.TaskCard;
+export type Plan = board.Plan;
+export type PlanStep = board.PlanStep;
+
+export const activePlans = derived(kanban, () => [] as board.Plan[]);
+export const parentIssueProgress = derived(kanban, () => ({} as Record<number, { done: number; total: number }>));

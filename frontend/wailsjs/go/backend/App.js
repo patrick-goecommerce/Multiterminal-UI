@@ -431,6 +431,43 @@ export function SyncKanbanWithIssues(arg1) {
   return $Call.ByID(146449503, arg1);
 }
 
+// Board (git-ref backend) methods
+export function GetBoardTasks(arg1) {
+  return $Call.ByID(1643060703, arg1);
+}
+
+export function CreateBoardTask(arg1, arg2) {
+  return $Call.ByID(97914340, arg1, arg2);
+}
+
+export function GetBoardTask(arg1, arg2) {
+  return $Call.ByID(781865590, arg1, arg2);
+}
+
+export function UpdateBoardTask(arg1, arg2) {
+  return $Call.ByID(4286425107, arg1, arg2);
+}
+
+export function DeleteBoardTask(arg1, arg2) {
+  return $Call.ByID(2152206025, arg1, arg2);
+}
+
+export function MoveBoardTask(arg1, arg2, arg3) {
+  return $Call.ByID(151213451, arg1, arg2, arg3);
+}
+
+export function SaveBoardPlan(arg1, arg2, arg3) {
+  return $Call.ByID(250003897, arg1, arg2, arg3);
+}
+
+export function GetBoardPlan(arg1, arg2) {
+  return $Call.ByID(3653446680, arg1, arg2);
+}
+
+export function SyncBoard(arg1) {
+  return $Call.ByID(1435946464, arg1);
+}
+
 export function GeneratePlan(arg1, arg2) {
   return $Call.ByID(716985523, arg1, arg2);
 }

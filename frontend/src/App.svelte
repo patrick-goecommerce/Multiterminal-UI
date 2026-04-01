@@ -287,30 +287,13 @@
       showAskUser = true;
     });
 
-    // Orchestrator events: reload kanban board when plan steps change
-    EventsOn('orchestrator:update', (event: any) => {
-      const data = event.data || event;
-      const eventType = data.type || '';
-      console.log('[orchestrator]', eventType, 'plan:', data.planId || data.plan_id);
-      // Reload kanban state when orchestrator changes plan/step status
+    // Board events: reload kanban board when a task transitions
+    EventsOn('board:task-transition', (_payload: any) => {
       const dir = get(activeTab)?.dir || '';
       if (dir) {
-        import('../wailsjs/go/backend/App').then(({ GetKanbanState }) => {
-          GetKanbanState(dir).then(state => {
-            kanban.setState(state);
-          }).catch(() => {});
-        });
-      }
-    });
-
-    // Schedule runner events: reload kanban schedules when a task runs
-    EventsOn('kanban:schedules_updated', (event: any) => {
-      const data = event.data || event;
-      const dir = data.dir || get(activeTab)?.dir || '';
-      if (dir) {
-        import('../wailsjs/go/backend/App').then(({ GetKanbanState }) => {
-          GetKanbanState(dir).then(state => {
-            kanban.setState(state);
+        import('../wailsjs/go/backend/App').then(({ GetBoardTasks }) => {
+          GetBoardTasks(dir).then(tasks => {
+            kanban.setTasks(tasks || []);
           }).catch(() => {});
         });
       }
