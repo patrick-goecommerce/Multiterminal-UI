@@ -119,9 +119,75 @@ func (o *Orchestrator) RunCard(ctx context.Context, dir, cardID string) error {
 }
 
 // ResumeAfterReview continues execution after user approves the plan.
-// This will be implemented in 2.8b.
+// Card must be in "review" state.
 func (o *Orchestrator) ResumeAfterReview(ctx context.Context, dir, cardID string) error {
-	return fmt.Errorf("not implemented: wave execution comes in v3-2.8b")
+	// 1. Get card, verify state is "review"
+	card, err := o.board.GetTask(cardID)
+	if err != nil {
+		return fmt.Errorf("get card: %w", err)
+	}
+	if card.State != board.StateReview {
+		return fmt.Errorf("card %s is in state %s, expected review", cardID, card.State)
+	}
+
+	// 2. Transition: review → executing
+	result, err := o.sm.Transition(card, board.EventApproved)
+	if err != nil {
+		return fmt.Errorf("transition to executing: %w", err)
+	}
+	card.State = result.NewState
+	if err := o.board.UpdateTask(card); err != nil {
+		return fmt.Errorf("update card: %w", err)
+	}
+
+	// 3. Load plan
+	boardPlan, err := o.board.GetPlan(cardID)
+	if err != nil {
+		return fmt.Errorf("load plan: %w", err)
+	}
+	plan := fromBoardPlan(boardPlan)
+
+	// 4. Compute waves
+	waves, err := ComputeWaves(plan.Steps)
+	if err != nil {
+		return fmt.Errorf("compute waves: %w", err)
+	}
+
+	// 5. Load skills for prompt assembly
+	detected := DetectStack(dir)
+	allSkills, _ := LoadSkills(o.skillDir)
+	matched := MatchSkills(detected, allSkills)
+	merged := MergePolicies(matched, o.skillDir)
+
+	// 6. Execute waves sequentially
+	for _, wave := range waves {
+		// Budget check before wave
+		if !o.budget.CanSpend(cardID, 0.01) {
+			card, _ = o.board.GetTask(cardID)
+			return fmt.Errorf("budget exhausted for card %s", cardID)
+		}
+
+		if err := o.executeWave(ctx, dir, cardID, wave, merged); err != nil {
+			return err
+		}
+	}
+
+	// 7. All waves done → transition to QA
+	card, err = o.board.GetTask(cardID)
+	if err != nil {
+		return fmt.Errorf("get card after waves: %w", err)
+	}
+	result, err = o.sm.Transition(card, board.EventAllStepsDone)
+	if err != nil {
+		return fmt.Errorf("transition to qa: %w", err)
+	}
+	card.State = result.NewState
+	if err := o.board.UpdateTask(card); err != nil {
+		return fmt.Errorf("update card: %w", err)
+	}
+
+	// TODO(2.8c): QA phase, Decision Briefing, Merge
+	return nil
 }
 
 // Budget returns the orchestrator's budget tracker for external inspection.
@@ -167,6 +233,29 @@ func toBoardPlan(p Plan) board.Plan {
 	return board.Plan{
 		CardID:     p.CardID,
 		Complexity: board.Complexity(p.Complexity),
+		Steps:      steps,
+	}
+}
+
+// fromBoardPlan converts board.Plan back to orchestrator.Plan.
+func fromBoardPlan(bp board.Plan) Plan {
+	steps := make([]PlanStep, len(bp.Steps))
+	for i, s := range bp.Steps {
+		steps[i] = PlanStep{
+			ID:          s.ID,
+			Title:       s.Title,
+			Wave:        s.Wave,
+			DependsOn:   s.DependsOn,
+			ParallelOk:  s.ParallelOk,
+			Model:       s.Model,
+			FilesModify: s.FilesModify,
+			FilesCreate: s.FilesCreate,
+			Status:      s.Status,
+		}
+	}
+	return Plan{
+		CardID:     bp.CardID,
+		Complexity: string(bp.Complexity),
 		Steps:      steps,
 	}
 }

@@ -265,14 +265,14 @@ func TestRunCard_TechContextPassedToEngine(t *testing.T) {
 	}
 }
 
-func TestResumeAfterReview_NotImplemented(t *testing.T) {
+func TestResumeAfterReview_NonExistentCard_FromOldTest(t *testing.T) {
 	orch, _, _, dir := setupTestOrchestrator(t)
 
 	err := orch.ResumeAfterReview(context.Background(), dir, "any-card")
 	if err == nil {
-		t.Fatal("expected error from stub")
+		t.Fatal("expected error for non-existent card")
 	}
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("expected 'not implemented' error, got: %v", err)
+	if !strings.Contains(err.Error(), "get card") {
+		t.Errorf("expected 'get card' error, got: %v", err)
 	}
 }
