@@ -142,9 +142,10 @@ triage                    Haiku: Complexity Assessment
 
 planning                  Opus: Quiz + Plan Generation
   PlanReady
-review                    User prueft Plan
+review                    User prueft Plan (medium + complex, NIE trivial)
   Approved
 executing                 Wave-basiert, pro Step ein Agent
+                          (gilt fuer Impl UND QA-Fix — gleicher State, Substatus in Metadata)
   StepStuck
 stuck                     Loop/Timeout/Budget
   ModelEscalated -------> executing (hoeheres Model)
@@ -594,9 +595,19 @@ type DecisionBriefing struct {
     SharedSurfaces   []string
 
     // Dependency-Risiko (separiert von Code-Risiko)
-    DependencyRisk   string          // "none" | "low" | "high"
+    DependencyRisk      string            // "none" | "low" | "high"
+    ManifestChanges     []ManifestChange  // strukturierte Manifest-Diff-Info
 
     Recommendation   string
+    Reasons          []string  // z.B. ["dependency_version_changed", "critical_file_overlap", "secret_detected"]
+}
+
+type ManifestChange struct {
+    File    string `json:"file"`    // "go.mod"
+    Kind    string `json:"kind"`    // "add" | "update" | "remove"
+    Package string `json:"package"` // "github.com/foo/bar"
+    From    string `json:"from"`    // "v1.2.0" (leer bei add)
+    To      string `json:"to"`      // "v1.3.0" (leer bei remove)
 }
 
 type SecretFinding struct {
@@ -751,3 +762,163 @@ Heuristische Mechanismen die dedizierte Testfaelle brauchen:
 | Skill Conflict Resolution | Unit Tests mit mehreren matchenden Skills |
 | State Machine Transitions | Unit Tests fuer jede Transition + Guard |
 | Wave Planner | Unit Tests fuer Dependency-Graphen + Conflict Avoidance |
+| AI-Merge Grenzen | Integration Tests mit verschiedenen Konflikt-Groessen + kritischen Dateien |
+| ManifestChange Parser | Unit Tests mit echten go.mod/package.json Diffs |
+| Reasons-Generierung | Unit Tests: gegebene Briefing-Daten -> erwartete Reasons-Liste |
+
+---
+
+## 11. Non-Goals
+
+Dinge die ausdruecklich NICHT Teil dieser Spec sind:
+
+1. **Eigene AI-Runtime** — Wir nutzen `claude -p` / Agent Teams, bauen keinen eigenen LLM-Runner
+2. **Multi-Repo-Support** — Ein Board pro Repo. Cross-Repo-Orchestrierung ist out of scope
+3. **Echtzeit-Collaboration** — Kein gleichzeitiges Editieren desselben Tasks durch mehrere User
+4. **CI/CD-Integration** — Kein automatisches Deployment nach Done. Nur Code + PR
+5. **Custom Tool Definitions** — Skills definieren Kontext und Policies, keine eigenen Tools
+6. **Automatisches Merging in main** — Cards produzieren Branches/PRs, nie direkten Push
+7. **Billing/Payment** — Budget-Tracking ist informativ, keine echte Kostenabrechnung
+8. **Mobile UI** — Desktop-only (Wails WebView)
+9. **Plugin-System fuer externe Skills** — Skills kommen aus dem Repo, nicht aus einem Marketplace (Continuous Learning + Skill Contributing ist separates Issue #102)
+10. **Backwards-Kompatibilitaet mit v2** — Frischer Branch, v2-Daten werden nicht migriert
+
+---
+
+## 12. Open Questions
+
+Offene Punkte die waehrend der Implementation geklaert werden muessen:
+
+### OQ-1: AI-Merge — Was genau ist "klein"?
+
+Aktuell: "kleine, lokal begrenzte Textkonflikte in unkritischen Dateien."
+Muss operational definiert werden, z.B.:
+- Max N Dateien mit Konflikten (Vorschlag: 3)
+- Max N Conflict-Hunks pro Datei (Vorschlag: 2)
+- Keine Konflikte in Critical Files (denylist)
+- Kein Konflikt groesser als N Zeilen (Vorschlag: 20)
+
+**Entscheidung:** Waehrend Phase 3 Implementation anhand realer Merge-Szenarien festlegen.
+
+### OQ-2: Claude Agent SDK fuer Go?
+
+Just Ship nutzt das TypeScript Agent SDK erfolgreich. Fuer MTUI (Go-Backend) gibt es drei Optionen:
+- (a) Weiter `claude -p` via CLI (aktueller Plan)
+- (b) Node.js Sidecar mit Agent SDK
+- (c) Warten auf offizielles Go SDK
+
+**Entscheidung:** Phase 3 starten mit (a). Evaluieren ob (b) oder (c) spaeter Vorteile bringt.
+
+### OQ-3: Skill-Bibliothek Umfang zum Launch
+
+Wie viele Skills brauchen wir fuer Phase 2 MVP?
+- Minimum: 3 universelle (Superpowers-Kern, Code Review, Security Basics) + 2 tech-spezifische (Go, TypeScript)
+- Nice-to-have: Svelte, React, Python, Rust
+
+**Entscheidung:** Mit Minimum starten, erweitern basierend auf User-Feedback.
+
+### OQ-4: executing Substatus
+
+`executing` gilt fuer normale Implementation UND QA-Fix-Loops.
+Spaeter optional aufteilen in `executing:impl` / `executing:qa_fix`?
+
+**Entscheidung:** Vorerst ein State mit Metadata-Flag `execution_mode: "impl" | "qa_fix"`. Substatus nur einfuehren wenn UI oder Logik es erfordern.
+
+### OQ-5: Board Sync — Automatisch oder manuell?
+
+Git-Ref-Sync (`git fetch/push refs/mtui/*`) kann:
+- (a) Automatisch bei jeder Board-Mutation
+- (b) Manuell via "Sync"-Button
+- (c) Periodisch (alle 60s)
+
+**Entscheidung:** Start mit (b), dann (c) wenn stabil.
+
+---
+
+## 13. Operational Definitions
+
+Praezise Definitionen fuer Begriffe die in Decision Tables und Heuristiken verwendet werden:
+
+### Critical File
+
+Eine Datei deren Aenderung potenziell weitreichende Auswirkungen hat.
+
+**Default-Liste (konfigurierbar per Projekt):**
+- Dependency-Manifeste: `go.mod`, `go.sum`, `package.json`, `package-lock.json`, `Cargo.toml`, `requirements.txt`
+- Routing: `**/router.go`, `**/routes.ts`, `**/routes.go`
+- Schema: `**/schema.sql`, `**/migrations/**`
+- Auth: `**/auth.go`, `**/auth.ts`, `**/middleware/**`
+- Config: `.env*`, `**/config.go`, `**/config.ts`
+- Build: `Dockerfile`, `docker-compose.yml`, `.github/workflows/**`
+
+**Konfiguration:** `.mtui/config.json` -> `critical_files: []string`
+
+### Shared Surface
+
+Ein logischer Bereich (Package, Modul, API-Boundary) der von mehreren aktiven Cards gleichzeitig beruehrt wird.
+
+**Erkennung:** Zwei Cards aendern Dateien im gleichen Go-Package oder gleichen Frontend-Verzeichnis (`src/components/`, `internal/backend/`).
+
+**Beispiele:** "auth middleware", "config registry", "DB schema", "API router"
+
+### Kleiner Konflikt (fuer AI-Merge)
+
+Ein Git-Merge-Konflikt der automatisch per AI aufgeloest werden darf.
+
+**Muss ALLE Bedingungen erfuellen:**
+- Datei ist NICHT in Critical Files Liste
+- Max 2 Conflict-Hunks in der Datei
+- Jeder Hunk ist max 20 Zeilen
+- Max 3 Dateien mit Konflikten in der gesamten Wave
+- Kein Konflikt in Import-/Dependency-Bloecken
+
+**Wenn eine Bedingung verletzt:** -> `human_review`
+
+### same_error (StepLoopDetector)
+
+Zwei aufeinanderfolgende Fix-Versuche produzieren semantisch identische Fehler.
+
+**Erkennung:**
+1. Fehler-Output normalisieren (Timestamps, tmp-Pfade, Hex-Adressen, volatile Zahlen entfernen)
+2. ErrorSignature extrahieren: `{error_class}:{first_error_line_normalized}:{failing_symbol_or_test}`
+3. Hash der normalisierten ErrorSignature
+4. Vergleich mit vorherigem Hash
+
+**Beispiel:**
+```
+Versuch 1: "undefined: AppService.HandleAuth" in app.go:142
+Versuch 2: "undefined: AppService.HandleAuth" in app.go:155
+-> ErrorSignature: "build:undefined_AppService.HandleAuth:app.go"
+-> same_error = true (trotz unterschiedlicher Zeilennummer)
+```
+
+### scope_exceeded
+
+Ein Step hat mehr Dateien oder Zeilen veraendert als die Scope Limits fuer seinen Card-Typ erlauben.
+
+**Pruefung:** `git diff --stat` im Worktree nach Step-Completion.
+**Ausnahmen:** Renames, generated Files, vendor/, dist/, build/, *.min.*
+**Aktion:** Review-Flag setzen, Warnung in UI. Kein automatischer Abbruch.
+
+### stuck (State Machine)
+
+Ein Step kann trotz mehrerer Versuche nicht erfolgreich abgeschlossen werden.
+
+**Eintritt in stuck:**
+- StepLoopDetector meldet 2+ Signale
+- Checkpoint Guard meldet 3 Checks ohne Progress (15min)
+- Budget fuer den Step erschoepft
+- 3 QA-Fix-Versuche fehlgeschlagen
+
+**Austritt aus stuck:**
+- Model-Escalation (max 2x)
+- Re-Planning (scope-begrenzt, max 1x)
+- -> `human_review` wenn beides fehlschlaegt
+
+### scope_expansion_required (human_review Reason)
+
+Re-Planning hat ergeben, dass der Step nur mit Dateien ausserhalb des Original-Scopes loesbar ist.
+
+**Ausloeser:** Re-Planning-Agent meldet, dass die Loesung Aenderungen an Dateien erfordert die nicht in `files_modify` / `files_create` des Original-Steps stehen.
+**Aktion:** Card nach `human_review` mit Kontext: welche zusaetzlichen Dateien benoetigt werden und warum.
+**User-Optionen:** Scope erweitern (Plan anpassen) | Task aufteilen | Task abbrechen
