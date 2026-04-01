@@ -195,15 +195,18 @@ Card nach "executing"
       Scope Limits pruefen
       Worktree-Slot freigeben
       Step-Status in Board Layer updaten
-    Wave-Merge: Worktrees in Hauptbranch
+    Wave-Merge (INTERNER Integrationsmerge innerhalb des Card-Branches):
+      Worktree-Branches in Card-Branch mergen
       Dependency Reconciliation (go mod tidy etc.)
+        Falls Reconciliation zu Version-Upgrades, Removals oder Build-Breakage fuehrt:
+          DependencyRisk: high -> human_review (go mod tidy ist kein magischer Heiler)
       Bei Konflikt: nur kleine lokale Textkonflikte per AI-Merge
       Kritische/strukturelle Konflikte: human_review
     Anti-Drift-Checkpoint alle 2 Waves (Haiku)
   Alle Waves done: Decision Briefing (Pre-QA Gate)
   Card nach "qa"
   QA: must_haves gegen Codebase
-    Pass: Card nach "merging" -> "done"
+    Pass: Card nach "merging" (FINALER Merge: Card-Branch -> Hauptbranch / PR-ready)
     Fail: QA Fix Loop (max 3x), dann human_review
   Learnings persistieren
 ```
@@ -688,7 +691,7 @@ Kritische/strukturelle Konflikte: Sofort `human_review`.
 | Kleiner Textkonflikt, unkritische Datei | AI-Merge (Sonnet) |
 | Struktureller Konflikt | human_review |
 | Critical File Konflikt | human_review |
-| Dependency Manifest Konflikt | Reconciliation (go mod tidy), dann Verify |
+| Dependency Manifest Konflikt | Reconciliation (go mod tidy), dann Verify. Falls Reconciliation selbst zu Version-Upgrades, Removals oder Build-Breakage fuehrt: DependencyRisk: high -> human_review |
 | AI-Merge fehlgeschlagen | human_review |
 
 ### 8.3 Invariants
@@ -857,7 +860,9 @@ Eine Datei deren Aenderung potenziell weitreichende Auswirkungen hat.
 
 Ein logischer Bereich (Package, Modul, API-Boundary) der von mehreren aktiven Cards gleichzeitig beruehrt wird.
 
-**Erkennung:** Zwei Cards aendern Dateien im gleichen Go-Package oder gleichen Frontend-Verzeichnis (`src/components/`, `internal/backend/`).
+**Erkennung (v1 — bewusst grob):** Zwei Cards aendern Dateien im gleichen Go-Package oder gleichen Frontend-Verzeichnis (`src/components/`, `internal/backend/`).
+
+**Bekannte Einschraenkung:** Package-/Verzeichnis-Naehe ist manchmal zu breit (zwei Dateien im selben Package, aber logisch kaum gekoppelt). Feinere Heuristiken (z.B. Import-Graph-Analyse, funktionale Kopplung) sind spaeter moeglich, aber fuer v1 reicht die grobe Erkennung.
 
 **Beispiele:** "auth middleware", "config registry", "DB schema", "API router"
 
