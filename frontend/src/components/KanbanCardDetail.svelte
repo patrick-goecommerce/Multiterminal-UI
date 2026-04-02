@@ -327,6 +327,7 @@
             type="text"
             bind:value={editTitle}
             placeholder="Titel..."
+            disabled={orchRunning}
           />
           <button class="close-btn" on:click={close} title="Schliessen">&#10005;</button>
         </div>
@@ -352,7 +353,7 @@
         <div class="detail-section">
           <span class="section-label">Typ</span>
           {#if canEditType}
-            <select class="edit-select" bind:value={editCardType}>
+            <select class="edit-select" bind:value={editCardType} disabled={orchRunning}>
               {#each CARD_TYPES as ct}
                 <option value={ct.value}>{ct.label}</option>
               {/each}
@@ -370,6 +371,7 @@
             bind:value={editDescription}
             placeholder="Beschreibung hinzufuegen..."
             rows="3"
+            disabled={orchRunning}
           ></textarea>
         </div>
 
