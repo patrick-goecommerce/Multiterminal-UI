@@ -4,13 +4,13 @@
   import { EventsOn } from '../../wailsjs/runtime/runtime';
   import KanbanColumn from './KanbanColumn.svelte';
   import KanbanCardDetail from './KanbanCardDetail.svelte';
+  import KanbanCreateDialog from './KanbanCreateDialog.svelte';
   import { kanban, tasksByColumn, COLUMN_IDS, type ColumnID } from '../stores/kanban';
   import { board } from '../../wailsjs/go/models';
 
   export let dir = '';
 
-  let addCardTitle = '';
-  let showAddCard = false;
+  let showCreateDialog = false;
   let detailCardId = '';
   let showDetail = false;
 
@@ -66,18 +66,19 @@
     }
   }
 
-  async function handleAddCard() {
-    if (!addCardTitle.trim() || !dir) return;
+  async function handleAddCard(e: CustomEvent<{ title: string; cardType: string; description: string }>) {
+    if (!dir) return;
+    const { title, cardType, description } = e.detail;
     try {
       const card = new board.TaskCard({
-        title: addCardTitle.trim(),
+        title,
+        card_type: cardType,
+        description,
         state: 'backlog',
-        card_type: 'feature',
       });
       const saved = await App.CreateBoardTask(dir, card);
       kanban.addTask(saved);
-      addCardTitle = '';
-      showAddCard = false;
+      showCreateDialog = false;
     } catch (err) {
       console.error('[kanban] add card error:', err);
     }
@@ -102,10 +103,6 @@
     }
   }
 
-  function handleAddCardKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') handleAddCard();
-    if (e.key === 'Escape') { showAddCard = false; addCardTitle = ''; }
-  }
 </script>
 
 <div class="kanban-board">
@@ -116,7 +113,7 @@
     {/if}
     <div class="toolbar-spacer"></div>
     <div class="toolbar-actions">
-      <button class="btn-toolbar" on:click={() => { showAddCard = !showAddCard; }} title="Karte hinzufügen">
+      <button class="btn-toolbar" on:click={() => { showCreateDialog = true; }} title="Karte hinzufügen">
         + Karte
       </button>
       <button class="btn-toolbar" on:click={handleSync} title="Board synchronisieren">
@@ -124,20 +121,6 @@
       </button>
     </div>
   </div>
-
-  {#if showAddCard}
-    <div class="add-card-row">
-      <input
-        class="add-card-input"
-        placeholder="Titel der neuen Karte..."
-        bind:value={addCardTitle}
-        on:keydown={handleAddCardKeydown}
-        autofocus
-      />
-      <button class="btn-add" on:click={handleAddCard}>Hinzufügen</button>
-      <button class="btn-cancel" on:click={() => { showAddCard = false; addCardTitle = ''; }}>&#10005;</button>
-    </div>
-  {/if}
 
   {#if $kanban.loading}
     <div class="loading">Board wird geladen...</div>
@@ -161,6 +144,12 @@
   cardId={detailCardId}
   {dir}
   on:updated={handleDetailUpdated}
+/>
+
+<KanbanCreateDialog
+  bind:visible={showCreateDialog}
+  on:create={handleAddCard}
+  on:cancel={() => { showCreateDialog = false; }}
 />
 
 <style>
@@ -211,45 +200,6 @@
     transition: border-color 0.15s;
   }
   .btn-toolbar:hover { border-color: var(--accent, #39ff14); }
-
-  .add-card-row {
-    display: flex;
-    gap: 8px;
-    padding: 8px 16px;
-    background: var(--bg-secondary, #1e1e2e);
-    border-bottom: 1px solid var(--border, #45475a);
-  }
-  .add-card-input {
-    flex: 1;
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: 1px solid var(--border, #45475a);
-    background: var(--bg, #11111b);
-    color: var(--fg, #cdd6f4);
-    font-size: 0.8rem;
-    outline: none;
-  }
-  .add-card-input:focus { border-color: var(--accent, #39ff14); }
-  .btn-add {
-    padding: 6px 12px;
-    border-radius: 6px;
-    background: var(--accent, #39ff14);
-    border: none;
-    color: #000;
-    font-weight: 600;
-    cursor: pointer;
-    font-size: 0.75rem;
-  }
-  .btn-add:hover { opacity: 0.85; }
-  .btn-cancel {
-    padding: 6px 8px;
-    border-radius: 6px;
-    background: transparent;
-    border: 1px solid var(--border, #45475a);
-    color: var(--fg-muted, #a6adc8);
-    cursor: pointer;
-    font-size: 0.8rem;
-  }
 
   .loading {
     display: flex;

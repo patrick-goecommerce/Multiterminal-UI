@@ -19,6 +19,19 @@
   let loading = false;
   let error = '';
   let showEscalation = false;
+  let saving = false;
+
+  // Editable fields
+  let editTitle = '';
+  let editDescription = '';
+  let editCardType = '';
+
+  const CARD_TYPES = [
+    { value: 'feature', label: 'Feature' },
+    { value: 'bugfix', label: 'Bugfix' },
+    { value: 'refactor', label: 'Refactor' },
+    { value: 'docs', label: 'Dokumentation' },
+  ];
 
   // Briefing data — populated from backend context when card is in qa state
   let briefing: any = null;
@@ -96,6 +109,9 @@
     App.GetBoardTask(dir, cardId)
       .then(c => {
         card = c;
+        editTitle = c.title || '';
+        editDescription = c.description || '';
+        editCardType = c.card_type || 'feature';
         loading = false;
         // Load plan if card is beyond planning
         if (c.state !== 'backlog' && c.state !== 'triage') {
@@ -113,6 +129,33 @@
   $: if (visible && cardId) loadCard();
 
   $: transitions = card ? (STATE_TRANSITIONS[card.state] || []) : [];
+  $: canEditType = card ? (card.state === 'backlog' || card.state === 'triage') : false;
+  $: hasChanges = card ? (
+    editTitle.trim() !== (card.title || '') ||
+    editDescription.trim() !== (card.description || '') ||
+    editCardType !== (card.card_type || 'feature')
+  ) : false;
+
+  async function handleSave() {
+    if (!card || !dir || saving) return;
+    if (!editTitle.trim()) return;
+    saving = true;
+    try {
+      const updated = new board.TaskCard({
+        ...card,
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+        card_type: editCardType,
+      });
+      await App.UpdateBoardTask(dir, updated);
+      dispatch('updated');
+      loadCard();
+    } catch (err) {
+      console.error('[detail] save error:', err);
+    } finally {
+      saving = false;
+    }
+  }
 
   async function handleTransition(event: board.Event) {
     if (!card) return;
@@ -165,16 +208,18 @@
       {:else}
         <!-- Header -->
         <div class="detail-header">
-          <h3 class="detail-title">{card.title}</h3>
+          <input
+            class="edit-title"
+            type="text"
+            bind:value={editTitle}
+            placeholder="Titel..."
+          />
           <button class="close-btn" on:click={close} title="Schliessen">&#10005;</button>
         </div>
 
         <!-- State & Meta -->
         <div class="detail-meta">
           <span class="state-badge" title="Status">{STATE_LABELS[card.state] || card.state}</span>
-          {#if card.card_type}
-            <span class="meta-tag">{card.card_type}</span>
-          {/if}
           {#if card.complexity}
             <span class="meta-tag">Komplex.: {card.complexity}</span>
           {/if}
@@ -189,13 +234,30 @@
           {/if}
         </div>
 
+        <!-- Card type -->
+        <div class="detail-section">
+          <span class="section-label">Typ</span>
+          {#if canEditType}
+            <select class="edit-select" bind:value={editCardType}>
+              {#each CARD_TYPES as ct}
+                <option value={ct.value}>{ct.label}</option>
+              {/each}
+            </select>
+          {:else}
+            <span class="meta-tag">{editCardType}</span>
+          {/if}
+        </div>
+
         <!-- Description -->
-        {#if card.description}
-          <div class="detail-section">
-            <span class="section-label">Beschreibung</span>
-            <p class="detail-desc">{card.description}</p>
-          </div>
-        {/if}
+        <div class="detail-section">
+          <span class="section-label">Beschreibung</span>
+          <textarea
+            class="edit-textarea"
+            bind:value={editDescription}
+            placeholder="Beschreibung hinzufuegen..."
+            rows="3"
+          ></textarea>
+        </div>
 
         <!-- Review reason -->
         {#if card.review_reason}
@@ -241,6 +303,15 @@
             </p>
             <button class="btn-escalation" on:click={() => { showEscalation = true; }}>
               Eskalation bearbeiten
+            </button>
+          </div>
+        {/if}
+
+        <!-- Save button -->
+        {#if hasChanges}
+          <div class="detail-section save-section">
+            <button class="btn-save" on:click={handleSave} disabled={saving || !editTitle.trim()}>
+              {saving ? 'Speichert...' : 'Speichern'}
             </button>
           </div>
         {/if}
@@ -314,13 +385,22 @@
     margin-bottom: 12px;
   }
 
-  .detail-title {
+  .edit-title {
     flex: 1;
     font-size: 1rem;
     font-weight: 700;
     color: var(--fg, #cdd6f4);
     margin: 0;
     line-height: 1.3;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px 6px;
+    outline: none;
+  }
+  .edit-title:focus {
+    border-color: var(--accent, #39ff14);
+    background: var(--bg-secondary, #1e1e2e);
   }
 
   .close-btn {
@@ -475,6 +555,51 @@
   .btn-transition:hover {
     border-color: var(--accent, #39ff14);
   }
+
+  .edit-select {
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #45475a);
+    background: var(--bg, #11111b);
+    color: var(--fg, #cdd6f4);
+    font-size: 0.75rem;
+    outline: none;
+  }
+  .edit-select:focus { border-color: var(--accent, #39ff14); }
+
+  .edit-textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #45475a);
+    background: var(--bg, #11111b);
+    color: var(--fg, #cdd6f4);
+    font-size: 0.8rem;
+    font-family: inherit;
+    line-height: 1.4;
+    resize: vertical;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .edit-textarea:focus { border-color: var(--accent, #39ff14); }
+
+  .save-section {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .btn-save {
+    padding: 6px 14px;
+    border-radius: 6px;
+    background: var(--accent, #39ff14);
+    border: none;
+    color: #000;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.75rem;
+  }
+  .btn-save:hover { opacity: 0.85; }
+  .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
 
   .btn-escalation {
     margin-top: 6px;

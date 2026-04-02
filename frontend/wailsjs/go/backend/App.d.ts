@@ -290,6 +290,16 @@ export function GenerateSubTickets(arg1:string,arg2:string,arg3:number):Promise<
 
 export function GetSubTicketProgress(arg1:string,arg2:number):Promise<[number, number]>;
 
+// --- Kanban Orchestration V3 (board-backed) ---
+
+export function StartCardOrchestration(dir: string, cardID: string): Promise<void>;
+
+export function ResumeCardOrchestration(dir: string, cardID: string): Promise<void>;
+
+export function CancelCardOrchestration(cardID: string): Promise<void>;
+
+export function IsCardOrchestrationRunning(cardID: string): Promise<boolean>;
+
 // --- Debug ---
 
 export function EnableSessionDebugLog(arg1:number,arg2:string):Promise<void>;

@@ -586,6 +586,24 @@ export function GetSubTicketProgress(arg1, arg2) {
   return $Call.ByID(1517370834, arg1, arg2);
 }
 
+// --- Kanban Orchestration V3 (board-backed) ---
+
+export function StartCardOrchestration(arg1, arg2) {
+  return $Call.ByID(1552781740, arg1, arg2);
+}
+
+export function ResumeCardOrchestration(arg1, arg2) {
+  return $Call.ByID(2727398619, arg1, arg2);
+}
+
+export function CancelCardOrchestration(arg1) {
+  return $Call.ByID(3899119424, arg1);
+}
+
+export function IsCardOrchestrationRunning(arg1) {
+  return $Call.ByID(2210346425, arg1);
+}
+
 // --- Debug ---
 
 export function EnableSessionDebugLog(arg1, arg2) {
