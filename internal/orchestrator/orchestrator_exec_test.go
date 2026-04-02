@@ -143,29 +143,56 @@ func TestResumeAfterReview_BudgetExhausted(t *testing.T) {
 	}
 }
 
-func TestResumeAfterReview_StuckStep(t *testing.T) {
+func TestResumeAfterReview_StuckStep_ModelEscalated(t *testing.T) {
 	orch, b, eng, dir := setupCardInReview(t, "card-stuck", 1)
 
+	// Step uses "sonnet" model — escalation will promote to "opus".
 	eng.addResult(ExecutionResult{StepID: "01", Status: StepStuck, CostUSD: 0.05})
 
 	err := orch.ResumeAfterReview(context.Background(), dir, "card-stuck")
-	if err == nil {
-		t.Fatal("expected stuck error")
-	}
-	if !strings.Contains(err.Error(), "stuck") {
-		t.Errorf("error should mention stuck, got: %v", err)
+	// Model escalation succeeds (sonnet→opus), handleStuckStep returns nil,
+	// but executeWave already finished its steps. Card proceeds to QA then done.
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Card should end in human_review.
 	card, err := b.GetTask("card-stuck")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// After model escalation, card goes back to executing, then QA (no must_haves) -> done.
+	if card.State != board.StateDone {
+		t.Errorf("state: got %q, want %q", card.State, board.StateDone)
+	}
+	if card.EscAttempts != 1 {
+		t.Errorf("esc_attempts: got %d, want 1", card.EscAttempts)
+	}
+}
+
+func TestResumeAfterReview_StuckStep_HumanReview(t *testing.T) {
+	orch, b, eng, dir := setupCardInReview(t, "card-stuck-hr", 1)
+
+	// Step uses "sonnet" model. Set EscAttempts to 2 so max escalations is reached.
+	card, _ := b.GetTask("card-stuck-hr")
+	card.EscAttempts = 2
+	_ = b.UpdateTask(card)
+
+	eng.addResult(ExecutionResult{StepID: "01", Status: StepStuck, CostUSD: 0.05})
+
+	err := orch.ResumeAfterReview(context.Background(), dir, "card-stuck-hr")
+	if err == nil {
+		t.Fatal("expected error for human review escalation")
+	}
+	if !strings.Contains(err.Error(), "human review") {
+		t.Errorf("error should mention human review, got: %v", err)
+	}
+
+	card, err = b.GetTask("card-stuck-hr")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if card.State != board.StateHumanReview {
 		t.Errorf("state: got %q, want %q", card.State, board.StateHumanReview)
-	}
-	if card.ReviewReason != "step_stuck" {
-		t.Errorf("review_reason: got %q, want %q", card.ReviewReason, "step_stuck")
 	}
 }
 

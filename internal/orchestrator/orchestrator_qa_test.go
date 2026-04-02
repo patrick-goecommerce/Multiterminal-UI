@@ -228,7 +228,7 @@ func TestRunQA_ArtifactTooFewLines(t *testing.T) {
 	}
 }
 
-func TestRunQA_FixLoopExhausted(t *testing.T) {
+func TestRunQA_FixLoopExhausted_Escalated(t *testing.T) {
 	arts := []struct{ path string; minLines int }{
 		{"missing_file.go", 0},
 	}
@@ -240,22 +240,54 @@ func TestRunQA_FixLoopExhausted(t *testing.T) {
 	eng.addResult(ExecutionResult{StepID: "qa-fix-3", Status: StepSuccess, CostUSD: 0.05})
 
 	err := orch.RunQA(context.Background(), dir, "card-qa-exhaust")
-	if err == nil {
-		t.Fatal("expected error after fix loop exhaustion")
-	}
-	if !strings.Contains(err.Error(), "QA fix loop exhausted") {
-		t.Errorf("error should mention fix loop exhausted, got: %v", err)
+	// Escalation succeeds (model_escalated: sonnet→opus) so no error returned.
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 
 	card, err := b.GetTask("card-qa-exhaust")
 	if err != nil {
 		t.Fatal(err)
 	}
+	// After model escalation, card is back in executing state.
+	if card.State != board.StateExecuting {
+		t.Errorf("state: got %q, want %q", card.State, board.StateExecuting)
+	}
+	if card.EscAttempts != 1 {
+		t.Errorf("esc_attempts: got %d, want 1", card.EscAttempts)
+	}
+}
+
+func TestRunQA_FixLoopExhausted_HumanReview(t *testing.T) {
+	arts := []struct{ path string; minLines int }{
+		{"missing_file.go", 0},
+	}
+	orch, b, eng, dir := setupCardInQA(t, "card-qa-hr", arts)
+
+	// Set EscAttempts to 2 so escalation goes directly to human_review.
+	card, _ := b.GetTask("card-qa-hr")
+	card.EscAttempts = 2
+	_ = b.UpdateTask(card)
+
+	// File never gets created. Add 3 fix results.
+	eng.addResult(ExecutionResult{StepID: "qa-fix-1", Status: StepSuccess, CostUSD: 0.05})
+	eng.addResult(ExecutionResult{StepID: "qa-fix-2", Status: StepSuccess, CostUSD: 0.05})
+	eng.addResult(ExecutionResult{StepID: "qa-fix-3", Status: StepSuccess, CostUSD: 0.05})
+
+	err := orch.RunQA(context.Background(), dir, "card-qa-hr")
+	if err == nil {
+		t.Fatal("expected error after fix loop exhaustion with max escalations")
+	}
+	if !strings.Contains(err.Error(), "human review") {
+		t.Errorf("error should mention human review, got: %v", err)
+	}
+
+	card, err = b.GetTask("card-qa-hr")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if card.State != board.StateHumanReview {
 		t.Errorf("state: got %q, want %q", card.State, board.StateHumanReview)
-	}
-	if card.ReviewReason != "qa_fix_exhausted" {
-		t.Errorf("review_reason: got %q, want %q", card.ReviewReason, "qa_fix_exhausted")
 	}
 }
 

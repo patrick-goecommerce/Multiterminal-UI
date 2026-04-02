@@ -85,6 +85,7 @@ func NewStateMachine() *StateMachine {
 	sm.register(StateStuck, EventMaxEscalations, StateHumanReview, nil)
 	sm.register(StateQA, EventQAPassed, StateMerging, nil)
 	sm.register(StateQA, EventQAFailed, StateExecuting, guardQAAttempts)
+	sm.register(StateQA, EventStepStuck, StateStuck, nil)
 	sm.register(StateMerging, EventMergeSuccess, StateDone, nil)
 	sm.register(StateMerging, EventMergeConflict, StateHumanReview, nil)
 	sm.register(StateHumanReview, EventUserResolvedExecuting, StateExecuting, nil)

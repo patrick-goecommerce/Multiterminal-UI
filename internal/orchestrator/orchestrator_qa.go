@@ -10,8 +10,10 @@ import (
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/board"
 )
 
-// DecisionBriefingStub is a Phase 2 placeholder for the full Decision Briefing.
-// The real implementation (secrets scanner, conflict risk, dependency risk) comes in Phase 3.
+// DecisionBriefingStub is a simplified decision briefing.
+// The full engine.BuildBriefing (secrets scanner, conflict risk, dependency risk)
+// is called from the Wails binding layer (app_orchestrate_v3.go) which can import
+// the engine package without import cycles.
 type DecisionBriefingStub struct {
 	FilesChanged   int    `json:"files_changed"`
 	ScopeStatus    string `json:"scope_status"`    // "within_limits" | "exceeded"
@@ -19,10 +21,9 @@ type DecisionBriefingStub struct {
 }
 
 // buildBriefingStub creates a minimal decision briefing.
-// Phase 3 will replace this with the full DecisionBriefing.
+// TODO: Real briefing via engine.BuildBriefing is called from app_orchestrate_v3.go
+// (the Wails binding layer), which can import both engine and orchestrator packages.
 func buildBriefingStub(dir string) DecisionBriefingStub {
-	// PHASE2-TEMP: always returns proceed_to_qa. Phase 3 adds git diff analysis,
-	// secrets scanning, conflict risk, and dependency risk checks.
 	return DecisionBriefingStub{
 		ScopeStatus:    "within_limits",
 		Recommendation: "proceed_to_qa",
@@ -44,10 +45,20 @@ func (o *Orchestrator) RunQA(ctx context.Context, dir, cardID string) error {
 	// 1. Decision Briefing (Phase 2 stub)
 	briefing := buildBriefingStub(dir)
 	if briefing.Recommendation == "needs_human_review" {
-		// PHASE2-TEMP: transition to human_review directly
-		card.State = board.StateHumanReview
-		card.ReviewReason = "briefing_flagged"
-		return o.board.UpdateTask(card)
+		// Briefing flagged issues — escalate via stuck pipeline
+		trResult, err := o.sm.Transition(card, board.EventStepStuck)
+		if err != nil {
+			return fmt.Errorf("transition qa->stuck for briefing: %w", err)
+		}
+		card.State = trResult.NewState
+		if err := o.board.UpdateTask(card); err != nil {
+			return fmt.Errorf("update card to stuck: %w", err)
+		}
+		_, escErr := o.Escalate(ctx, dir, cardID, PlanStep{ID: "briefing"}, "decision briefing flagged for human review")
+		if escErr != nil {
+			return fmt.Errorf("briefing escalation: %w", escErr)
+		}
+		return nil
 	}
 
 	// 2. Load plan to check must_haves
@@ -124,8 +135,7 @@ func checkMustHaves(dir string, plan Plan) (bool, []string) {
 				}
 			}
 		}
-		// PHASE2-TEMP: truths are skipped. Phase 3 will send truths to Haiku
-		// with codebase context for verification.
+		// TODO: Truth verification via Haiku with codebase context (requires engine package).
 	}
 
 	return len(failures) == 0, failures
@@ -142,12 +152,8 @@ func (o *Orchestrator) qaFixLoop(ctx context.Context, dir, cardID string, plan P
 		// Transition: qa -> executing (QA fix)
 		result, err := o.sm.Transition(card, board.EventQAFailed)
 		if err != nil {
-			// Guard blocked (QAAttempts >= 3) -> human_review
-			// PHASE2-TEMP: stuck goes directly to human_review
-			card.State = board.StateHumanReview
-			card.ReviewReason = "qa_fix_exhausted"
-			_ = o.board.UpdateTask(card)
-			return fmt.Errorf("QA fix loop exhausted after %d attempts", card.QAAttempts)
+			// Guard blocked (QAAttempts >= 3) — escalate via stuck pipeline
+			return o.escalateQAExhausted(ctx, dir, cardID, card, failures)
 		}
 		card.State = result.NewState
 		card.QAAttempts++
@@ -193,13 +199,9 @@ func (o *Orchestrator) qaFixLoop(ctx context.Context, dir, cardID string, plan P
 		failures = newFailures
 	}
 
-	// All 3 attempts failed
+	// All 3 attempts failed — escalate via stuck pipeline
 	card, _ := o.board.GetTask(cardID)
-	// PHASE2-TEMP: go directly to human_review (escalation pipeline in Phase 3)
-	card.State = board.StateHumanReview
-	card.ReviewReason = "qa_fix_exhausted"
-	_ = o.board.UpdateTask(card)
-	return fmt.Errorf("QA fix loop exhausted after 3 attempts, remaining failures: %v", failures)
+	return o.escalateQAExhausted(ctx, dir, cardID, card, failures)
 }
 
 // buildQAFixPrompt creates a prompt for the engine to fix QA failures.
@@ -208,4 +210,36 @@ func buildQAFixPrompt(failures []string) string {
 		"The following QA checks failed. Please fix them:\n\n%s\n\nFix ONLY these issues. Do not change anything else.",
 		strings.Join(failures, "\n"),
 	)
+}
+
+// escalateQAExhausted transitions a card from QA through stuck into the escalation pipeline.
+func (o *Orchestrator) escalateQAExhausted(ctx context.Context, dir, cardID string, card board.TaskCard, failures []string) error {
+	// Transition qa -> stuck
+	trResult, err := o.sm.Transition(card, board.EventStepStuck)
+	if err != nil {
+		// Fallback: set human_review directly if transition fails
+		card.State = board.StateHumanReview
+		card.ReviewReason = "qa_fix_exhausted"
+		_ = o.board.UpdateTask(card)
+		return fmt.Errorf("QA fix loop exhausted after %d attempts", card.QAAttempts)
+	}
+	card.State = trResult.NewState
+	if err := o.board.UpdateTask(card); err != nil {
+		return fmt.Errorf("update card to stuck: %w", err)
+	}
+
+	reason := fmt.Sprintf("QA fix loop exhausted after %d attempts, failures: %v", card.QAAttempts, failures)
+	escResult, err := o.Escalate(ctx, dir, cardID, PlanStep{ID: "qa-fix", Model: "sonnet"}, reason)
+	if err != nil {
+		return fmt.Errorf("QA escalation failed: %w", err)
+	}
+
+	switch escResult.Action {
+	case "model_escalated", "replanned":
+		return nil
+	case "human_review":
+		return fmt.Errorf("QA fix loop exhausted, escalated to human review: %s", escResult.Reason)
+	}
+
+	return nil
 }

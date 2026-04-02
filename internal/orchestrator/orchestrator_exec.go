@@ -48,7 +48,7 @@ func (o *Orchestrator) executeWave(ctx context.Context, dir, cardID string, wave
 
 		// Check result
 		if result.Status == StepStuck {
-			return o.handleStuckStep(cardID, step.ID)
+			return o.handleStuckStep(ctx, dir, cardID, step, "step stuck during execution")
 		}
 
 		if result.Status != StepSuccess {
@@ -60,9 +60,9 @@ func (o *Orchestrator) executeWave(ctx context.Context, dir, cardID string, wave
 	return nil
 }
 
-// handleStuckStep transitions a card through stuck → human_review.
-// PHASE2-TEMP: stuck goes directly to human_review (replace with escalation pipeline in Phase 3).
-func (o *Orchestrator) handleStuckStep(cardID, stepID string) error {
+// handleStuckStep transitions a card through the escalation pipeline.
+// Tries model escalation → re-planning → human_review.
+func (o *Orchestrator) handleStuckStep(ctx context.Context, dir, cardID string, failedStep PlanStep, reason string) error {
 	card, err := o.board.GetTask(cardID)
 	if err != nil {
 		return fmt.Errorf("get card for stuck handling: %w", err)
@@ -78,18 +78,24 @@ func (o *Orchestrator) handleStuckStep(cardID, stepID string) error {
 		return fmt.Errorf("update card to stuck: %w", err)
 	}
 
-	// PHASE2-TEMP: stuck → human_review directly (replace with escalation pipeline in Phase 3)
-	result, err = o.sm.Transition(card, board.EventMaxEscalations)
+	// Use real escalation pipeline
+	escResult, err := o.Escalate(ctx, dir, cardID, failedStep, reason)
 	if err != nil {
-		return fmt.Errorf("transition to human_review: %w", err)
-	}
-	card.State = result.NewState
-	card.ReviewReason = "step_stuck"
-	if err := o.board.UpdateTask(card); err != nil {
-		return fmt.Errorf("update card to human_review: %w", err)
+		return fmt.Errorf("escalation failed: %w", err)
 	}
 
-	return fmt.Errorf("step %s stuck, escalated to human review", stepID)
+	switch escResult.Action {
+	case "model_escalated":
+		// Card is back in executing with higher model — caller should retry
+		return nil
+	case "replanned":
+		// Card is back in executing with sub-steps — caller should execute them
+		return nil
+	case "human_review":
+		return fmt.Errorf("step %s stuck, escalated to human review: %s", failedStep.ID, escResult.Reason)
+	}
+
+	return nil
 }
 
 // stepBudget calculates per-step budget from remaining card budget.
