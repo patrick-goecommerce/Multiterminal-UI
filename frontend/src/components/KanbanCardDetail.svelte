@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onDestroy } from 'svelte';
   import * as App from '../../wailsjs/go/backend/App';
   import { board } from '../../wailsjs/go/models';
+  import { EventsOn } from '../../wailsjs/runtime/runtime';
   import DecisionBriefing from './DecisionBriefing.svelte';
   import EscalationDialog from './EscalationDialog.svelte';
 
@@ -20,6 +21,90 @@
   let error = '';
   let showEscalation = false;
   let saving = false;
+
+  // Orchestration state
+  let orchRunning = false;
+  let orchError = '';
+  let orchEventCleanups: (() => void)[] = [];
+
+  function setupOrchEvents() {
+    cleanupOrchEvents();
+
+    orchEventCleanups.push(EventsOn('orchestration:started', (payload: any) => {
+      if (payload?.card_id === cardId) { orchRunning = true; orchError = ''; }
+    }));
+
+    orchEventCleanups.push(EventsOn('orchestration:completed', (payload: any) => {
+      if (payload?.card_id === cardId) { orchRunning = false; loadCard(); }
+    }));
+
+    orchEventCleanups.push(EventsOn('orchestration:awaiting-review', (payload: any) => {
+      if (payload?.card_id === cardId) { orchRunning = false; loadCard(); }
+    }));
+
+    orchEventCleanups.push(EventsOn('orchestration:resumed', (payload: any) => {
+      if (payload?.card_id === cardId) { orchRunning = true; orchError = ''; }
+    }));
+
+    orchEventCleanups.push(EventsOn('orchestration:error', (payload: any) => {
+      if (payload?.card_id === cardId) {
+        orchRunning = false;
+        orchError = payload.error || 'Unbekannter Fehler';
+        loadCard();
+      }
+    }));
+  }
+
+  function cleanupOrchEvents() {
+    orchEventCleanups.forEach(fn => fn());
+    orchEventCleanups = [];
+  }
+
+  function checkOrchState() {
+    if (!cardId) return;
+    App.IsCardOrchestrationRunning(cardId)
+      .then(running => { orchRunning = running; })
+      .catch(() => { orchRunning = false; });
+  }
+
+  function initOrchestration() {
+    orchRunning = false;
+    orchError = '';
+    checkOrchState();
+    setupOrchEvents();
+  }
+
+  async function handleStartOrch() {
+    if (!dir || !cardId) return;
+    orchError = '';
+    try {
+      await App.StartCardOrchestration(dir, cardId);
+    } catch (err) {
+      orchError = String(err);
+    }
+  }
+
+  async function handleResumeOrch() {
+    if (!dir || !cardId) return;
+    orchError = '';
+    try {
+      await App.ResumeCardOrchestration(dir, cardId);
+    } catch (err) {
+      orchError = String(err);
+    }
+  }
+
+  async function handleCancelOrch() {
+    if (!cardId) return;
+    try {
+      await App.CancelCardOrchestration(cardId);
+      orchRunning = false;
+    } catch (err) {
+      orchError = String(err);
+    }
+  }
+
+  onDestroy(() => { cleanupOrchEvents(); });
 
   // Editable fields
   let editTitle = '';
@@ -126,7 +211,8 @@
       });
   }
 
-  $: if (visible && cardId) loadCard();
+  $: if (visible && cardId) { loadCard(); initOrchestration(); }
+  $: if (!visible) cleanupOrchEvents();
 
   $: transitions = card ? (STATE_TRANSITIONS[card.state] || []) : [];
   $: canEditType = card ? (card.state === 'backlog' || card.state === 'triage') : false;
@@ -312,6 +398,41 @@
           <div class="detail-section save-section">
             <button class="btn-save" on:click={handleSave} disabled={saving || !editTitle.trim()}>
               {saving ? 'Speichert...' : 'Speichern'}
+            </button>
+          </div>
+        {/if}
+
+        <!-- Orchestration error -->
+        {#if orchError}
+          <div class="orch-error">
+            <span>Fehler: {orchError}</span>
+            <button class="orch-error-dismiss" on:click={() => orchError = ''}>&#10005;</button>
+          </div>
+        {/if}
+
+        <!-- Orchestration controls -->
+        {#if card.state === 'backlog' && !orchRunning}
+          <div class="detail-section orch-section">
+            <button class="btn-orchestrate" on:click={handleStartOrch}>
+              Orchestrierung starten
+            </button>
+          </div>
+        {/if}
+
+        {#if card.state === 'review' && !orchRunning}
+          <div class="detail-section orch-section">
+            <button class="btn-orchestrate" on:click={handleResumeOrch}>
+              Plan genehmigen &amp; ausfuehren
+            </button>
+          </div>
+        {/if}
+
+        {#if orchRunning}
+          <div class="detail-section orch-running">
+            <span class="orch-pulse"></span>
+            <span>Orchestrierung laeuft...</span>
+            <button class="btn-cancel-orch" on:click={handleCancelOrch}>
+              Abbrechen
             </button>
           </div>
         {/if}
@@ -613,4 +734,75 @@
     cursor: pointer;
   }
   .btn-escalation:hover { opacity: 0.85; }
+
+  /* Orchestration styles */
+  .btn-orchestrate {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    background: #22c55e;
+    border: none;
+    color: #000;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .btn-orchestrate:hover { opacity: 0.9; }
+
+  .orch-running {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #f59e0b;
+  }
+
+  .orch-pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #f59e0b;
+    animation: pulse 1.5s infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .btn-cancel-orch {
+    margin-left: auto;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #ef4444;
+    border: none;
+    color: #fff;
+    font-size: 0.7rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-cancel-orch:hover { opacity: 0.85; }
+
+  .orch-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid #ef4444;
+    border-radius: 6px;
+    color: #ef4444;
+    font-size: 0.8rem;
+    margin-bottom: 12px;
+  }
+
+  .orch-error-dismiss {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0 4px;
+  }
 </style>
