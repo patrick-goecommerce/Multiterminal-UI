@@ -6,10 +6,22 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/orchestrator"
 )
+
+// hideWindow sets SysProcAttr to hide the console window on Windows.
+func hideWindow(cmd *exec.Cmd) {
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow:    true,
+			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+		}
+	}
+}
 
 // runClaude executes claude -p --output-format json and returns the raw stdout.
 func runClaude(ctx context.Context, workDir, prompt, systemPrompt, model string) ([]byte, error) {
@@ -32,6 +44,7 @@ func runClaude(ctx context.Context, workDir, prompt, systemPrompt, model string)
 	cmd.Dir = workDir
 	cmd.Stdin = strings.NewReader(prompt)
 	cmd.Env = stripClaudeEnv(os.Environ())
+	hideWindow(cmd)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -75,6 +88,7 @@ func runVerify(ctx context.Context, workDir string, steps []orchestrator.VerifyS
 		}
 		cmd := exec.CommandContext(ctx, comspec, "/c", step.Command)
 		cmd.Dir = workDir
+		hideWindow(cmd)
 
 		output, err := cmd.CombinedOutput()
 		exitCode := 0

@@ -96,6 +96,9 @@ func (a *AppService) IsCardOrchestrationRunning(cardID string) bool {
 
 // createOrchestrator builds the orchestrator stack for a directory.
 func (a *AppService) createOrchestrator(dir string) (*orchestrator.Orchestrator, error) {
+	if err := board.ValidateGitRepo(dir); err != nil {
+		return nil, err
+	}
 	b := board.NewBoard(dir)
 	eng := engine.NewHeadlessEngine(dir, 4)
 	skillDir := filepath.Join(dir, ".mtui", "skills")
