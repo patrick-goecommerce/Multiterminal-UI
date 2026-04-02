@@ -217,6 +217,7 @@ func (m *WorktreeSlotManager) createWorktree(slot *WorktreeSlot) error {
 func (m *WorktreeSlotManager) runGit(args ...string) error {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = m.repoDir
+	hideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %s", err, out)

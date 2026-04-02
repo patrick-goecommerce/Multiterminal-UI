@@ -44,15 +44,27 @@ func (e *HeadlessEngine) Execute(ctx context.Context, req orchestrator.Execution
 	start := time.Now()
 	result := orchestrator.ExecutionResult{StepID: req.StepID}
 
-	// 1. Allocate worktree slot.
-	branch := fmt.Sprintf("mtui/%s/%s", req.CardID, req.StepID)
-	slotID, workDir, err := e.slots.Allocate(ctx, branch)
-	if err != nil {
-		return result, fmt.Errorf("allocate worktree: %w", err)
+	// 1. Determine work directory.
+	// WorktreeSlot == -1 means "run in repo dir" (for triage, planning — no file changes).
+	// WorktreeSlot >= 0 means "allocate an isolated worktree" (for code execution).
+	var workDir string
+	var slotID int = -1
+	if req.WorktreeSlot >= 0 && req.CardID != "" && req.StepID != "" &&
+		req.StepID != "triage" && req.StepID != "plan" &&
+		!strings.HasPrefix(req.StepID, "plan-repair") &&
+		!strings.HasPrefix(req.StepID, "replan") {
+		branch := fmt.Sprintf("mtui/%s/%s", req.CardID, req.StepID)
+		var err error
+		slotID, workDir, err = e.slots.Allocate(ctx, branch)
+		if err != nil {
+			return result, fmt.Errorf("allocate worktree: %w", err)
+		}
+		defer func() {
+			_ = e.slots.Release(slotID)
+		}()
+	} else {
+		workDir = e.repoDir
 	}
-	defer func() {
-		_ = e.slots.Release(slotID)
-	}()
 
 	// 2. Create cancellable context with timeout.
 	timeout := time.Duration(req.TimeoutSec) * time.Second

@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strings"
+	"syscall"
 )
 
 // ErrRefNotFound is returned when a git ref does not exist.
@@ -34,10 +36,21 @@ func ValidateGitRepo(dir string) error {
 	}
 	cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--git-dir")
 	cmd.Dir = dir
+	hideWindowCmd(cmd)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("'%s' ist kein Git-Repository — Kanban Board benötigt ein Git-Projekt", dir)
 	}
 	return nil
+}
+
+// hideWindowCmd prevents a console window from flashing on Windows.
+func hideWindowCmd(cmd *exec.Cmd) {
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow:    true,
+			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+		}
+	}
 }
 
 // WriteRef stores content as a blob in a git ref.
@@ -172,6 +185,7 @@ func (rs *RefStore) validateRefPrefix(prefix string) error {
 func (rs *RefStore) git(ctx context.Context, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = rs.repoDir
+	hideWindowCmd(cmd)
 	return cmd
 }
 
