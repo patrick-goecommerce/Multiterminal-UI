@@ -157,10 +157,12 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="dialog" on:click|stopPropagation on:keydown={handleKeydown} tabindex="-1">
       {#if loading}
-        <div class="loading-state">Karte wird geladen...</div>
+        <div class="loading-state">Karte wird geladen... (ID: {cardId})</div>
       {:else if error}
         <div class="error-state">Fehler: {error}</div>
-      {:else if card}
+      {:else if !card}
+        <div class="error-state">Keine Kartendaten empfangen (ID: {cardId}, dir: {dir})</div>
+      {:else}
         <!-- Header -->
         <div class="detail-header">
           <h3 class="detail-title">{card.title}</h3>
@@ -297,12 +299,13 @@
   }
 
   .loading-state, .error-state {
-    padding: 20px;
+    padding: 30px 20px;
     text-align: center;
-    color: var(--fg-muted, #a6adc8);
-    font-size: 0.85rem;
+    color: #cdd6f4;
+    font-size: 0.9rem;
+    font-weight: 500;
   }
-  .error-state { color: #ef4444; }
+  .error-state { color: #ef4444; font-weight: 600; }
 
   .detail-header {
     display: flex;
