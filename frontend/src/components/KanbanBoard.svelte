@@ -14,8 +14,7 @@
   let detailCardId = '';
   let showDetail = false;
 
-  // Event cleanup
-  let eventCleanup: (() => void) | null = null;
+  // Event cleanup (initialized in onMount)
 
   function loadBoard() {
     if (!dir) return;
@@ -29,16 +28,29 @@
       });
   }
 
+  let eventCleanups: (() => void)[] = [];
+
   onMount(() => {
-    // Listen for board state transition events
-    eventCleanup = EventsOn('board:task-transition', (_payload: any) => {
-      // Reload the full task list on any transition
+    // Listen for board state transition events (manual transitions via UI)
+    eventCleanups.push(EventsOn('board:task-transition', (_payload: any) => {
       loadBoard();
-    });
+    }));
+    // Listen for orchestration events (automated transitions via orchestrator)
+    eventCleanups.push(EventsOn('orchestration:started', () => loadBoard()));
+    eventCleanups.push(EventsOn('orchestration:awaiting-review', () => loadBoard()));
+    eventCleanups.push(EventsOn('orchestration:resumed', () => loadBoard()));
+    eventCleanups.push(EventsOn('orchestration:completed', () => loadBoard()));
+    eventCleanups.push(EventsOn('orchestration:error', () => loadBoard()));
+
+    // Polling fallback: refresh every 5s when orchestration might be running
+    const pollInterval = setInterval(() => {
+      if (dir) loadBoard();
+    }, 5000);
+    eventCleanups.push(() => clearInterval(pollInterval));
   });
 
   onDestroy(() => {
-    if (eventCleanup) eventCleanup();
+    eventCleanups.forEach(fn => fn());
   });
 
   // Reload when dir changes
