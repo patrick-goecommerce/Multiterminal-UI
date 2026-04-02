@@ -83,9 +83,12 @@
       try {
         const updated = await App.GetBoardTask(dir, cardId);
         if (card && updated.state !== card.state) {
+          // State changed — if orchestration was running, it's done now
+          if (orchRunning) {
+            orchRunning = false;
+            orchDone = true;
+          }
           card = updated;
-          // Re-check orchestration state
-          checkOrchState();
         }
       } catch (_) {}
     }, 2000);
