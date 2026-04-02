@@ -52,6 +52,13 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **`App.mu`** — sessions map, queues map, nextID.
 - **Never allocate under lock** — use pre-allocated templates (e.g. `blankLine` in scroll ops).
 
+## Issue & Commit Discipline
+- **Issues schließen nur mit Commit-Referenz.** Nutze `Closes #123` oder `Fixes #123` im Commit-Message-Body. So ist für jeden nachvollziehbar, welcher Commit welches Issue löst.
+- **Ein Issue ist erst "done" wenn:** (1) Code implementiert, (2) Tests geschrieben UND grün, (3) E2E-getestet oder als `needs-e2e-testing` getaggt, (4) Commit mit `Closes #N` referenziert das Issue.
+- **Nie Issues manuell schließen** ohne zugehörigen Commit. Ausnahme: Duplikate, obsolete Issues.
+- **`needs-e2e-testing` Label** bedeutet: Unit Tests passen, aber der Feature-Flow wurde nie real (mit echtem Claude CLI, echtem Git-Repo, echtem UI) getestet.
+- **Spec vs. Implementation:** Die Design Spec (`docs/superpowers/specs/2026-04-01-kanban-orchestration-v3-design.md`) ist die Quelle der Wahrheit. Wenn Code von der Spec abweicht, entweder Code anpassen oder Spec updaten — nie still divergieren.
+
 ## Branch Strategy
 - **`main`** — stable releases only. Hotfixes land here first.
 - **`alpha-main`** — ongoing alpha development. New features target this branch.
