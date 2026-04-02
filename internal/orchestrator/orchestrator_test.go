@@ -53,7 +53,7 @@ func createBacklogCard(t *testing.T, b *board.Board, id, title, desc string) {
 		State:       board.StateBacklog,
 		CardType:    board.CardTypeFeature,
 	}
-	if err := b.CreateTask(card); err != nil {
+	if _, err := b.CreateTask(card); err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 }

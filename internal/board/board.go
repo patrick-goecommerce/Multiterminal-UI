@@ -30,11 +30,12 @@ func NewBoard(repoDir string) *Board {
 
 // CreateTask persists a new task card. If ID is empty, one is generated.
 // CreatedAt and UpdatedAt are set to the current time.
-func (b *Board) CreateTask(card TaskCard) error {
+// Returns the card with generated ID and timestamps.
+func (b *Board) CreateTask(card TaskCard) (TaskCard, error) {
 	if card.ID == "" {
 		id, err := generateID()
 		if err != nil {
-			return fmt.Errorf("generate task id: %w", err)
+			return TaskCard{}, fmt.Errorf("generate task id: %w", err)
 		}
 		card.ID = id
 	}
@@ -44,10 +45,13 @@ func (b *Board) CreateTask(card TaskCard) error {
 
 	data, err := marshalCard(card)
 	if err != nil {
-		return fmt.Errorf("marshal task %s: %w", card.ID, err)
+		return TaskCard{}, fmt.Errorf("marshal task %s: %w", card.ID, err)
 	}
 	ref := taskContentRef(card.ID)
-	return b.store.WriteRef(ref, data)
+	if err := b.store.WriteRef(ref, data); err != nil {
+		return TaskCard{}, err
+	}
+	return card, nil
 }
 
 // GetTask reads a task card by ID. Returns an error wrapping

@@ -19,15 +19,20 @@ type BoardTransitionEvent struct {
 }
 
 // openBoard creates a Board instance for the given repo directory.
-// Board instances are cheap (no state beyond a RefStore pointer), so
-// we create them on demand rather than caching.
-func openBoard(dir string) *board.Board {
-	return board.NewBoard(dir)
+// Returns an error if the directory is not a git repository.
+func openBoard(dir string) (*board.Board, error) {
+	if err := board.ValidateGitRepo(dir); err != nil {
+		return nil, err
+	}
+	return board.NewBoard(dir), nil
 }
 
 // GetBoardTasks returns all tasks from the git-ref board.
 func (a *AppService) GetBoardTasks(dir string) ([]board.TaskCard, error) {
-	b := openBoard(dir)
+	b, err := openBoard(dir)
+	if err != nil {
+		return nil, err
+	}
 	tasks, err := b.ListTasks()
 	if err != nil {
 		log.Printf("[board] ListTasks error for %s: %v", dir, err)
@@ -42,28 +47,27 @@ func (a *AppService) GetBoardTasks(dir string) ([]board.TaskCard, error) {
 // CreateBoardTask creates a new task on the board.
 // Returns the created card (with generated ID and timestamps).
 func (a *AppService) CreateBoardTask(dir string, card board.TaskCard) (board.TaskCard, error) {
-	b := openBoard(dir)
+	b, err := openBoard(dir)
+	if err != nil {
+		return board.TaskCard{}, err
+	}
 	if card.State == "" {
 		card.State = board.StateBacklog
 	}
-	if err := b.CreateTask(card); err != nil {
+	created, err := b.CreateTask(card)
+	if err != nil {
 		log.Printf("[board] CreateTask error for %s: %v", dir, err)
 		return board.TaskCard{}, fmt.Errorf("create board task: %w", err)
 	}
-	// Re-read to get the generated ID and timestamps.
-	if card.ID != "" {
-		created, err := b.GetTask(card.ID)
-		if err == nil {
-			return created, nil
-		}
-	}
-	// If ID was auto-generated we can't re-read easily; return what we have.
-	return card, nil
+	return created, nil
 }
 
 // GetBoardTask returns a single task by ID.
 func (a *AppService) GetBoardTask(dir, id string) (board.TaskCard, error) {
-	b := openBoard(dir)
+	b, err := openBoard(dir)
+	if err != nil {
+		return board.TaskCard{}, err
+	}
 	card, err := b.GetTask(id)
 	if err != nil {
 		return board.TaskCard{}, fmt.Errorf("get board task %s: %w", id, err)
@@ -73,7 +77,10 @@ func (a *AppService) GetBoardTask(dir, id string) (board.TaskCard, error) {
 
 // UpdateBoardTask updates an existing task.
 func (a *AppService) UpdateBoardTask(dir string, card board.TaskCard) error {
-	b := openBoard(dir)
+	b, err := openBoard(dir)
+	if err != nil {
+		return err
+	}
 	if err := b.UpdateTask(card); err != nil {
 		log.Printf("[board] UpdateTask error for %s/%s: %v", dir, card.ID, err)
 		return fmt.Errorf("update board task %s: %w", card.ID, err)
@@ -83,7 +90,10 @@ func (a *AppService) UpdateBoardTask(dir string, card board.TaskCard) error {
 
 // DeleteBoardTask removes a task and its associated plan.
 func (a *AppService) DeleteBoardTask(dir, id string) error {
-	b := openBoard(dir)
+	b, err := openBoard(dir)
+	if err != nil {
+		return err
+	}
 	if err := b.DeleteTask(id); err != nil {
 		log.Printf("[board] DeleteTask error for %s/%s: %v", dir, id, err)
 		return fmt.Errorf("delete board task %s: %w", id, err)
@@ -94,7 +104,10 @@ func (a *AppService) DeleteBoardTask(dir, id string) error {
 // MoveBoardTask triggers a state transition on a task.
 // Returns the transition result. Emits "board:task-transition" event.
 func (a *AppService) MoveBoardTask(dir, id string, event board.Event) (board.TransitionResult, error) {
-	b := openBoard(dir)
+	b, err := openBoard(dir)
+	if err != nil {
+		return board.TransitionResult{}, err
+	}
 	sm := board.NewStateMachine()
 
 	// 1. Get current card
@@ -131,7 +144,10 @@ func (a *AppService) MoveBoardTask(dir, id string, event board.Event) (board.Tra
 
 // SaveBoardPlan saves an execution plan for a task.
 func (a *AppService) SaveBoardPlan(dir, id string, plan board.Plan) error {
-	b := openBoard(dir)
+	b, err := openBoard(dir)
+	if err != nil {
+		return err
+	}
 	if err := b.SavePlan(id, plan); err != nil {
 		log.Printf("[board] SavePlan error for %s/%s: %v", dir, id, err)
 		return fmt.Errorf("save board plan for %s: %w", id, err)
@@ -141,7 +157,10 @@ func (a *AppService) SaveBoardPlan(dir, id string, plan board.Plan) error {
 
 // GetBoardPlan returns the plan for a task.
 func (a *AppService) GetBoardPlan(dir, id string) (board.Plan, error) {
-	b := openBoard(dir)
+	b, err := openBoard(dir)
+	if err != nil {
+		return board.Plan{}, err
+	}
 	plan, err := b.GetPlan(id)
 	if err != nil {
 		return board.Plan{}, fmt.Errorf("get board plan for %s: %w", id, err)
@@ -151,6 +170,9 @@ func (a *AppService) GetBoardPlan(dir, id string) (board.Plan, error) {
 
 // SyncBoard pulls and pushes board refs to/from the remote.
 func (a *AppService) SyncBoard(dir string) error {
+	if err := board.ValidateGitRepo(dir); err != nil {
+		return err
+	}
 	syncer := board.NewSyncer(dir)
 	if err := syncer.Pull(); err != nil {
 		log.Printf("[board] sync pull error for %s: %v", dir, err)

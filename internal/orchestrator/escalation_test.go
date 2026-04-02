@@ -21,7 +21,7 @@ func setupStuckCard(t *testing.T, cardID string, model string, escAttempts int) 
 		CardType:    board.CardTypeFeature,
 		EscAttempts: escAttempts,
 	}
-	if err := b.CreateTask(card); err != nil {
+	if _, err := b.CreateTask(card); err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
@@ -222,7 +222,7 @@ func TestEscalate_WrongState(t *testing.T) {
 		State:    board.StateExecuting,
 		CardType: board.CardTypeFeature,
 	}
-	if err := b.CreateTask(card); err != nil {
+	if _, err := b.CreateTask(card); err != nil {
 		t.Fatal(err)
 	}
 

@@ -27,7 +27,7 @@ func TestCreateAndGetTask(t *testing.T) {
 		Complexity:  ComplexityMedium,
 	}
 
-	if err := b.CreateTask(card); err != nil {
+	if _, err := b.CreateTask(card); err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
@@ -64,7 +64,7 @@ func TestCreateTaskAutoID(t *testing.T) {
 		State: StateBacklog,
 	}
 
-	if err := b.CreateTask(card); err != nil {
+	if _, err := b.CreateTask(card); err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestCreateTaskSetsTimestamps(t *testing.T) {
 		State: StateBacklog,
 	}
 
-	if err := b.CreateTask(card); err != nil {
+	if _, err := b.CreateTask(card); err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
@@ -119,7 +119,7 @@ func TestListTasksMultiple(t *testing.T) {
 	ids := []string{"list-a", "list-b", "list-c"}
 	for _, id := range ids {
 		card := TaskCard{ID: id, Title: "Task " + id, State: StateBacklog}
-		if err := b.CreateTask(card); err != nil {
+		if _, err := b.CreateTask(card); err != nil {
 			t.Fatalf("CreateTask(%s): %v", id, err)
 		}
 	}
@@ -161,7 +161,7 @@ func TestUpdateTask(t *testing.T) {
 	b := NewBoard(dir)
 
 	card := TaskCard{ID: "upd-1", Title: "Original", State: StateBacklog}
-	if err := b.CreateTask(card); err != nil {
+	if _, err := b.CreateTask(card); err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
@@ -209,7 +209,7 @@ func TestDeleteTask(t *testing.T) {
 	b := NewBoard(dir)
 
 	card := TaskCard{ID: "del-1", Title: "To delete", State: StateBacklog}
-	if err := b.CreateTask(card); err != nil {
+	if _, err := b.CreateTask(card); err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
@@ -231,7 +231,7 @@ func TestDeleteTaskRemovesPlan(t *testing.T) {
 	b := NewBoard(dir)
 
 	card := TaskCard{ID: "del-plan", Title: "With plan", State: StateBacklog}
-	if err := b.CreateTask(card); err != nil {
+	if _, err := b.CreateTask(card); err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 

@@ -27,6 +27,19 @@ func NewRefStore(repoDir string) *RefStore {
 	return &RefStore{repoDir: repoDir}
 }
 
+// ValidateGitRepo checks if the given directory is inside a git repository.
+func ValidateGitRepo(dir string) error {
+	if dir == "" {
+		return fmt.Errorf("kein Projektverzeichnis ausgewählt")
+	}
+	cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--git-dir")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("'%s' ist kein Git-Repository — Kanban Board benötigt ein Git-Projekt", dir)
+	}
+	return nil
+}
+
 // WriteRef stores content as a blob in a git ref.
 // The ref must be a valid path like "refs/mtui/tasks/abc123/content".
 func (rs *RefStore) WriteRef(ref string, content []byte) error {
@@ -38,9 +51,11 @@ func (rs *RefStore) WriteRef(ref string, content []byte) error {
 	// Create blob from content.
 	hashCmd := rs.git(ctx, "hash-object", "-w", "--stdin")
 	hashCmd.Stdin = bytes.NewReader(content)
+	var stderr bytes.Buffer
+	hashCmd.Stderr = &stderr
 	out, err := hashCmd.Output()
 	if err != nil {
-		return fmt.Errorf("git hash-object for ref %q: %w", ref, err)
+		return fmt.Errorf("git hash-object for ref %q (dir=%s): %w: %s", ref, rs.repoDir, err, strings.TrimSpace(stderr.String()))
 	}
 	sha := strings.TrimSpace(string(out))
 
