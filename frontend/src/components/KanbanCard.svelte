@@ -39,10 +39,13 @@
   $: badge = getBadge(card.state as board.TaskState);
   $: typeInfo = TYPE_LABELS[card.card_type] || null;
   $: complexityLabel = card.complexity ? COMPLEXITY_LABELS[card.complexity] || '' : '';
+  $: scopeExceeded = card.review_reason?.includes('scope') || false;
+  $: isHumanReview = card.state === 'human_review';
 </script>
 
 <button
   class="kanban-card"
+  class:card-human-review={isHumanReview}
   on:click={handleClick}
 >
   <div class="card-top-row">
@@ -52,8 +55,11 @@
     {#if badge}
       <span class="card-state-badge" style="background: {badge.color}">{badge.label}</span>
     {/if}
+    {#if scopeExceeded}
+      <span class="card-scope-badge" title="Scope ueberschritten">Scope!</span>
+    {/if}
     {#if complexityLabel}
-      <span class="card-complexity" title="Komplexität: {card.complexity}">{complexityLabel}</span>
+      <span class="card-complexity" title="Komplexitaet: {card.complexity}">{complexityLabel}</span>
     {/if}
     <span class="card-spacer"></span>
     <button class="card-remove" on:click={handleRemove} title="Karte entfernen">&#10005;</button>
@@ -62,15 +68,21 @@
   {#if card.description}
     <div class="card-desc">{card.description}</div>
   {/if}
+  {#if isHumanReview && card.review_reason}
+    <div class="card-review-reason">{card.review_reason}</div>
+  {/if}
   <div class="card-meta">
     {#if card.cost_usd > 0}
       <span class="card-cost" title="Kosten">${card.cost_usd.toFixed(2)}</span>
     {/if}
     {#if card.qa_attempts > 0}
-      <span class="card-qa" title="QA-Versuche">QA: {card.qa_attempts}</span>
+      <span class="card-qa" title="QA-Versuche">QA: {card.qa_attempts}/3</span>
+    {/if}
+    {#if card.esc_attempts > 0}
+      <span class="card-esc" title="Eskalationen">Esc: {card.esc_attempts}/2</span>
     {/if}
     {#if card.execution_mode}
-      <span class="card-mode" title="Ausführungsmodus">{card.execution_mode}</span>
+      <span class="card-mode" title="Ausfuehrungsmodus">{card.execution_mode}</span>
     {/if}
   </div>
 </button>
@@ -198,5 +210,39 @@
     font-size: 0.6rem;
     color: var(--fg-muted, #a6adc8);
     opacity: 0.6;
+  }
+
+  .card-scope-badge {
+    font-size: 0.6rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: #ef4444;
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .card-esc {
+    font-size: 0.6rem;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: rgba(249, 115, 22, 0.15);
+    color: #f97316;
+    font-weight: 600;
+  }
+
+  .card-review-reason {
+    font-size: 0.65rem;
+    color: #f97316;
+    padding: 2px 0;
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-human-review {
+    border-color: #f97316;
+    border-width: 2px;
   }
 </style>

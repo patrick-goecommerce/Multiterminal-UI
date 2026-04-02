@@ -3,6 +3,7 @@
   import * as App from '../../wailsjs/go/backend/App';
   import { EventsOn } from '../../wailsjs/runtime/runtime';
   import KanbanColumn from './KanbanColumn.svelte';
+  import KanbanCardDetail from './KanbanCardDetail.svelte';
   import { kanban, tasksByColumn, COLUMN_IDS, type ColumnID } from '../stores/kanban';
   import { board } from '../../wailsjs/go/models';
 
@@ -10,6 +11,8 @@
 
   let addCardTitle = '';
   let showAddCard = false;
+  let detailCardId = '';
+  let showDetail = false;
 
   // Event cleanup
   let eventCleanup: (() => void) | null = null;
@@ -42,7 +45,12 @@
   $: if (dir) { loadBoard(); }
 
   function handleCardClick(e: CustomEvent<{ card: board.TaskCard }>) {
-    console.log('[kanban] card click:', e.detail.card);
+    detailCardId = e.detail.card.id;
+    showDetail = true;
+  }
+
+  function handleDetailUpdated() {
+    loadBoard();
   }
 
   async function handleSync() {
@@ -147,6 +155,13 @@
     </div>
   {/if}
 </div>
+
+<KanbanCardDetail
+  bind:visible={showDetail}
+  cardId={detailCardId}
+  {dir}
+  on:updated={handleDetailUpdated}
+/>
 
 <style>
   .kanban-board {
