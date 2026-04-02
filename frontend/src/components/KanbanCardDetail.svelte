@@ -25,6 +25,7 @@
   // Orchestration state
   let orchRunning = false;
   let orchError = '';
+  let orchDone = false;
   let orchEventCleanups: (() => void)[] = [];
 
   function setupOrchEvents() {
@@ -35,11 +36,11 @@
     }));
 
     orchEventCleanups.push(EventsOn('orchestration:completed', (payload: any) => {
-      if (payload?.card_id === cardId) { orchRunning = false; loadCard(); }
+      if (payload?.card_id === cardId) { orchRunning = false; orchDone = true; loadCard(); }
     }));
 
     orchEventCleanups.push(EventsOn('orchestration:awaiting-review', (payload: any) => {
-      if (payload?.card_id === cardId) { orchRunning = false; loadCard(); }
+      if (payload?.card_id === cardId) { orchRunning = false; orchDone = true; loadCard(); }
     }));
 
     orchEventCleanups.push(EventsOn('orchestration:resumed', (payload: any) => {
@@ -71,6 +72,7 @@
 
   function initOrchestration() {
     orchRunning = false;
+    orchDone = false;
     orchError = '';
     checkOrchState();
     setupOrchEvents();
@@ -457,10 +459,15 @@
               Abbrechen
             </button>
           </div>
+        {:else if orchDone}
+          <div class="detail-section orch-done">
+            <span class="orch-done-icon">&#10003;</span>
+            <span>Orchestrierung abgeschlossen</span>
+          </div>
         {/if}
 
-        <!-- Transitions -->
-        {#if transitions.length > 0}
+        <!-- Transitions (hidden when orchestration is running) -->
+        {#if transitions.length > 0 && !orchRunning}
           <div class="detail-section">
             <span class="section-label">Aktionen</span>
             <div class="transition-buttons">
@@ -804,6 +811,19 @@
     flex-shrink: 0;
   }
   .btn-cancel-orch:hover { opacity: 0.85; }
+
+  .orch-done {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #22c55e;
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+  .orch-done-icon {
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
 
   .orch-error {
     display: flex;
