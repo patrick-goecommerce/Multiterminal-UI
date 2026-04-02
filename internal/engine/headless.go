@@ -96,8 +96,20 @@ func (e *HeadlessEngine) Execute(ctx context.Context, req orchestrator.Execution
 		return result, fmt.Errorf("claude -p: %w", err)
 	}
 
-	// 4. Parse claude output for cost info.
+	// 4. Parse claude output for cost info and extract model response.
 	result.CostUSD = parseCostFromOutput(claudeOut)
+
+	// Store the model's text response so the orchestrator can read it.
+	// Convention: first VerifyResult with Output contains the raw model response.
+	modelText := extractResultText(claudeOut)
+	if modelText != "" {
+		result.Verify = append(result.Verify, orchestrator.VerifyResult{
+			Command:     "claude-response",
+			Description: "Raw model output",
+			Output:      modelText,
+			Passed:      true,
+		})
+	}
 
 	// 5. Run verify commands in the worktree.
 	if len(req.Verify) > 0 {
@@ -149,8 +161,9 @@ func (e *HeadlessEngine) Slots() *WorktreeSlotManager {
 
 // claudeOutputJSON is the minimal structure we parse from claude --output-format json.
 type claudeOutputJSON struct {
-	CostUSD float64 `json:"cost_usd"`
-	Result  string  `json:"result"`
+	Result       string  `json:"result"`
+	TotalCostUSD float64 `json:"total_cost_usd"`
+	IsError      bool    `json:"is_error"`
 }
 
 // parseCostFromOutput attempts to extract cost from claude JSON output.
@@ -159,7 +172,16 @@ func parseCostFromOutput(output []byte) float64 {
 	if err := json.Unmarshal(output, &parsed); err != nil {
 		return 0
 	}
-	return parsed.CostUSD
+	return parsed.TotalCostUSD
+}
+
+// extractResultText gets the model's text response from claude JSON output.
+func extractResultText(output []byte) string {
+	var parsed claudeOutputJSON
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return ""
+	}
+	return parsed.Result
 }
 
 // determineStatus computes the step status from verify results and loop signals.
