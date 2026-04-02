@@ -83,8 +83,9 @@
       try {
         const updated = await App.GetBoardTask(dir, cardId);
         if (card && updated.state !== card.state) {
-          // State changed — if orchestration was running, it's done now
-          if (orchRunning) {
+          // State changed — check if orchestration reached a stopping point
+          const orchStopStates = ['planning', 'review', 'done', 'human_review'];
+          if (orchRunning && orchStopStates.includes(updated.state)) {
             orchRunning = false;
             orchDone = true;
           }
