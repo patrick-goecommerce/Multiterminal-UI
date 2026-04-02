@@ -82,6 +82,24 @@ function createKanbanStore() {
     subscribe,
     setDir: (dir: string) => update(s => ({ ...s, dir })),
     setTasks: (tasks: board.TaskCard[]) => update(s => ({ ...s, tasks, loading: false })),
+    // Smart sync: only triggers re-render if data actually changed
+    syncTasks: (tasks: board.TaskCard[]) => update(s => {
+      const oldMap = new Map(s.tasks.map(t => [t.id, t]));
+      const newMap = new Map(tasks.map(t => [t.id, t]));
+      // Quick equality check: same IDs and same states
+      if (s.tasks.length === tasks.length) {
+        let same = true;
+        for (const t of tasks) {
+          const old = oldMap.get(t.id);
+          if (!old || old.state !== t.state || old.title !== t.title || old.updated_at !== t.updated_at) {
+            same = false;
+            break;
+          }
+        }
+        if (same) return s; // no change, skip re-render
+      }
+      return { ...s, tasks, loading: false };
+    }),
     setLoading: (loading: boolean) => update(s => ({ ...s, loading })),
     addTask: (task: board.TaskCard) => update(s => ({ ...s, tasks: [...s.tasks, task] })),
     removeTask: (id: string) => update(s => ({ ...s, tasks: s.tasks.filter(t => t.id !== id) })),

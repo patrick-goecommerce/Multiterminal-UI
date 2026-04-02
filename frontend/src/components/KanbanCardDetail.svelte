@@ -67,19 +67,36 @@
       .catch(() => { orchRunning = false; });
   }
 
+  let cardPollInterval: ReturnType<typeof setInterval> | null = null;
+
   function initOrchestration() {
     orchRunning = false;
     orchError = '';
     checkOrchState();
     setupOrchEvents();
+    // Poll card state while dialog is open — update only if state changed
+    if (cardPollInterval) clearInterval(cardPollInterval);
+    cardPollInterval = setInterval(async () => {
+      if (!dir || !cardId || !visible) return;
+      try {
+        const updated = await App.GetBoardTask(dir, cardId);
+        if (card && updated.state !== card.state) {
+          card = updated;
+          // Re-check orchestration state
+          checkOrchState();
+        }
+      } catch (_) {}
+    }, 2000);
   }
 
   async function handleStartOrch() {
     if (!dir || !cardId) return;
     orchError = '';
+    orchRunning = true; // immediate feedback
     try {
       await App.StartCardOrchestration(dir, cardId);
     } catch (err) {
+      orchRunning = false;
       orchError = String(err);
     }
   }
@@ -104,7 +121,10 @@
     }
   }
 
-  onDestroy(() => { cleanupOrchEvents(); });
+  onDestroy(() => {
+    cleanupOrchEvents();
+    if (cardPollInterval) clearInterval(cardPollInterval);
+  });
 
   // Editable fields
   let editTitle = '';
@@ -256,6 +276,8 @@
 
   function close() {
     visible = false;
+    cleanupOrchEvents();
+    if (cardPollInterval) { clearInterval(cardPollInterval); cardPollInterval = null; }
     dispatch('close');
   }
 

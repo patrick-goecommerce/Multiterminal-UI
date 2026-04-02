@@ -42,10 +42,14 @@
     eventCleanups.push(EventsOn('orchestration:completed', () => loadBoard()));
     eventCleanups.push(EventsOn('orchestration:error', () => loadBoard()));
 
-    // Polling fallback: refresh every 5s when orchestration might be running
-    const pollInterval = setInterval(() => {
-      if (dir) loadBoard();
-    }, 5000);
+    // Smart polling: syncTasks skips re-render if nothing changed
+    const pollInterval = setInterval(async () => {
+      if (!dir) return;
+      try {
+        const tasks = await App.GetBoardTasks(dir);
+        kanban.syncTasks(tasks || []);
+      } catch (_) {}
+    }, 3000);
     eventCleanups.push(() => clearInterval(pollInterval));
   });
 
