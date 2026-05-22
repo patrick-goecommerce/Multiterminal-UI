@@ -143,29 +143,122 @@ func TestResumeAfterReview_BudgetExhausted(t *testing.T) {
 	}
 }
 
-func TestResumeAfterReview_StuckStep_ModelEscalated(t *testing.T) {
-	orch, b, eng, dir := setupCardInReview(t, "card-stuck", 1)
+func TestResumeAfterReview_StuckStep_RetriesWithEscalatedModel(t *testing.T) {
+	orch, b, eng, dir := setupCardInReview(t, "card-retry", 1)
 
-	// Step uses "sonnet" model — escalation will promote to "opus".
+	// Step 01 (sonnet) gets stuck on the first attempt. After model escalation
+	// to opus, the retry succeeds. The orchestrator MUST re-execute the step —
+	// escalation without retry burns tokens but does no work.
 	eng.addResult(ExecutionResult{StepID: "01", Status: StepStuck, CostUSD: 0.05})
+	eng.addResult(ExecutionResult{StepID: "01", Status: StepSuccess, CostUSD: 0.10})
 
-	err := orch.ResumeAfterReview(context.Background(), dir, "card-stuck")
-	// Model escalation succeeds (sonnet→opus), handleStuckStep returns nil,
-	// but executeWave already finished its steps. Card proceeds to QA then done.
+	err := orch.ResumeAfterReview(context.Background(), dir, "card-retry")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	card, err := b.GetTask("card-stuck")
+	// The failed step must be executed twice: the stuck attempt plus the
+	// escalated retry. The retry must use the higher model tier (opus).
+	eng.mu.Lock()
+	stepCalls := 0
+	retryModel := ""
+	for _, c := range eng.calls {
+		if c.StepID == "01" {
+			stepCalls++
+			retryModel = c.Model
+		}
+	}
+	eng.mu.Unlock()
+
+	if stepCalls != 2 {
+		t.Errorf("step 01 should execute twice (stuck + escalated retry), got %d", stepCalls)
+	}
+	if retryModel != "opus" {
+		t.Errorf("retry should use escalated model, got %q want opus", retryModel)
+	}
+
+	card, err := b.GetTask("card-retry")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// After model escalation, card goes back to executing, then QA (no must_haves) -> done.
 	if card.State != board.StateDone {
-		t.Errorf("state: got %q, want %q", card.State, board.StateDone)
+		t.Errorf("state: got %q, want done", card.State)
 	}
 	if card.EscAttempts != 1 {
 		t.Errorf("esc_attempts: got %d, want 1", card.EscAttempts)
+	}
+}
+
+// makeOpusStepPlanJSON builds a single-step plan whose step already uses opus,
+// so the escalation pipeline cannot bump the model and falls through to re-planning.
+func makeOpusStepPlanJSON(cardID string) string {
+	return `{
+		"card_id": "` + cardID + `",
+		"complexity": "medium",
+		"steps": [{
+			"id": "01",
+			"title": "Opus step",
+			"wave": 1,
+			"depends_on": [],
+			"parallel_ok": true,
+			"model": "opus",
+			"files_modify": [],
+			"files_create": ["file01.go"],
+			"must_haves": {"truths": [], "artifacts": []},
+			"verify": [],
+			"status": "pending"
+		}]
+	}`
+}
+
+func TestResumeAfterReview_StuckStep_ExecutesReplannedSubSteps(t *testing.T) {
+	orch, b, eng, dir := setupTestOrchestrator(t)
+	cardID := "card-replan"
+	createBacklogCard(t, b, cardID, "Replan card", "Force replan path")
+
+	eng.addResult(triageResult(`{"complexity":"medium","reasoning":"opus step"}`))
+	eng.addResult(planResult(makeOpusStepPlanJSON(cardID)))
+
+	if err := orch.RunCard(context.Background(), dir, cardID); err != nil {
+		t.Fatalf("RunCard: %v", err)
+	}
+
+	// 1. Original opus step gets stuck — no higher model, so the pipeline re-plans.
+	eng.addResult(ExecutionResult{StepID: "01", Status: StepStuck, CostUSD: 0.05})
+	// 2. Re-planning call returns one sub-step within the original file scope.
+	eng.addResult(ExecutionResult{
+		StepID: "replan-01",
+		Status: StepSuccess,
+		Verify: []VerifyResult{{Output: `[{"id":"sub-1","title":"Sub step","model":"sonnet","files_modify":[],"files_create":["file01.go"]}]`}},
+	})
+	// 3. The re-planned sub-step executes successfully.
+	eng.addResult(ExecutionResult{StepID: "sub-1", Status: StepSuccess, CostUSD: 0.10})
+
+	err := orch.ResumeAfterReview(context.Background(), dir, cardID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The re-planned sub-step must actually be executed — replanning without
+	// executing the sub-steps leaves the work undone.
+	eng.mu.Lock()
+	subExecuted := false
+	for _, c := range eng.calls {
+		if c.StepID == "sub-1" {
+			subExecuted = true
+		}
+	}
+	eng.mu.Unlock()
+	if !subExecuted {
+		t.Error("re-planned sub-step 'sub-1' was never executed")
+	}
+
+	card, err := b.GetTask(cardID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if card.State != board.StateDone {
+		t.Errorf("state: got %q, want done", card.State)
 	}
 }
 
