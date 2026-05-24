@@ -20,6 +20,8 @@ export interface Pane {
   branch: string;
   zoomDelta: number;
   background: boolean;
+  display: 'terminal' | 'chat';
+  conversationId: string;
 }
 
 export interface Tab {
@@ -127,7 +129,7 @@ function createTabStore() {
       });
     },
 
-    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, background?: boolean): string {
+    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = ''): string {
       const paneId = `pane-${nextPaneNum++}`;
       update((state) => {
         const tab = state.tabs.find((t) => t.id === tabId);
@@ -152,6 +154,8 @@ function createTabStore() {
           branch: branch ?? issueBranch ?? '',
           zoomDelta: 0,
           background: background ?? false,
+          display,
+          conversationId,
         });
         tab.focusedPaneId = paneId;
         return state;
