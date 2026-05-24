@@ -38,25 +38,111 @@ func (o *Orchestrator) executeStep(ctx context.Context, dir, cardID string, step
 			return nil
 
 		case StepStuck:
-			esc, err := o.handleStuckStep(ctx, dir, cardID, step, "step stuck during execution")
+			next, retry, err := o.escalateAndDecide(ctx, dir, cardID, step, "step stuck during execution", merged)
 			if err != nil {
 				return err
 			}
-			switch esc.Action {
-			case "model_escalated":
-				step.Model = esc.NewModel
-				continue // retry the same step with the escalated model
-			case "replanned":
-				return o.executeSubSteps(ctx, dir, cardID, esc.SubSteps, merged)
-			default:
+			if !retry {
 				return nil
 			}
+			step = next
+			continue
+
+		case StepFailed:
+			// A failed verify gets a Sonnet fix loop first; only an exhausted
+			// fix loop is treated as stuck and routed through escalation.
+			if o.qaFixStep(ctx, dir, cardID, step, result, stepsInWave, merged) {
+				return nil
+			}
+			next, retry, err := o.escalateAndDecide(ctx, dir, cardID, step, "step verify failed after fix attempts", merged)
+			if err != nil {
+				return err
+			}
+			if !retry {
+				return nil
+			}
+			step = next
+			continue
 
 		default:
-			// TODO(Bug D): QA Fix Loop for a failed verify before giving up.
 			return fmt.Errorf("step %s failed with status %s", step.ID, result.Status)
 		}
 	}
+}
+
+// maxStepFixAttempts bounds the per-step QA fix loop before a step is
+// treated as stuck (spec §6.6).
+const maxStepFixAttempts = 3
+
+// qaFixStep attempts to repair a step whose verify failed, using a Sonnet fix
+// agent for up to maxStepFixAttempts iterations. It returns true as soon as a
+// fix attempt produces a step that passes verification.
+func (o *Orchestrator) qaFixStep(ctx context.Context, dir, cardID string, step PlanStep, failed ExecutionResult, stepsInWave int, merged MergedPolicy) bool {
+	mergedVerify := mergeVerifyCommands(step.Verify, merged.Verify)
+	failures := summarizeVerifyFailures(failed.Verify)
+
+	for attempt := 1; attempt <= maxStepFixAttempts; attempt++ {
+		card, err := o.board.GetTask(cardID)
+		if err != nil {
+			return false
+		}
+		req := ExecutionRequest{
+			StepID:       fmt.Sprintf("%s-fix-%d", step.ID, attempt),
+			CardID:       cardID,
+			WorktreeSlot: 0,
+			Prompt:       buildStepFixPrompt(step, card.Title, card.Description, failures),
+			SystemPrompt: BuildSystemPrompt(merged.SkillPrompts),
+			Model:        "sonnet",
+			Verify:       mergedVerify,
+			BudgetUSD:    o.stepBudget(cardID, stepsInWave),
+			TimeoutSec:   120,
+			SkillPrompts: merged.SkillPrompts,
+		}
+
+		result, err := o.engine.Execute(ctx, req)
+		if err != nil {
+			return false
+		}
+		o.budget.Spend(cardID, result.CostUSD)
+
+		if result.Status == StepSuccess {
+			return true
+		}
+		failures = summarizeVerifyFailures(result.Verify)
+	}
+	return false
+}
+
+// summarizeVerifyFailures renders the failed verify results into a prompt-ready list.
+func summarizeVerifyFailures(verify []VerifyResult) string {
+	var parts []string
+	for _, v := range verify {
+		if !v.Passed {
+			parts = append(parts, fmt.Sprintf("- `%s` (exit %d): %s", v.Command, v.ExitCode, v.Output))
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+// buildStepFixPrompt builds the fix-agent prompt: the original task plus the
+// concrete verification failures to repair, scoped to the original files.
+func buildStepFixPrompt(step PlanStep, cardTitle, cardDescription, failures string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "A previous attempt at this step failed verification. Fix ONLY the issues below.\n\n")
+	fmt.Fprintf(&b, "## Original task: %s\n", step.Title)
+	fmt.Fprintf(&b, "Card: %s\n", cardTitle)
+	if cardDescription != "" {
+		fmt.Fprintf(&b, "Description: %s\n", cardDescription)
+	}
+	if len(step.FilesModify) > 0 {
+		fmt.Fprintf(&b, "\nFiles in scope (modify): %s\n", strings.Join(step.FilesModify, ", "))
+	}
+	if len(step.FilesCreate) > 0 {
+		fmt.Fprintf(&b, "Files in scope (create): %s\n", strings.Join(step.FilesCreate, ", "))
+	}
+	fmt.Fprintf(&b, "\n## Verification failures\n%s\n", failures)
+	b.WriteString("\nFix these failures. Do not modify files outside the listed scope.")
+	return b.String()
 }
 
 // executeSubSteps runs the sub-steps produced by a re-planning escalation.
@@ -102,6 +188,26 @@ func (o *Orchestrator) runStepOnce(ctx context.Context, dir, cardID string, step
 		return ExecutionResult{}, fmt.Errorf("step %s failed: %w", step.ID, err)
 	}
 	return result, nil
+}
+
+// escalateAndDecide drives a stuck or fix-exhausted step through the escalation
+// pipeline and reports how the caller should proceed: retry the (possibly
+// model-bumped) step, or stop — either because sub-steps were executed
+// (re-planning) or because escalation hit a terminal human_review (err).
+func (o *Orchestrator) escalateAndDecide(ctx context.Context, dir, cardID string, step PlanStep, reason string, merged MergedPolicy) (next PlanStep, retry bool, err error) {
+	esc, err := o.handleStuckStep(ctx, dir, cardID, step, reason)
+	if err != nil {
+		return step, false, err
+	}
+	switch esc.Action {
+	case "model_escalated":
+		step.Model = esc.NewModel
+		return step, true, nil
+	case "replanned":
+		return step, false, o.executeSubSteps(ctx, dir, cardID, esc.SubSteps, merged)
+	default:
+		return step, false, nil
+	}
 }
 
 // handleStuckStep transitions a card into the escalation pipeline and returns

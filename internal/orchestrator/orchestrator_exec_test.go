@@ -262,6 +262,102 @@ func TestResumeAfterReview_StuckStep_ExecutesReplannedSubSteps(t *testing.T) {
 	}
 }
 
+func TestExecuteStep_FailedVerify_FixedBySonnet(t *testing.T) {
+	orch, b, eng, dir := setupCardInReview(t, "card-qafix", 1)
+
+	// Step 01 fails verify on the first run; the Sonnet fix attempt then passes.
+	eng.addResult(ExecutionResult{
+		StepID: "01", Status: StepFailed, CostUSD: 0.05,
+		Verify: []VerifyResult{{Command: "go test ./...", Passed: false, ExitCode: 1, Output: "FAIL"}},
+	})
+	eng.addResult(ExecutionResult{StepID: "01-fix-1", Status: StepSuccess, CostUSD: 0.08})
+
+	err := orch.ResumeAfterReview(context.Background(), dir, "card-qafix")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// A Sonnet fix attempt must have run for the failed step.
+	eng.mu.Lock()
+	fixRan := false
+	fixModel := ""
+	for _, c := range eng.calls {
+		if strings.HasPrefix(c.StepID, "01-fix") {
+			fixRan = true
+			fixModel = c.Model
+		}
+	}
+	eng.mu.Unlock()
+	if !fixRan {
+		t.Error("a fix attempt should have run for the failed step")
+	}
+	if fixModel != "sonnet" {
+		t.Errorf("fix attempt should use sonnet, got %q", fixModel)
+	}
+
+	card, err := b.GetTask("card-qafix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if card.State != board.StateDone {
+		t.Errorf("state: got %q, want done", card.State)
+	}
+}
+
+func TestExecuteStep_FailedVerify_ExhaustsFixLoopThenEscalates(t *testing.T) {
+	orch, b, eng, dir := setupCardInReview(t, "card-qafix-exhaust", 1)
+
+	failed := func(id string) ExecutionResult {
+		return ExecutionResult{
+			StepID: id, Status: StepFailed, CostUSD: 0.03,
+			Verify: []VerifyResult{{Command: "go test ./...", Passed: false, ExitCode: 1, Output: "FAIL"}},
+		}
+	}
+	// Initial run fails, all 3 Sonnet fix attempts fail, the loop is exhausted.
+	eng.addResult(failed("01"))
+	eng.addResult(failed("01-fix-1"))
+	eng.addResult(failed("01-fix-2"))
+	eng.addResult(failed("01-fix-3"))
+	// Exhausted fix loop must escalate (sonnet→opus); the opus retry succeeds.
+	eng.addResult(ExecutionResult{StepID: "01", Status: StepSuccess, CostUSD: 0.10})
+
+	err := orch.ResumeAfterReview(context.Background(), dir, "card-qafix-exhaust")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	eng.mu.Lock()
+	fixAttempts := 0
+	retriedModel := ""
+	for _, c := range eng.calls {
+		if strings.HasPrefix(c.StepID, "01-fix") {
+			fixAttempts++
+		}
+		if c.StepID == "01" {
+			retriedModel = c.Model // last "01" call wins
+		}
+	}
+	eng.mu.Unlock()
+
+	if fixAttempts != 3 {
+		t.Errorf("expected 3 fix attempts before escalation, got %d", fixAttempts)
+	}
+	if retriedModel != "opus" {
+		t.Errorf("escalated retry should use opus, got %q", retriedModel)
+	}
+
+	card, err := b.GetTask("card-qafix-exhaust")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if card.State != board.StateDone {
+		t.Errorf("state: got %q, want done", card.State)
+	}
+	if card.EscAttempts != 1 {
+		t.Errorf("esc_attempts: got %d, want 1", card.EscAttempts)
+	}
+}
+
 func TestResumeAfterReview_StuckStep_HumanReview(t *testing.T) {
 	orch, b, eng, dir := setupCardInReview(t, "card-stuck-hr", 1)
 
@@ -289,17 +385,41 @@ func TestResumeAfterReview_StuckStep_HumanReview(t *testing.T) {
 	}
 }
 
-func TestResumeAfterReview_FailedStep(t *testing.T) {
-	orch, _, eng, dir := setupCardInReview(t, "card-failed", 1)
+func TestResumeAfterReview_FailedStep_UnfixableEscalatesToHumanReview(t *testing.T) {
+	orch, b, eng, dir := setupCardInReview(t, "card-failed", 1)
 
-	eng.addResult(ExecutionResult{StepID: "01", Status: StepFailed, CostUSD: 0.05})
+	// Preset escalation attempts to the max so the exhausted fix loop escalates
+	// straight to human_review instead of bumping the model.
+	card, _ := b.GetTask("card-failed")
+	card.EscAttempts = 2
+	_ = b.UpdateTask(card)
+
+	failed := func(id string) ExecutionResult {
+		return ExecutionResult{
+			StepID: id, Status: StepFailed, CostUSD: 0.02,
+			Verify: []VerifyResult{{Command: "go test ./...", Passed: false, ExitCode: 1}},
+		}
+	}
+	// Initial run + all 3 fix attempts fail; escalation then hits max → human_review.
+	eng.addResult(failed("01"))
+	eng.addResult(failed("01-fix-1"))
+	eng.addResult(failed("01-fix-2"))
+	eng.addResult(failed("01-fix-3"))
 
 	err := orch.ResumeAfterReview(context.Background(), dir, "card-failed")
 	if err == nil {
-		t.Fatal("expected failure error")
+		t.Fatal("expected human review escalation error")
 	}
-	if !strings.Contains(err.Error(), "failed with status") {
-		t.Errorf("error should mention failed status, got: %v", err)
+	if !strings.Contains(err.Error(), "human review") {
+		t.Errorf("error should mention human review, got: %v", err)
+	}
+
+	card, err = b.GetTask("card-failed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if card.State != board.StateHumanReview {
+		t.Errorf("state: got %q, want %q", card.State, board.StateHumanReview)
 	}
 }
 
