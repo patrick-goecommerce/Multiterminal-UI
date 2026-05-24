@@ -33,7 +33,7 @@
     }
     if (cfg.claude_enabled !== false) {
       opts.push({ mode: 'claude', label: $t('launch.claude'), desc: $t('launch.claudeDesc'), icon: '&#10024;', cssClass: '' });
-      opts.push({ mode: 'claude-auto', label: $t('launch.claudeAuto'), desc: $t('launch.claudeAutoDesc'), icon: '&#129302;', cssClass: 'claude-auto' });
+      opts.push({ mode: 'claude-auto', label: $t('launch.claudeAuto'), desc: $t('launch.claudeAutoDesc'), icon: '&#9881;', cssClass: 'claude-auto' });
       opts.push({ mode: 'claude-yolo', label: $t('launch.claudeYolo'), desc: $t('launch.claudeYoloDesc'), icon: '&#9889;', cssClass: 'yolo' });
     }
     if (cfg.codex_enabled) {
