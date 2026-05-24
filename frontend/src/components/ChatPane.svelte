@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import * as App from '../../wailsjs/go/backend/App';
   import ChatMessage from './ChatMessage.svelte';
   import ChatInput from './ChatInput.svelte';
@@ -16,11 +17,13 @@
   $: chatStyle = ($config as any)?.chat_style ?? 'claude-code';
 
   onMount(() => {
-    if (dir) App.GetConversations(dir).then(cs => chat.setConversations(cs || [])).catch(() => {});
+    if (dir && !get(chat).conversations.some(c => c.id === conversationId)) {
+      App.GetConversations(dir).then(cs => chat.setConversations(cs || [])).catch(() => {});
+    }
   });
 
   async function handleSend(e: CustomEvent<{ content: string }>) {
-    if (!conv) return;
+    if (!conv || get(streaming)) return;
     chat.addUserMessage(conversationId, {
       id: Date.now().toString(), role: 'user', content: e.detail.content,
       timestamp: new Date().toISOString(), cost: '', tokens: 0,
