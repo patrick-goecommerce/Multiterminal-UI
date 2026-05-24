@@ -97,6 +97,9 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	// Auto-setup statusline in ~/.claude/settings.json if not already configured
 	go a.setupStatusLine()
 
+	// Enable Claude voice dictation by default (settings.json only — no CLI flag exists)
+	go a.setupVoice()
+
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
 	a.cancelAll = cancel
