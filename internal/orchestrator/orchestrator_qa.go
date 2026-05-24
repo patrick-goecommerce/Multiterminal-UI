@@ -70,6 +70,11 @@ func (o *Orchestrator) RunQA(ctx context.Context, dir, cardID string) error {
 
 	// 3. Check must_haves
 	passed, failures := checkMustHaves(dir, plan)
+	o.emitEvent(EventQAResult, map[string]string{
+		"card_id": cardID,
+		"result":  map[bool]string{true: "pass", false: "fail"}[passed],
+		"failures": fmt.Sprintf("%d", len(failures)),
+	})
 
 	if passed {
 		return o.transitionQAToMergeToDone(card)

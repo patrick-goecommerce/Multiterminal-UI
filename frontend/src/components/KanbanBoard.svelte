@@ -30,26 +30,35 @@
 
   let eventCleanups: (() => void)[] = [];
 
+  // syncBoard fetches the latest tasks and reconciles them without a full
+  // reload; kanban.syncTasks skips re-render when nothing changed (no flicker).
+  async function syncBoard() {
+    if (!dir) return;
+    try {
+      const tasks = await App.GetBoardTasks(dir);
+      kanban.syncTasks(tasks || []);
+    } catch (_) {}
+  }
+
   onMount(() => {
     // Listen for board state transition events (manual transitions via UI)
-    eventCleanups.push(EventsOn('board:task-transition', (_payload: any) => {
-      loadBoard();
-    }));
-    // Listen for orchestration events (automated transitions via orchestrator)
-    eventCleanups.push(EventsOn('orchestration:started', () => loadBoard()));
-    eventCleanups.push(EventsOn('orchestration:awaiting-review', () => loadBoard()));
-    eventCleanups.push(EventsOn('orchestration:resumed', () => loadBoard()));
-    eventCleanups.push(EventsOn('orchestration:completed', () => loadBoard()));
-    eventCleanups.push(EventsOn('orchestration:error', () => loadBoard()));
+    eventCleanups.push(EventsOn('board:task-transition', () => syncBoard()));
+    // Orchestration lifecycle events (start / pause / finish / error)
+    eventCleanups.push(EventsOn('orchestration:started', () => syncBoard()));
+    eventCleanups.push(EventsOn('orchestration:awaiting-review', () => syncBoard()));
+    eventCleanups.push(EventsOn('orchestration:resumed', () => syncBoard()));
+    eventCleanups.push(EventsOn('orchestration:completed', () => syncBoard()));
+    eventCleanups.push(EventsOn('orchestration:error', () => syncBoard()));
+    // Granular progress events drive real-time board updates (replaces polling)
+    eventCleanups.push(EventsOn('orchestration:triage-done', () => syncBoard()));
+    eventCleanups.push(EventsOn('orchestration:plan-ready', () => syncBoard()));
+    eventCleanups.push(EventsOn('orchestration:wave-started', () => syncBoard()));
+    eventCleanups.push(EventsOn('orchestration:step-done', () => syncBoard()));
+    eventCleanups.push(EventsOn('orchestration:qa-result', () => syncBoard()));
 
-    // Smart polling: syncTasks skips re-render if nothing changed
-    const pollInterval = setInterval(async () => {
-      if (!dir) return;
-      try {
-        const tasks = await App.GetBoardTasks(dir);
-        kanban.syncTasks(tasks || []);
-      } catch (_) {}
-    }, 3000);
+    // Safety-net poll: events are the primary update path, but a slow poll
+    // recovers from any event emitted before this component subscribed.
+    const pollInterval = setInterval(syncBoard, 30000);
     eventCleanups.push(() => clearInterval(pollInterval));
   });
 

@@ -15,6 +15,7 @@ type Orchestrator struct {
 	engine   Engine
 	budget   *BudgetTracker
 	skillDir string
+	emit     ProgressEmitter
 }
 
 // NewOrchestrator creates a new orchestrator instance.
@@ -61,6 +62,7 @@ func (o *Orchestrator) RunCard(ctx context.Context, dir, cardID string) error {
 		return fmt.Errorf("triage: %w", err)
 	}
 	card.Complexity = board.Complexity(triage.Complexity)
+	o.emitEvent(EventTriageDone, map[string]string{"card_id": cardID, "complexity": triage.Complexity})
 
 	// 5. Allocate budget
 	o.budget.Allocate(cardID, triage.Complexity)
@@ -102,6 +104,7 @@ func (o *Orchestrator) RunCard(ctx context.Context, dir, cardID string) error {
 	if err := o.board.SavePlan(cardID, boardPlan); err != nil {
 		return fmt.Errorf("save plan: %w", err)
 	}
+	o.emitEvent(EventPlanReady, map[string]string{"card_id": cardID, "steps": fmt.Sprintf("%d", len(plan.Steps))})
 
 	// 9. Transition: planning → review
 	result, err = o.sm.Transition(card, board.EventPlanReady)

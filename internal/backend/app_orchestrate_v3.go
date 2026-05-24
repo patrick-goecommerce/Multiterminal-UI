@@ -102,7 +102,15 @@ func (a *AppService) createOrchestrator(dir string) (*orchestrator.Orchestrator,
 	b := board.NewBoard(dir)
 	eng := engine.NewHeadlessEngine(dir, 4)
 	skillDir := filepath.Join(dir, ".mtui", "skills")
-	return orchestrator.NewOrchestrator(b, eng, skillDir), nil
+	orch := orchestrator.NewOrchestrator(b, eng, skillDir)
+	// Forward granular progress events to the frontend so it can update in
+	// real time instead of polling.
+	orch.SetProgressEmitter(func(event string, payload map[string]string) {
+		if a.app != nil {
+			a.app.Event.Emit(event, payload)
+		}
+	})
+	return orch, nil
 }
 
 // runCardOrchestration is the background goroutine for StartCardOrchestration.

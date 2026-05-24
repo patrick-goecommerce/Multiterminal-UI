@@ -12,10 +12,16 @@ import (
 // Phase 2: steps execute sequentially even within a wave (no real parallelism without worktrees).
 // Phase 3 will add parallel execution with worktree isolation.
 func (o *Orchestrator) executeWave(ctx context.Context, dir, cardID string, wave Wave, merged MergedPolicy) error {
+	o.emitEvent(EventWaveStarted, map[string]string{
+		"card_id": cardID,
+		"wave":    fmt.Sprintf("%d", wave.Number),
+		"steps":   fmt.Sprintf("%d", len(wave.Steps)),
+	})
 	for _, step := range wave.Steps {
 		if err := o.executeStep(ctx, dir, cardID, step, len(wave.Steps), merged); err != nil {
 			return err
 		}
+		o.emitEvent(EventStepDone, map[string]string{"card_id": cardID, "step": step.ID})
 	}
 	return nil
 }
