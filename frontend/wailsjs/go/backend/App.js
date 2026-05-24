@@ -59,6 +59,10 @@ export function ClearQueue(arg1) {
   return $Call.ByID(990141303, arg1);
 }
 
+export function CloseChatSession(arg1) {
+  return $Call.ByID(1679814237, arg1);
+}
+
 export function CloseSession(arg1) {
   return $Call.ByID(961833007, arg1);
 }

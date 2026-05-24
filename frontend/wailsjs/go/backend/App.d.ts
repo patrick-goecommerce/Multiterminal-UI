@@ -31,6 +31,8 @@ export function ClearDoneFromQueue(arg1:number):Promise<void>;
 
 export function ClearQueue(arg1:number):Promise<void>;
 
+export function CloseChatSession(arg1:string):Promise<void>;
+
 export function CloseSession(arg1:number):Promise<void>;
 
 export function CreateDirectory(arg1:string):Promise<string>;

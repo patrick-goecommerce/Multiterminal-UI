@@ -607,7 +607,8 @@
     const { name, mode, model } = pane;
 
     if (pane.display === 'chat') {
-      // Chat → Terminal (conversation remains available for future resume)
+      // Chat → Terminal: close the backing claude subprocess before removing the pane
+      if (pane.conversationId) App.CloseChatSession(pane.conversationId);
       tabStore.closePane(tab.id, pane.id);
       const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
       try {
