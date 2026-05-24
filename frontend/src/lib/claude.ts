@@ -4,11 +4,13 @@ export const MODE_TO_INDEX: Record<string, number> = {
   shell: 0, claude: 1, 'claude-yolo': 2,
   codex: 3, 'codex-auto': 4,
   gemini: 5, 'gemini-yolo': 6,
+  'claude-auto': 7,
 };
 export const INDEX_TO_MODE: PaneMode[] = [
   'shell', 'claude', 'claude-yolo',
   'codex', 'codex-auto',
   'gemini', 'gemini-yolo',
+  'claude-auto',
 ];
 
 /** Build the argv array for launching a CLI session. */
@@ -20,6 +22,10 @@ export function buildClaudeArgv(mode: PaneMode, model: string, claudeCmd: string
       return model
         ? [claudeCmd, '--dangerously-skip-permissions', '--model', model]
         : [claudeCmd, '--dangerously-skip-permissions'];
+    case 'claude-auto':
+      return model
+        ? [claudeCmd, '--permission-mode', 'auto', '--model', model]
+        : [claudeCmd, '--permission-mode', 'auto'];
     case 'codex':
       return model ? [codexCmd || 'codex', '--model', model] : [codexCmd || 'codex'];
     case 'codex-auto':
@@ -42,6 +48,7 @@ export function getClaudeName(mode: PaneMode, model: string): string {
   switch (mode) {
     case 'claude': return `Claude ${model ? `(${model})` : ''}`.trim();
     case 'claude-yolo': return `YOLO ${model ? `(${model})` : ''}`.trim();
+    case 'claude-auto': return `Claude Auto ${model ? `(${model})` : ''}`.trim();
     case 'codex': return `Codex ${model ? `(${model})` : ''}`.trim();
     case 'codex-auto': return `Codex Auto ${model ? `(${model})` : ''}`.trim();
     case 'gemini': return `Gemini ${model ? `(${model})` : ''}`.trim();
