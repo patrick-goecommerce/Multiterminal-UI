@@ -392,8 +392,8 @@
     } catch (err) { console.error('[handleOpenWorktreePane] failed:', err); }
   }
 
-  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null }>) {
-    const { type, model, issue } = e.detail;
+  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string }>) {
+    const { type, model, issue, display = 'terminal', permissionMode = 'plan' } = e.detail;
     showLaunchDialog = false;
     const issueCtx = issue || launchIssueContext;
     launchIssueContext = null;
@@ -403,6 +403,18 @@
       alert($t('app.maxPanes', { max: MAX_PANES_PER_TAB }));
       return;
     }
+
+    if (display === 'chat') {
+      const provider = type.startsWith('codex') ? 'codex' : type.startsWith('gemini') ? 'gemini' : 'claude';
+      try {
+        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', permissionMode);
+        const name = getClaudeName(type, model);
+        tabStore.addPane(tab.id, 0, name, type, model || '', null, '', '', '', '', false, 'chat', conv.id);
+        workspace.setView('terminals');
+      } catch (err) { console.error('[handleLaunch] CreateConversation failed:', err); }
+      return;
+    }
+
     const argv = buildClaudeArgv(type, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
     const baseName = getClaudeName(type, model);
     const name = issueCtx ? `${baseName} – #${issueCtx.number}` : baseName;

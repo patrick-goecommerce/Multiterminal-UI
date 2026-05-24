@@ -13,7 +13,11 @@
   const dispatch = createEventDispatcher();
 
   let selectedModel = '';
+  let selectedDisplay: 'terminal' | 'chat' = 'terminal';
+  let selectedPermissionMode: 'plan' | 'acceptEdits' | 'bypassPermissions' = 'plan';
   let dialogEl: HTMLDivElement;
+
+  const agentModes: PaneMode[] = ['claude', 'claude-yolo', 'codex', 'codex-auto', 'gemini', 'gemini-yolo'];
 
   interface LaunchOption {
     mode: PaneMode;
@@ -51,14 +55,21 @@
   }
 
   function launch(type: PaneMode) {
-    dispatch('launch', { type, model: selectedModel, issue: issueContext });
+    const isAgent = agentModes.includes(type);
+    const display = isAgent ? selectedDisplay : 'terminal';
+    const permissionMode = display === 'chat' ? selectedPermissionMode : 'plan';
+    dispatch('launch', { type, model: selectedModel, issue: issueContext, display, permissionMode });
     dispatch('close');
     selectedModel = '';
+    selectedDisplay = 'terminal';
+    selectedPermissionMode = 'plan';
   }
 
   function close() {
     dispatch('close');
     selectedModel = '';
+    selectedDisplay = 'terminal';
+    selectedPermissionMode = 'plan';
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -81,6 +92,7 @@
     return group(options[i - 1].mode) !== group(options[i].mode);
   }
 
+  $: showAgentOptions = options.some(o => agentModes.includes(o.mode));
   $: showClaudeWarning = ($config.claude_enabled !== false) && !claudeDetected;
   $: showCodexWarning = $config.codex_enabled && !codexDetected;
   $: showGeminiWarning = $config.gemini_enabled && !geminiDetected;
@@ -178,6 +190,33 @@
             {/if}
           </select>
         </div>
+      {/if}
+
+      {#if showAgentOptions}
+        <div class="display-picker">
+          <label>Anzeige</label>
+          <div class="display-toggle">
+            <button
+              class="toggle-btn {selectedDisplay === 'terminal' ? 'active' : ''}"
+              on:click={() => selectedDisplay = 'terminal'}
+            >Terminal</button>
+            <button
+              class="toggle-btn {selectedDisplay === 'chat' ? 'active' : ''}"
+              on:click={() => selectedDisplay = 'chat'}
+            >Chat</button>
+          </div>
+        </div>
+
+        {#if selectedDisplay === 'chat'}
+          <div class="permission-picker">
+            <label>Berechtigungen</label>
+            <select bind:value={selectedPermissionMode}>
+              <option value="plan">Plan (read-only)</option>
+              <option value="acceptEdits">Edits akzeptieren</option>
+              <option value="bypassPermissions">Alle Berechtigungen</option>
+            </select>
+          </div>
+        {/if}
       {/if}
 
       <div class="dialog-footer">
@@ -345,4 +384,67 @@
     padding: 0;
   }
   .warning-link:hover { opacity: 0.8; }
+
+  .display-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .display-picker label {
+    font-size: 12px;
+    color: var(--fg-muted);
+    white-space: nowrap;
+  }
+
+  .display-toggle {
+    display: flex;
+    gap: 4px;
+  }
+
+  .toggle-btn {
+    padding: 4px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg-muted);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+  }
+
+  .toggle-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .toggle-btn:hover:not(.active) {
+    border-color: var(--accent);
+    color: var(--fg);
+  }
+
+  .permission-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .permission-picker label {
+    font-size: 12px;
+    color: var(--fg-muted);
+    white-space: nowrap;
+  }
+
+  .permission-picker select {
+    flex: 1;
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg);
+    font-size: 12px;
+  }
 </style>
