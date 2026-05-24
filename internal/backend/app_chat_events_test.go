@@ -34,6 +34,14 @@ func TestParseChatEvent_Result(t *testing.T) {
 	}
 }
 
+func TestParseChatEvent_ToolResult(t *testing.T) {
+	line := `{"type":"tool_result","tool_use_id":"t1","content":"Success"}`
+	ev, ok := parseChatEvent([]byte(line))
+	if !ok || ev.Kind != ChatEventToolResult || ev.ToolID != "t1" || ev.ToolResult != "Success" {
+		t.Fatalf("got %+v ok=%v, want tool_result", ev, ok)
+	}
+}
+
 func TestParseChatEvent_Ignored(t *testing.T) {
 	if _, ok := parseChatEvent([]byte(`{"type":"stream_event","event":{"type":"message_start"}}`)); ok {
 		t.Fatal("message_start should be ignored")
