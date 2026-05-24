@@ -106,6 +106,16 @@ function createChatStore() {
       });
     },
 
+    /** Append a message to a conversation without changing its stream state. */
+    addMessage(convId: string, msg: ChatMessage) {
+      update(s => ({
+        ...s,
+        conversations: s.conversations.map(c =>
+          c.id === convId ? { ...c, messages: [...c.messages, msg], updated_at: msg.timestamp } : c
+        ),
+      }));
+    },
+
     /** Finalize streaming: append the completed message and clear the buffer. */
     completeStream(convId: string, msg: ChatMessage) {
       update(s => {

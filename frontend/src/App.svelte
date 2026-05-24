@@ -39,6 +39,7 @@
   import type { IssueContext } from './lib/launch';
   import * as App from '../wailsjs/go/backend/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
+  import { subscribeChatEvents } from './lib/chat-events';
 
   const MAX_PANES_PER_TAB = 10;
 
@@ -117,6 +118,7 @@
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
   let storeUnsubscribe: (() => void) | null = null;
   let keepAliveCleanup: (() => void) | null = null;
+  let chatEventsCleanup: (() => void) | null = null;
 
   const handleGlobalKeydown = createGlobalKeyHandler({
     onNewPane: () => { showLaunchDialog = true; },
@@ -236,6 +238,9 @@
       keepAliveCleanup = await startKeepAliveLoop($config.keep_alive, resolvedClaudePath);
     }
 
+    // Subscribe to backend chat:* streaming events
+    chatEventsCleanup = subscribeChatEvents();
+
     // Listen for tabs merging back from secondary windows
     EventsOn('window:tabs-merged', (event: any) => {
       try {
@@ -320,6 +325,7 @@
     if (commitAgeInterval) clearInterval(commitAgeInterval);
     if (storeUnsubscribe) storeUnsubscribe();
     if (keepAliveCleanup) keepAliveCleanup();
+    if (chatEventsCleanup) chatEventsCleanup();
     window.removeEventListener('beforeunload', saveSession);
     document.removeEventListener('keydown', handleGlobalKeydown);
   });
