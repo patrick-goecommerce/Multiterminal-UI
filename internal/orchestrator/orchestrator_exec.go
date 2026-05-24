@@ -4,21 +4,49 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/board"
 )
 
-// executeWave runs all steps in a wave sequentially.
-// Phase 2: steps execute sequentially even within a wave (no real parallelism without worktrees).
-// Phase 3 will add parallel execution with worktree isolation.
+// executeWave runs a wave's steps in two phases:
+//
+//	Phase 1 (parallel): each step's first attempt runs concurrently in its own
+//	  isolated worktree. This phase only reads board state, so it is race-free.
+//	Phase 2 (sequential): results are processed one at a time — cost accounting,
+//	  the QA fix loop, escalation and retries all mutate shared card state, so
+//	  they must be serialized.
+//
+// ComputeWaves guarantees the steps in a wave are independent (no cross-deps,
+// no files_modify overlap), so parallel first attempts cannot conflict.
 func (o *Orchestrator) executeWave(ctx context.Context, dir, cardID string, wave Wave, merged MergedPolicy) error {
 	o.emitEvent(EventWaveStarted, map[string]string{
 		"card_id": cardID,
 		"wave":    fmt.Sprintf("%d", wave.Number),
 		"steps":   fmt.Sprintf("%d", len(wave.Steps)),
 	})
-	for _, step := range wave.Steps {
-		if err := o.executeStep(ctx, dir, cardID, step, len(wave.Steps), merged); err != nil {
+
+	steps := wave.Steps
+	results := make([]ExecutionResult, len(steps))
+	errs := make([]error, len(steps))
+
+	// Phase 1: parallel first attempts.
+	var wg sync.WaitGroup
+	for i := range steps {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			results[i], errs[i] = o.runStepOnce(ctx, dir, cardID, steps[i], len(steps), merged)
+		}(i)
+	}
+	wg.Wait()
+
+	// Phase 2: sequential result processing and recovery.
+	for i, step := range steps {
+		if errs[i] != nil {
+			return errs[i]
+		}
+		if err := o.driveStep(ctx, dir, cardID, step, results[i], len(steps), merged); err != nil {
 			return err
 		}
 		o.emitEvent(EventStepDone, map[string]string{"card_id": cardID, "step": step.ID})
@@ -26,16 +54,22 @@ func (o *Orchestrator) executeWave(ctx context.Context, dir, cardID string, wave
 	return nil
 }
 
-// executeStep runs a single step and drives it through the escalation pipeline
-// when it gets stuck. A model-escalated step is retried with the higher model;
-// only a successful (or terminally escalated) step ends the loop.
+// executeStep runs a step from scratch and drives it to completion. Used for
+// re-planned sub-steps, which are executed sequentially.
 func (o *Orchestrator) executeStep(ctx context.Context, dir, cardID string, step PlanStep, stepsInWave int, merged MergedPolicy) error {
-	for {
-		result, err := o.runStepOnce(ctx, dir, cardID, step, stepsInWave, merged)
-		if err != nil {
-			return err
-		}
+	result, err := o.runStepOnce(ctx, dir, cardID, step, stepsInWave, merged)
+	if err != nil {
+		return err
+	}
+	return o.driveStep(ctx, dir, cardID, step, result, stepsInWave, merged)
+}
 
+// driveStep processes an execution result and recovers a stuck or failed step
+// through the QA fix loop and escalation pipeline, retrying the (possibly
+// model-bumped) step until it succeeds or escalation is terminal. It mutates
+// shared card state and must only be called sequentially.
+func (o *Orchestrator) driveStep(ctx context.Context, dir, cardID string, step PlanStep, result ExecutionResult, stepsInWave int, merged MergedPolicy) error {
+	for {
 		// Record cost
 		o.budget.Spend(cardID, result.CostUSD)
 
@@ -52,7 +86,6 @@ func (o *Orchestrator) executeStep(ctx context.Context, dir, cardID string, step
 				return nil
 			}
 			step = next
-			continue
 
 		case StepFailed:
 			// A failed verify gets a Sonnet fix loop first; only an exhausted
@@ -68,10 +101,16 @@ func (o *Orchestrator) executeStep(ctx context.Context, dir, cardID string, step
 				return nil
 			}
 			step = next
-			continue
 
 		default:
 			return fmt.Errorf("step %s failed with status %s", step.ID, result.Status)
+		}
+
+		// Retry the (possibly model-bumped) step.
+		var err error
+		result, err = o.runStepOnce(ctx, dir, cardID, step, stepsInWave, merged)
+		if err != nil {
+			return err
 		}
 	}
 }

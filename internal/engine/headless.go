@@ -122,10 +122,14 @@ func (e *HeadlessEngine) Execute(ctx context.Context, req orchestrator.Execution
 		result.FilesChanged = files
 	}
 
-	// 7. Run loop detection.
+	// 7. Run loop detection. The orchestrator may run a wave's steps through
+	// Execute concurrently; stepDetect holds shared mutable history, so guard
+	// it with e.mu. repoDetect is stateless (reads git log per call).
 	diffLines := countDiffLines(execCtx, workDir)
+	e.mu.Lock()
 	e.stepDetect.Record(result.Verify, diffLines)
 	loopSignals := e.stepDetect.Detect()
+	e.mu.Unlock()
 	repoSignals := e.repoDetect.Detect(execCtx, workDir)
 	result.LoopSignals = append(loopSignals, repoSignals...)
 
