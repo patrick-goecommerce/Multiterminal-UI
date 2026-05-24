@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 )
 
@@ -295,7 +296,21 @@ func migrateColumns(state *KanbanState) {
 	}
 }
 
-// generateID creates a simple unique ID from timestamp.
+// lastGeneratedID guarantees strictly increasing IDs even when the system
+// clock has coarse resolution (e.g. Windows), where time.Now().UnixNano() can
+// return the same value for calls in a tight loop.
+var lastGeneratedID atomic.Int64
+
+// generateID creates a unique, strictly increasing ID seeded from the clock.
 func generateID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+	for {
+		prev := lastGeneratedID.Load()
+		next := time.Now().UnixNano()
+		if next <= prev {
+			next = prev + 1
+		}
+		if lastGeneratedID.CompareAndSwap(prev, next) {
+			return fmt.Sprintf("%d", next)
+		}
+	}
 }

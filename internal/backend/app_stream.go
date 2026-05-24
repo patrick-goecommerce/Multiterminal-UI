@@ -42,6 +42,19 @@ func newOutputBatcher() *outputBatcher {
 	return &outputBatcher{pending: make(map[int][]byte)}
 }
 
+// outputBatch returns the shared output batcher, initializing it on first use.
+// The batcher's lifecycle is the AppService's, not ServiceStartup's: sessions
+// (and thus collectOutput) can be created before ServiceStartup — e.g. scheduled
+// tasks in tests — so the batcher must never be nil.
+func (a *AppService) outputBatch() *outputBatcher {
+	a.batcherOnce.Do(func() {
+		if a.batcher == nil {
+			a.batcher = newOutputBatcher()
+		}
+	})
+	return a.batcher
+}
+
 // add appends raw bytes for a session into the accumulation buffer.
 func (b *outputBatcher) add(id int, data []byte) {
 	b.mu.Lock()
@@ -77,7 +90,7 @@ func (a *AppService) batchLoop(ctx context.Context) {
 			emitCount = 0
 			totalBytes = 0
 		case <-ticker.C:
-			batch := a.batcher.swap()
+			batch := a.outputBatch().swap()
 			if len(batch) == 0 {
 				continue
 			}
@@ -114,18 +127,18 @@ func (a *AppService) collectOutput(id int, sess *terminal.Session, ctx context.C
 				select {
 				case more, ok := <-sess.RawOutputCh:
 					if !ok {
-						a.batcher.add(id, buf)
+						a.outputBatch().add(id, buf)
 						return
 					}
 					buf = append(buf, more...)
 				case <-ctx.Done():
-					a.batcher.add(id, buf)
+					a.outputBatch().add(id, buf)
 					return
 				default:
 					break drain
 				}
 			}
-			a.batcher.add(id, buf)
+			a.outputBatch().add(id, buf)
 		case <-ctx.Done():
 			return
 		}
@@ -135,5 +148,8 @@ func (a *AppService) collectOutput(id int, sess *terminal.Session, ctx context.C
 // watchExit waits for a session to exit and notifies the frontend.
 func (a *AppService) watchExit(id int, sess *terminal.Session) {
 	<-sess.Done()
+	if a.app == nil {
+		return // no frontend to notify (e.g. before ServiceStartup, in tests)
+	}
 	a.app.Event.Emit("terminal:exit", TerminalExitEvent{ID: id, ExitCode: sess.ExitCode})
 }

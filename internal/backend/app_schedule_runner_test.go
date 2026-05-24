@@ -3,7 +3,27 @@ package backend
 import (
 	"testing"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
+
+// closeSpawnedSessions synchronously closes every session the app spawned so
+// the OS releases handles into t.TempDir() before its cleanup runs. On Windows
+// a lingering session process keeps the temp dir locked, failing RemoveAll.
+func closeSpawnedSessions(t *testing.T, app *AppService) {
+	t.Helper()
+	t.Cleanup(func() {
+		app.mu.Lock()
+		sessions := make([]*terminal.Session, 0, len(app.sessions))
+		for _, s := range app.sessions {
+			sessions = append(sessions, s)
+		}
+		app.mu.Unlock()
+		for _, s := range sessions {
+			s.Close() // blocks until the process exits and the PTY closes
+		}
+	})
+}
 
 // ---------------------------------------------------------------------------
 // runDueSchedules — detects and marks due tasks
@@ -27,8 +47,9 @@ func TestRunDueSchedules_ExecutesDueTask(t *testing.T) {
 	saveKanbanState(dir, state)
 
 	app := newTestApp()
-	// Will try to CreateSession which returns -1 (no PTY), but
-	// the schedule state should still be updated.
+	closeSpawnedSessions(t, app)
+	// runDueSchedules spawns a session for the due task; the schedule state
+	// must still be updated regardless of whether the session does any work.
 	app.runDueSchedules(dir, time.Now())
 
 	loaded, _ := loadKanbanState(dir)

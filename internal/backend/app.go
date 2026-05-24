@@ -38,6 +38,7 @@ type AppService struct {
 	nextID            int
 	cancelAll         context.CancelFunc
 	batcher           *outputBatcher
+	batcherOnce       sync.Once
 	resolvedClaudePath string
 	claudeDetected     bool
 	winMgr            *windowManager // tracks all open windows for multi-window support
@@ -99,7 +100,7 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
 	a.cancelAll = cancel
-	a.batcher = newOutputBatcher()
+	a.outputBatch() // ensure the batcher is initialized before batchLoop starts
 	go a.scanLoop(scanCtx)
 	go a.batchLoop(scanCtx)
 	go a.scheduleLoop(scanCtx)
@@ -212,8 +213,14 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 	a.sessions[id] = sess
 	a.mu.Unlock()
 
-	// Stream PTY output to frontend
-	go a.collectOutput(id, sess, a.serviceCtx)
+	// Stream PTY output to frontend. serviceCtx is nil if CreateSession
+	// runs before ServiceStartup (e.g. scheduled tasks in tests); fall
+	// back to a non-nil context so collectOutput's select never panics.
+	streamCtx := a.serviceCtx
+	if streamCtx == nil {
+		streamCtx = context.Background()
+	}
+	go a.collectOutput(id, sess, streamCtx)
 
 	// Watch for process exit
 	go a.watchExit(id, sess)
