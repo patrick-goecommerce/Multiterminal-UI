@@ -52,6 +52,7 @@
     <button class="chat-header-btn" on:click|stopPropagation={() => dispatch('toggleDisplay', { paneId })} title="Als Terminal anzeigen">
       &gt;_
     </button>
+    <button class="chat-header-btn" title="Schließen" on:click|stopPropagation={() => dispatch('close', { paneId })}>✕</button>
   </div>
   <div class="chat-messages" bind:this={messagesEl}>
     {#if conv}

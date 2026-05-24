@@ -65,7 +65,7 @@
   {#each visiblePanes as pane (pane.id)}
     {#if pane.display === 'chat'}
       <div class="pane-chat-wrapper">
-        <ChatPane conversationId={pane.conversationId} dir={tabDir} paneId={pane.id} on:toggleDisplay={handleToggleDisplay} />
+        <ChatPane conversationId={pane.conversationId} dir={tabDir} paneId={pane.id} on:toggleDisplay={handleToggleDisplay} on:close={e => dispatch('closePane', e.detail)} />
       </div>
     {:else}
       <TerminalPane

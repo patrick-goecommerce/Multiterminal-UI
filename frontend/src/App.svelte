@@ -562,13 +562,18 @@
     showSkillPicker = true;
   }
 
-  function handleClosePane(e: CustomEvent<{ paneId: string; sessionId: number }>) {
+  function handleClosePane(e: CustomEvent<{ paneId: string; sessionId?: number }>) {
     const tab = $activeTab;
     if (!tab) return;
     const pane = tab.panes.find((p) => p.id === e.detail.paneId);
-    if (!confirm(`"${pane?.name || 'Terminal'}" wirklich schließen?`)) return;
-    App.CloseSession(e.detail.sessionId);
-    tabStore.closePane(tab.id, e.detail.paneId);
+    if (!pane) return;
+    if (!confirm(`"${pane.name || 'Pane'}" wirklich schließen?`)) return;
+    if (pane.display === 'chat') {
+      if (pane.conversationId) App.CloseChatSession(pane.conversationId);
+    } else {
+      App.CloseSession(pane.sessionId);
+    }
+    tabStore.closePane(tab.id, pane.id);
   }
 
   function handleMaximizePane(e: CustomEvent<{ paneId: string }>) {

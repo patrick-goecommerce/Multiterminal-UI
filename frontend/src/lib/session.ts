@@ -14,6 +14,15 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
       const tabId = tabStore.addTab(savedTab.name, savedTab.dir, false);
       for (const savedPane of savedTab.panes) {
         const mode = INDEX_TO_MODE[savedPane.mode] || 'shell';
+        const display = (savedPane as any).display || 'terminal';
+        const conversationId = (savedPane as any).conversation_id || '';
+
+        if (display === 'chat') {
+          // Chat panes have no PTY; the backend chat process restarts lazily on next message (with --resume).
+          tabStore.addPane(tabId, 0, savedPane.name, mode, savedPane.model || '', null, '', '', '', '', false, 'chat', conversationId);
+          continue;
+        }
+
         const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath, codexPath || 'codex', geminiPath || 'gemini');
         try {
           const sessionId = await App.CreateSession(argv, savedTab.dir || '', 24, 80, mode);
@@ -68,6 +77,8 @@ export function saveSession(): void {
       issue_number: pane.issueNumber || 0,
       issue_branch: pane.issueBranch || '',
       zoom_delta: pane.zoomDelta || 0,
+      display: pane.display || 'terminal',
+      conversation_id: pane.conversationId || '',
     })),
   }));
   App.SaveTabs({ active_tab: Math.max(activeIdx, 0), tabs } as any);
