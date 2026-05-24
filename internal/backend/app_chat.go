@@ -157,6 +157,12 @@ func (a *AppService) ensureChatSession(conv Conversation) (*ChatSession, error) 
 		return nil, err
 	}
 	a.mu.Lock()
+	if existing, ok := a.chatSessions[conv.ID]; ok {
+		// Lost the race: another caller started one first. Discard ours.
+		a.mu.Unlock()
+		sess.Close()
+		return existing, nil
+	}
 	a.chatSessions[conv.ID] = sess
 	a.mu.Unlock()
 	return sess, nil
@@ -167,6 +173,7 @@ func (a *AppService) CloseChatSession(convID string) {
 	a.mu.Lock()
 	sess := a.chatSessions[convID]
 	delete(a.chatSessions, convID)
+	delete(a.chatBuffers, convID)
 	a.mu.Unlock()
 	if sess != nil {
 		sess.Close()
