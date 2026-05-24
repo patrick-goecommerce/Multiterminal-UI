@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
@@ -11,6 +12,8 @@ func newTestApp() *AppService {
 		sessions:      make(map[int]*terminal.Session),
 		queues:        make(map[int]*sessionQueue),
 		sessionIssues: make(map[int]*sessionIssue),
+		chatSessions:  make(map[string]*ChatSession),
+		chatBuffers:   make(map[string]*strings.Builder),
 	}
 }
 

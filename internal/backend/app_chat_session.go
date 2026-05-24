@@ -13,6 +13,7 @@ import (
 // ChatSession is a long-lived claude subprocess driven via stream-json.
 type ChatSession struct {
 	ConvID string
+	Scope  string
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	mu     sync.Mutex
@@ -84,7 +85,7 @@ func (a *AppService) startChatProcess(convID, scope, model, permissionMode, resu
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	sess := &ChatSession{ConvID: convID, cmd: cmd, stdin: stdin}
+	sess := &ChatSession{ConvID: convID, Scope: scope, cmd: cmd, stdin: stdin}
 	go scanNDJSON(stdout, func(line []byte) {
 		if ev, ok := parseChatEvent(line); ok {
 			a.dispatchChatEvent(sess.ConvID, ev)
@@ -121,5 +122,3 @@ func (s *ChatSession) Close() {
 	}
 }
 
-// dispatchChatEvent is implemented in Task 3 (app_chat_stream.go). Temporary stub.
-func (a *AppService) dispatchChatEvent(convID string, ev ChatEvent) {}

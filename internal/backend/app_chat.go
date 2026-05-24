@@ -12,37 +12,46 @@ import (
 
 // Conversation represents a chat session with an AI provider.
 type Conversation struct {
-	ID        string        `json:"id" yaml:"id"`
-	Title     string        `json:"title" yaml:"title"`
-	Provider  string        `json:"provider" yaml:"provider"`
-	Model     string        `json:"model" yaml:"model"`
-	Scope     string        `json:"scope" yaml:"scope"`
-	CreatedAt string        `json:"created_at" yaml:"created_at"`
-	UpdatedAt string        `json:"updated_at" yaml:"updated_at"`
-	Messages  []ChatMessage `json:"messages" yaml:"messages"`
+	ID             string        `json:"id" yaml:"id"`
+	Title          string        `json:"title" yaml:"title"`
+	Provider       string        `json:"provider" yaml:"provider"`
+	Model          string        `json:"model" yaml:"model"`
+	Scope          string        `json:"scope" yaml:"scope"`
+	CreatedAt      string        `json:"created_at" yaml:"created_at"`
+	UpdatedAt      string        `json:"updated_at" yaml:"updated_at"`
+	Messages       []ChatMessage `json:"messages" yaml:"messages"`
+	SessionID      string        `json:"session_id,omitempty" yaml:"session_id,omitempty"`
+	PermissionMode string        `json:"permission_mode,omitempty" yaml:"permission_mode,omitempty"`
 }
 
 // ChatMessage represents a single message in a conversation.
 type ChatMessage struct {
-	ID        string `json:"id" yaml:"id"`
-	Role      string `json:"role" yaml:"role"`
-	Content   string `json:"content" yaml:"content"`
-	Timestamp string `json:"timestamp" yaml:"timestamp"`
-	Cost      string `json:"cost" yaml:"cost"`
-	Tokens    int    `json:"tokens" yaml:"tokens"`
+	ID         string `json:"id" yaml:"id"`
+	Role       string `json:"role" yaml:"role"`
+	Content    string `json:"content" yaml:"content"`
+	Timestamp  string `json:"timestamp" yaml:"timestamp"`
+	Cost       string `json:"cost" yaml:"cost"`
+	Tokens     int    `json:"tokens" yaml:"tokens"`
+	ToolName   string `json:"tool_name,omitempty" yaml:"tool_name,omitempty"`
+	ToolInput  string `json:"tool_input,omitempty" yaml:"tool_input,omitempty"`
+	ToolResult string `json:"tool_result,omitempty" yaml:"tool_result,omitempty"`
 }
 
 // CreateConversation creates a new chat conversation.
-func (a *AppService) CreateConversation(provider string, model string, scope string) (Conversation, error) {
+func (a *AppService) CreateConversation(provider, model, scope, permissionMode string) (Conversation, error) {
+	if permissionMode == "" {
+		permissionMode = "plan"
+	}
 	conv := Conversation{
-		ID:        generateID(),
-		Title:     "Neue Konversation",
-		Provider:  provider,
-		Model:     model,
-		Scope:     scope,
-		CreatedAt: time.Now().Format(time.RFC3339),
-		UpdatedAt: time.Now().Format(time.RFC3339),
-		Messages:  []ChatMessage{},
+		ID:             generateID(),
+		Title:          "Neue Konversation",
+		Provider:       provider,
+		Model:          model,
+		Scope:          scope,
+		PermissionMode: permissionMode,
+		CreatedAt:      time.Now().Format(time.RFC3339),
+		UpdatedAt:      time.Now().Format(time.RFC3339),
+		Messages:       []ChatMessage{},
 	}
 
 	if err := saveConversation(scope, conv); err != nil {
@@ -103,24 +112,17 @@ func (a *AppService) DeleteConversation(dir string, convID string) error {
 	return nil
 }
 
-// AddChatMessage adds a user message and triggers AI response.
+// AddChatMessage adds a user message and sends it to the persistent chat session.
 func (a *AppService) AddChatMessage(dir string, convID string, content string) error {
 	conv, err := a.GetConversation(dir, convID)
 	if err != nil {
 		return fmt.Errorf("load conversation: %w", err)
 	}
 
-	// Add user message
-	msg := ChatMessage{
-		ID:        generateID(),
-		Role:      "user",
-		Content:   content,
-		Timestamp: time.Now().Format(time.RFC3339),
-	}
+	msg := ChatMessage{ID: generateID(), Role: "user", Content: content, Timestamp: time.Now().Format(time.RFC3339)}
 	conv.Messages = append(conv.Messages, msg)
 	conv.UpdatedAt = time.Now().Format(time.RFC3339)
 
-	// Auto-set title from first message
 	if conv.Title == "Neue Konversation" && len(conv.Messages) == 1 {
 		title := content
 		if len(title) > 50 {
@@ -133,10 +135,42 @@ func (a *AppService) AddChatMessage(dir string, convID string, content string) e
 		return fmt.Errorf("save conversation: %w", err)
 	}
 
-	// Start AI response in background
-	go a.streamChatResponse(dir, conv)
+	sess, err := a.ensureChatSession(conv)
+	if err != nil {
+		a.emitChatError(convID, err.Error())
+		return err
+	}
+	return sess.SendTurn(content)
+}
 
-	return nil
+// ensureChatSession returns the running session for conv, starting it if needed.
+func (a *AppService) ensureChatSession(conv Conversation) (*ChatSession, error) {
+	a.mu.Lock()
+	if s, ok := a.chatSessions[conv.ID]; ok {
+		a.mu.Unlock()
+		return s, nil
+	}
+	a.mu.Unlock()
+
+	sess, err := a.startChatProcess(conv.ID, conv.Scope, conv.Model, conv.PermissionMode, conv.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	a.mu.Lock()
+	a.chatSessions[conv.ID] = sess
+	a.mu.Unlock()
+	return sess, nil
+}
+
+// CloseChatSession stops and forgets a chat session (called when a chat pane closes).
+func (a *AppService) CloseChatSession(convID string) {
+	a.mu.Lock()
+	sess := a.chatSessions[convID]
+	delete(a.chatSessions, convID)
+	a.mu.Unlock()
+	if sess != nil {
+		sess.Close()
+	}
 }
 
 // RenameConversation updates a conversation's title.

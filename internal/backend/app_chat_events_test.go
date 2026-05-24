@@ -50,3 +50,14 @@ func TestParseChatEvent_Ignored(t *testing.T) {
 		t.Fatal("non-JSON should be ignored")
 	}
 }
+
+func TestChatEvent_ToolToMessage(t *testing.T) {
+	ev := ChatEvent{Kind: ChatEventToolUse, ToolID: "t1", ToolName: "Bash"}
+	m := chatEventToMessage(ev)
+	if m == nil || m.Role != "tool" || m.ToolName != "Bash" {
+		t.Fatalf("got %+v, want tool message Bash", m)
+	}
+	if chatEventToMessage(ChatEvent{Kind: ChatEventText, Text: "hi"}) != nil {
+		t.Fatal("text events should not become standalone messages")
+	}
+}
