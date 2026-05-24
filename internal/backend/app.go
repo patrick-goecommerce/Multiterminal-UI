@@ -51,6 +51,7 @@ type AppService struct {
 	resolvedGeminiPath string
 	geminiDetected     bool
 	tmuxAPIPort        int // port for the tmux shim HTTP API
+	chatSessions       map[string]*ChatSession // active chat sessions keyed by conversation ID
 }
 
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
@@ -61,6 +62,7 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		sessions:      make(map[int]*terminal.Session),
 		queues:        make(map[int]*sessionQueue),
 		sessionIssues: make(map[int]*sessionIssue),
+		chatSessions:  make(map[string]*ChatSession),
 		winMgr:        newWindowManager(app),
 		safeMode:      safeMode,
 	}
