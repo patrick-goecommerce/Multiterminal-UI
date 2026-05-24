@@ -167,7 +167,7 @@ type SessionInfo struct {
 
 // CreateSession spawns a new PTY session and starts streaming its output
 // to the frontend. Returns the session ID.
-// mode must be "shell", "claude", or "claude-yolo"; it controls env injection.
+// mode must be "shell", "claude", "claude-auto", or "claude-yolo"; it controls env injection.
 func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int, mode string) int {
 	a.mu.Lock()
 	a.nextID++
@@ -196,7 +196,7 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 	if a.tmuxAPIPort > 0 {
 		env = append(env, fmt.Sprintf("MTUI_PORT=%d", a.tmuxAPIPort))
 	}
-	if mode == "claude" || mode == "claude-yolo" {
+	if mode == "claude" || mode == "claude-auto" || mode == "claude-yolo" {
 		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
 	}
 

@@ -61,6 +61,7 @@
   function getModeLabel(mode: string): string {
     switch (mode) {
       case 'claude': return 'Claude';
+      case 'claude-auto': return 'Claude Auto';
       case 'claude-yolo': return 'YOLO';
       case 'codex': return 'Codex';
       case 'codex-auto': return 'Codex Auto';
@@ -73,6 +74,7 @@
   function getModeBadgeClass(mode: string): string {
     switch (mode) {
       case 'claude': return 'badge-claude';
+      case 'claude-auto': return 'badge-claude-auto';
       case 'claude-yolo': return 'badge-yolo';
       case 'codex': return 'badge-codex';
       case 'codex-auto': return 'badge-codex-auto';
@@ -297,6 +299,7 @@
   .badge-yolo { background: #dc262633; color: #f87171; }
   .badge-codex { background: #10a37f33; color: #34d399; }
   .badge-codex-auto { background: #e87b3533; color: #fb923c; }
+  .badge-claude-auto { background: #c084fc33; color: #c084fc; }
   .badge-gemini { background: #4285f433; color: #60a5fa; }
   .badge-gemini-yolo { background: #ea433533; color: #f87171; }
   .badge-bg { background: #64748b33; color: #94a3b8; font-size: 9px; }
