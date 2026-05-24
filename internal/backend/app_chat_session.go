@@ -4,6 +4,7 @@ package backend
 import (
 	"bufio"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"sync"
@@ -55,11 +56,14 @@ func scanNDJSON(r io.Reader, fn func(line []byte)) {
 		copy(line, b)
 		fn(line)
 	}
+	if err := scanner.Err(); err != nil {
+		log.Printf("[chat] stream read error: %v", err)
+	}
 }
 
 // startChatProcess launches the claude subprocess for a chat session.
 // On Windows, claude is a .cmd shim → wrap via COMSPEC (see session.go).
-func (a *AppService) startChatProcess(scope, model, permissionMode, resumeID string) (*ChatSession, error) {
+func (a *AppService) startChatProcess(convID, scope, model, permissionMode, resumeID string) (*ChatSession, error) {
 	path := a.resolvedClaudePath
 	if path == "" {
 		path = "claude"
@@ -80,7 +84,7 @@ func (a *AppService) startChatProcess(scope, model, permissionMode, resumeID str
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	sess := &ChatSession{cmd: cmd, stdin: stdin}
+	sess := &ChatSession{ConvID: convID, cmd: cmd, stdin: stdin}
 	go scanNDJSON(stdout, func(line []byte) {
 		if ev, ok := parseChatEvent(line); ok {
 			a.dispatchChatEvent(sess.ConvID, ev)
@@ -111,7 +115,9 @@ func (s *ChatSession) Close() {
 	s.closed = true
 	_ = s.stdin.Close()
 	if s.cmd != nil && s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
+		c := s.cmd
+		_ = c.Process.Kill()
+		go func() { _ = c.Wait() }() // reap to avoid zombie; async so we don't block under lock
 	}
 }
 
