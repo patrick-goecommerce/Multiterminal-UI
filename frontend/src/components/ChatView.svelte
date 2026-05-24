@@ -3,7 +3,7 @@
   import * as App from '../../wailsjs/go/backend/App';
   import ChatMessage from './ChatMessage.svelte';
   import ChatInput from './ChatInput.svelte';
-  import { chat, activeConversation, type Conversation } from '../stores/chat';
+  import { chat, activeConversation, isStreaming, streamBuffer, type Conversation } from '../stores/chat';
   import { config } from '../stores/config';
 
   export let dir = '';
@@ -65,7 +65,7 @@
       cost: '',
       tokens: 0,
     };
-    chat.addUserMessage(msg);
+    chat.addUserMessage(conv.id, msg);
 
     try {
       await App.AddChatMessage(dir, conv.id, e.detail.content);
@@ -102,6 +102,9 @@
       return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     } catch { return ''; }
   }
+
+  $: streaming = isStreaming($chat.activeConvId);
+  $: buffer = streamBuffer($chat.activeConvId);
 
   $: providers = [
     ...(claudeDetected ? [{ id: 'claude', label: 'Claude' }] : []),
@@ -169,14 +172,14 @@
         {#each $activeConversation.messages as msg (msg.id)}
           <ChatMessage message={msg} />
         {/each}
-        {#if $chat.streaming && $chat.streamBuffer}
+        {#if $streaming && $buffer}
           <ChatMessage
             message={{ id: 'stream', role: 'assistant', content: '', timestamp: new Date().toISOString(), cost: '', tokens: 0 }}
             isStreaming={true}
-            streamContent={$chat.streamBuffer}
+            streamContent={$buffer}
           />
         {/if}
-        {#if $activeConversation.messages.length === 0 && !$chat.streaming}
+        {#if $activeConversation.messages.length === 0 && !$streaming}
           <div class="chat-welcome">
             <p>Starte die Konversation mit einer Nachricht</p>
           </div>
@@ -184,8 +187,8 @@
       </div>
 
       <ChatInput
-        disabled={$chat.streaming}
-        placeholder={$chat.streaming ? 'Antwort wird generiert...' : 'Nachricht eingeben...'}
+        disabled={$streaming}
+        placeholder={$streaming ? 'Antwort wird generiert...' : 'Nachricht eingeben...'}
         on:send={handleSend}
       />
     {:else}
