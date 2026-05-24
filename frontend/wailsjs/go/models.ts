@@ -725,6 +725,7 @@ export namespace config {
 	    favorites?: Record<string, Array<string>>;
 	    font_family: string;
 	    font_size: number;
+	    chat_style: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -753,6 +754,7 @@ export namespace config {
 	        this.favorites = source["favorites"];
 	        this.font_family = source["font_family"];
 	        this.font_size = source["font_size"];
+	        this.chat_style = source["chat_style"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

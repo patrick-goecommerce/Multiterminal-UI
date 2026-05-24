@@ -46,6 +46,7 @@ type Config struct {
 	Orchestrator          OrchestratorSettings `yaml:"orchestrator" json:"orchestrator"`
 	Language              string         `yaml:"language" json:"language"`
 	SetupDone             bool           `yaml:"setup_done" json:"setup_done"`
+	ChatStyle             string         `yaml:"chat_style" json:"chat_style"`
 }
 
 // IssueTracking holds settings for automatic issue progress reporting.
@@ -201,8 +202,9 @@ func DefaultConfig() Config {
 			ReviewCommand:        "go test ./... && go vet ./...",
 			SyncSubtasksToGitHub: false,
 		},
-		Language: "de",
-		SetupDone:         false,
+		Language:  "de",
+		SetupDone: false,
+		ChatStyle: "claude-code",
 	}
 }
 
@@ -349,6 +351,12 @@ func Load() Config {
 	validLangs := map[string]bool{"de": true, "en": true, "it": true, "es": true, "fr": true}
 	if !validLangs[cfg.Language] {
 		cfg.Language = "de"
+	}
+
+	// Validate chat_style
+	validChatStyles := map[string]bool{"claude-code": true, "telegram": true}
+	if !validChatStyles[cfg.ChatStyle] {
+		cfg.ChatStyle = "claude-code"
 	}
 
 	return cfg

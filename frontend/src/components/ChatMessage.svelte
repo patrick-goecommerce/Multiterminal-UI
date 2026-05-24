@@ -169,4 +169,20 @@
   @keyframes blink {
     50% { opacity: 0; }
   }
+
+  /* Telegram look: vivid user bubble on the right, rounded, tighter */
+  :global(.chat-pane[data-style="telegram"]) .chat-message.user {
+    background: var(--accent, #39ff14);
+    color: #000;
+    border: none;
+  }
+  :global(.chat-pane[data-style="telegram"]) .chat-message {
+    max-width: 75%;
+    border-radius: 14px;
+  }
+  /* Claude-Code look: full-width, left-aligned, calmer */
+  :global(.chat-pane[data-style="claude-code"]) .chat-message {
+    max-width: 100%;
+    align-self: stretch;
+  }
 </style>

@@ -23,6 +23,7 @@
   let colorValue = $config.terminal_color || '#39ff14';
   let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'dark';
   let savedTheme: ThemeName = selectedTheme;
+  let chatStyle: string = ($config as any).chat_style || 'claude-code';
   let loggingEnabled = $config.logging_enabled || false;
   let useWorktrees = $config.use_worktrees || false;
   let logPath = '';
@@ -58,6 +59,7 @@
     colorValue = $config.terminal_color || '#39ff14';
     selectedTheme = ($config.theme as ThemeName) || 'dark';
     savedTheme = selectedTheme;
+    chatStyle = ($config as any).chat_style || 'claude-code';
     loggingEnabled = $config.logging_enabled || false;
     useWorktrees = $config.use_worktrees || false;
     claudeCommand = $config.claude_command || '';
@@ -157,6 +159,7 @@
       ...$config,
       terminal_color: colorValue,
       theme: selectedTheme,
+      chat_style: chatStyle,
       logging_enabled: loggingEnabled,
       use_worktrees: useWorktrees,
       claude_command: claudeCommand,
@@ -194,6 +197,7 @@
   function resetDefault() {
     colorValue = '#39ff14';
     selectedTheme = 'dark';
+    chatStyle = 'claude-code';
     applyTheme('dark', '#39ff14');
     fontFamily = '';
     fontSize = 10;
@@ -234,6 +238,15 @@
           {#each availableThemes as t}
             <option value={t.value} selected={t.value === selectedTheme}>{t.label}</option>
           {/each}
+        </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="chat-style-select">Chat-Stil</label>
+        <p class="setting-desc">Aussehen der Chat-Blasen im Chat-Modus.</p>
+        <select id="chat-style-select" class="theme-select" bind:value={chatStyle}>
+          <option value="claude-code">Claude Code</option>
+          <option value="telegram">Telegram</option>
         </select>
       </div>
 
