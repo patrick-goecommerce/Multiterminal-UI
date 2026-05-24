@@ -49,6 +49,10 @@
     dispatch('splitPane');
   }
 
+  function handleToggleDisplay(e: CustomEvent) {
+    dispatch('toggleDisplayPane', e.detail);
+  }
+
   $: maximizedPane = panes.find((p) => p.maximized);
   $: visiblePanes = maximizedPane ? [maximizedPane] : panes;
   $: gridCols = maximizedPane ? 1 : Math.min(Math.ceil(Math.sqrt(panes.length)), 3);
@@ -61,7 +65,7 @@
   {#each visiblePanes as pane (pane.id)}
     {#if pane.display === 'chat'}
       <div class="pane-chat-wrapper">
-        <ChatPane conversationId={pane.conversationId} dir={tabDir} />
+        <ChatPane conversationId={pane.conversationId} dir={tabDir} paneId={pane.id} on:toggleDisplay={handleToggleDisplay} />
       </div>
     {:else}
       <TerminalPane
@@ -76,6 +80,7 @@
         on:focus={handleFocus}
         on:rename={handleRename}
         on:restart={handleRestart}
+        on:toggleDisplay={handleToggleDisplay}
         on:issueAction={handleIssueAction}
         on:commitPush={handleCommitPush}
         on:navigateFile={handleNavigateFile}

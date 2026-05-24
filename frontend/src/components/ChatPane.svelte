@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, createEventDispatcher } from 'svelte';
   import { get } from 'svelte/store';
   import * as App from '../../wailsjs/go/backend/App';
   import ChatMessage from './ChatMessage.svelte';
@@ -9,6 +9,9 @@
 
   export let conversationId: string;
   export let dir = '';
+  export let paneId = '';
+
+  const dispatch = createEventDispatcher();
 
   let messagesEl: HTMLDivElement;
   $: streaming = isStreaming(conversationId);
@@ -44,6 +47,12 @@
 </script>
 
 <div class="chat-pane" data-style={chatStyle}>
+  <div class="chat-header">
+    <span class="chat-header-title">{conv?.title || 'Chat'}</span>
+    <button class="chat-header-btn" on:click|stopPropagation={() => dispatch('toggleDisplay', { paneId })} title="Als Terminal anzeigen">
+      &gt;_
+    </button>
+  </div>
   <div class="chat-messages" bind:this={messagesEl}>
     {#if conv}
       {#each conv.messages as msg (msg.id)}
@@ -69,6 +78,47 @@
   .chat-pane { display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--bg, #11111b); }
   .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   .chat-welcome { margin: auto; color: var(--fg-muted, #a6adc8); opacity: 0.5; font-size: 0.85rem; }
+
+  .chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background: var(--bg-secondary, #181825);
+    border-bottom: 1px solid var(--border, #45475a);
+    height: 30px;
+    min-height: 30px;
+    flex-shrink: 0;
+  }
+
+  .chat-header-title {
+    font-size: 12px;
+    color: var(--fg, #cdd6f4);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .chat-header-btn {
+    background: none;
+    border: none;
+    color: var(--fg-muted, #a6adc8);
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-family: monospace;
+    font-weight: 600;
+    line-height: 1;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .chat-header-btn:hover {
+    background: var(--bg-tertiary, #313244);
+    color: var(--fg, #cdd6f4);
+  }
 
   /* Telegram style: tighter spacing (full bubble styling added in Task 10) */
   .chat-pane[data-style="telegram"] .chat-messages { gap: 6px; }

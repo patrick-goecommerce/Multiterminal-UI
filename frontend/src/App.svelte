@@ -599,6 +599,33 @@
     } catch (err) { console.error('[handleRestartPane] failed:', err); }
   }
 
+  async function handleToggleDisplay(e: CustomEvent<{ paneId: string }>) {
+    const tab = $activeTab;
+    if (!tab) return;
+    const pane = tab.panes.find((p) => p.id === e.detail.paneId);
+    if (!pane) return;
+    const { name, mode, model } = pane;
+
+    if (pane.display === 'chat') {
+      // Chat → Terminal (conversation remains available for future resume)
+      tabStore.closePane(tab.id, pane.id);
+      const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
+      try {
+        const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
+        if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model);
+      } catch (err) { console.error('[toggleDisplay→terminal] failed:', err); }
+    } else {
+      // Terminal → Chat
+      App.CloseSession(pane.sessionId);
+      tabStore.closePane(tab.id, pane.id);
+      const provider = mode.startsWith('codex') ? 'codex' : mode.startsWith('gemini') ? 'gemini' : 'claude';
+      try {
+        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', 'plan');
+        tabStore.addPane(tab.id, 0, name, mode, model || '', null, '', '', '', '', false, 'chat', conv.id);
+      } catch (err) { console.error('[toggleDisplay→chat] failed:', err); }
+    }
+  }
+
   function handleSendCommand(e: CustomEvent<{ text: string }>) {
     const tab = $activeTab;
     if (!tab) return;
@@ -829,6 +856,7 @@
               on:focusPane={handleFocusPane}
               on:renamePane={handleRenamePane}
               on:restartPane={handleRestartPane}
+              on:toggleDisplayPane={handleToggleDisplay}
               on:issueAction={handleIssueAction}
               on:commitPush={handleCommitPush}
               on:navigateFile={handleNavigateFile}
