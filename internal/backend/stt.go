@@ -41,9 +41,3 @@ func (a *AppService) TranscribeAudio(audioB64, mime string) (string, error) {
 	return tr.Transcribe(context.Background(), audio, mime, a.cfg.STT.Language)
 }
 
-// stub — replaced in task 9
-type parakeetTranscriber struct{ a *AppService }
-
-func (t *parakeetTranscriber) Transcribe(ctx context.Context, audio []byte, mime, lang string) (string, error) {
-	return "", fmt.Errorf("parakeet not yet implemented")
-}

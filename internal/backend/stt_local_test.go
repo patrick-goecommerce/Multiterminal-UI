@@ -31,3 +31,10 @@ func TestParseWhisperTxt(t *testing.T) {
 		t.Errorf("got %q, want 'hallo welt'", got)
 	}
 }
+
+func TestParakeetArgs_OmitsLangWhenAuto(t *testing.T) {
+	a := strings.Join(parakeetArgs("/model", "/a.wav", "auto"), " ")
+	if strings.Contains(a, "--language") {
+		t.Errorf("auto should omit --language, got %q", a)
+	}
+}
