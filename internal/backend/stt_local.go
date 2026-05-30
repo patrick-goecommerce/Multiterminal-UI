@@ -45,6 +45,7 @@ func toWav16kMono(ctx context.Context, audio []byte, mime string) (string, error
 	out := in.Name() + ".wav"
 	cmd := exec.CommandContext(ctx, ff, "-y", "-i", in.Name(), "-ar", "16000", "-ac", "1", "-f", "wav", out)
 	if b, err := cmd.CombinedOutput(); err != nil {
+		os.Remove(out) // best-effort cleanup; out may not exist if ffmpeg failed early
 		return "", fmt.Errorf("ffmpeg: %v: %s", err, strings.TrimSpace(string(b)))
 	}
 	return out, nil
