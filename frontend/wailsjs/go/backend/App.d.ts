@@ -302,6 +302,10 @@ export function CancelCardOrchestration(cardID: string): Promise<void>;
 
 export function IsCardOrchestrationRunning(cardID: string): Promise<boolean>;
 
+// --- Voice / STT ---
+
+export function TranscribeAudio(arg1:string,arg2:string):Promise<string>;
+
 // --- Debug ---
 
 export function EnableSessionDebugLog(arg1:number,arg2:string):Promise<void>;

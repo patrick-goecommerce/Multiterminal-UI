@@ -608,6 +608,12 @@ export function IsCardOrchestrationRunning(arg1) {
   return $Call.ByID(2210346425, arg1);
 }
 
+// --- Voice / STT ---
+
+export function TranscribeAudio(arg1, arg2) {
+  return $Call.ByID(3987595386, arg1, arg2);
+}
+
 // --- Debug ---
 
 export function EnableSessionDebugLog(arg1, arg2) {
