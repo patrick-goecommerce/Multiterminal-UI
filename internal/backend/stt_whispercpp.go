@@ -50,14 +50,15 @@ func (a *AppService) ensureWhisperCpp(ctx context.Context, dir, bin, model strin
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
+	// Check binary first — no point downloading 148 MB if the runner isn't there.
+	if !fileExists(bin) {
+		return fmt.Errorf("whisper.cpp-Binary fehlt unter %s — bitte whisper-cli(.exe) dort ablegen (Auto-Download des Binaries folgt)", bin)
+	}
 	if !fileExists(model) {
 		a.emitSttDownload("whisper-cpp", 0)
 		if err := downloadFile(ctx, whisperCppModelURL, model, func(p int) { a.emitSttDownload("whisper-cpp", p) }); err != nil {
 			return fmt.Errorf("modell-download: %w", err)
 		}
-	}
-	if !fileExists(bin) {
-		return fmt.Errorf("whisper.cpp-Binary fehlt unter %s — bitte whisper-cli(.exe) dort ablegen (Auto-Download des Binaries folgt)", bin)
 	}
 	return nil
 }
