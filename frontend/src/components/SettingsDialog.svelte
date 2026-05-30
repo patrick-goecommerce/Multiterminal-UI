@@ -24,6 +24,11 @@
   let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'dark';
   let savedTheme: ThemeName = selectedTheme;
   let chatStyle: string = ($config as any).chat_style || 'claude-code';
+  let sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
+  let sttLanguage = ($config as any).stt?.language || 'de';
+  let sttBaseUrl = ($config as any).stt?.cloud?.base_url || '';
+  let sttModel = ($config as any).stt?.cloud?.model || 'whisper-1';
+  let sttApiKey = ($config as any).stt?.cloud?.api_key || '';
   let loggingEnabled = $config.logging_enabled || false;
   let useWorktrees = $config.use_worktrees || false;
   let logPath = '';
@@ -60,6 +65,11 @@
     selectedTheme = ($config.theme as ThemeName) || 'dark';
     savedTheme = selectedTheme;
     chatStyle = ($config as any).chat_style || 'claude-code';
+    sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
+    sttLanguage = ($config as any).stt?.language || 'de';
+    sttBaseUrl = ($config as any).stt?.cloud?.base_url || '';
+    sttModel = ($config as any).stt?.cloud?.model || 'whisper-1';
+    sttApiKey = ($config as any).stt?.cloud?.api_key || '';
     loggingEnabled = $config.logging_enabled || false;
     useWorktrees = $config.use_worktrees || false;
     claudeCommand = $config.claude_command || '';
@@ -181,6 +191,11 @@
         review_command: orchReviewCommand,
         sync_subtasks_to_github: orchSyncSubtasks,
       },
+      stt: {
+        provider: sttProvider,
+        language: sttLanguage,
+        cloud: { base_url: sttBaseUrl, model: sttModel, api_key: sttApiKey },
+      },
     };
     config.set(updated);
     try { await App.SaveConfig(updated); } catch (err) { console.error('[SettingsDialog] SaveConfig failed:', err); }
@@ -214,6 +229,11 @@
     orchMaxRetries = 1;
     orchReviewCommand = '';
     orchSyncSubtasks = false;
+    sttProvider = 'cloud-whisper';
+    sttLanguage = 'de';
+    sttBaseUrl = '';
+    sttModel = 'whisper-1';
+    sttApiKey = '';
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -248,6 +268,32 @@
           <option value="claude-code">Claude Code</option>
           <option value="telegram">Telegram</option>
         </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="stt-provider">Spracheingabe (STT)</label>
+        <p class="setting-desc">Engine für das Mikrofon-Diktat im Chat.</p>
+        <select id="stt-provider" class="theme-select" bind:value={sttProvider}>
+          <option value="cloud-whisper">Cloud (Whisper-API)</option>
+          <option value="whisper-cpp">Lokal: whisper.cpp</option>
+          <option value="parakeet">Lokal: Parakeet (sherpa-onnx)</option>
+        </select>
+        <label class="setting-label" for="stt-lang" style="margin-top: 12px;">Sprache</label>
+        <select id="stt-lang" class="theme-select" bind:value={sttLanguage}>
+          <option value="de">Deutsch</option>
+          <option value="en">Englisch</option>
+          <option value="auto">Automatisch</option>
+        </select>
+        {#if sttProvider === 'cloud-whisper'}
+          <label class="setting-label" for="stt-key" style="margin-top: 12px;">API-Key (leer = $OPENAI_API_KEY)</label>
+          <input id="stt-key" type="password" class="claude-input" bind:value={sttApiKey} placeholder="sk-…" />
+          <label class="setting-label" for="stt-url" style="margin-top: 8px;">Base-URL (leer = OpenAI)</label>
+          <input id="stt-url" type="text" class="claude-input" bind:value={sttBaseUrl} placeholder="https://api.openai.com/v1" />
+          <label class="setting-label" for="stt-model" style="margin-top: 8px;">Modell</label>
+          <input id="stt-model" type="text" class="claude-input" bind:value={sttModel} placeholder="whisper-1" />
+        {:else}
+          <p class="setting-desc" style="margin-top: 12px;">Lokale Engine lädt Binary + Modell beim ersten Gebrauch nach <code>~/.multiterminal/stt/</code>. Benötigt <code>ffmpeg</code> im PATH.</p>
+        {/if}
       </div>
 
       <div class="setting-group">
