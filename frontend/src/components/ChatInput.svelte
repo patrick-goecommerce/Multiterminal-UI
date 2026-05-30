@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onDestroy } from 'svelte';
   import { startRecording, type VoiceRecorder } from '../lib/voice';
   import * as App from '../../wailsjs/go/backend/App';
 
@@ -16,13 +16,20 @@
   let voiceState: 'idle' | 'recording' | 'transcribing' = 'idle';
   let recorder: VoiceRecorder | null = null;
   let voiceError = '';
+  let cancelRequested = false;
 
   async function startVoice() {
     if (voiceState !== 'idle' || disabled) return;
     voiceError = '';
+    cancelRequested = false;
+    voiceState = 'recording'; // claim the slot BEFORE first await
     try {
       recorder = await startRecording();
-      voiceState = 'recording';
+      if (cancelRequested) {
+        recorder.cancel();
+        recorder = null;
+        voiceState = 'idle';
+      }
     } catch (e) {
       voiceError = 'Mikrofon nicht verfügbar oder verweigert.';
       voiceState = 'idle';
@@ -31,7 +38,12 @@
   }
 
   async function stopVoice() {
-    if (voiceState !== 'recording' || !recorder) return;
+    if (voiceState !== 'recording') return;
+    if (!recorder) {
+      // getUserMedia still in flight — signal startVoice to abort on resolve
+      cancelRequested = true;
+      return;
+    }
     voiceState = 'transcribing';
     try {
       const { base64, mime } = await recorder.stop();
@@ -48,6 +60,10 @@
       recorder = null;
     }
   }
+
+  onDestroy(() => {
+    if (recorder) recorder.cancel();
+  });
 
   function handleSend() {
     if (!text.trim() || disabled) return;
