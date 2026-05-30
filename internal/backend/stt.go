@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 )
 
 // Transcriber turns recorded audio into text.
@@ -43,13 +41,7 @@ func (a *AppService) TranscribeAudio(audioB64, mime string) (string, error) {
 	return tr.Transcribe(context.Background(), audio, mime, a.cfg.STT.Language)
 }
 
-// stubs — replaced in later tasks (3, 8, 9)
-type cloudWhisperTranscriber struct{ cfg config.STTCloudSettings }
-
-func (t *cloudWhisperTranscriber) Transcribe(ctx context.Context, audio []byte, mime, lang string) (string, error) {
-	return "", fmt.Errorf("cloud whisper not yet implemented")
-}
-
+// stubs — replaced in later tasks (8, 9)
 type whisperCppTranscriber struct{ a *AppService }
 
 func (t *whisperCppTranscriber) Transcribe(ctx context.Context, audio []byte, mime, lang string) (string, error) {
