@@ -29,7 +29,12 @@ export async function startRecording(): Promise<VoiceRecorder> {
             resolve({ base64, mime: blob.type });
           } catch (e) { reject(e); }
         };
-        rec.stop();
+        try {
+          rec.stop();
+        } catch (e) {
+          cleanup();
+          reject(e);
+        }
       }),
     cancel: () => { try { rec.stop(); } catch {} cleanup(); },
   };
