@@ -24,3 +24,10 @@ func TestWavArgsForLang(t *testing.T) {
 		t.Errorf("auto should omit -l, got %q", got2)
 	}
 }
+
+func TestParseWhisperTxt(t *testing.T) {
+	raw := "  hallo welt \n"
+	if got := parseTranscriptText(raw); got != "hallo welt" {
+		t.Errorf("got %q, want 'hallo welt'", got)
+	}
+}

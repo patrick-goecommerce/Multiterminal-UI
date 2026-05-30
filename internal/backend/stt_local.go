@@ -4,10 +4,14 @@ package backend
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 )
 
 // sttEngineDir returns the on-demand storage dir for an engine's binary+model.
@@ -66,4 +70,66 @@ func (a *AppService) emitSttDownload(engine string, pct int) {
 		return
 	}
 	a.app.Event.Emit("stt:download", map[string]interface{}{"engine": engine, "pct": pct})
+}
+
+// binName appends ".exe" on Windows, otherwise returns base unchanged.
+func binName(base string) string {
+	if runtime.GOOS == "windows" {
+		return base + ".exe"
+	}
+	return base
+}
+
+// commandCtx is a thin wrapper around exec.CommandContext to allow future
+// test-time substitution without changing call sites.
+func commandCtx(ctx context.Context, bin string, args ...string) *exec.Cmd {
+	return exec.CommandContext(ctx, bin, args...)
+}
+
+// downloadFile streams url to dst, reporting integer percent via progress.
+// Uses an atomic .part + rename pattern to avoid partial files on error.
+func downloadFile(ctx context.Context, url, dst string, progress func(pct int)) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 30 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download %s: status %d", url, resp.StatusCode)
+	}
+	tmp := dst + ".part"
+	f, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	total := resp.ContentLength
+	var written int64
+	buf := make([]byte, 256*1024)
+	for {
+		n, rerr := resp.Body.Read(buf)
+		if n > 0 {
+			if _, werr := f.Write(buf[:n]); werr != nil {
+				f.Close()
+				return werr
+			}
+			written += int64(n)
+			if total > 0 && progress != nil {
+				progress(int(written * 100 / total))
+			}
+		}
+		if rerr == io.EOF {
+			break
+		}
+		if rerr != nil {
+			f.Close()
+			return rerr
+		}
+	}
+	f.Close()
+	return os.Rename(tmp, dst)
 }

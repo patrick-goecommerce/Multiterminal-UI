@@ -41,13 +41,7 @@ func (a *AppService) TranscribeAudio(audioB64, mime string) (string, error) {
 	return tr.Transcribe(context.Background(), audio, mime, a.cfg.STT.Language)
 }
 
-// stubs — replaced in later tasks (8, 9)
-type whisperCppTranscriber struct{ a *AppService }
-
-func (t *whisperCppTranscriber) Transcribe(ctx context.Context, audio []byte, mime, lang string) (string, error) {
-	return "", fmt.Errorf("whisper.cpp not yet implemented")
-}
-
+// stub — replaced in task 9
 type parakeetTranscriber struct{ a *AppService }
 
 func (t *parakeetTranscriber) Transcribe(ctx context.Context, audio []byte, mime, lang string) (string, error) {
