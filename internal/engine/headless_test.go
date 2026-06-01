@@ -234,7 +234,7 @@ func TestSummarizeFailures(t *testing.T) {
 }
 
 func TestParseCostFromOutput(t *testing.T) {
-	raw := []byte(`{"cost_usd": 0.42, "result": "done"}`)
+	raw := []byte(`{"total_cost_usd": 0.42, "result": "done"}`)
 	cost := parseCostFromOutput(raw)
 	if cost != 0.42 {
 		t.Fatalf("expected 0.42, got %f", cost)

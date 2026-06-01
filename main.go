@@ -37,6 +37,7 @@ func main() {
 		flagRemoveTab = flag.String("remove-tab", "", "Remove a tab by name and exit")
 		flagClean     = flag.Bool("clean", false, "Delete the session file and exit")
 		flagSafeMode  = flag.Bool("safe-mode", false, "Start without loading sessions; restore session on close")
+		flagDebug     = flag.Bool("debug", false, "Open debug console + enable file logging from startup")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: mtui [options]\n\nOptions:\n")
@@ -59,12 +60,21 @@ func main() {
 	}
 
 	// --- GUI start ---
+
+	// Debug mode: open console window + file logging BEFORE anything else.
+	if *flagDebug {
+		backend.InitDebugMode()
+	}
+
 	log.Println("Starting Multiterminal UI...")
 
 	cfg := config.Load()
 	log.Println("Config loaded, theme:", cfg.Theme)
 
-	backend.InitLoggingFromConfig(cfg)
+	// Config-based logging (for non-debug mode, when LoggingEnabled is set in YAML).
+	if !*flagDebug {
+		backend.InitLoggingFromConfig(cfg)
+	}
 
 	app := application.New(application.Options{
 		Name: "Multiterminal",

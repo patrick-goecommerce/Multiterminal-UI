@@ -40,3 +40,10 @@ FEATURE_IDEAS.md
 
 # Git worktrees
 .worktrees/
+
+# Additional local dev artifacts
+.mt-worktrees/
+.mtui/workspace.yml
+.mtui/kanban_fixed.json
+.superpowers/
+tmux-shim.exe
