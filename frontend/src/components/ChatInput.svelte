@@ -54,7 +54,8 @@
         setTimeout(autoResize, 0);
       }
     } catch (e) {
-      voiceError = 'Transkription fehlgeschlagen.';
+      const msg = e instanceof Error ? e.message : String(e);
+      voiceError = msg || 'Transkription fehlgeschlagen.';
     } finally {
       voiceState = 'idle';
       recorder = null;
