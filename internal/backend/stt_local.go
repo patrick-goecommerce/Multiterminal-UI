@@ -97,7 +97,9 @@ func commandCtx(ctx context.Context, bin string, args ...string) *exec.Cmd {
 
 // downloadFile streams url to dst, reporting integer percent via progress.
 // Uses an atomic .part + rename pattern to avoid partial files on error.
-func downloadFile(ctx context.Context, url, dst string, progress func(pct int)) error {
+// Named return rerr drives a defer that removes the .part file on any error,
+// so callers never see an orphaned partial download on disk.
+func downloadFile(ctx context.Context, url, dst string, progress func(pct int)) (rerr error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -116,6 +118,11 @@ func downloadFile(ctx context.Context, url, dst string, progress func(pct int)) 
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if rerr != nil {
+			os.Remove(tmp)
+		}
+	}()
 	total := resp.ContentLength
 	var written int64
 	buf := make([]byte, 256*1024)
