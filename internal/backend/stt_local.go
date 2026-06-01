@@ -72,6 +72,15 @@ func (a *AppService) emitSttDownload(engine string, pct int) {
 	a.app.Event.Emit("stt:download", map[string]interface{}{"engine": engine, "pct": pct})
 }
 
+// emitSttPhase reports phased progress (phase: "binary" | "model") to the frontend.
+// Payload is a superset of emitSttDownload — the frontend can use either pct or phase+pct.
+func (a *AppService) emitSttPhase(engine, phase string, pct int) {
+	if a.app == nil {
+		return
+	}
+	a.app.Event.Emit("stt:download", map[string]interface{}{"engine": engine, "phase": phase, "pct": pct})
+}
+
 // binName appends ".exe" on Windows, otherwise returns base unchanged.
 func binName(base string) string {
 	if runtime.GOOS == "windows" {

@@ -629,6 +629,31 @@ export namespace backend {
 	    }
 	}
 
+	export class SttEngineStatus {
+	    provider: string;
+	    dir: string;
+	    bin_path: string;
+	    model_path: string;
+	    bin_found: boolean;
+	    model_found: boolean;
+	    installed: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new SttEngineStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.dir = source["dir"];
+	        this.bin_path = source["bin_path"];
+	        this.model_path = source["model_path"];
+	        this.bin_found = source["bin_found"];
+	        this.model_found = source["model_found"];
+	        this.installed = source["installed"];
+	    }
+	}
+
 }
 
 export namespace config {

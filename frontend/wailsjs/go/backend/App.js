@@ -614,6 +614,14 @@ export function TranscribeAudio(arg1, arg2) {
   return $Call.ByID(3987595386, arg1, arg2);
 }
 
+export function CheckSttEngine(arg1) {
+  return $Call.ByID(2330316972, arg1);
+}
+
+export function InstallSttEngine(arg1) {
+  return $Call.ByID(3417606153, arg1);
+}
+
 // --- Debug ---
 
 export function EnableSessionDebugLog(arg1, arg2) {

@@ -306,6 +306,10 @@ export function IsCardOrchestrationRunning(cardID: string): Promise<boolean>;
 
 export function TranscribeAudio(arg1:string,arg2:string):Promise<string>;
 
+export function CheckSttEngine(arg1:string):Promise<backend.SttEngineStatus>;
+
+export function InstallSttEngine(arg1:string):Promise<void>;
+
 // --- Debug ---
 
 export function EnableSessionDebugLog(arg1:number,arg2:string):Promise<void>;
