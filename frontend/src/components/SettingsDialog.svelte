@@ -117,8 +117,12 @@
     orchSyncSubtasks = $config.orchestrator?.sync_subtasks_to_github ?? false;
     App.GetLogPath().then(p => logPath = p).catch(() => {});
     detectClaude();
-    if (sttProvider !== 'cloud-whisper') refreshSttStatus(sttProvider);
   }
+
+  // Isolated reactive: re-runs when `visible` or `sttProvider` change. Writes
+  // sttStatus/sttInstallError (not read by the main block above), so re-firing
+  // does NOT cascade into a reset of the main block's fields.
+  $: if (visible && sttProvider !== 'cloud-whisper') refreshSttStatus(sttProvider);
 
   function handleColorChange(e: CustomEvent<{ value: string }>) {
     colorValue = e.detail.value;
@@ -173,6 +177,7 @@
   }
 
   async function refreshSttStatus(provider: string) {
+    sttStatus = null;
     sttInstallError = '';
     if (provider === 'cloud-whisper') {
       sttStatus = { installed: true, bin_found: true, model_found: true, dir: '', bin_path: '', model_path: '' };
@@ -367,6 +372,11 @@
           {/if}
           {#if sttInstallError}
             <p class="stt-install-error">{sttInstallError}</p>
+            {#if !sttStatus || !sttStatus.installed}
+              <button class="install-btn" on:click={installStt} disabled={sttInstalling}>
+                {#if sttInstalling}Installation läuft…{:else}Erneut versuchen{/if}
+              </button>
+            {/if}
           {/if}
         {/if}
         {#if sttProvider === 'cloud-whisper'}
