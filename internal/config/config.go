@@ -46,6 +46,8 @@ type Config struct {
 	Orchestrator          OrchestratorSettings `yaml:"orchestrator" json:"orchestrator"`
 	Language              string         `yaml:"language" json:"language"`
 	SetupDone             bool           `yaml:"setup_done" json:"setup_done"`
+	ChatStyle             string         `yaml:"chat_style" json:"chat_style"`
+	STT                   STTSettings    `yaml:"stt" json:"stt"`
 }
 
 // IssueTracking holds settings for automatic issue progress reporting.
@@ -115,6 +117,34 @@ type OrchestratorSettings struct {
 	MaxRetries           int    `yaml:"max_retries" json:"max_retries"`
 	ReviewCommand        string `yaml:"review_command" json:"review_command"`
 	SyncSubtasksToGitHub bool   `yaml:"sync_subtasks_to_github" json:"sync_subtasks_to_github"`
+}
+
+// STTSettings configures speech-to-text voice input.
+type STTSettings struct {
+	Provider string           `yaml:"provider" json:"provider"` // cloud-whisper | whisper-cpp | parakeet
+	Language string           `yaml:"language" json:"language"` // ISO code or "auto"
+	Cloud    STTCloudSettings `yaml:"cloud" json:"cloud"`
+}
+
+// STTCloudSettings configures the cloud Whisper-compatible endpoint.
+type STTCloudSettings struct {
+	BaseURL string `yaml:"base_url" json:"base_url"` // empty = OpenAI default
+	Model   string `yaml:"model" json:"model"`       // default whisper-1
+	APIKey  string `yaml:"api_key" json:"api_key"`   // empty = $OPENAI_API_KEY
+}
+
+// normalizeSTT applies defaults/validation to STT settings.
+func normalizeSTT(c *Config) {
+	valid := map[string]bool{"cloud-whisper": true, "whisper-cpp": true, "parakeet": true}
+	if !valid[c.STT.Provider] {
+		c.STT.Provider = "cloud-whisper"
+	}
+	if c.STT.Language == "" {
+		c.STT.Language = "de"
+	}
+	if c.STT.Cloud.Model == "" {
+		c.STT.Cloud.Model = "whisper-1"
+	}
 }
 
 // DefaultConfig returns the built-in defaults.
@@ -201,8 +231,10 @@ func DefaultConfig() Config {
 			ReviewCommand:        "go test ./... && go vet ./...",
 			SyncSubtasksToGitHub: false,
 		},
-		Language: "de",
-		SetupDone:         false,
+		Language:  "de",
+		SetupDone: false,
+		ChatStyle: "claude-code",
+		STT: STTSettings{Provider: "cloud-whisper", Language: "de", Cloud: STTCloudSettings{Model: "whisper-1"}},
 	}
 }
 
@@ -350,6 +382,14 @@ func Load() Config {
 	if !validLangs[cfg.Language] {
 		cfg.Language = "de"
 	}
+
+	// Validate chat_style
+	validChatStyles := map[string]bool{"claude-code": true, "telegram": true}
+	if !validChatStyles[cfg.ChatStyle] {
+		cfg.ChatStyle = "claude-code"
+	}
+
+	normalizeSTT(&cfg)
 
 	return cfg
 }

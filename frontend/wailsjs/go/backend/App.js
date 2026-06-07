@@ -59,6 +59,10 @@ export function ClearQueue(arg1) {
   return $Call.ByID(990141303, arg1);
 }
 
+export function CloseChatSession(arg1) {
+  return $Call.ByID(1679814237, arg1);
+}
+
 export function CloseSession(arg1) {
   return $Call.ByID(961833007, arg1);
 }
@@ -514,8 +518,8 @@ export function ToggleSchedule(arg1, arg2) {
 
 // --- Sprint 3: Chat & Queue ---
 
-export function CreateConversation(arg1, arg2, arg3) {
-  return $Call.ByID(2019553056, arg1, arg2, arg3);
+export function CreateConversation(arg1, arg2, arg3, arg4) {
+  return $Call.ByID(2019553056, arg1, arg2, arg3, arg4);
 }
 
 export function GetConversations(arg1) {
@@ -602,6 +606,20 @@ export function CancelCardOrchestration(arg1) {
 
 export function IsCardOrchestrationRunning(arg1) {
   return $Call.ByID(2210346425, arg1);
+}
+
+// --- Voice / STT ---
+
+export function TranscribeAudio(arg1, arg2) {
+  return $Call.ByID(3987595386, arg1, arg2);
+}
+
+export function CheckSttEngine(arg1) {
+  return $Call.ByID(2330316972, arg1);
+}
+
+export function InstallSttEngine(arg1) {
+  return $Call.ByID(3417606153, arg1);
 }
 
 // --- Debug ---

@@ -31,6 +31,8 @@ export function ClearDoneFromQueue(arg1:number):Promise<void>;
 
 export function ClearQueue(arg1:number):Promise<void>;
 
+export function CloseChatSession(arg1:string):Promise<void>;
+
 export function CloseSession(arg1:number):Promise<void>;
 
 export function CreateDirectory(arg1:string):Promise<string>;
@@ -252,7 +254,7 @@ export function ToggleSchedule(arg1:string,arg2:string):Promise<void>;
 
 // --- Sprint 3: Chat & Queue ---
 
-export function CreateConversation(arg1:string,arg2:string,arg3:string):Promise<backend.Conversation>;
+export function CreateConversation(arg1:string,arg2:string,arg3:string,arg4:string):Promise<backend.Conversation>;
 
 export function GetConversations(arg1:string):Promise<Array<backend.Conversation>>;
 
@@ -299,6 +301,14 @@ export function ResumeCardOrchestration(dir: string, cardID: string): Promise<vo
 export function CancelCardOrchestration(cardID: string): Promise<void>;
 
 export function IsCardOrchestrationRunning(cardID: string): Promise<boolean>;
+
+// --- Voice / STT ---
+
+export function TranscribeAudio(arg1:string,arg2:string):Promise<string>;
+
+export function CheckSttEngine(arg1:string):Promise<backend.SttEngineStatus>;
+
+export function InstallSttEngine(arg1:string):Promise<void>;
 
 // --- Debug ---
 

@@ -28,12 +28,14 @@ type SavedTab struct {
 
 // SavedPane captures enough information to re-launch a single pane.
 type SavedPane struct {
-	Name        string `json:"name"`
-	Mode        int    `json:"mode"`                   // integer index into frontend MODE_TO_INDEX / INDEX_TO_MODE (see frontend/src/lib/claude.ts)
-	Model       string `json:"model"`                  // model label (empty for shell)
-	IssueNumber int    `json:"issue_number,omitempty"` // linked GitHub issue number
-	IssueBranch string `json:"issue_branch,omitempty"` // branch created for issue
-	ZoomDelta   int    `json:"zoom_delta,omitempty"`   // per-pane font zoom offset
+	Name           string `json:"name"`
+	Mode           int    `json:"mode"`                      // integer index into frontend MODE_TO_INDEX / INDEX_TO_MODE (see frontend/src/lib/claude.ts)
+	Model          string `json:"model"`                     // model label (empty for shell)
+	IssueNumber    int    `json:"issue_number,omitempty"`    // linked GitHub issue number
+	IssueBranch    string `json:"issue_branch,omitempty"`    // branch created for issue
+	ZoomDelta      int    `json:"zoom_delta,omitempty"`      // per-pane font zoom offset
+	Display        string `json:"display,omitempty"`         // "chat" for chat panes; empty/"terminal" otherwise
+	ConversationID string `json:"conversation_id,omitempty"` // chat conversation id (when Display=="chat")
 }
 
 // sessionPath returns the path to ~/.multiterminal-session.json.

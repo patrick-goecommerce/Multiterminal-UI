@@ -8,7 +8,8 @@
 
   $: displayContent = isStreaming ? streamContent : message.content;
   $: isUser = message.role === 'user';
-  $: renderedHtml = !isUser && !isStreaming ? renderMarkdown(displayContent) : '';
+  $: isTool = message.role === 'tool';
+  $: renderedHtml = !isUser && !isTool && !isStreaming ? renderMarkdown(displayContent) : '';
   $: timeStr = (() => {
     try {
       return new Date(message.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -16,26 +17,55 @@
   })();
 
   function providerIcon(role: string): string {
-    return role === 'user' ? '&#9998;' : '&#9679;';
+    if (role === 'user') return '&#9998;';
+    if (role === 'tool') return '&#128295;'; // 🔧
+    return '&#9679;';
+  }
+
+  function roleLabel(role: string): string {
+    if (role === 'user') return 'Du';
+    if (role === 'tool') return 'Tool';
+    return 'Assistent';
   }
 </script>
 
-<div class="chat-message" class:user={isUser} class:assistant={!isUser}>
-  <div class="msg-header">
-    <span class="msg-icon">{@html providerIcon(message.role)}</span>
-    <span class="msg-role">{isUser ? 'Du' : 'Assistent'}</span>
-    {#if timeStr}
-      <span class="msg-time">{timeStr}</span>
-    {/if}
-    {#if message.cost}
-      <span class="msg-cost">{message.cost}</span>
-    {/if}
-  </div>
+<div class="chat-message" class:user={isUser} class:assistant={!isUser && !isTool} class:tool={isTool}>
+  {#if !isTool}
+    <div class="msg-header">
+      <span class="msg-icon">{@html providerIcon(message.role)}</span>
+      <span class="msg-role">{roleLabel(message.role)}</span>
+      {#if timeStr}
+        <span class="msg-time">{timeStr}</span>
+      {/if}
+      {#if message.cost}
+        <span class="msg-cost">{message.cost}</span>
+      {/if}
+    </div>
+  {/if}
   <div class="msg-content">
     {#if isStreaming}
       <pre class="msg-text">{streamContent}<span class="cursor-blink">|</span></pre>
     {:else if isUser}
       <pre class="msg-text">{displayContent}</pre>
+    {:else if isTool}
+      {#if message.tool_name}
+        <div class="tool-call">
+          <span class="tool-icon">🔧</span>
+          <span class="tool-name">{message.tool_name}</span>
+          {#if timeStr}
+            <span class="msg-time tool-time">{timeStr}</span>
+          {/if}
+        </div>
+      {/if}
+      {#if message.tool_result}
+        <details class="tool-result-wrap">
+          <summary class="tool-result-summary">Ergebnis</summary>
+          <pre class="tool-result">{message.tool_result}</pre>
+        </details>
+      {/if}
+      {#if !message.tool_name && !message.tool_result}
+        <div class="tool-empty">—</div>
+      {/if}
     {:else}
       <div class="msg-rendered">{@html renderedHtml}</div>
     {/if}
@@ -60,6 +90,15 @@
     align-self: flex-start;
     background: var(--bg-secondary, #1e1e2e);
     border: 1px solid var(--border, #45475a);
+  }
+  .chat-message.tool {
+    align-self: flex-start;
+    background: transparent;
+    border: 1px solid var(--border, #45475a);
+    border-left: 2px solid var(--accent, #39ff14);
+    padding: 4px 10px;
+    max-width: 100%;
+    opacity: 0.8;
   }
 
   .msg-header {
@@ -90,6 +129,69 @@
     word-wrap: break-word;
     font-family: inherit;
     margin: 0;
+  }
+
+  /* Tool call card */
+  .tool-call {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-family: monospace;
+    color: var(--fg-muted, #a6adc8);
+  }
+  .tool-icon {
+    font-size: 0.7rem;
+  }
+  .tool-name {
+    font-weight: 600;
+    color: var(--accent, #39ff14);
+    background: var(--bg-tertiary, #313244);
+    padding: 1px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.02em;
+  }
+  .tool-time {
+    margin-left: auto;
+    font-family: inherit;
+    font-size: 0.65rem;
+    opacity: 0.5;
+  }
+
+  /* Tool result block */
+  .tool-result-wrap {
+    margin-top: 4px;
+  }
+  .tool-result-summary {
+    font-size: 0.68rem;
+    color: var(--fg-muted, #a6adc8);
+    cursor: pointer;
+    user-select: none;
+    padding: 1px 0;
+  }
+  .tool-result-summary:hover {
+    color: var(--fg, #cdd6f4);
+  }
+  .tool-result {
+    font-size: 0.72rem;
+    font-family: monospace;
+    line-height: 1.4;
+    color: var(--fg-muted, #a6adc8);
+    background: var(--bg-tertiary, #313244);
+    border: 1px solid var(--border, #45475a);
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin: 4px 0 0 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 200px;
+    overflow: auto;
+  }
+
+  .tool-empty {
+    font-size: 0.7rem;
+    color: var(--fg-muted, #a6adc8);
+    opacity: 0.4;
   }
 
   /* Rendered markdown for assistant messages */
@@ -168,5 +270,21 @@
   }
   @keyframes blink {
     50% { opacity: 0; }
+  }
+
+  /* Telegram look: vivid user bubble on the right, rounded, tighter */
+  :global(.chat-pane[data-style="telegram"]) .chat-message.user {
+    background: var(--accent, #39ff14);
+    color: #000;
+    border: none;
+  }
+  :global(.chat-pane[data-style="telegram"]) .chat-message {
+    max-width: 75%;
+    border-radius: 14px;
+  }
+  /* Claude-Code look: full-width, left-aligned, calmer */
+  :global(.chat-pane[data-style="claude-code"]) .chat-message {
+    max-width: 100%;
+    align-self: stretch;
   }
 </style>

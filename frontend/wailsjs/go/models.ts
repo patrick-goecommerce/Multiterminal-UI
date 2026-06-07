@@ -629,6 +629,31 @@ export namespace backend {
 	    }
 	}
 
+	export class SttEngineStatus {
+	    provider: string;
+	    dir: string;
+	    bin_path: string;
+	    model_path: string;
+	    bin_found: boolean;
+	    model_found: boolean;
+	    installed: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new SttEngineStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.dir = source["dir"];
+	        this.bin_path = source["bin_path"];
+	        this.model_path = source["model_path"];
+	        this.bin_found = source["bin_found"];
+	        this.model_found = source["model_found"];
+	        this.installed = source["installed"];
+	    }
+	}
+
 }
 
 export namespace config {
@@ -655,14 +680,47 @@ export namespace config {
 	        this.error_sound = source["error_sound"];
 	    }
 	}
+	export class STTCloudSettings {
+	    base_url: string;
+	    model: string;
+	    api_key: string;
+	    static createFrom(source: any = {}) { return new STTCloudSettings(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.base_url = source["base_url"];
+	        this.model = source["model"];
+	        this.api_key = source["api_key"];
+	    }
+	}
+	export class STTSettings {
+	    provider: string;
+	    language: string;
+	    cloud: STTCloudSettings;
+	    static createFrom(source: any = {}) { return new STTSettings(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.language = source["language"];
+	        this.cloud = this.convertValues(source["cloud"], STTCloudSettings);
+	    }
+	    convertValues(a: any, classs: any, asMap: boolean = false): any {
+	        if (!a) return a;
+	        if (a.slice && a.map) return (a as any[]).map(elem => this.convertValues(elem, classs));
+	        else if ("object" === typeof a) {
+	            if (asMap) { for (const key of Object.keys(a)) a[key] = new classs(a[key]); return a; }
+	            return new classs(a);
+	        }
+	        return a;
+	    }
+	}
 	export class CommandEntry {
 	    name: string;
 	    text: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new CommandEntry(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -725,7 +783,9 @@ export namespace config {
 	    favorites?: Record<string, Array<string>>;
 	    font_family: string;
 	    font_size: number;
-	
+	    chat_style: string;
+	    stt: STTSettings;
+
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }
@@ -753,8 +813,10 @@ export namespace config {
 	        this.favorites = source["favorites"];
 	        this.font_family = source["font_family"];
 	        this.font_size = source["font_size"];
+	        this.chat_style = source["chat_style"];
+	        this.stt = this.convertValues(source["stt"], STTSettings);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import { config } from '../stores/config';
   import { applyAccentColor, applyTheme } from '../stores/theme';
   import type { ThemeName } from '../stores/theme';
@@ -7,6 +7,7 @@
   import ColorPicker from './ColorPicker.svelte';
   import { playBell } from '../lib/audio';
   import { MONOSPACE_FONTS, isFontAvailable } from '../lib/terminal';
+  import { EventsOn } from '../../wailsjs/runtime/runtime';
 
   export let visible: boolean = false;
 
@@ -23,6 +24,12 @@
   let colorValue = $config.terminal_color || '#39ff14';
   let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'dark';
   let savedTheme: ThemeName = selectedTheme;
+  let chatStyle: string = ($config as any).chat_style || 'claude-code';
+  let sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
+  let sttLanguage = ($config as any).stt?.language || 'de';
+  let sttBaseUrl = ($config as any).stt?.cloud?.base_url || '';
+  let sttModel = ($config as any).stt?.cloud?.model || 'whisper-1';
+  let sttApiKey = ($config as any).stt?.cloud?.api_key || '';
   let loggingEnabled = $config.logging_enabled || false;
   let useWorktrees = $config.use_worktrees || false;
   let logPath = '';
@@ -53,11 +60,38 @@
   let orchReviewCommand = $config.orchestrator?.review_command || '';
   let orchSyncSubtasks = $config.orchestrator?.sync_subtasks_to_github ?? false;
 
+  // STT engine install status
+  let sttStatus: { installed: boolean; bin_found: boolean; model_found: boolean; dir: string; bin_path: string; model_path: string } | null = null;
+  let sttInstalling = false;
+  let sttInstallError = '';
+  let sttProgress: { phase: 'binary' | 'model'; pct: number } | null = null;
+  let sttDownloadUnsubscribe: (() => void) | null = null;
+
+  onMount(() => {
+    sttDownloadUnsubscribe = EventsOn('stt:download', (payload: any) => {
+      if (!payload || typeof payload !== 'object') return;
+      sttProgress = {
+        phase: (payload.phase === 'model' ? 'model' : 'binary'),
+        pct: typeof payload.pct === 'number' ? payload.pct : 0,
+      };
+    });
+  });
+
+  onDestroy(() => {
+    if (sttDownloadUnsubscribe) sttDownloadUnsubscribe();
+  });
+
   $: if (visible) {
     requestAnimationFrame(() => dialogEl?.focus());
     colorValue = $config.terminal_color || '#39ff14';
     selectedTheme = ($config.theme as ThemeName) || 'dark';
     savedTheme = selectedTheme;
+    chatStyle = ($config as any).chat_style || 'claude-code';
+    sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
+    sttLanguage = ($config as any).stt?.language || 'de';
+    sttBaseUrl = ($config as any).stt?.cloud?.base_url || '';
+    sttModel = ($config as any).stt?.cloud?.model || 'whisper-1';
+    sttApiKey = ($config as any).stt?.cloud?.api_key || '';
     loggingEnabled = $config.logging_enabled || false;
     useWorktrees = $config.use_worktrees || false;
     claudeCommand = $config.claude_command || '';
@@ -84,6 +118,11 @@
     App.GetLogPath().then(p => logPath = p).catch(() => {});
     detectClaude();
   }
+
+  // Isolated reactive: re-runs when `visible` or `sttProvider` change. Writes
+  // sttStatus/sttInstallError (not read by the main block above), so re-firing
+  // does NOT cascade into a reset of the main block's fields.
+  $: if (visible && sttProvider !== 'cloud-whisper') refreshSttStatus(sttProvider);
 
   function handleColorChange(e: CustomEvent<{ value: string }>) {
     colorValue = e.detail.value;
@@ -137,6 +176,37 @@
     } catch {}
   }
 
+  async function refreshSttStatus(provider: string) {
+    sttStatus = null;
+    sttInstallError = '';
+    if (provider === 'cloud-whisper') {
+      sttStatus = { installed: true, bin_found: true, model_found: true, dir: '', bin_path: '', model_path: '' };
+      return;
+    }
+    try {
+      sttStatus = await App.CheckSttEngine(provider);
+    } catch (e) {
+      sttStatus = null;
+      sttInstallError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function installStt() {
+    if (sttInstalling) return;
+    sttInstallError = '';
+    sttInstalling = true;
+    sttProgress = { phase: 'binary', pct: 0 };
+    try {
+      await App.InstallSttEngine(sttProvider);
+      await refreshSttStatus(sttProvider);
+    } catch (e) {
+      sttInstallError = e instanceof Error ? e.message : String(e);
+    } finally {
+      sttInstalling = false;
+      sttProgress = null;
+    }
+  }
+
   async function browseAudioFile(target: 'done' | 'input' | 'error') {
     try {
       const path = await App.BrowseForAudioFile();
@@ -157,6 +227,7 @@
       ...$config,
       terminal_color: colorValue,
       theme: selectedTheme,
+      chat_style: chatStyle,
       logging_enabled: loggingEnabled,
       use_worktrees: useWorktrees,
       claude_command: claudeCommand,
@@ -178,6 +249,11 @@
         review_command: orchReviewCommand,
         sync_subtasks_to_github: orchSyncSubtasks,
       },
+      stt: {
+        provider: sttProvider,
+        language: sttLanguage,
+        cloud: { base_url: sttBaseUrl, model: sttModel, api_key: sttApiKey },
+      },
     };
     config.set(updated);
     try { await App.SaveConfig(updated); } catch (err) { console.error('[SettingsDialog] SaveConfig failed:', err); }
@@ -194,6 +270,7 @@
   function resetDefault() {
     colorValue = '#39ff14';
     selectedTheme = 'dark';
+    chatStyle = 'claude-code';
     applyTheme('dark', '#39ff14');
     fontFamily = '';
     fontSize = 10;
@@ -210,6 +287,11 @@
     orchMaxRetries = 1;
     orchReviewCommand = '';
     orchSyncSubtasks = false;
+    sttProvider = 'cloud-whisper';
+    sttLanguage = 'de';
+    sttBaseUrl = '';
+    sttModel = 'whisper-1';
+    sttApiKey = '';
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -235,6 +317,78 @@
             <option value={t.value} selected={t.value === selectedTheme}>{t.label}</option>
           {/each}
         </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="chat-style-select">Chat-Stil</label>
+        <p class="setting-desc">Aussehen der Chat-Blasen im Chat-Modus.</p>
+        <select id="chat-style-select" class="theme-select" bind:value={chatStyle}>
+          <option value="claude-code">Claude Code</option>
+          <option value="telegram">Telegram</option>
+        </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="stt-provider">Spracheingabe (STT)</label>
+        <p class="setting-desc">Engine für das Mikrofon-Diktat im Chat.</p>
+        <select id="stt-provider" class="theme-select" bind:value={sttProvider} on:change={() => refreshSttStatus(sttProvider)}>
+          <option value="cloud-whisper">Cloud (Whisper-API)</option>
+          <option value="whisper-cpp">Lokal: whisper.cpp</option>
+          <option value="parakeet">Lokal: Parakeet (sherpa-onnx)</option>
+        </select>
+        <label class="setting-label" for="stt-lang" style="margin-top: 12px;">Sprache</label>
+        <select id="stt-lang" class="theme-select" bind:value={sttLanguage}>
+          <option value="de">Deutsch</option>
+          <option value="en">Englisch</option>
+          <option value="auto">Automatisch</option>
+        </select>
+        {#if sttProvider !== 'cloud-whisper'}
+          {#if sttStatus}
+            {#if sttStatus.installed}
+              <p class="stt-status installed">&#x2705; Installiert ({sttStatus.bin_path})</p>
+            {:else}
+              <p class="stt-status missing">
+                &#x26A0;&#xFE0F; Nicht installiert
+                {#if !sttStatus.bin_found && !sttStatus.model_found}
+                  (Binary + Modell fehlen)
+                {:else if !sttStatus.bin_found}
+                  (Binary fehlt)
+                {:else}
+                  (Modell fehlt)
+                {/if}
+              </p>
+              <button class="install-btn" on:click={installStt} disabled={sttInstalling}>
+                {#if sttInstalling}Installation läuft…{:else}Jetzt installieren{/if}
+              </button>
+            {/if}
+          {/if}
+          {#if sttInstalling && sttProgress}
+            <div class="install-progress">
+              <div class="install-progress-label">
+                {sttProgress.phase === 'binary' ? 'Binary' : 'Modell'} – {sttProgress.pct}%
+              </div>
+              <div class="install-progress-bar"><div class="install-progress-fill" style="width: {sttProgress.pct}%"></div></div>
+            </div>
+          {/if}
+          {#if sttInstallError}
+            <p class="stt-install-error">{sttInstallError}</p>
+            {#if !sttStatus || !sttStatus.installed}
+              <button class="install-btn" on:click={installStt} disabled={sttInstalling}>
+                {#if sttInstalling}Installation läuft…{:else}Erneut versuchen{/if}
+              </button>
+            {/if}
+          {/if}
+        {/if}
+        {#if sttProvider === 'cloud-whisper'}
+          <label class="setting-label" for="stt-key" style="margin-top: 12px;">API-Key (leer = $OPENAI_API_KEY)</label>
+          <input id="stt-key" type="password" class="claude-input" bind:value={sttApiKey} placeholder="sk-…" />
+          <label class="setting-label" for="stt-url" style="margin-top: 8px;">Base-URL (leer = OpenAI)</label>
+          <input id="stt-url" type="text" class="claude-input" bind:value={sttBaseUrl} placeholder="https://api.openai.com/v1" />
+          <label class="setting-label" for="stt-model" style="margin-top: 8px;">Modell</label>
+          <input id="stt-model" type="text" class="claude-input" bind:value={sttModel} placeholder="whisper-1" />
+        {:else}
+          <p class="setting-desc" style="margin-top: 12px;">Lokale Engine lädt Binary + Modell beim ersten Gebrauch nach <code>~/.multiterminal/stt/</code>. Benötigt <code>ffmpeg</code> im PATH.</p>
+        {/if}
       </div>
 
       <div class="setting-group">
@@ -567,4 +721,28 @@
     font-size: 12px; outline: none; text-align: center;
   }
   .orch-number:focus { border-color: var(--accent); }
+
+  .stt-status {
+    font-size: 12px; margin: 8px 0; padding: 6px 8px;
+    border-radius: 4px; font-family: monospace; word-break: break-all;
+  }
+  .stt-status.installed { color: #a6e3a1; background: rgba(166, 227, 161, 0.08); }
+  .stt-status.missing { color: #f9e2af; background: rgba(249, 226, 175, 0.08); }
+  .install-btn {
+    padding: 6px 14px; background: var(--accent); color: #000; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+  .install-btn:hover { opacity: 0.9; }
+  .install-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .install-progress { margin-top: 8px; }
+  .install-progress-label { font-size: 11px; color: var(--fg-muted); margin-bottom: 4px; }
+  .install-progress-bar {
+    height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;
+  }
+  .install-progress-fill {
+    height: 100%; background: var(--accent); transition: width 0.2s;
+  }
+  .stt-install-error {
+    font-size: 11px; color: #f38ba8; margin-top: 8px; word-break: break-word;
+  }
 </style>

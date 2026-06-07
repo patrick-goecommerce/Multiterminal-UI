@@ -39,6 +39,7 @@
   import type { IssueContext } from './lib/launch';
   import * as App from '../wailsjs/go/backend/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
+  import { subscribeChatEvents } from './lib/chat-events';
 
   const MAX_PANES_PER_TAB = 10;
 
@@ -117,6 +118,7 @@
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
   let storeUnsubscribe: (() => void) | null = null;
   let keepAliveCleanup: (() => void) | null = null;
+  let chatEventsCleanup: (() => void) | null = null;
 
   const handleGlobalKeydown = createGlobalKeyHandler({
     onNewPane: () => { showLaunchDialog = true; },
@@ -236,6 +238,9 @@
       keepAliveCleanup = await startKeepAliveLoop($config.keep_alive, resolvedClaudePath);
     }
 
+    // Subscribe to backend chat:* streaming events
+    chatEventsCleanup = subscribeChatEvents();
+
     // Listen for tabs merging back from secondary windows
     EventsOn('window:tabs-merged', (event: any) => {
       try {
@@ -320,6 +325,7 @@
     if (commitAgeInterval) clearInterval(commitAgeInterval);
     if (storeUnsubscribe) storeUnsubscribe();
     if (keepAliveCleanup) keepAliveCleanup();
+    if (chatEventsCleanup) chatEventsCleanup();
     window.removeEventListener('beforeunload', saveSession);
     document.removeEventListener('keydown', handleGlobalKeydown);
   });
@@ -386,8 +392,8 @@
     } catch (err) { console.error('[handleOpenWorktreePane] failed:', err); }
   }
 
-  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null }>) {
-    const { type, model, issue } = e.detail;
+  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string }>) {
+    const { type, model, issue, display = 'terminal', permissionMode = 'plan' } = e.detail;
     showLaunchDialog = false;
     const issueCtx = issue || launchIssueContext;
     launchIssueContext = null;
@@ -397,6 +403,18 @@
       alert($t('app.maxPanes', { max: MAX_PANES_PER_TAB }));
       return;
     }
+
+    if (display === 'chat') {
+      const provider = type.startsWith('codex') ? 'codex' : type.startsWith('gemini') ? 'gemini' : 'claude';
+      try {
+        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', permissionMode);
+        const name = getClaudeName(type, model);
+        tabStore.addPane(tab.id, 0, name, type, model || '', null, '', '', '', '', false, 'chat', conv.id);
+        workspace.setView('terminals');
+      } catch (err) { console.error('[handleLaunch] CreateConversation failed:', err); }
+      return;
+    }
+
     const argv = buildClaudeArgv(type, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
     const baseName = getClaudeName(type, model);
     const name = issueCtx ? `${baseName} – #${issueCtx.number}` : baseName;
@@ -544,13 +562,18 @@
     showSkillPicker = true;
   }
 
-  function handleClosePane(e: CustomEvent<{ paneId: string; sessionId: number }>) {
+  function handleClosePane(e: CustomEvent<{ paneId: string; sessionId?: number }>) {
     const tab = $activeTab;
     if (!tab) return;
     const pane = tab.panes.find((p) => p.id === e.detail.paneId);
-    if (!confirm(`"${pane?.name || 'Terminal'}" wirklich schließen?`)) return;
-    App.CloseSession(e.detail.sessionId);
-    tabStore.closePane(tab.id, e.detail.paneId);
+    if (!pane) return;
+    if (!confirm(`"${pane.name || 'Pane'}" wirklich schließen?`)) return;
+    if (pane.display === 'chat') {
+      if (pane.conversationId) App.CloseChatSession(pane.conversationId);
+    } else {
+      App.CloseSession(pane.sessionId);
+    }
+    tabStore.closePane(tab.id, pane.id);
   }
 
   function handleMaximizePane(e: CustomEvent<{ paneId: string }>) {
@@ -579,6 +602,34 @@
       const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
       if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model);
     } catch (err) { console.error('[handleRestartPane] failed:', err); }
+  }
+
+  async function handleToggleDisplay(e: CustomEvent<{ paneId: string }>) {
+    const tab = $activeTab;
+    if (!tab) return;
+    const pane = tab.panes.find((p) => p.id === e.detail.paneId);
+    if (!pane) return;
+    const { name, mode, model } = pane;
+
+    if (pane.display === 'chat') {
+      // Chat → Terminal: close the backing claude subprocess before removing the pane
+      if (pane.conversationId) App.CloseChatSession(pane.conversationId);
+      tabStore.closePane(tab.id, pane.id);
+      const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
+      try {
+        const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
+        if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model);
+      } catch (err) { console.error('[toggleDisplay→terminal] failed:', err); }
+    } else {
+      // Terminal → Chat
+      App.CloseSession(pane.sessionId);
+      tabStore.closePane(tab.id, pane.id);
+      const provider = mode.startsWith('codex') ? 'codex' : mode.startsWith('gemini') ? 'gemini' : 'claude';
+      try {
+        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', 'plan');
+        tabStore.addPane(tab.id, 0, name, mode, model || '', null, '', '', '', '', false, 'chat', conv.id);
+      } catch (err) { console.error('[toggleDisplay→chat] failed:', err); }
+    }
   }
 
   function handleSendCommand(e: CustomEvent<{ text: string }>) {
@@ -811,6 +862,7 @@
               on:focusPane={handleFocusPane}
               on:renamePane={handleRenamePane}
               on:restartPane={handleRestartPane}
+              on:toggleDisplayPane={handleToggleDisplay}
               on:issueAction={handleIssueAction}
               on:commitPush={handleCommitPush}
               on:navigateFile={handleNavigateFile}

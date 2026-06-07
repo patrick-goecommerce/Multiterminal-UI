@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { t } from '../stores/i18n';
   import TerminalPane from './TerminalPane.svelte';
+  import ChatPane from './ChatPane.svelte';
   import type { Pane } from '../stores/tabs';
 
   export let panes: Pane[] = [];
@@ -48,6 +49,10 @@
     dispatch('splitPane');
   }
 
+  function handleToggleDisplay(e: CustomEvent) {
+    dispatch('toggleDisplayPane', e.detail);
+  }
+
   $: maximizedPane = panes.find((p) => p.maximized);
   $: visiblePanes = maximizedPane ? [maximizedPane] : panes;
   $: gridCols = maximizedPane ? 1 : Math.min(Math.ceil(Math.sqrt(panes.length)), 3);
@@ -58,25 +63,32 @@
   style="grid-template-columns: repeat({gridCols}, 1fr);"
 >
   {#each visiblePanes as pane (pane.id)}
-    <TerminalPane
-      {pane}
-      {active}
-      {tabId}
-      {worktrees}
-      {tabDir}
-      paneIndex={panes.indexOf(pane) + 1}
-      on:close={handleClose}
-      on:maximize={handleMaximize}
-      on:focus={handleFocus}
-      on:rename={handleRename}
-      on:restart={handleRestart}
-      on:issueAction={handleIssueAction}
-      on:commitPush={handleCommitPush}
-      on:navigateFile={handleNavigateFile}
-      on:splitPane={handleSplitPane}
-      on:openWorktreePane
-      on:worktreeListChanged
-    />
+    {#if pane.display === 'chat'}
+      <div class="pane-chat-wrapper">
+        <ChatPane conversationId={pane.conversationId} dir={tabDir} paneId={pane.id} on:toggleDisplay={handleToggleDisplay} on:close={e => dispatch('closePane', e.detail)} />
+      </div>
+    {:else}
+      <TerminalPane
+        {pane}
+        {active}
+        {tabId}
+        {worktrees}
+        {tabDir}
+        paneIndex={panes.indexOf(pane) + 1}
+        on:close={handleClose}
+        on:maximize={handleMaximize}
+        on:focus={handleFocus}
+        on:rename={handleRename}
+        on:restart={handleRestart}
+        on:toggleDisplay={handleToggleDisplay}
+        on:issueAction={handleIssueAction}
+        on:commitPush={handleCommitPush}
+        on:navigateFile={handleNavigateFile}
+        on:splitPane={handleSplitPane}
+        on:openWorktreePane
+        on:worktreeListChanged
+      />
+    {/if}
   {/each}
 
   {#if panes.length === 0}
@@ -113,6 +125,14 @@
 
   .hint {
     font-size: 12px;
+  }
+
+  .pane-chat-wrapper {
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border, #45475a);
+    border-radius: 6px;
   }
 
   kbd {

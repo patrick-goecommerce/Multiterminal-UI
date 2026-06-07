@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onDestroy } from 'svelte';
+  import { startRecording, type VoiceRecorder } from '../lib/voice';
+  import * as App from '../../wailsjs/go/backend/App';
 
   export let disabled = false;
   export let placeholder = 'Nachricht eingeben...';
@@ -10,6 +12,59 @@
 
   let text = '';
   let inputEl: HTMLTextAreaElement;
+
+  let voiceState: 'idle' | 'recording' | 'transcribing' = 'idle';
+  let recorder: VoiceRecorder | null = null;
+  let voiceError = '';
+  let cancelRequested = false;
+
+  async function startVoice() {
+    if (voiceState !== 'idle' || disabled) return;
+    voiceError = '';
+    cancelRequested = false;
+    voiceState = 'recording'; // claim the slot BEFORE first await
+    try {
+      recorder = await startRecording();
+      if (cancelRequested) {
+        recorder.cancel();
+        recorder = null;
+        voiceState = 'idle';
+      }
+    } catch (e) {
+      voiceError = 'Mikrofon nicht verfügbar oder verweigert.';
+      voiceState = 'idle';
+      recorder = null;
+    }
+  }
+
+  async function stopVoice() {
+    if (voiceState !== 'recording') return;
+    if (!recorder) {
+      // getUserMedia still in flight — signal startVoice to abort on resolve
+      cancelRequested = true;
+      return;
+    }
+    voiceState = 'transcribing';
+    try {
+      const { base64, mime } = await recorder.stop();
+      const transcript = (await App.TranscribeAudio(base64, mime)).trim();
+      if (transcript) {
+        text = text ? text + ' ' + transcript : transcript;
+        // resize after value change
+        setTimeout(autoResize, 0);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      voiceError = msg || 'Transkription fehlgeschlagen.';
+    } finally {
+      voiceState = 'idle';
+      recorder = null;
+    }
+  }
+
+  onDestroy(() => {
+    if (recorder) recorder.cancel();
+  });
 
   function handleSend() {
     if (!text.trim() || disabled) return;
@@ -42,10 +97,24 @@
     {disabled}
     rows="1"
   ></textarea>
+  <button
+    class="mic-btn"
+    class:recording={voiceState === 'recording'}
+    disabled={disabled || voiceState === 'transcribing'}
+    on:pointerdown|preventDefault={startVoice}
+    on:pointerup|preventDefault={stopVoice}
+    on:pointerleave={() => voiceState === 'recording' && stopVoice()}
+    title="Gedrückt halten zum Diktieren"
+  >
+    {#if voiceState === 'transcribing'}…{:else}&#127908;{/if}
+  </button>
   <button class="send-btn" on:click={handleSend} disabled={!text.trim() || disabled} title="Senden">
     &#10148;
   </button>
 </div>
+{#if voiceError}
+  <div class="voice-error">{voiceError}</div>
+{/if}
 
 <style>
   .chat-input {
@@ -98,4 +167,17 @@
     opacity: 0.3;
     cursor: not-allowed;
   }
+
+  .mic-btn {
+    width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+    background: var(--bg-tertiary, #313244); border: 1px solid var(--border, #45475a);
+    color: var(--fg, #cdd6f4); cursor: pointer; font-size: 1rem;
+    display: flex; align-items: center; justify-content: center; transition: background .15s;
+    user-select: none; touch-action: none;
+  }
+  .mic-btn:hover { background: var(--surface, #1e1e2e); }
+  .mic-btn.recording { background: #e53935; color: #fff; animation: micpulse 1s infinite; }
+  .mic-btn:disabled { opacity: .4; cursor: not-allowed; }
+  @keyframes micpulse { 50% { opacity: .6; } }
+  .voice-error { padding: 2px 16px 6px; font-size: .7rem; color: #e53935; }
 </style>

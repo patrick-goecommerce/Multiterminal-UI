@@ -185,6 +185,11 @@
     {#if pane.cost}
       <span class="cost-label">{pane.cost}</span>
     {/if}
+    {#if pane.mode !== 'shell'}
+      <button class="pane-btn toggle-display-btn" on:click|stopPropagation={() => dispatch('toggleDisplay', { paneId: pane.id })} title="Als Chat anzeigen">
+        💬
+      </button>
+    {/if}
     <button class="pane-btn queue-toggle" class:queue-active={queueCount > 0} on:click|stopPropagation={() => dispatch('toggleQueue')} title={$t('titlebar.pipelineQueue')}>
       &#9654;{#if queueCount > 0}<span class="queue-badge">{queueCount}</span>{/if}
     </button>
