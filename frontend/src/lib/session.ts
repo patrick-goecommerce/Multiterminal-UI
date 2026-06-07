@@ -1,5 +1,5 @@
 import { tabStore } from '../stores/tabs';
-import { INDEX_TO_MODE, MODE_TO_INDEX, buildClaudeArgv } from './claude';
+import { INDEX_TO_MODE, MODE_TO_INDEX, buildClaudeArgv, genSessionId } from './claude';
 import * as App from '../../wailsjs/go/backend/App';
 
 /** Restore saved tabs/panes from the backend session file. */
@@ -23,13 +23,20 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
           continue;
         }
 
-        const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath, codexPath || 'codex', geminiPath || 'gemini');
+        // Resume the pinned claude session so restored terminal panes keep their
+        // context (and stay toggle-able to chat). Pin a fresh id if none saved.
+        let claudeSessionId = (savedPane as any).claude_session_id || '';
+        if (mode.startsWith('claude') && !claudeSessionId) claudeSessionId = genSessionId();
+        const sessOpts = mode.startsWith('claude')
+          ? ((savedPane as any).claude_session_id ? { resumeId: claudeSessionId } : { sessionId: claudeSessionId })
+          : undefined;
+        const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath, codexPath || 'codex', geminiPath || 'gemini', sessOpts);
         try {
           const sessionId = await App.CreateSession(argv, savedTab.dir || '', 24, 80, mode);
           if (sessionId > 0) {
             const issueNum = (savedPane as any).issue_number || 0;
             const issueBranch = (savedPane as any).issue_branch || '';
-            const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch);
+            const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch, '', '', false, 'terminal', '', claudeSessionId);
             const zd = (savedPane as any).zoom_delta || 0;
             if (zd !== 0) {
               tabStore.setZoomDelta(tabId, paneId, zd);
@@ -79,6 +86,7 @@ export function saveSession(): void {
       zoom_delta: pane.zoomDelta || 0,
       display: pane.display || 'terminal',
       conversation_id: pane.conversationId || '',
+      claude_session_id: pane.claudeSessionId || '',
     })),
   }));
   App.SaveTabs({ active_tab: Math.max(activeIdx, 0), tabs } as any);

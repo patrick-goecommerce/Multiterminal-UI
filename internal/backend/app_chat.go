@@ -37,8 +37,11 @@ type ChatMessage struct {
 	ToolResult string `json:"tool_result,omitempty" yaml:"tool_result,omitempty"`
 }
 
-// CreateConversation creates a new chat conversation.
-func (a *AppService) CreateConversation(provider, model, scope, permissionMode string) (Conversation, error) {
+// CreateConversation creates a new chat conversation. When resumeID is set,
+// the conversation adopts that claude session id so the first message resumes
+// (`--resume`) an existing session instead of starting a fresh one — this is
+// how a terminal pane keeps Claude's context when toggled to chat display.
+func (a *AppService) CreateConversation(provider, model, scope, permissionMode, resumeID string) (Conversation, error) {
 	if permissionMode == "" {
 		permissionMode = "plan"
 	}
@@ -49,6 +52,7 @@ func (a *AppService) CreateConversation(provider, model, scope, permissionMode s
 		Model:          model,
 		Scope:          scope,
 		PermissionMode: permissionMode,
+		SessionID:      resumeID,
 		CreatedAt:      time.Now().Format(time.RFC3339),
 		UpdatedAt:      time.Now().Format(time.RFC3339),
 		Messages:       []ChatMessage{},

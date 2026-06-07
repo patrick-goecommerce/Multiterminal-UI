@@ -22,6 +22,8 @@ export interface Pane {
   background: boolean;
   display: 'terminal' | 'chat';
   conversationId: string;
+  /** Claude session id pinned at launch (--session-id), used to resume on terminal⇄chat toggle. Empty for shell/codex/gemini. */
+  claudeSessionId: string;
 }
 
 export interface Tab {
@@ -129,7 +131,7 @@ function createTabStore() {
       });
     },
 
-    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = ''): string {
+    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = '', claudeSessionId = ''): string {
       const paneId = `pane-${nextPaneNum++}`;
       update((state) => {
         const tab = state.tabs.find((t) => t.id === tabId);
@@ -156,6 +158,7 @@ function createTabStore() {
           background: background ?? false,
           display,
           conversationId,
+          claudeSessionId,
         });
         tab.focusedPaneId = paneId;
         return state;
