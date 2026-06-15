@@ -44,7 +44,9 @@ func buildChatArgs(model, permissionMode, resumeID string) []string {
 
 // scanNDJSON reads newline-delimited JSON from r and calls fn per complete line.
 // Buffer is enlarged so large tool payloads spanning chunks are not truncated.
-func scanNDJSON(r io.Reader, fn func(line []byte)) {
+// Returns the scanner error (if any) so the caller can decide whether it is
+// worth logging — a closed pipe during intentional teardown is not.
+func scanNDJSON(r io.Reader, fn func(line []byte)) error {
 	scanner := bufio.NewScanner(r)
 	buf := make([]byte, 0, 256*1024)
 	scanner.Buffer(buf, 8*1024*1024) // up to 8 MiB per line
@@ -57,9 +59,7 @@ func scanNDJSON(r io.Reader, fn func(line []byte)) {
 		copy(line, b)
 		fn(line)
 	}
-	if err := scanner.Err(); err != nil {
-		log.Printf("[chat] stream read error: %v", err)
-	}
+	return scanner.Err()
 }
 
 // startChatProcess launches the claude subprocess for a chat session.
@@ -86,12 +86,26 @@ func (a *AppService) startChatProcess(convID, scope, model, permissionMode, resu
 		return nil, err
 	}
 	sess := &ChatSession{ConvID: convID, Scope: scope, cmd: cmd, stdin: stdin}
-	go scanNDJSON(stdout, func(line []byte) {
-		if ev, ok := parseChatEvent(line); ok {
-			a.dispatchChatEvent(sess.ConvID, ev)
+	go func() {
+		err := scanNDJSON(stdout, func(line []byte) {
+			if ev, ok := parseChatEvent(line); ok {
+				a.dispatchChatEvent(sess.ConvID, ev)
+			}
+		})
+		// A read error after an intentional Close (e.g. terminal⇄chat toggle)
+		// is expected teardown noise, not a fault.
+		if err != nil && !sess.isClosed() {
+			log.Printf("[chat] stream read error: %v", err)
 		}
-	})
+	}()
 	return sess, nil
+}
+
+// isClosed reports whether Close has been called (thread-safe).
+func (s *ChatSession) isClosed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closed
 }
 
 // SendTurn writes one user turn to the session's stdin as stream-json.
@@ -121,4 +135,3 @@ func (s *ChatSession) Close() {
 		go func() { _ = c.Wait() }() // reap to avoid zombie; async so we don't block under lock
 	}
 }
-

@@ -27,7 +27,7 @@
   import { applyTheme, applyAccentColor } from './stores/theme';
   import { initI18n, setLanguage, t, type Language } from './stores/i18n';
   import type { PaneMode } from './stores/tabs';
-  import { buildClaudeArgv, getClaudeName, encodeForPty, genSessionId } from './lib/claude';
+  import { buildClaudeArgv, getClaudeName, encodeForPty, genSessionId, modeToPermissionMode } from './lib/claude';
   import { getWindowId, isMainWindow, getInitialTabs, getInitialView } from './lib/window';
   import { createGlobalKeyHandler } from './lib/shortcuts';
   import { sendNotification } from './lib/notifications';
@@ -656,7 +656,7 @@
       tabStore.closePane(tab.id, pane.id);
       const provider = mode.startsWith('codex') ? 'codex' : mode.startsWith('gemini') ? 'gemini' : 'claude';
       try {
-        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', 'plan', resumeId);
+        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', modeToPermissionMode(mode), resumeId);
         tabStore.addPane(tab.id, 0, name, mode, model || '', null, '', '', '', '', false, 'chat', conv.id, resumeId);
       } catch (err) { console.error('[toggleDisplay→chat] failed:', err); }
     }

@@ -29,6 +29,20 @@ export function genSessionId(): string {
   return crypto.randomUUID();
 }
 
+/**
+ * Map a pane mode to the chat `--permission-mode` equivalent so a terminal
+ * pane keeps its permission posture when toggled to chat display. Mirrors the
+ * flags buildClaudeArgv adds: claude-yolo↔--dangerously-skip-permissions,
+ * claude-auto↔--permission-mode auto, plain claude↔default.
+ */
+export function modeToPermissionMode(mode: PaneMode): string {
+  switch (mode) {
+    case 'claude-yolo': return 'bypassPermissions';
+    case 'claude-auto': return 'auto';
+    default: return 'default';
+  }
+}
+
 /** Build the argv array for launching a CLI session. */
 export function buildClaudeArgv(mode: PaneMode, model: string, claudeCmd: string, codexCmd?: string, geminiCmd?: string, opts?: SessionOpts): string[] {
   let argv: string[];

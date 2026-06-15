@@ -1,5 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { buildClaudeArgv, getClaudeName, MODE_TO_INDEX, INDEX_TO_MODE } from './claude';
+import { buildClaudeArgv, getClaudeName, MODE_TO_INDEX, INDEX_TO_MODE, modeToPermissionMode } from './claude';
+
+describe('modeToPermissionMode', () => {
+  it('maps claude-yolo to bypassPermissions (matches --dangerously-skip-permissions)', () => {
+    expect(modeToPermissionMode('claude-yolo')).toBe('bypassPermissions');
+  });
+
+  it('maps claude-auto to auto (matches --permission-mode auto)', () => {
+    expect(modeToPermissionMode('claude-auto')).toBe('auto');
+  });
+
+  it('maps plain claude to default', () => {
+    expect(modeToPermissionMode('claude')).toBe('default');
+  });
+
+  it('falls back to default for non-claude modes', () => {
+    expect(modeToPermissionMode('shell')).toBe('default');
+    expect(modeToPermissionMode('codex')).toBe('default');
+  });
+});
 
 describe('buildClaudeArgv session opts', () => {
   it('pins a fresh session via --session-id (claude)', () => {
