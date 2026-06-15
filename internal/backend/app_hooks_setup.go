@@ -71,5 +71,6 @@ func (a *AppService) setupHooks(ctx context.Context) {
 			a.onActivityChangeForIssue(sessionID, activity, cost)
 		},
 	)
+	a.hookMgr.onPrompt = a.maybeGeneratePaneName
 	a.hookMgr.Start(ctx)
 }

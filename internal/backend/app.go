@@ -285,6 +285,7 @@ func (a *AppService) CloseSession(id int) {
 		a.mu.Unlock()
 		// Clean up per-session activity tracking to prevent memory leak
 		cleanupActivityTracking(id)
+		cleanupNameTracking(id)
 	}()
 }
 

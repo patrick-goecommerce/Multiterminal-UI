@@ -2,6 +2,13 @@ package terminal
 
 import "strings"
 
+// GetTitle returns the OSC-reported window title under lock.
+func (s *Screen) GetTitle() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Title
+}
+
 // ---------------------------------------------------------------------------
 // Render – convert the screen buffer to an ANSI string for display
 // ---------------------------------------------------------------------------

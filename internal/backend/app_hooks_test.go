@@ -149,6 +149,38 @@ func TestHookManager_SessionEnd_ClearsHookData(t *testing.T) {
 	}
 }
 
+func TestHookManager_UserPromptSubmitTriggersOnPrompt(t *testing.T) {
+	dir := t.TempDir()
+	sess := terminal.NewSession(8, 24, 80)
+
+	hm := newHookManager(dir, func(mtID int) *terminal.Session {
+		if mtID == 8 {
+			return sess
+		}
+		return nil
+	}, nil)
+
+	var gotID int
+	var gotPrompt string
+	hm.onPrompt = func(mtID int, prompt string) {
+		gotID = mtID
+		gotPrompt = prompt
+	}
+
+	writeTestHookEvent(t, dir, "s8", testHookEvent{
+		Ts: time.Now().Unix(), Event: "UserPromptSubmit",
+		SessionID: "s8", MtID: 8, Message: "Refactor the auth module",
+	})
+	hm.processDirectory()
+
+	if gotID != 8 {
+		t.Errorf("onPrompt mtID = %d, want 8", gotID)
+	}
+	if gotPrompt != "Refactor the auth module" {
+		t.Errorf("onPrompt prompt = %q, want 'Refactor the auth module'", gotPrompt)
+	}
+}
+
 func TestHookManager_IgnoresZeroMtID(t *testing.T) {
 	dir := t.TempDir()
 	called := false

@@ -12,6 +12,13 @@ import (
 
 const hookMarker = "# multiterminal-hook"
 
+// hookEvents lists every Claude Code event Multiterminal registers a handler for.
+var hookEvents = []string{
+	"PreToolUse", "PostToolUse", "PostToolUseFailure",
+	"PermissionRequest", "Notification", "Stop", "SessionEnd",
+	"UserPromptSubmit",
+}
+
 // hookInstaller manages registration of Multiterminal hooks in ~/.claude/settings.json.
 type hookInstaller struct {
 	settingsPath string
@@ -64,17 +71,30 @@ func (h *hookInstaller) Install() error {
 	return os.WriteFile(h.settingsPath, out, 0644)
 }
 
-// isInstalled checks if the Multiterminal hook marker is present in PreToolUse.
+// isInstalled reports whether every Multiterminal hook event already carries
+// our marker. Returns false if any event is missing, so newly-added events are
+// backfilled on the next Install (older installs predate UserPromptSubmit).
 func (h *hookInstaller) isInstalled(settings map[string]any) bool {
+	for _, event := range hookEvents {
+		if !markerInEvent(settings, event) {
+			return false
+		}
+	}
+	return true
+}
+
+// markerInEvent reports whether the given event already has a Multiterminal
+// marker entry in settings.
+func markerInEvent(settings map[string]any, event string) bool {
 	hooks, ok := settings["hooks"].(map[string]any)
 	if !ok {
 		return false
 	}
-	preToolUse, ok := hooks["PreToolUse"].([]any)
-	if !ok || len(preToolUse) == 0 {
+	entries, ok := hooks[event].([]any)
+	if !ok {
 		return false
 	}
-	for _, entry := range preToolUse {
+	for _, entry := range entries {
 		e, ok := entry.(map[string]any)
 		if !ok {
 			continue
@@ -97,7 +117,9 @@ func (h *hookInstaller) isInstalled(settings map[string]any) bool {
 	return false
 }
 
-// mergeHooks prepends Multiterminal hook entries for all relevant events.
+// mergeHooks prepends a Multiterminal hook entry for every event that does not
+// already have one. Per-event idempotency means re-running install only adds
+// missing events without duplicating existing ones.
 func (h *hookInstaller) mergeHooks(settings map[string]any) {
 	hooks, ok := settings["hooks"].(map[string]any)
 	if !ok {
@@ -105,12 +127,10 @@ func (h *hookInstaller) mergeHooks(settings map[string]any) {
 		settings["hooks"] = hooks
 	}
 
-	events := []string{
-		"PreToolUse", "PostToolUse", "PostToolUseFailure",
-		"PermissionRequest", "Notification", "Stop", "SessionEnd",
-	}
-
-	for _, event := range events {
+	for _, event := range hookEvents {
+		if markerInEvent(settings, event) {
+			continue // already present — don't duplicate
+		}
 		cmd := fmt.Sprintf("%s %s %s", h.command, event, hookMarker)
 		entry := map[string]any{
 			"hooks": []any{

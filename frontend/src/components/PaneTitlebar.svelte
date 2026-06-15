@@ -35,9 +35,11 @@
   }
 
   $: displayBranch = pane.branch || pane.issueBranch || '';
+  // Auto names (LLM > OSC) only apply until the user manually renames the pane.
+  $: displayName = pane.userRenamed ? pane.name : (pane.autoName || pane.oscTitle || pane.name);
 
   function startRename() {
-    editName = pane.name;
+    editName = displayName;
     editing = true;
     requestAnimationFrame(() => {
       nameInput?.focus();
@@ -48,7 +50,7 @@
   function finishRename() {
     editing = false;
     const trimmed = editName.trim();
-    if (trimmed && trimmed !== pane.name) {
+    if (trimmed && trimmed !== displayName) {
       dispatch('rename', { paneId: pane.id, name: trimmed });
     }
   }
@@ -128,7 +130,7 @@
       />
     {:else}
       <!-- svelte-ignore a11y-no-static-element-interactions -->
-      <span class="pane-name" on:dblclick|stopPropagation={startRename} title={$t('titlebar.doubleClickRename')}>{pane.name}</span>
+      <span class="pane-name" on:dblclick|stopPropagation={startRename} title={$t('titlebar.doubleClickRename')}>{displayName}</span>
     {/if}
     <span class="mode-badge {getModeBadgeClass(pane.mode)}">{getModeLabel(pane.mode)}</span>
     {#if pane.background}

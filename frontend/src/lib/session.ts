@@ -19,7 +19,8 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
 
         if (display === 'chat') {
           // Chat panes have no PTY; the backend chat process restarts lazily on next message (with --resume).
-          tabStore.addPane(tabId, 0, savedPane.name, mode, savedPane.model || '', null, '', '', '', '', false, 'chat', conversationId);
+          const chatPaneId = tabStore.addPane(tabId, 0, savedPane.name, mode, savedPane.model || '', null, '', '', '', '', false, 'chat', conversationId);
+          if ((savedPane as any).user_renamed) tabStore.renamePane(tabId, chatPaneId, savedPane.name);
           continue;
         }
 
@@ -37,6 +38,7 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
             const issueNum = (savedPane as any).issue_number || 0;
             const issueBranch = (savedPane as any).issue_branch || '';
             const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch, '', '', false, 'terminal', '', claudeSessionId);
+            if ((savedPane as any).user_renamed) tabStore.renamePane(tabId, paneId, savedPane.name);
             const zd = (savedPane as any).zoom_delta || 0;
             if (zd !== 0) {
               tabStore.setZoomDelta(tabId, paneId, zd);
@@ -87,6 +89,7 @@ export function saveSession(): void {
       display: pane.display || 'terminal',
       conversation_id: pane.conversationId || '',
       claude_session_id: pane.claudeSessionId || '',
+      user_renamed: pane.userRenamed || false,
     })),
   }));
   App.SaveTabs({ active_tab: Math.max(activeIdx, 0), tabs } as any);

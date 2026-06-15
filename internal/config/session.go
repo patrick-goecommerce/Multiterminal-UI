@@ -37,6 +37,7 @@ type SavedPane struct {
 	Display         string `json:"display,omitempty"`           // "chat" for chat panes; empty/"terminal" otherwise
 	ConversationID  string `json:"conversation_id,omitempty"`   // chat conversation id (when Display=="chat")
 	ClaudeSessionID string `json:"claude_session_id,omitempty"` // pinned claude session id; resumed on restore + terminal⇄chat toggle
+	UserRenamed     bool   `json:"user_renamed,omitempty"`      // true if the user manually named the pane (suppresses auto-naming)
 }
 
 // sessionPath returns the path to ~/.multiterminal-session.json.

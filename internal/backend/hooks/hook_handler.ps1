@@ -21,6 +21,11 @@ try {
     $mtSessionId = if ($env:MULTITERMINAL_SESSION_ID) { [int]$env:MULTITERMINAL_SESSION_ID } else { 0 }
     $toolName = if ($data.tool_name) { $data.tool_name } else { "" }
     $message = if ($data.message) { $data.message } else { "" }
+    # UserPromptSubmit carries the user's prompt text in $data.prompt (not message).
+    # Capture it so the host can derive an automatic pane name from the prompt.
+    if ($EventType -eq "UserPromptSubmit" -and $data.prompt) {
+        $message = [string]$data.prompt
+    }
     $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 
     $payload = [ordered]@{
@@ -33,10 +38,12 @@ try {
     }
     $line = $payload | ConvertTo-Json -Compress
 
-    # Append to JSONL file (one file per Claude session)
+    # Append to JSONL file (one file per Claude session).
+    # Use UTF-8 WITHOUT BOM: Add-Content -Encoding UTF8 emits a BOM on Windows
+    # PowerShell 5.1, which corrupts the first JSON line so it fails to parse.
     $file = Join-Path $hooksDir "$sessionId.jsonl"
-    Add-Content -Path $file -Value $line -Encoding UTF8 -NoNewline
-    Add-Content -Path $file -Value "`n" -Encoding UTF8 -NoNewline
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::AppendAllText($file, $line + "`n", $utf8NoBom)
 } catch {
     # Silent failure — never block Claude Code
     exit 0

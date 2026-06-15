@@ -48,6 +48,15 @@ type Config struct {
 	SetupDone             bool           `yaml:"setup_done" json:"setup_done"`
 	ChatStyle             string         `yaml:"chat_style" json:"chat_style"`
 	STT                   STTSettings    `yaml:"stt" json:"stt"`
+	AutoNaming            AutoNamingSettings `yaml:"auto_naming" json:"auto_naming"`
+}
+
+// AutoNamingSettings controls automatic pane naming for Claude panes. When
+// enabled, a fresh user prompt triggers a one-shot model call (Model) that
+// summarizes the task into a short pane title.
+type AutoNamingSettings struct {
+	Enabled *bool  `yaml:"enabled" json:"enabled"`
+	Model   string `yaml:"model" json:"model"`
 }
 
 // IssueTracking holds settings for automatic issue progress reporting.
@@ -235,6 +244,10 @@ func DefaultConfig() Config {
 		SetupDone: false,
 		ChatStyle: "claude-code",
 		STT: STTSettings{Provider: "cloud-whisper", Language: "de", Cloud: STTCloudSettings{Model: "whisper-1"}},
+		AutoNaming: AutoNamingSettings{
+			Enabled: boolPtr(true),
+			Model:   "claude-haiku-4-5",
+		},
 	}
 }
 
@@ -252,6 +265,14 @@ func (c Config) ShouldAutoBranch() bool {
 		return true
 	}
 	return *c.AutoBranchOnIssue
+}
+
+// ShouldAutoName returns whether automatic pane naming is enabled.
+func (c Config) ShouldAutoName() bool {
+	if c.AutoNaming.Enabled == nil {
+		return true
+	}
+	return *c.AutoNaming.Enabled
 }
 
 // ShouldKeepAlive returns whether the keep-alive feature is enabled.
@@ -390,6 +411,13 @@ func Load() Config {
 	}
 
 	normalizeSTT(&cfg)
+
+	if cfg.AutoNaming.Enabled == nil {
+		cfg.AutoNaming.Enabled = boolPtr(true)
+	}
+	if cfg.AutoNaming.Model == "" {
+		cfg.AutoNaming.Model = "claude-haiku-4-5"
+	}
 
 	return cfg
 }

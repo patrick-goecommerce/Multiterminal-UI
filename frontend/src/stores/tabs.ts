@@ -24,6 +24,12 @@ export interface Pane {
   conversationId: string;
   /** Claude session id pinned at launch (--session-id), used to resume on terminal⇄chat toggle. Empty for shell/codex/gemini. */
   claudeSessionId: string;
+  /** LLM-generated pane name (from the user's prompt). Highest-priority auto name. */
+  autoName: string;
+  /** OSC-derived window title from the PTY. Fallback auto name. */
+  oscTitle: string;
+  /** True once the user manually renamed the pane — suppresses all auto names. */
+  userRenamed: boolean;
 }
 
 export interface Tab {
@@ -126,7 +132,24 @@ function createTabStore() {
         const tab = state.tabs.find((t) => t.id === tabId);
         if (!tab) return state;
         const pane = tab.panes.find((p) => p.id === paneId);
-        if (pane) pane.name = name;
+        if (pane) {
+          pane.name = name;
+          pane.userRenamed = true; // a manual rename wins over any auto name
+        }
+        return state;
+      });
+    },
+
+    /** Apply an auto-generated name (by session id). Ignored once the user
+     *  manually renamed the pane. source 'llm' sets autoName, 'osc' sets oscTitle. */
+    setAutoName(sessionId: number, value: string, source: 'llm' | 'osc') {
+      update((state) => {
+        for (const tab of state.tabs) {
+          const pane = tab.panes.find((p) => p.sessionId === sessionId);
+          if (!pane || pane.userRenamed) continue;
+          if (source === 'llm') pane.autoName = value;
+          else pane.oscTitle = value;
+        }
         return state;
       });
     },
@@ -159,6 +182,9 @@ function createTabStore() {
           display,
           conversationId,
           claudeSessionId,
+          autoName: '',
+          oscTitle: '',
+          userRenamed: false,
         });
         tab.focusedPaneId = paneId;
         return state;

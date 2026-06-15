@@ -258,8 +258,9 @@
 
     // Wails v3: event handlers receive a WailsEvent object; payload is in event.data
     EventsOn('terminal:activity', (event: any) => {
-      const info = event.data; // ActivityInfo { id, activity, cost }
+      const info = event.data; // ActivityInfo { id, activity, cost, title }
       tabStore.updateActivity(info.id, info.activity, info.cost);
+      if (info.title) tabStore.setAutoName(info.id, info.title, 'osc');
       // Notify when an issue-linked agent finishes (only when window is focused,
       // because TerminalPane already sends a notification when unfocused)
       if (info.activity === 'done' && document.hasFocus()) {
@@ -271,6 +272,11 @@
           }
         }
       }
+    });
+    // Auto-generated pane name (LLM summary of the user's prompt)
+    EventsOn('pane:autoname', (event: any) => {
+      const info = event.data; // PaneNameEvent { id, name }
+      if (info?.name) tabStore.setAutoName(info.id, info.name, 'llm');
     });
     EventsOn('terminal:exit', (event: any) => {
       const id: number = event.data.id;

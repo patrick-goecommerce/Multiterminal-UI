@@ -319,3 +319,9 @@ func (s *Session) GetTokens() TokenInfo {
 	defer s.mu.Unlock()
 	return s.Tokens
 }
+
+// GetTitle returns the current OSC-derived window title, read thread-safe
+// straight from the screen buffer (the source of truth for OSC 0/2 titles).
+func (s *Session) GetTitle() string {
+	return s.Screen.GetTitle()
+}

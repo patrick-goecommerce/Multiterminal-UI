@@ -52,6 +52,9 @@ type HookManager struct {
 	dir        string
 	lookupFn   func(mtID int) *terminal.Session
 	onActivity func(sessionID int, activity string, cost string)
+	// onPrompt, if set, is called with the user's prompt text on every
+	// UserPromptSubmit event (used to auto-generate a pane name). Optional.
+	onPrompt func(mtID int, prompt string)
 
 	mu      sync.Mutex
 	offsets map[string]int64 // filename → bytes already read
@@ -201,6 +204,12 @@ func (hm *HookManager) handleEvent(ev rawHookEvent) {
 		sess.ClearHookData()
 		hm.cleanupFile(ev.SessionID + ".jsonl")
 		return
+	}
+
+	// UserPromptSubmit carries the user's prompt text (see hook_handler.ps1).
+	// Forward it so the host can derive an automatic pane name.
+	if ev.Event == "UserPromptSubmit" && ev.Message != "" && hm.onPrompt != nil {
+		hm.onPrompt(ev.MtID, ev.Message)
 	}
 
 	newState := hookEventToActivity(ev.Event, ev.Message)
