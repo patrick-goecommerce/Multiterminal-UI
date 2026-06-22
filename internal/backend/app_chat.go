@@ -144,7 +144,27 @@ func (a *AppService) AddChatMessage(dir string, convID string, content string) e
 		a.emitChatError(convID, err.Error())
 		return err
 	}
-	return sess.SendTurn(content)
+	// A write failure here usually means the process just died (e.g. a stale
+	// --resume). Don't surface it directly: the session's wait goroutine is the
+	// source of truth — it either reports the real error or self-heals and
+	// resends the turn. Surfacing the broken-pipe here would flash a confusing
+	// banner that the recovery then replaces.
+	if err := sess.SendTurn(content); err != nil {
+		log.Printf("[chat %s] send turn failed (process likely exiting): %v", convID, err)
+	}
+	return nil
+}
+
+// WarmChatSession pre-starts the claude process for a conversation so the first
+// message is answered without a visible cold start. No-op if already running.
+// Called when a chat pane opens; the process is reaped on CloseChatSession.
+func (a *AppService) WarmChatSession(dir string, convID string) error {
+	conv, err := a.GetConversation(dir, convID)
+	if err != nil {
+		return err
+	}
+	_, err = a.ensureChatSession(conv)
+	return err
 }
 
 // ensureChatSession returns the running session for conv, starting it if needed.

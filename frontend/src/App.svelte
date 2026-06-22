@@ -150,9 +150,9 @@
       try {
         const cfg = await App.GetConfig();
         config.set(cfg);
-        applyTheme(cfg.theme || 'dark');
+        applyTheme(cfg.theme || 'konzept');
         if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
-      } catch { applyTheme('dark'); }
+      } catch { applyTheme('konzept'); }
 
       // Restore the tab that was detached into this window
       try {
@@ -180,12 +180,12 @@
     try {
       const cfg = await App.GetConfig();
       config.set(cfg);
-      applyTheme(cfg.theme || 'dark');
+      applyTheme(cfg.theme || 'konzept');
       if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
       if (cfg.sidebar_pinned) { workspace.setSidebarPinned(true); workspace.openSidebar('explorer'); }
       await initI18n((cfg.language || 'de') as Language);
       if (!cfg.setup_done) showSetupDialog = true;
-    } catch { applyTheme('dark'); await initI18n('de'); }
+    } catch { applyTheme('konzept'); await initI18n('de'); }
 
     try {
       resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude';
@@ -649,14 +649,18 @@
           null, '', '', '', '', false, 'terminal', '', sid);
       } catch (err) { console.error('[toggleDisplay→terminal] failed:', err); }
     } else {
-      // Terminal → Chat: hand the terminal's pinned session id to the new chat so
-      // Claude keeps its context (the chat process resumes via --resume).
+      // Terminal → Chat: an interactive terminal session id is NOT a resumable
+      // `claude -p` conversation, so passing it as --resume reliably fails with
+      // "No conversation found" and costs a doomed cold start (~11s) before the
+      // self-heal restarts fresh. Start the chat fresh instead — a single cold
+      // start. (We still keep the id on the pane so toggling back to terminal can
+      // resume the interactive session.)
       const resumeId = pane.claudeSessionId || '';
       App.CloseSession(pane.sessionId);
       tabStore.closePane(tab.id, pane.id);
       const provider = mode.startsWith('codex') ? 'codex' : mode.startsWith('gemini') ? 'gemini' : 'claude';
       try {
-        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', modeToPermissionMode(mode), resumeId);
+        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', modeToPermissionMode(mode), '');
         tabStore.addPane(tab.id, 0, name, mode, model || '', null, '', '', '', '', false, 'chat', conv.id, resumeId);
       } catch (err) { console.error('[toggleDisplay→chat] failed:', err); }
     }
@@ -944,7 +948,7 @@
 <style>
   :global(*) { margin: 0; padding: 0; box-sizing: border-box; }
   :global(body) {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
     background: var(--bg); color: var(--fg); overflow: hidden;
   }
   .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }

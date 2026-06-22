@@ -16,8 +16,8 @@ import (
 func TestDefaultConfig_Values(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if cfg.Theme != "dark" {
-		t.Errorf("Theme = %q, want 'dark'", cfg.Theme)
+	if cfg.Theme != "konzept" {
+		t.Errorf("Theme = %q, want 'konzept'", cfg.Theme)
 	}
 	if cfg.MaxPanesPerTab != 9 {
 		t.Errorf("MaxPanesPerTab = %d, want 9", cfg.MaxPanesPerTab)

@@ -538,6 +538,10 @@ export function AddChatMessage(arg1, arg2, arg3) {
   return $Call.ByID(4010796075, arg1, arg2, arg3);
 }
 
+export function WarmChatSession(arg1, arg2) {
+  return $Call.ByID(939717200, arg1, arg2);
+}
+
 export function RenameConversation(arg1, arg2, arg3) {
   return $Call.ByID(2597828302, arg1, arg2, arg3);
 }

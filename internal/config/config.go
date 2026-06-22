@@ -164,7 +164,7 @@ func DefaultConfig() Config {
 	return Config{
 		DefaultShell:          "",
 		DefaultDir:            "",
-		Theme:                 "dark",
+		Theme:                 "konzept",
 		TerminalColor:         "#39ff14",
 		MaxPanesPerTab:        9,
 		SidebarWidth:          30,
@@ -325,9 +325,9 @@ func Load() Config {
 	}
 
 	// Validate theme name
-	validThemes := map[string]bool{"dark": true, "light": true, "dracula": true, "nord": true, "solarized": true}
+	validThemes := map[string]bool{"konzept": true, "dark": true, "light": true, "dracula": true, "nord": true, "solarized": true}
 	if !validThemes[cfg.Theme] {
-		cfg.Theme = "dark"
+		cfg.Theme = "konzept"
 	}
 
 	if cfg.CommitReminderMinutes < 0 {

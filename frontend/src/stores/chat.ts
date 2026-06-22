@@ -28,6 +28,7 @@ export interface Conversation {
 export interface ConvStreamState {
   streaming: boolean;
   buffer: string;
+  error?: string;
 }
 
 export interface ChatStore {
@@ -102,7 +103,7 @@ function createChatStore() {
     appendStream(convId: string, delta: string) {
       update(s => {
         const prev = s.streams[convId] ?? { streaming: true, buffer: '' };
-        return setStream(s, convId, { streaming: true, buffer: prev.buffer + delta });
+        return setStream(s, convId, { streaming: true, buffer: prev.buffer + delta, error: undefined });
       });
     },
 
@@ -116,10 +117,13 @@ function createChatStore() {
       }));
     },
 
-    /** Finalize streaming: append the completed message and clear the buffer. */
+    /** Finalize streaming: append the completed message and clear the buffer.
+     *  An empty assistant message (e.g. a pure thinking/tool turn) is dropped so
+     *  it doesn't leave a blank bubble — but streaming is still ended. */
     completeStream(convId: string, msg: ChatMessage) {
       update(s => {
-        const withMsg = {
+        const isEmpty = (!msg.content || !msg.content.trim()) && !msg.tool_name && !msg.tool_result;
+        const withMsg = isEmpty ? s : {
           ...s,
           conversations: s.conversations.map(c =>
             c.id === convId ? { ...c, messages: [...c.messages, msg], updated_at: msg.timestamp } : c
@@ -129,9 +133,9 @@ function createChatStore() {
       });
     },
 
-    /** Mark streaming stopped after an error. */
-    streamError(convId: string) {
-      update(s => setStream(s, convId, { streaming: false, buffer: '' }));
+    /** Mark streaming stopped after an error, keeping a message for the UI. */
+    streamError(convId: string, error?: string) {
+      update(s => setStream(s, convId, { streaming: false, buffer: '', error: error || 'Generierung fehlgeschlagen.' }));
     },
 
     renameConversation(convId: string, title: string) {
@@ -162,3 +166,7 @@ export const isStreaming = (convId: string | null) =>
 /** Returns a derived store: the current streaming buffer for a conversation. */
 export const streamBuffer = (convId: string | null) =>
   derived(chat, $c => (convId ? $c.streams[convId]?.buffer ?? '' : ''));
+
+/** Returns a derived store: the last error for a conversation (if any). */
+export const streamErrorMsg = (convId: string | null) =>
+  derived(chat, $c => (convId ? $c.streams[convId]?.error ?? '' : ''));

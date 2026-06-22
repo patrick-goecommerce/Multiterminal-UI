@@ -264,6 +264,8 @@ export function DeleteConversation(arg1:string,arg2:string):Promise<void>;
 
 export function AddChatMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function WarmChatSession(arg1:string,arg2:string):Promise<void>;
+
 export function RenameConversation(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function GetAllQueues():Promise<Array<backend.QueueOverviewItem>>;

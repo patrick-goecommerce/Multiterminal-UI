@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { tabStore, activeTab, allTabs, computeTabActivity } from './tabs';
 
@@ -103,7 +103,11 @@ describe('tabStore', () => {
       tabStore.setActiveTab(fgTab);
 
       tabStore.addPane(bgTab, 4001, 'Claude', 'claude', '');
+      // "waitingAnswer" is a calm/classified state — debounced in the store.
+      vi.useFakeTimers();
       tabStore.updateActivity(4001, 'waitingAnswer', '');
+      vi.advanceTimersByTime(1000);
+      vi.useRealTimers();
 
       let tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
       expect(tab!.unreadActivity).toBe('waitingAnswer');
@@ -208,7 +212,10 @@ describe('tabStore', () => {
       tabStore.setActiveTab(fgTab);
 
       const p1 = tabStore.addPane(bgTab, 5001, 'C1', 'claude', '');
+      vi.useFakeTimers();
       tabStore.updateActivity(5001, 'waitingAnswer', '');
+      vi.advanceTimersByTime(1000);
+      vi.useRealTimers();
 
       let tab = tabStore.getState().tabs.find(t => t.id === bgTab);
       expect(tab!.unreadActivity).toBe('waitingAnswer');
@@ -273,7 +280,11 @@ describe('tabStore', () => {
       tabStore.addPane(tab1, 100, 'P1', 'shell', '');
       tabStore.addPane(tab2, 200, 'P2', 'claude', '');
 
+      // "done" is debounced; advance past the calm-state delay.
+      vi.useFakeTimers();
       tabStore.updateActivity(200, 'done', '$1.50');
+      vi.advanceTimersByTime(1000);
+      vi.useRealTimers();
 
       const t2 = tabStore.getState().tabs.find((t) => t.id === tab2);
       const pane = t2!.panes.find((p) => p.sessionId === 200);
@@ -396,7 +407,10 @@ describe('updateActivity — tab unreadActivity', () => {
     tabStore.setActiveTab(tab1);
 
     tabStore.addPane(tab2, 3001, 'Claude', 'claude', '');
+    vi.useFakeTimers();
     tabStore.updateActivity(3001, 'done', '$0.10');
+    vi.advanceTimersByTime(1000);
+    vi.useRealTimers();
 
     const t2 = tabStore.getState().tabs.find((t) => t.id === tab2);
     expect(t2!.unreadActivity).toBe('done');
@@ -407,7 +421,10 @@ describe('updateActivity — tab unreadActivity', () => {
     tabStore.setActiveTab(tabId);
     tabStore.addPane(tabId, 3002, 'Claude', 'claude', '');
 
+    vi.useFakeTimers();
     tabStore.updateActivity(3002, 'done', '');
+    vi.advanceTimersByTime(1000);
+    vi.useRealTimers();
 
     const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
     expect(tab!.unreadActivity).toBeNull();
@@ -421,8 +438,11 @@ describe('updateActivity — tab unreadActivity', () => {
     tabStore.addPane(bgTab, 3003, 'C1', 'claude', '');
     tabStore.addPane(bgTab, 3004, 'C2', 'claude', '');
 
+    vi.useFakeTimers();
     tabStore.updateActivity(3003, 'done', '');
     tabStore.updateActivity(3004, 'waitingAnswer', '');
+    vi.advanceTimersByTime(1000);
+    vi.useRealTimers();
 
     const tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
     expect(tab!.unreadActivity).toBe('waitingAnswer');

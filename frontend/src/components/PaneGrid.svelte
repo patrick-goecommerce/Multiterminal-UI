@@ -127,12 +127,14 @@
     font-size: 12px;
   }
 
+  /* Chat replaces a pane — same frame, but violet top edge = AI mode */
   .pane-chat-wrapper {
     display: flex;
     min-width: 0;
     overflow: hidden;
-    border: 1px solid var(--border, #45475a);
-    border-radius: 6px;
+    border: 1px solid var(--pane-border, #45475a);
+    border-top: 2px solid var(--status-ai, #a184f4);
+    border-radius: 9px;
   }
 
   kbd {

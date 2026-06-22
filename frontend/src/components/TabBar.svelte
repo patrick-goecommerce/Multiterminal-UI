@@ -268,9 +268,14 @@
   }
 
   .tab.active {
-    background: var(--bg);
+    background: var(--tab-active-bg, var(--bg));
     color: var(--tab-active-fg);
-    border-bottom: 2px solid var(--accent);
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+
+  .tab.active .tab-count {
+    background: var(--status-running-tint, rgba(76,197,106,.16));
+    color: var(--accent);
   }
 
   .tab.highlight {
@@ -365,22 +370,19 @@
   }
 
   .tab-dot-done {
-    background: #22c55e;
-    box-shadow: 0 0 4px #22c55e88;
+    background: var(--status-running, #4cc56a);
+    box-shadow: 0 0 6px var(--status-running, #4cc56a);
   }
 
-  .tab-dot-waitingPermission {
-    background: #f5a623;
-    animation: tab-dot-pulse 1s ease-in-out infinite;
-  }
-
+  .tab-dot-waitingPermission,
   .tab-dot-waitingAnswer {
-    background: #e8875a;
+    background: var(--status-waiting, #d6a85c);
+    box-shadow: 0 0 7px var(--status-waiting, #d6a85c);
     animation: tab-dot-pulse 1s ease-in-out infinite;
   }
 
   .tab-dot-error {
-    background: #e05252;
+    background: var(--status-danger, #d65f5f);
   }
 
   .tab-dot-active {

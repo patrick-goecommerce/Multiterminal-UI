@@ -14,6 +14,7 @@
   const dispatch = createEventDispatcher();
 
   const availableThemes: { value: ThemeName; label: string }[] = [
+    { value: 'konzept', label: 'Konzept (MTUI)' },
     { value: 'dark', label: 'Dark (Catppuccin Mocha)' },
     { value: 'light', label: 'Light' },
     { value: 'dracula', label: 'Dracula' },
@@ -22,7 +23,7 @@
   ];
 
   let colorValue = $config.terminal_color || '#39ff14';
-  let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'dark';
+  let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'konzept';
   let savedTheme: ThemeName = selectedTheme;
   let chatStyle: string = ($config as any).chat_style || 'claude-code';
   let sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
@@ -87,7 +88,7 @@
   $: if (visible) {
     requestAnimationFrame(() => dialogEl?.focus());
     colorValue = $config.terminal_color || '#39ff14';
-    selectedTheme = ($config.theme as ThemeName) || 'dark';
+    selectedTheme = ($config.theme as ThemeName) || 'konzept';
     savedTheme = selectedTheme;
     chatStyle = ($config as any).chat_style || 'claude-code';
     sttProvider = ($config as any).stt?.provider || 'cloud-whisper';

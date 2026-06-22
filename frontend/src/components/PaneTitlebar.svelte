@@ -97,6 +97,31 @@
     }
   }
 
+  // Status badge: the state spelled out so the grid is scannable at a glance.
+  $: statusLabel = (() => {
+    switch (pane.activity) {
+      case 'active': return 'läuft';
+      case 'done': return 'fertig';
+      case 'waitingPermission': return 'wartet auf dich';
+      case 'waitingAnswer': return 'wartet auf dich';
+      case 'error': return 'Fehler';
+      default: return '';
+    }
+  })();
+  $: statusClass = (() => {
+    switch (pane.activity) {
+      case 'active': return 'status-running';
+      case 'done': return 'status-done';
+      case 'waitingPermission':
+      case 'waitingAnswer': return 'status-waiting';
+      case 'error': return 'status-danger';
+      default: return '';
+    }
+  })();
+
+  const chatModes = ['claude', 'claude-auto', 'claude-yolo', 'codex', 'codex-auto', 'gemini', 'gemini-yolo'];
+  $: canChat = chatModes.includes(pane.mode);
+
   let showIssueActions = false;
 
   function issueAction(action: string) {
@@ -133,6 +158,9 @@
       <span class="pane-name" on:dblclick|stopPropagation={startRename} title={$t('titlebar.doubleClickRename')}>{displayName}</span>
     {/if}
     <span class="mode-badge {getModeBadgeClass(pane.mode)}">{getModeLabel(pane.mode)}</span>
+    {#if statusLabel}
+      <span class="status-badge {statusClass}">{statusLabel}</span>
+    {/if}
     {#if pane.background}
       <span class="mode-badge badge-bg">BG</span>
     {/if}
@@ -187,10 +215,23 @@
     {#if pane.cost}
       <span class="cost-label">{pane.cost}</span>
     {/if}
-    {#if pane.mode !== 'shell'}
-      <button class="pane-btn toggle-display-btn" on:click|stopPropagation={() => dispatch('toggleDisplay', { paneId: pane.id })} title="Als Chat anzeigen">
-        💬
-      </button>
+    {#if canChat}
+      <div class="display-toggle" role="group" aria-label="Anzeige umschalten">
+        <button
+          class="seg seg-active"
+          title="Terminal-Ansicht"
+          on:click|stopPropagation={() => {}}
+        >
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4l4 4-4 4"/><path d="M8.5 12.5H13"/></svg>
+        </button>
+        <button
+          class="seg"
+          title="Als Chat anzeigen"
+          on:click|stopPropagation={() => dispatch('toggleDisplay', { paneId: pane.id })}
+        >
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="2.2" y="3" width="11.6" height="8" rx="2"/><path d="M5.5 11v2.2l3-2.2"/></svg>
+        </button>
+      </div>
     {/if}
     <button class="pane-btn queue-toggle" class:queue-active={queueCount > 0} on:click|stopPropagation={() => dispatch('toggleQueue')} title={$t('titlebar.pipelineQueue')}>
       &#9654;{#if queueCount > 0}<span class="queue-badge">{queueCount}</span>{/if}
@@ -224,30 +265,21 @@
     transition: background 0.3s;
   }
 
-  .titlebar-done { background: rgba(34, 197, 94, 0.12); }
+  .titlebar-done { background: var(--status-running-tint); }
 
-  .titlebar-waiting-permission {
-    background: rgba(245, 166, 35, 0.12);
-    animation: titlebar-blink-permission 1.2s ease-in-out infinite;
-  }
-
+  .titlebar-waiting-permission,
   .titlebar-waiting-answer {
-    background: rgba(232, 135, 90, 0.12);
-    animation: titlebar-blink-answer 1.2s ease-in-out infinite;
+    background: var(--status-waiting-tint);
+    animation: titlebar-blink-waiting 1.6s ease-in-out infinite;
   }
 
   .titlebar-error {
-    background: rgba(224, 82, 82, 0.12);
+    background: var(--status-danger-tint);
   }
 
-  @keyframes titlebar-blink-permission {
-    0%, 100% { background: rgba(245, 166, 35, 0.12); }
-    50% { background: rgba(245, 166, 35, 0.25); }
-  }
-
-  @keyframes titlebar-blink-answer {
-    0%, 100% { background: rgba(232, 135, 90, 0.12); }
-    50% { background: rgba(232, 135, 90, 0.25); }
+  @keyframes titlebar-blink-waiting {
+    0%, 100% { background: var(--status-waiting-tint); }
+    50% { background: rgba(214, 168, 92, 0.28); }
   }
 
   .pane-title-left { display: flex; align-items: center; gap: 6px; overflow: hidden; }
@@ -258,29 +290,18 @@
     transition: background 0.3s;
   }
 
-  .dot-idle { background: var(--fg-muted); }
-  .dot-active { background: var(--accent); animation: dot-spin 1s linear infinite; }
-  .dot-done { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.8); }
+  .dot-idle { background: var(--status-idle, var(--fg-muted)); }
+  .dot-active { background: var(--status-running); animation: dot-spin 1s linear infinite; }
+  .dot-done { background: var(--status-running); box-shadow: 0 0 6px var(--status-running); }
 
-  :global(.dot-waiting-permission) {
-    background: var(--color-warning, #f5a623);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  :global(.titlebar-waiting-permission) {
-    border-bottom-color: var(--color-warning, #f5a623);
-  }
+  :global(.dot-waiting-permission),
   :global(.dot-waiting-answer) {
-    background: var(--color-warning-soft, #e8875a);
+    background: var(--status-waiting);
+    box-shadow: 0 0 7px var(--status-waiting);
     animation: pulse 1.2s ease-in-out infinite;
-  }
-  :global(.titlebar-waiting-answer) {
-    border-bottom-color: var(--color-warning-soft, #e8875a);
   }
   :global(.dot-error) {
-    background: var(--color-error, #e05252);
-  }
-  :global(.titlebar-error) {
-    border-bottom-color: var(--color-error, #e05252);
+    background: var(--status-danger);
   }
 
   @keyframes dot-spin { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
@@ -310,6 +331,32 @@
   .badge-gemini { background: #4285f433; color: #60a5fa; }
   .badge-gemini-yolo { background: #ea433533; color: #f87171; }
   .badge-bg { background: #64748b33; color: #94a3b8; font-size: 9px; }
+
+  /* Status text badge — state spelled out, color-coded */
+  .status-badge {
+    font-size: 9.5px; font-weight: 600; padding: 2px 7px; border-radius: 5px;
+    white-space: nowrap; letter-spacing: 0.01em; flex-shrink: 0;
+  }
+  .status-badge.status-running { color: var(--status-running); background: var(--status-running-tint); }
+  .status-badge.status-done { color: var(--fg-muted); background: var(--bg-tertiary); }
+  .status-badge.status-waiting { color: var(--status-waiting); background: var(--status-waiting-tint); }
+  .status-badge.status-danger { color: var(--status-danger); background: var(--status-danger-tint); }
+
+  /* Segmented Terminal | Chat toggle */
+  .display-toggle {
+    display: flex; align-items: center;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden; flex-shrink: 0;
+  }
+  .display-toggle .seg {
+    display: flex; align-items: center; justify-content: center;
+    padding: 3px 6px; background: none; border: none; cursor: pointer;
+    color: var(--fg-muted); transition: background 0.12s, color 0.12s;
+  }
+  .display-toggle .seg:hover { color: var(--fg); }
+  .display-toggle .seg-active {
+    color: var(--status-running); background: var(--status-running-tint);
+  }
 
   .issue-badge {
     font-size: 10px; padding: 1px 6px; border-radius: 4px;
