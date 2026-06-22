@@ -168,16 +168,16 @@
     color: var(--fg, #cdd6f4);
   }
   .nav-item.active {
-    background: rgba(57, 255, 20, 0.08);
-    color: var(--accent, #39ff14);
+    background: var(--status-running-tint, rgba(76, 197, 106, 0.12));
+    color: var(--accent, #4cc56a);
   }
   .nav-item.active::before {
     content: '';
     position: absolute;
     left: 0; top: 4px; bottom: 4px;
-    width: 2px;
-    background: var(--accent, #39ff14);
-    border-radius: 1px;
+    width: 2.5px;
+    background: var(--accent, #4cc56a);
+    border-radius: 0 2px 2px 0;
   }
 
   .icon {
@@ -220,8 +220,8 @@
     height: 16px;
     padding: 0 4px;
     border-radius: 8px;
-    background: var(--accent, #39ff14);
-    color: #000;
+    background: var(--status-waiting-tint, rgba(214,168,92,.16));
+    color: var(--status-waiting, #d6a85c);
     display: flex;
     align-items: center;
     justify-content: center;

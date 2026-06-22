@@ -15,6 +15,7 @@ type ActivityInfo struct {
 	ID       int    `json:"id"`
 	Activity string `json:"activity"` // "idle", "active", "done", "waitingPermission", "waitingAnswer", "error"
 	Cost     string `json:"cost"`
+	Title    string `json:"title"` // OSC-derived window title (fallback pane name)
 }
 
 // prevActivity tracks the last emitted state per session to avoid spamming.
@@ -22,6 +23,7 @@ var (
 	prevActivityMu sync.Mutex
 	prevActivity   = make(map[int]string)
 	prevCost       = make(map[int]string)
+	prevTitle      = make(map[int]string)
 )
 
 // scanInterval returns the scan tick duration based on the number of active sessions.
@@ -84,6 +86,7 @@ func cleanupActivityTracking(id int) {
 	prevActivityMu.Lock()
 	delete(prevActivity, id)
 	delete(prevCost, id)
+	delete(prevTitle, id)
 	prevActivityMu.Unlock()
 }
 
@@ -125,23 +128,28 @@ func (a *AppService) scanAllSessions() {
 			costStr = fmt.Sprintf("$%.2f", tokens.TotalCost)
 		}
 
-		// Only emit when state or cost actually changed
+		title := sess.GetTitle()
+
+		// Only emit when state, cost, or title actually changed
 		prevActivityMu.Lock()
 		activityChanged := prevActivity[id] != actStr
 		costChanged := prevCost[id] != costStr
-		changed := activityChanged || costChanged
+		titleChanged := prevTitle[id] != title
+		changed := activityChanged || costChanged || titleChanged
 		if changed {
 			prevActivity[id] = actStr
 			prevCost[id] = costStr
+			prevTitle[id] = title
 		}
 		prevActivityMu.Unlock()
 
 		if changed && a.app != nil {
-			log.Printf("[scan] session %d: activity=%s cost=%s", id, actStr, costStr)
+			log.Printf("[scan] session %d: activity=%s cost=%s title=%q", id, actStr, costStr, title)
 			a.app.Event.Emit("terminal:activity", ActivityInfo{
 				ID:       id,
 				Activity: actStr,
 				Cost:     costStr,
+				Title:    title,
 			})
 		}
 

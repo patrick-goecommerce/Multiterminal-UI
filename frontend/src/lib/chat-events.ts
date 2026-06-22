@@ -31,9 +31,9 @@ export function subscribeChatEvents(): () => void {
 
   // Error during generation — stop streaming state
   offs.push(EventsOn('chat:error', (event: any) => {
-    const { conversationId } = event.data || {};
+    const { conversationId, error } = event.data || {};
     if (!conversationId) return;
-    chat.streamError(conversationId);
+    chat.streamError(conversationId, error);
   }));
 
   return () => offs.forEach(off => off && off());

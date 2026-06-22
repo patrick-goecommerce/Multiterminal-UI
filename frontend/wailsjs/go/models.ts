@@ -761,6 +761,20 @@ export namespace config {
 	        this.id = source["id"];
 	    }
 	}
+	export class AutoNamingSettings {
+	    enabled?: boolean;
+	    model: string;
+
+	    static createFrom(source: any = {}) {
+	        return new AutoNamingSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.model = source["model"];
+	    }
+	}
 	export class Config {
 	    default_shell: string;
 	    default_dir: string;
@@ -785,6 +799,7 @@ export namespace config {
 	    font_size: number;
 	    chat_style: string;
 	    stt: STTSettings;
+	    auto_naming: AutoNamingSettings;
 
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -815,6 +830,7 @@ export namespace config {
 	        this.font_size = source["font_size"];
 	        this.chat_style = source["chat_style"];
 	        this.stt = this.convertValues(source["stt"], STTSettings);
+	        this.auto_naming = this.convertValues(source["auto_naming"], AutoNamingSettings);
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

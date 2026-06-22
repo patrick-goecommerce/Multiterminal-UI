@@ -22,6 +22,14 @@ export interface Pane {
   background: boolean;
   display: 'terminal' | 'chat';
   conversationId: string;
+  /** Claude session id pinned at launch (--session-id), used to resume on terminal⇄chat toggle. Empty for shell/codex/gemini. */
+  claudeSessionId: string;
+  /** LLM-generated pane name (from the user's prompt). Highest-priority auto name. */
+  autoName: string;
+  /** OSC-derived window title from the PTY. Fallback auto name. */
+  oscTitle: string;
+  /** True once the user manually renamed the pane — suppresses all auto names. */
+  userRenamed: boolean;
 }
 
 export interface Tab {
@@ -57,6 +65,32 @@ function createTabStore() {
 
   let nextTabNum = 1;
   let nextPaneNum = 1;
+
+  // Activity smoothing: Claude Code's animated TUI (spinner, cursor blink,
+  // status bar) emits bursty output, so the backend detector flips between
+  // "active" and "done"/"idle" every couple of seconds. We debounce only the
+  // transitions INTO the calm states so the badge/border doesn't flicker;
+  // attention states (waiting/error) and "active" apply immediately.
+  const calmDebounce = new Map<number, ReturnType<typeof setTimeout>>();
+  const CALM_DELAY_MS = 900;
+
+  function applyActivity(sessionId: number, activity: string, cost: string) {
+    update((state) => {
+      for (const tab of state.tabs) {
+        for (const pane of tab.panes) {
+          if (pane.sessionId === sessionId) {
+            if (activity) pane.activity = activity as Pane['activity'];
+            if (cost) pane.cost = cost;
+            if (tab.id !== state.activeTabId) {
+              tab.unreadActivity = computeTabActivity(tab.panes);
+            }
+            return state;
+          }
+        }
+      }
+      return state;
+    });
+  }
 
   return {
     subscribe,
@@ -124,12 +158,29 @@ function createTabStore() {
         const tab = state.tabs.find((t) => t.id === tabId);
         if (!tab) return state;
         const pane = tab.panes.find((p) => p.id === paneId);
-        if (pane) pane.name = name;
+        if (pane) {
+          pane.name = name;
+          pane.userRenamed = true; // a manual rename wins over any auto name
+        }
         return state;
       });
     },
 
-    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = ''): string {
+    /** Apply an auto-generated name (by session id). Ignored once the user
+     *  manually renamed the pane. source 'llm' sets autoName, 'osc' sets oscTitle. */
+    setAutoName(sessionId: number, value: string, source: 'llm' | 'osc') {
+      update((state) => {
+        for (const tab of state.tabs) {
+          const pane = tab.panes.find((p) => p.sessionId === sessionId);
+          if (!pane || pane.userRenamed) continue;
+          if (source === 'llm') pane.autoName = value;
+          else pane.oscTitle = value;
+        }
+        return state;
+      });
+    },
+
+    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = '', claudeSessionId = ''): string {
       const paneId = `pane-${nextPaneNum++}`;
       update((state) => {
         const tab = state.tabs.find((t) => t.id === tabId);
@@ -156,6 +207,10 @@ function createTabStore() {
           background: background ?? false,
           display,
           conversationId,
+          claudeSessionId,
+          autoName: '',
+          oscTitle: '',
+          userRenamed: false,
         });
         tab.focusedPaneId = paneId;
         return state;
@@ -214,21 +269,28 @@ function createTabStore() {
     },
 
     updateActivity(sessionId: number, activity: string, cost: string) {
-      update((state) => {
-        for (const tab of state.tabs) {
-          for (const pane of tab.panes) {
-            if (pane.sessionId === sessionId) {
-              pane.activity = activity as Pane['activity'];
-              if (cost) pane.cost = cost;
-              if (tab.id !== state.activeTabId) {
-                tab.unreadActivity = computeTabActivity(tab.panes);
-              }
-              return state;
-            }
-          }
-        }
-        return state;
-      });
+      // Any incoming update cancels a pending calm transition.
+      const pending = calmDebounce.get(sessionId);
+      if (pending) { clearTimeout(pending); calmDebounce.delete(sessionId); }
+
+      // "active" is real-time truth (output is flowing) — apply at once.
+      // The states classified after a quiet pause (done/idle/waiting*) are
+      // deferred: a redraw of Claude's TUI quickly flips back to "active" and
+      // cancels the pending change, so the badge reads calmly as "läuft" while
+      // work continues and only settles once a state truly holds.
+      const isCalm = activity === 'done' || activity === 'idle'
+        || activity === 'waitingPermission' || activity === 'waitingAnswer';
+      if (isCalm) {
+        // Cost still updates immediately so the title bar number stays live.
+        if (cost) applyActivity(sessionId, '', cost);
+        const timer = setTimeout(() => {
+          calmDebounce.delete(sessionId);
+          applyActivity(sessionId, activity, '');
+        }, CALM_DELAY_MS);
+        calmDebounce.set(sessionId, timer);
+        return;
+      }
+      applyActivity(sessionId, activity, cost);
     },
 
     markExited(sessionId: number) {

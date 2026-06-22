@@ -59,6 +59,8 @@ const en = {
     claudeDesc: 'Normal mode',
     claudeYolo: 'Claude YOLO',
     claudeYoloDesc: 'All permissions',
+    claudeAuto: 'Claude Auto',
+    claudeAutoDesc: 'Auto-approve mode',
     codex: 'Codex',
     codexDesc: 'OpenAI Codex CLI',
     codexAuto: 'Codex Auto',

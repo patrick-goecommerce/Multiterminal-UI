@@ -13,34 +13,80 @@ export const INDEX_TO_MODE: PaneMode[] = [
   'claude-auto',
 ];
 
+/** Options for pinning/resuming a claude session id (claude modes only). */
+export interface SessionOpts {
+  /** Resume an existing claude conversation by session id (`--resume`). Wins over sessionId. */
+  resumeId?: string;
+  /** Launch a fresh claude session with a fixed id (`--session-id`) so it can be resumed later. */
+  sessionId?: string;
+}
+
+/** Modes backed by the claude CLI, which understands --session-id / --resume. */
+const CLAUDE_MODES = new Set<PaneMode>(['claude', 'claude-yolo', 'claude-auto']);
+
+/** Generate a fresh session id (UUID v4) for pinning a claude session. */
+export function genSessionId(): string {
+  return crypto.randomUUID();
+}
+
+/**
+ * Map a pane mode to the chat `--permission-mode` equivalent so a terminal
+ * pane keeps its permission posture when toggled to chat display. Mirrors the
+ * flags buildClaudeArgv adds: claude-yolo↔--dangerously-skip-permissions,
+ * claude-auto↔--permission-mode auto, plain claude↔default.
+ */
+export function modeToPermissionMode(mode: PaneMode): string {
+  switch (mode) {
+    case 'claude-yolo': return 'bypassPermissions';
+    case 'claude-auto': return 'auto';
+    default: return 'default';
+  }
+}
+
 /** Build the argv array for launching a CLI session. */
-export function buildClaudeArgv(mode: PaneMode, model: string, claudeCmd: string, codexCmd?: string, geminiCmd?: string): string[] {
+export function buildClaudeArgv(mode: PaneMode, model: string, claudeCmd: string, codexCmd?: string, geminiCmd?: string, opts?: SessionOpts): string[] {
+  let argv: string[];
   switch (mode) {
     case 'claude':
-      return model ? [claudeCmd, '--model', model] : [claudeCmd];
+      argv = model ? [claudeCmd, '--model', model] : [claudeCmd];
+      break;
     case 'claude-yolo':
-      return model
+      argv = model
         ? [claudeCmd, '--dangerously-skip-permissions', '--model', model]
         : [claudeCmd, '--dangerously-skip-permissions'];
+      break;
     case 'claude-auto':
-      return model
+      argv = model
         ? [claudeCmd, '--permission-mode', 'auto', '--model', model]
         : [claudeCmd, '--permission-mode', 'auto'];
+      break;
     case 'codex':
-      return model ? [codexCmd || 'codex', '--model', model] : [codexCmd || 'codex'];
+      argv = model ? [codexCmd || 'codex', '--model', model] : [codexCmd || 'codex'];
+      break;
     case 'codex-auto':
-      return model
+      argv = model
         ? [codexCmd || 'codex', '--full-auto', '--model', model]
         : [codexCmd || 'codex', '--full-auto'];
+      break;
     case 'gemini':
-      return model ? [geminiCmd || 'gemini', '--model', model] : [geminiCmd || 'gemini'];
+      argv = model ? [geminiCmd || 'gemini', '--model', model] : [geminiCmd || 'gemini'];
+      break;
     case 'gemini-yolo':
-      return model
+      argv = model
         ? [geminiCmd || 'gemini', '--sandbox', '--model', model]
         : [geminiCmd || 'gemini', '--sandbox'];
+      break;
     default:
       return [];
   }
+
+  // Pin or resume the claude session so terminal⇄chat toggles keep the same
+  // conversation. --resume wins over --session-id (they are mutually exclusive).
+  if (opts && CLAUDE_MODES.has(mode)) {
+    if (opts.resumeId) argv.push('--resume', opts.resumeId);
+    else if (opts.sessionId) argv.push('--session-id', opts.sessionId);
+  }
+  return argv;
 }
 
 /** Generate a display name for a pane. */

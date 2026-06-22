@@ -20,14 +20,14 @@ describe('theme store', () => {
   });
 
   describe('currentTheme', () => {
-    it('defaults to dark', () => {
+    it('defaults to konzept', () => {
       // The store may have been changed by previous tests, set it explicitly
-      currentTheme.set('dark');
-      expect(get(currentTheme)).toBe('dark');
+      currentTheme.set('konzept');
+      expect(get(currentTheme)).toBe('konzept');
     });
 
     it('can be set to all theme names', () => {
-      const themes: ThemeName[] = ['dark', 'light', 'dracula', 'nord', 'solarized'];
+      const themes: ThemeName[] = ['konzept', 'dark', 'light', 'dracula', 'nord', 'solarized'];
       for (const theme of themes) {
         currentTheme.set(theme);
         expect(get(currentTheme)).toBe(theme);
@@ -36,6 +36,13 @@ describe('theme store', () => {
   });
 
   describe('themeColors', () => {
+    it('returns colors for konzept theme', () => {
+      currentTheme.set('konzept');
+      const colors = get(themeColors);
+      expect(colors.bg).toBe('#0a0d0b');
+      expect(colors.accent).toBe('#4cc56a');
+    });
+
     it('returns colors for dark theme', () => {
       currentTheme.set('dark');
       const colors = get(themeColors);

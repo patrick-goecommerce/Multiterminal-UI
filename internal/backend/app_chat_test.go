@@ -55,6 +55,41 @@ func TestSaveAndLoadConversation(t *testing.T) {
 	}
 }
 
+func TestCreateConversation_AdoptsResumeID(t *testing.T) {
+	dir := t.TempDir()
+	app := newTestApp()
+
+	conv, err := app.CreateConversation("claude", "", dir, "plan", "sess-resume-42")
+	if err != nil {
+		t.Fatalf("CreateConversation error: %v", err)
+	}
+	if conv.SessionID != "sess-resume-42" {
+		t.Errorf("SessionID = %q, want %q (resume target)", conv.SessionID, "sess-resume-42")
+	}
+
+	// Must survive the save/load round-trip so the resume actually fires.
+	loaded, err := app.GetConversation(dir, conv.ID)
+	if err != nil {
+		t.Fatalf("load error: %v", err)
+	}
+	if loaded.SessionID != "sess-resume-42" {
+		t.Errorf("persisted SessionID = %q, want %q", loaded.SessionID, "sess-resume-42")
+	}
+}
+
+func TestCreateConversation_EmptyResumeID(t *testing.T) {
+	dir := t.TempDir()
+	app := newTestApp()
+
+	conv, err := app.CreateConversation("claude", "", dir, "plan", "")
+	if err != nil {
+		t.Fatalf("CreateConversation error: %v", err)
+	}
+	if conv.SessionID != "" {
+		t.Errorf("SessionID = %q, want empty (fresh session)", conv.SessionID)
+	}
+}
+
 func TestConversationPath(t *testing.T) {
 	got := conversationPath("/project", "abc123")
 	want := filepath.Join("/project", ".mtui", "chat", "conv-abc123.json")

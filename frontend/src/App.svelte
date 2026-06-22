@@ -27,7 +27,7 @@
   import { applyTheme, applyAccentColor } from './stores/theme';
   import { initI18n, setLanguage, t, type Language } from './stores/i18n';
   import type { PaneMode } from './stores/tabs';
-  import { buildClaudeArgv, getClaudeName, encodeForPty } from './lib/claude';
+  import { buildClaudeArgv, getClaudeName, encodeForPty, genSessionId, modeToPermissionMode } from './lib/claude';
   import { getWindowId, isMainWindow, getInitialTabs, getInitialView } from './lib/window';
   import { createGlobalKeyHandler } from './lib/shortcuts';
   import { sendNotification } from './lib/notifications';
@@ -105,6 +105,7 @@
     name: string;
     argv: string[];
     sessionDir: string;
+    claudeSessionId: string;
   } | null = null;
 
   let resolvedClaudePath = 'claude';
@@ -149,9 +150,9 @@
       try {
         const cfg = await App.GetConfig();
         config.set(cfg);
-        applyTheme(cfg.theme || 'dark');
+        applyTheme(cfg.theme || 'konzept');
         if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
-      } catch { applyTheme('dark'); }
+      } catch { applyTheme('konzept'); }
 
       // Restore the tab that was detached into this window
       try {
@@ -179,12 +180,12 @@
     try {
       const cfg = await App.GetConfig();
       config.set(cfg);
-      applyTheme(cfg.theme || 'dark');
+      applyTheme(cfg.theme || 'konzept');
       if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
       if (cfg.sidebar_pinned) { workspace.setSidebarPinned(true); workspace.openSidebar('explorer'); }
       await initI18n((cfg.language || 'de') as Language);
       if (!cfg.setup_done) showSetupDialog = true;
-    } catch { applyTheme('dark'); await initI18n('de'); }
+    } catch { applyTheme('konzept'); await initI18n('de'); }
 
     try {
       resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude';
@@ -257,8 +258,9 @@
 
     // Wails v3: event handlers receive a WailsEvent object; payload is in event.data
     EventsOn('terminal:activity', (event: any) => {
-      const info = event.data; // ActivityInfo { id, activity, cost }
+      const info = event.data; // ActivityInfo { id, activity, cost, title }
       tabStore.updateActivity(info.id, info.activity, info.cost);
+      if (info.title) tabStore.setAutoName(info.id, info.title, 'osc');
       // Notify when an issue-linked agent finishes (only when window is focused,
       // because TerminalPane already sends a notification when unfocused)
       if (info.activity === 'done' && document.hasFocus()) {
@@ -270,6 +272,11 @@
           }
         }
       }
+    });
+    // Auto-generated pane name (LLM summary of the user's prompt)
+    EventsOn('pane:autoname', (event: any) => {
+      const info = event.data; // PaneNameEvent { id, name }
+      if (info?.name) tabStore.setAutoName(info.id, info.name, 'llm');
     });
     EventsOn('terminal:exit', (event: any) => {
       const id: number = event.data.id;
@@ -407,7 +414,7 @@
     if (display === 'chat') {
       const provider = type.startsWith('codex') ? 'codex' : type.startsWith('gemini') ? 'gemini' : 'claude';
       try {
-        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', permissionMode);
+        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', permissionMode, '');
         const name = getClaudeName(type, model);
         tabStore.addPane(tab.id, 0, name, type, model || '', null, '', '', '', '', false, 'chat', conv.id);
         workspace.setView('terminals');
@@ -415,7 +422,10 @@
       return;
     }
 
-    const argv = buildClaudeArgv(type, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
+    // Pin a session id for claude panes so they can be resumed when toggled to
+    // chat display (and vice versa). Empty for shell/codex/gemini.
+    const claudeSessionId = type.startsWith('claude') ? genSessionId() : '';
+    const argv = buildClaudeArgv(type, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, { sessionId: claudeSessionId });
     const baseName = getClaudeName(type, model);
     const name = issueCtx ? `${baseName} – #${issueCtx.number}` : baseName;
     try {
@@ -437,7 +447,7 @@
             targetIssueTitle: issueCtx.title,
             dirtyWorkingTree: result.conflict.dirtyWorkingTree,
           };
-          pendingLaunch = { type, model, issueCtx, name, argv, sessionDir };
+          pendingLaunch = { type, model, issueCtx, name, argv, sessionDir, claudeSessionId };
           showBranchConflict = true;
           return;
         }
@@ -453,7 +463,8 @@
           try { paneBranch = await App.GetGitBranch(sessionDir); } catch {}
         }
         tabStore.addPane(tab.id, sessionId, name, type, model,
-          issueCtx?.number, issueCtx?.title, issueBranch, worktreePath, paneBranch);
+          issueCtx?.number, issueCtx?.title, issueBranch, worktreePath, paneBranch,
+          false, 'terminal', '', claudeSessionId);
         if (issueCtx) {
           App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
           setTimeout(() => {
@@ -474,7 +485,7 @@
 
     const tab = $activeTab;
     if (!tab) return;
-    const { type, model, issueCtx, name, argv } = launch;
+    const { type, model, issueCtx, name, argv, claudeSessionId } = launch;
 
     try {
       const resolved = await resolveBranchConflict(e.detail.action, launch.sessionDir, issueCtx);
@@ -487,7 +498,8 @@
           try { paneBranch = await App.GetGitBranch(resolved.sessionDir); } catch {}
         }
         tabStore.addPane(tab.id, sessionId, name, type, model,
-          issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.worktreePath, paneBranch);
+          issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.worktreePath, paneBranch,
+          false, 'terminal', '', claudeSessionId);
         App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.sessionDir);
         setTimeout(() => {
           const prompt = buildIssuePrompt(issueCtx);
@@ -597,10 +609,13 @@
     const { paneId, sessionId, mode, model, name } = e.detail;
     App.CloseSession(sessionId);
     tabStore.closePane(tab.id, paneId);
-    const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
+    // Restart = fresh session, but still pin an id so it stays toggle-able to chat.
+    const sid = mode.startsWith('claude') ? genSessionId() : '';
+    const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, { sessionId: sid });
     try {
       const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
-      if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model);
+      if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model,
+        null, '', '', '', '', false, 'terminal', '', sid);
     } catch (err) { console.error('[handleRestartPane] failed:', err); }
   }
 
@@ -612,22 +627,41 @@
     const { name, mode, model } = pane;
 
     if (pane.display === 'chat') {
-      // Chat → Terminal: close the backing claude subprocess before removing the pane
-      if (pane.conversationId) App.CloseChatSession(pane.conversationId);
+      // Chat → Terminal: resume the same claude session so the conversation is
+      // preserved (claude --resume replays the history into the TUI).
+      let resumeId = '';
+      if (pane.conversationId) {
+        try {
+          const conv = await App.GetConversation(tab.dir || '', pane.conversationId);
+          resumeId = (conv as any)?.session_id || '';
+        } catch {}
+        App.CloseChatSession(pane.conversationId);
+      }
       tabStore.closePane(tab.id, pane.id);
-      const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
+      // Keep the pane resumable after the toggle: reuse the resumed id, or pin a
+      // fresh one for claude panes that never got a session id yet.
+      const sid = resumeId || (mode.startsWith('claude') ? genSessionId() : '');
+      const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath,
+        resumeId ? { resumeId } : { sessionId: sid });
       try {
         const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
-        if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model);
+        if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model,
+          null, '', '', '', '', false, 'terminal', '', sid);
       } catch (err) { console.error('[toggleDisplay→terminal] failed:', err); }
     } else {
-      // Terminal → Chat
+      // Terminal → Chat: an interactive terminal session id is NOT a resumable
+      // `claude -p` conversation, so passing it as --resume reliably fails with
+      // "No conversation found" and costs a doomed cold start (~11s) before the
+      // self-heal restarts fresh. Start the chat fresh instead — a single cold
+      // start. (We still keep the id on the pane so toggling back to terminal can
+      // resume the interactive session.)
+      const resumeId = pane.claudeSessionId || '';
       App.CloseSession(pane.sessionId);
       tabStore.closePane(tab.id, pane.id);
       const provider = mode.startsWith('codex') ? 'codex' : mode.startsWith('gemini') ? 'gemini' : 'claude';
       try {
-        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', 'plan');
-        tabStore.addPane(tab.id, 0, name, mode, model || '', null, '', '', '', '', false, 'chat', conv.id);
+        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', modeToPermissionMode(mode), '');
+        tabStore.addPane(tab.id, 0, name, mode, model || '', null, '', '', '', '', false, 'chat', conv.id, resumeId);
       } catch (err) { console.error('[toggleDisplay→chat] failed:', err); }
     }
   }
@@ -914,7 +948,7 @@
 <style>
   :global(*) { margin: 0; padding: 0; box-sizing: border-box; }
   :global(body) {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
     background: var(--bg); color: var(--fg); overflow: hidden;
   }
   .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }

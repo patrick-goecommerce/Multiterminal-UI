@@ -518,8 +518,8 @@ export function ToggleSchedule(arg1, arg2) {
 
 // --- Sprint 3: Chat & Queue ---
 
-export function CreateConversation(arg1, arg2, arg3, arg4) {
-  return $Call.ByID(2019553056, arg1, arg2, arg3, arg4);
+export function CreateConversation(arg1, arg2, arg3, arg4, arg5) {
+  return $Call.ByID(2019553056, arg1, arg2, arg3, arg4, arg5);
 }
 
 export function GetConversations(arg1) {
@@ -536,6 +536,10 @@ export function DeleteConversation(arg1, arg2) {
 
 export function AddChatMessage(arg1, arg2, arg3) {
   return $Call.ByID(4010796075, arg1, arg2, arg3);
+}
+
+export function WarmChatSession(arg1, arg2) {
+  return $Call.ByID(939717200, arg1, arg2);
 }
 
 export function RenameConversation(arg1, arg2, arg3) {

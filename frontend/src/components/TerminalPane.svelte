@@ -570,40 +570,40 @@
 </div>
 
 <style>
+  /* Calm 1px frame; state is carried by a 2px colored top edge so the grid
+   * reads at a glance without a wall of glowing borders. */
   .terminal-pane {
     position: relative; display: flex; flex-direction: column;
-    background: var(--pane-bg); border: 2px solid var(--pane-border);
-    border-radius: 8px; overflow: hidden;
+    background: var(--pane-bg);
+    border: 1px solid var(--pane-border);
+    border-top: 2px solid var(--pane-border);
+    border-radius: 9px; overflow: hidden;
     transition: border-color 0.3s, box-shadow 0.3s;
   }
 
-  .terminal-pane.focused { border-color: var(--pane-border-focused); }
+  .terminal-pane.focused {
+    border-color: var(--pane-border-focused);
+    box-shadow: 0 0 0 1px var(--pane-border-focused), 0 0 14px -4px var(--pane-border-focused);
+  }
 
   .terminal-pane.drop-target {
     border-color: var(--accent);
-    box-shadow: 0 0 12px rgba(203, 166, 247, 0.4), inset 0 0 4px rgba(203, 166, 247, 0.1);
+    box-shadow: 0 0 12px rgba(76, 197, 106, 0.4), inset 0 0 4px rgba(76, 197, 106, 0.1);
   }
 
   .terminal-pane.activity-done {
-    border-color: #22c55e;
-    box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), inset 0 0 4px rgba(34, 197, 94, 0.1);
+    border-top-color: var(--status-running);
   }
 
   .terminal-pane.activity-waiting {
-    border-color: #f5a623;
-    box-shadow: 0 0 14px rgba(245, 166, 35, 0.6), inset 0 0 4px rgba(245, 166, 35, 0.1);
-    animation: waiting-pulse 1.2s ease-in-out infinite;
+    border-top-color: var(--status-waiting);
+    box-shadow: 0 0 16px -4px var(--status-waiting);
+    animation: waiting-pulse 1.6s ease-in-out infinite;
   }
 
   @keyframes waiting-pulse {
-    0%, 100% {
-      border-color: #f5a623;
-      box-shadow: 0 0 14px rgba(245, 166, 35, 0.6), inset 0 0 4px rgba(245, 166, 35, 0.1);
-    }
-    50% {
-      border-color: #e8875a;
-      box-shadow: 0 0 24px rgba(245, 166, 35, 0.9), inset 0 0 8px rgba(245, 166, 35, 0.2);
-    }
+    0%, 100% { box-shadow: 0 0 16px -6px var(--status-waiting); }
+    50% { box-shadow: 0 0 22px -2px var(--status-waiting); }
   }
 
   /* Right padding moved to .xterm so the scrollbar lives in .xterm's padding area.

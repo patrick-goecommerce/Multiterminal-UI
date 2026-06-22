@@ -1,5 +1,51 @@
 import { describe, it, expect } from 'vitest';
-import { buildClaudeArgv, getClaudeName, MODE_TO_INDEX, INDEX_TO_MODE } from './claude';
+import { buildClaudeArgv, getClaudeName, MODE_TO_INDEX, INDEX_TO_MODE, modeToPermissionMode } from './claude';
+
+describe('modeToPermissionMode', () => {
+  it('maps claude-yolo to bypassPermissions (matches --dangerously-skip-permissions)', () => {
+    expect(modeToPermissionMode('claude-yolo')).toBe('bypassPermissions');
+  });
+
+  it('maps claude-auto to auto (matches --permission-mode auto)', () => {
+    expect(modeToPermissionMode('claude-auto')).toBe('auto');
+  });
+
+  it('maps plain claude to default', () => {
+    expect(modeToPermissionMode('claude')).toBe('default');
+  });
+
+  it('falls back to default for non-claude modes', () => {
+    expect(modeToPermissionMode('shell')).toBe('default');
+    expect(modeToPermissionMode('codex')).toBe('default');
+  });
+});
+
+describe('buildClaudeArgv session opts', () => {
+  it('pins a fresh session via --session-id (claude)', () => {
+    expect(buildClaudeArgv('claude', '', 'claude', undefined, undefined, { sessionId: 'sid-1' }))
+      .toEqual(['claude', '--session-id', 'sid-1']);
+  });
+
+  it('resumes via --resume (claude)', () => {
+    expect(buildClaudeArgv('claude', 'opus', 'claude', undefined, undefined, { resumeId: 'sess-9' }))
+      .toEqual(['claude', '--model', 'opus', '--resume', 'sess-9']);
+  });
+
+  it('--resume wins over --session-id', () => {
+    expect(buildClaudeArgv('claude-auto', '', 'claude', undefined, undefined, { sessionId: 'sid', resumeId: 'res' }))
+      .toEqual(['claude', '--permission-mode', 'auto', '--resume', 'res']);
+  });
+
+  it('ignores session opts for non-claude modes (codex)', () => {
+    expect(buildClaudeArgv('codex', '', 'claude', 'codex', undefined, { sessionId: 'sid' }))
+      .toEqual(['codex']);
+  });
+
+  it('emits nothing extra when opts are empty', () => {
+    expect(buildClaudeArgv('claude', '', 'claude', undefined, undefined, {}))
+      .toEqual(['claude']);
+  });
+});
 
 describe('claude-auto mode', () => {
   it('builds argv with --permission-mode auto, no model', () => {

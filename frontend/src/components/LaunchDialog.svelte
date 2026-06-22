@@ -37,6 +37,7 @@
     }
     if (cfg.claude_enabled !== false) {
       opts.push({ mode: 'claude', label: $t('launch.claude'), desc: $t('launch.claudeDesc'), icon: '&#10024;', cssClass: '' });
+      opts.push({ mode: 'claude-auto', label: $t('launch.claudeAuto'), desc: $t('launch.claudeAutoDesc'), icon: '&#9881;', cssClass: 'claude-auto' });
       opts.push({ mode: 'claude-yolo', label: $t('launch.claudeYolo'), desc: $t('launch.claudeYoloDesc'), icon: '&#9889;', cssClass: 'yolo' });
     }
     if (cfg.codex_enabled) {
@@ -85,7 +86,7 @@
     if (i === 0) return false;
     const group = (m: PaneMode) => {
       if (m === 'shell') return 0;
-      if (m === 'claude' || m === 'claude-yolo') return 1;
+      if (m === 'claude' || m === 'claude-auto' || m === 'claude-yolo') return 1;
       if (m === 'codex' || m === 'codex-auto') return 2;
       return 3;
     };
@@ -295,6 +296,7 @@
   }
 
   .option.yolo:hover { border-color: var(--error); }
+  .option.claude-auto:hover { border-color: #c084fc; }
   .option.codex:hover { border-color: #10a37f; }
   .option.codex-auto:hover { border-color: #e87b35; }
   .option.gemini:hover { border-color: #4285f4; }

@@ -14,6 +14,7 @@
   const dispatch = createEventDispatcher();
 
   const availableThemes: { value: ThemeName; label: string }[] = [
+    { value: 'konzept', label: 'Konzept (MTUI)' },
     { value: 'dark', label: 'Dark (Catppuccin Mocha)' },
     { value: 'light', label: 'Light' },
     { value: 'dracula', label: 'Dracula' },
@@ -22,7 +23,7 @@
   ];
 
   let colorValue = $config.terminal_color || '#39ff14';
-  let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'dark';
+  let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'konzept';
   let savedTheme: ThemeName = selectedTheme;
   let chatStyle: string = ($config as any).chat_style || 'claude-code';
   let sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
@@ -46,6 +47,9 @@
   let audioDoneSound = $config.audio?.done_sound || '';
   let audioInputSound = $config.audio?.input_sound || '';
   let audioErrorSound = $config.audio?.error_sound || '';
+
+  let autoNamingEnabled = $config.auto_naming?.enabled ?? true;
+  let autoNamingModel = $config.auto_naming?.model || 'claude-haiku-4-5';
 
   let fontFamily = $config.font_family || '';
   let fontSize = $config.font_size || 10;
@@ -84,7 +88,7 @@
   $: if (visible) {
     requestAnimationFrame(() => dialogEl?.focus());
     colorValue = $config.terminal_color || '#39ff14';
-    selectedTheme = ($config.theme as ThemeName) || 'dark';
+    selectedTheme = ($config.theme as ThemeName) || 'konzept';
     savedTheme = selectedTheme;
     chatStyle = ($config as any).chat_style || 'claude-code';
     sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
@@ -101,6 +105,8 @@
     audioDoneSound = $config.audio?.done_sound || '';
     audioInputSound = $config.audio?.input_sound || '';
     audioErrorSound = $config.audio?.error_sound || '';
+    autoNamingEnabled = $config.auto_naming?.enabled ?? true;
+    autoNamingModel = $config.auto_naming?.model || 'claude-haiku-4-5';
     fontFamily = $config.font_family || '';
     fontSize = $config.font_size || 10;
     savedFontFamily = fontFamily;
@@ -254,6 +260,10 @@
         language: sttLanguage,
         cloud: { base_url: sttBaseUrl, model: sttModel, api_key: sttApiKey },
       },
+      auto_naming: {
+        enabled: autoNamingEnabled,
+        model: autoNamingModel,
+      },
     };
     config.set(updated);
     try { await App.SaveConfig(updated); } catch (err) { console.error('[SettingsDialog] SaveConfig failed:', err); }
@@ -281,6 +291,8 @@
     audioDoneSound = '';
     audioInputSound = '';
     audioErrorSound = '';
+    autoNamingEnabled = true;
+    autoNamingModel = 'claude-haiku-4-5';
     orchMaxParallel = 3;
     orchAutoMerge = false;
     orchAutoStart = false;
@@ -511,6 +523,18 @@
         <div class="orch-field">
           <label class="orch-label" for="orch-review-cmd">Review-Befehl</label>
           <input id="orch-review-cmd" type="text" class="claude-input" bind:value={orchReviewCommand} placeholder="go test ./... && go vet ./..." />
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Automatische Pane-Benennung</label>
+        <p class="setting-desc">Benennt Claude-Panes automatisch anhand des ersten Prompts (per {autoNamingModel}). Manuell vergebene Namen bleiben erhalten.</p>
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <button class="toggle-btn" class:toggle-on={autoNamingEnabled} on:click={() => autoNamingEnabled = !autoNamingEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{autoNamingEnabled ? 'Aktiv' : 'Inaktiv'}</span>
         </div>
       </div>
 

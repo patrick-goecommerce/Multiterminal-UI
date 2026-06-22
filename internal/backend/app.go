@@ -102,6 +102,9 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	// Auto-setup statusline in ~/.claude/settings.json if not already configured
 	go a.setupStatusLine()
 
+	// Enable Claude voice dictation by default (settings.json only — no CLI flag exists)
+	go a.setupVoice()
+
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
 	a.cancelAll = cancel
@@ -172,7 +175,7 @@ type SessionInfo struct {
 
 // CreateSession spawns a new PTY session and starts streaming its output
 // to the frontend. Returns the session ID.
-// mode must be "shell", "claude", or "claude-yolo"; it controls env injection.
+// mode must be "shell", "claude", "claude-auto", or "claude-yolo"; it controls env injection.
 func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int, mode string) int {
 	a.mu.Lock()
 	a.nextID++
@@ -201,7 +204,7 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 	if a.tmuxAPIPort > 0 {
 		env = append(env, fmt.Sprintf("MTUI_PORT=%d", a.tmuxAPIPort))
 	}
-	if mode == "claude" || mode == "claude-yolo" {
+	if mode == "claude" || mode == "claude-auto" || mode == "claude-yolo" {
 		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
 	}
 
@@ -282,6 +285,7 @@ func (a *AppService) CloseSession(id int) {
 		a.mu.Unlock()
 		// Clean up per-session activity tracking to prevent memory leak
 		cleanupActivityTracking(id)
+		cleanupNameTracking(id)
 	}()
 }
 

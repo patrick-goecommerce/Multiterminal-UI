@@ -57,6 +57,21 @@ func (a *AppService) persistSessionID(convID, sessionID string) {
 	_ = saveConversation(dir, conv)
 }
 
+// clearPersistedSessionID removes a stale claude session id so the next start
+// launches a fresh session instead of a failing --resume.
+func (a *AppService) clearPersistedSessionID(dir, convID string) {
+	if dir == "" {
+		return
+	}
+	conv, err := a.GetConversation(dir, convID)
+	if err != nil {
+		return
+	}
+	conv.SessionID = ""
+	conv.UpdatedAt = time.Now().Format(time.RFC3339)
+	_ = saveConversation(dir, conv)
+}
+
 // appendMessage loads, appends a message, and saves a conversation.
 func (a *AppService) appendMessage(convID string, msg ChatMessage) {
 	dir := a.convScope(convID)
@@ -87,6 +102,10 @@ func (a *AppService) flushAssistantMessage(convID string, ev ChatEvent) {
 		Cost:      cost,
 		Tokens:    ev.OutputTokens,
 	}
-	a.appendMessage(convID, msg)
+	// Persist only non-empty turns; a pure thinking/tool turn has no text and
+	// would otherwise leave a blank bubble that reappears after reload.
+	if text != "" {
+		a.appendMessage(convID, msg)
+	}
 	a.emitChat("chat:done", map[string]interface{}{"conversationId": convID, "message": msg})
 }

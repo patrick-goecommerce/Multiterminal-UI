@@ -1,8 +1,8 @@
 import { writable, derived } from 'svelte/store';
 
-export type ThemeName = 'dark' | 'light' | 'dracula' | 'nord' | 'solarized';
+export type ThemeName = 'konzept' | 'dark' | 'light' | 'dracula' | 'nord' | 'solarized';
 
-export const currentTheme = writable<ThemeName>('dark');
+export const currentTheme = writable<ThemeName>('konzept');
 
 interface ThemeColors {
   bg: string;
@@ -28,6 +28,31 @@ interface ThemeColors {
 }
 
 const themes: Record<ThemeName, ThemeColors> = {
+  // "Konzept" — the signature MTUI design language.
+  // Near-black with a subtle green tint; green = you/running, the accent.
+  // The semantic status colors (green/violet/amber/red) live in SEMANTIC below.
+  konzept: {
+    bg: '#0a0d0b',
+    bgSecondary: '#0b0e0c',
+    bgTertiary: '#1c241a',
+    fg: '#dadfd2',
+    fgMuted: '#8b9586',
+    accent: '#4cc56a',
+    accentHover: '#6fd989',
+    border: '#222a20',
+    borderFocused: '#4cc56a',
+    success: '#4cc56a',
+    warning: '#d6a85c',
+    error: '#d65f5f',
+    tabBg: '#0b0e0c',
+    tabActiveBg: '#0a0d0b',
+    tabActiveFg: '#4cc56a',
+    paneBg: '#0e1210',
+    paneBorder: '#222a20',
+    paneBorderFocused: '#4cc56a',
+    toolbarBg: '#0a0d0b',
+    footerBg: '#090b09',
+  },
   dark: {
     bg: '#1e1e2e',
     bgSecondary: '#181825',
@@ -142,12 +167,41 @@ const themes: Record<ThemeName, ThemeColors> = {
 
 export const themeColors = derived(currentTheme, ($theme) => themes[$theme]);
 
+// One color language with meaning — shared across all themes so chat, panes,
+// tabs and the command palette read the same way regardless of palette:
+//   green  = you · running · healthy
+//   violet = AI · chat · skills
+//   amber  = waiting for you
+//   red    = danger · YOLO
+// (These are intended to be settings-swappable later; the layout never changes.)
+const SEMANTIC: Record<string, string> = {
+  'status-running': '#4cc56a',
+  'status-running-tint': 'rgba(76,197,106,.14)',
+  'status-ai': '#a184f4',
+  'status-ai-tint': 'rgba(161,132,244,.16)',
+  'status-waiting': '#d6a85c',
+  'status-waiting-tint': 'rgba(214,168,92,.16)',
+  'status-danger': '#d65f5f',
+  'status-danger-tint': 'rgba(214,95,95,.15)',
+  'status-idle': '#5a6457',
+  'claude-orange': '#d8825f',
+  'diff-add': '#5bbf8c',
+  'diff-add-bg': 'rgba(91,191,140,.12)',
+  'diff-del': '#d77b7b',
+  'diff-del-bg': 'rgba(215,123,123,.10)',
+  'font-sans': "'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  'font-mono': "'JetBrains Mono', ui-monospace, 'Cascadia Code', Consolas, monospace",
+};
+
 export function applyTheme(theme: ThemeName, accentColor?: string) {
   currentTheme.set(theme);
   const colors = themes[theme];
   const root = document.documentElement;
   for (const [key, value] of Object.entries(colors)) {
     root.style.setProperty(`--${camelToKebab(key)}`, value);
+  }
+  for (const [key, value] of Object.entries(SEMANTIC)) {
+    root.style.setProperty(`--${key}`, value);
   }
   if (accentColor) {
     applyAccentColor(accentColor);

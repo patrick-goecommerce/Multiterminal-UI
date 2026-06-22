@@ -254,7 +254,7 @@ export function ToggleSchedule(arg1:string,arg2:string):Promise<void>;
 
 // --- Sprint 3: Chat & Queue ---
 
-export function CreateConversation(arg1:string,arg2:string,arg3:string,arg4:string):Promise<backend.Conversation>;
+export function CreateConversation(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<backend.Conversation>;
 
 export function GetConversations(arg1:string):Promise<Array<backend.Conversation>>;
 
@@ -263,6 +263,8 @@ export function GetConversation(arg1:string,arg2:string):Promise<backend.Convers
 export function DeleteConversation(arg1:string,arg2:string):Promise<void>;
 
 export function AddChatMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function WarmChatSession(arg1:string,arg2:string):Promise<void>;
 
 export function RenameConversation(arg1:string,arg2:string,arg3:string):Promise<void>;
 

@@ -45,6 +45,36 @@ func TestActivityString_UnknownState(t *testing.T) {
 	}
 }
 
+func TestScan_TracksOSCTitleChange(t *testing.T) {
+	sess := terminal.NewSession(7, 24, 80)
+	// OSC 2 ; <title> BEL — Claude/shell sets the window title
+	sess.Screen.Write([]byte("\x1b]2;my-pane\x07"))
+
+	app := &AppService{
+		sessions: map[int]*terminal.Session{7: sess},
+		queues:   map[int]*sessionQueue{},
+	}
+
+	cleanupActivityTracking(7) // start from a clean tracking state
+	app.scanAllSessions()
+
+	prevActivityMu.Lock()
+	got := prevTitle[7]
+	prevActivityMu.Unlock()
+
+	if got != "my-pane" {
+		t.Fatalf("after scan, prevTitle[7] = %q, want %q", got, "my-pane")
+	}
+
+	cleanupActivityTracking(7)
+	prevActivityMu.Lock()
+	_, exists := prevTitle[7]
+	prevActivityMu.Unlock()
+	if exists {
+		t.Fatal("cleanupActivityTracking should remove the prevTitle entry")
+	}
+}
+
 func TestScanGuard_HookActivityNotOverwrittenByScan(t *testing.T) {
 	// Setup: a session with hook-driven WaitingPermission state
 	// and NO PTY output (LastOutputAt = zero, no screen content).

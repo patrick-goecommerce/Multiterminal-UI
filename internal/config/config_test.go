@@ -16,8 +16,8 @@ import (
 func TestDefaultConfig_Values(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if cfg.Theme != "dark" {
-		t.Errorf("Theme = %q, want 'dark'", cfg.Theme)
+	if cfg.Theme != "konzept" {
+		t.Errorf("Theme = %q, want 'konzept'", cfg.Theme)
 	}
 	if cfg.MaxPanesPerTab != 9 {
 		t.Errorf("MaxPanesPerTab = %d, want 9", cfg.MaxPanesPerTab)
@@ -286,6 +286,27 @@ func TestSessionState_JSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSavedPane_UserRenamedRoundTrip(t *testing.T) {
+	state := SessionState{
+		Tabs: []SavedTab{{Name: "T", Panes: []SavedPane{
+			{Name: "auth fix", Mode: 1, UserRenamed: true},
+			{Name: "Claude 2", Mode: 1, UserRenamed: false},
+		}}},
+	}
+	data, _ := json.Marshal(state)
+
+	var loaded SessionState
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !loaded.Tabs[0].Panes[0].UserRenamed {
+		t.Error("pane 0 UserRenamed should survive round-trip as true")
+	}
+	if loaded.Tabs[0].Panes[1].UserRenamed {
+		t.Error("pane 1 UserRenamed should be false")
+	}
+}
+
 func TestSessionState_EmptyTabsReturnsNil(t *testing.T) {
 	// LoadSession returns nil for empty tabs — test the validation logic
 	state := SessionState{ActiveTab: 0, Tabs: nil}
@@ -394,6 +415,48 @@ func TestConfig_FavoritesDefaultNil(t *testing.T) {
 // ---------------------------------------------------------------------------
 // KeepAlive settings: JSON round-trip (simulates Wails frontend→backend call)
 // ---------------------------------------------------------------------------
+
+func TestAutoNaming_DefaultValues(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.AutoNaming.Enabled == nil || !*cfg.AutoNaming.Enabled {
+		t.Error("AutoNaming.Enabled should default to true")
+	}
+	if cfg.AutoNaming.Model == "" {
+		t.Error("AutoNaming.Model should have a default model")
+	}
+	if !cfg.ShouldAutoName() {
+		t.Error("ShouldAutoName() should default to true")
+	}
+}
+
+func TestAutoNaming_LoadFillsNilDefaults(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "autoname.yaml")
+	// Config file that omits auto_naming entirely
+	os.WriteFile(path, []byte("theme: dark\n"), 0644)
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+
+	// Move the well-known config into place so Load() picks it up.
+	home, _ := os.UserHomeDir()
+	os.WriteFile(filepath.Join(home, ".multiterminal.yaml"), []byte("theme: dark\n"), 0644)
+
+	cfg := Load()
+	if cfg.AutoNaming.Enabled == nil {
+		t.Error("AutoNaming.Enabled should be non-nil after Load (default applied)")
+	}
+	if cfg.AutoNaming.Model == "" {
+		t.Error("AutoNaming.Model should be defaulted after Load")
+	}
+}
+
+func TestShouldAutoName_False(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.AutoNaming.Enabled = boolPtr(false)
+	if cfg.ShouldAutoName() {
+		t.Error("ShouldAutoName() should be false when disabled")
+	}
+}
 
 func TestKeepAlive_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig()

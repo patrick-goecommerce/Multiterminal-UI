@@ -9,12 +9,12 @@ export interface KeepAliveConfig {
   message: string;
 }
 
-/** Find the first running Claude or claude-yolo pane across all tabs. */
+/** Find the first running Claude (any mode) pane across all tabs. */
 function findFirstClaudePane(): { sessionId: number; tabId: string } | null {
   const state = tabStore.getState();
   for (const tab of state.tabs) {
     for (const pane of tab.panes) {
-      if ((pane.mode === 'claude' || pane.mode === 'claude-yolo') && pane.running) {
+      if ((pane.mode === 'claude' || pane.mode === 'claude-auto' || pane.mode === 'claude-yolo') && pane.running) {
         return { sessionId: pane.sessionId, tabId: tab.id };
       }
     }

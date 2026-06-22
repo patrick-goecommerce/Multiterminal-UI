@@ -82,6 +82,25 @@ func TestNewSession_ActivityIdle(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// GetTitle returns the OSC-derived window title, thread-safe
+// ---------------------------------------------------------------------------
+
+func TestGetTitle_ReturnsOSCTitle(t *testing.T) {
+	sess := NewSession(1, 10, 40)
+
+	if got := sess.GetTitle(); got != "" {
+		t.Fatalf("new session GetTitle() = %q, want empty", got)
+	}
+
+	// OSC 2 ; <title> BEL — set window title
+	sess.Screen.Write([]byte("\x1b]2;auth-refactor\x07"))
+
+	if got := sess.GetTitle(); got != "auth-refactor" {
+		t.Fatalf("GetTitle() = %q, want %q", got, "auth-refactor")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Write without PTY returns error
 // ---------------------------------------------------------------------------
 

@@ -70,6 +70,8 @@ const de = {
     claudeDesc: 'Normal-Modus',
     claudeYolo: 'Claude YOLO',
     claudeYoloDesc: 'Alle Berechtigungen',
+    claudeAuto: 'Claude Auto',
+    claudeAutoDesc: 'Auto-Genehmigung',
     codex: 'Codex',
     codexDesc: 'OpenAI Codex CLI',
     codexAuto: 'Codex Auto',

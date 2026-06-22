@@ -45,7 +45,7 @@
   async function handleNewConversation() {
     if (!dir) return;
     try {
-      const conv = await App.CreateConversation(newProvider, newModel, dir, 'plan');
+      const conv = await App.CreateConversation(newProvider, newModel, dir, 'plan', '');
       chat.addConversation(conv);
       showNewConv = false;
     } catch (err) {

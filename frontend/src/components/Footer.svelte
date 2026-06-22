@@ -137,15 +137,15 @@
   }
 
   .commit-green {
-    color: #22c55e;
+    color: var(--status-running, #22c55e);
   }
 
   .commit-yellow {
-    color: #eab308;
+    color: var(--status-waiting, #eab308);
   }
 
   .commit-red {
-    color: #ef4444;
+    color: var(--status-danger, #ef4444);
     animation: commit-pulse 2s ease-in-out infinite;
   }
 
