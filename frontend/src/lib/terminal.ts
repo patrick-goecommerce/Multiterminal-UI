@@ -232,8 +232,20 @@ export function attachWebglRenderer(terminal: Terminal): void {
     const webgl = new WebglAddon();
     activeWebglCount++;
     webgl.onContextLoss(() => {
-      webgl.dispose();
-      activeWebglCount = Math.max(0, activeWebglCount - 1);
+      webgl.dispose(); // reverts to DOM renderer, decrements activeWebglCount
+      // A lost GL context leaves the canvas frozen on its last, half-erased
+      // frame. The DOM renderer does not repaint the existing buffer on its
+      // own, so an idle pane (e.g. Claude waiting at the prompt) stays garbled
+      // until new output arrives. Force a full repaint. This fires on display
+      // power cycles and output-device switches (monitor → laptop → monitor).
+      try {
+        terminal.refresh(0, terminal.rows - 1);
+      } catch {
+        // terminal already disposed — nothing to repaint.
+      }
+      // The GPU is typically back after such an event, so restore the WebGL
+      // renderer rather than leaving the pane on the slower DOM renderer.
+      setTimeout(() => attachWebglRenderer(terminal), 100);
     });
     // Decrement counter when the terminal or addon is disposed normally.
     const origDispose = webgl.dispose.bind(webgl);
