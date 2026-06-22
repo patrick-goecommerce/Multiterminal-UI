@@ -30,7 +30,7 @@
   // Build available options based on enabled CLI tools
   $: options = buildOptions(issueContext, $config, $t);
 
-  function buildOptions(issue: typeof issueContext, cfg: typeof $config, _t?: any): LaunchOption[] {
+  function buildOptions(issue: typeof issueContext, cfg: typeof $config, _t: any): LaunchOption[] {
     const opts: LaunchOption[] = [];
     if (!issue) {
       opts.push({ mode: 'shell', label: $t('launch.shell'), desc: $t('launch.shellDesc'), icon: '&#9000;', cssClass: '' });
