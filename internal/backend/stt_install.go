@@ -109,6 +109,42 @@ func findLatestAsset(ctx context.Context, owner, repo string, mustContain, mustN
 		owner, repo, rel.TagName, mustContain, mustNotContain)
 }
 
+// findAssetAcrossReleases scans the most recent releases (newest first) and
+// returns the first asset matching the filters. Use this when a repo publishes
+// multiple release kinds: k2-fsa/sherpa-onnx ships model-only releases that
+// GitHub marks as "latest" (e.g. asr-models-qnn-2), so /releases/latest carries
+// no binary — the standalone exe lives only in the versioned vX.Y.Z releases.
+func findAssetAcrossReleases(ctx context.Context, owner, repo string, mustContain, mustNotContain []string) (ghAsset, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=30", owner, repo)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return ghAsset{}, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ghAsset{}, fmt.Errorf("github api: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ghAsset{}, fmt.Errorf("github api %s: status %d", url, resp.StatusCode)
+	}
+	var rels []ghRelease
+	if err := json.NewDecoder(resp.Body).Decode(&rels); err != nil {
+		return ghAsset{}, fmt.Errorf("github api parse: %w", err)
+	}
+	for _, rel := range rels {
+		for _, ast := range rel.Assets {
+			if assetMatches(ast.Name, mustContain, mustNotContain) {
+				return ast, nil
+			}
+		}
+	}
+	return ghAsset{}, fmt.Errorf("no asset matches across %d recent releases of %s/%s (need %v, exclude %v)",
+		len(rels), owner, repo, mustContain, mustNotContain)
+}
+
 func assetMatches(name string, mustContain, mustNotContain []string) bool {
 	lower := strings.ToLower(name)
 	for _, w := range mustContain {
@@ -219,7 +255,10 @@ func (a *AppService) installParakeet(ctx context.Context) error {
 	bin := filepath.Join(dir, binName("sherpa-onnx-offline"))
 	if !fileExists(bin) {
 		a.emitSttPhase("parakeet", "binary", 0)
-		asset, err := findLatestAsset(ctx, "k2-fsa", "sherpa-onnx",
+		// NOT findLatestAsset: GitHub's "latest" for sherpa-onnx is a model-only
+		// release (asr-models-qnn-*). The exe lives in the versioned releases, so
+		// scan recent releases for the first one that actually has the binary.
+		asset, err := findAssetAcrossReleases(ctx, "k2-fsa", "sherpa-onnx",
 			[]string{"non-streaming-asr", "x64", ".exe"},
 			[]string{"arm", "linux", "darwin", "tts", "x86"},
 		)
