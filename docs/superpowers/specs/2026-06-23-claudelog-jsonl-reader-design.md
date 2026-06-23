@@ -14,7 +14,7 @@ MTUI currently derives Claude token/cost/activity data by scraping the **rendere
 
 This is inaccurate and version-fragile. Claude Code already writes complete, structured data to disk under `~/.claude/projects/{encoded_path}/{sessionId}.jsonl`. Reading it directly yields exact tokens (four counters), per-model cost, subagent state, todos, and a precise turn-state.
 
-**MTUI's structural advantage over external monitors (e.g. Agent-Dashboard):** MTUI owns the PTY. It knows each session's working directory (`session.Dir`), its start time, and often its session id (`hookSessionID`, set by Claude Code hooks via `HasHookData()`). So JSONL-file resolution is direct, not a `ps`/`lsof` guess. The whole external process-discovery layer that makes Agent-Dashboard Unix-only is unnecessary here — this design is Windows-native by construction.
+**MTUI's structural advantage over external monitors (e.g. Agent-Dashboard):** MTUI owns the PTY. Critically, it **launches Claude with an explicit `--session-id <uuid>` flag** (verified in `CreateSession`: `claude.exe --dangerously-skip-permissions --session-id 4e8cc0b5-…`), so the session id is **deterministically known at launch** — no `ps`/`lsof` discovery, no hook dependency, no newest-file guess. It also knows the working directory (`session.Dir`) and start time. The whole external process-discovery layer that makes Agent-Dashboard Unix-only is unnecessary here — this design is Windows-native by construction.
 
 ### The Windows path-encoding finding
 
@@ -104,15 +104,18 @@ type SessionData struct {
 ```go
 func EncodePath(absPath string) string            // replace : \ / . _ → -
 func ConfigDir(ptyEnv []string) string            // CLAUDE_CONFIG_DIR or ~/.claude
-func ResolveSessionFile(configDir, cwd, hookSessionID string, startedAt time.Time) (string, bool)
+func ResolveSessionFile(configDir, cwd, sessionID, hookSessionID string, startedAt time.Time) (string, bool)
 ```
 
-Resolution order:
+Resolution order (most authoritative first):
 
 1. Project dir = `{configDir}/projects/{EncodePath(cwd)}`.
-2. If `hookSessionID != ""` → `{projDir}/{hookSessionID}.jsonl` (if it exists).
-3. Else → list `{projDir}/*.jsonl`, pick the file with newest mtime where `mtime >= startedAt`. MTUI's known PTY start time disambiguates multiple sessions sharing one cwd.
-4. cwd empty or `/` → no file (skip).
+2. **`sessionID` from the session's own launch argv** (MTUI passes `--session-id <uuid>`) → `{projDir}/{sessionID}.jsonl`. This is the primary, deterministic path.
+3. Fallback `hookSessionID` (if set by hooks and `sessionID` was unavailable) → `{projDir}/{hookSessionID}.jsonl`.
+4. Last-resort fallback → list `{projDir}/*.jsonl`, pick newest mtime where `mtime >= startedAt`. Covers sessions MTUI did not launch with an explicit id (e.g. restored/attached).
+5. cwd empty or `/` → no file (skip).
+
+> Implementation note: the session id must be threaded from the launch argv onto the `Session` struct (parse the `--session-id` value in `Start`, store it). This is a small prerequisite tracked in the implementation plan.
 
 ### 2. Parser (`parse.go`)
 
