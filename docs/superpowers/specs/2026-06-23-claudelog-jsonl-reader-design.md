@@ -1,198 +1,146 @@
 # claudelog — JSONL Session Reader (Foundation)
 
 - **Date:** 2026-06-23
-- **Status:** Rev 2 — revised after red-team round 1 (empirical findings against real logs)
+- **Status:** Rev 3 — decomposed into 3 sub-plans after red-team rounds 1 & 2 (all findings empirical against real logs)
 - **Branch target:** `alpha-main` (feature branch off it)
-- **Scope:** Foundation only. Replaces fragile screen-scraping of Claude token/cost data with a structured reader of Claude Code's JSONL session logs, and adds a turn-state–based "working" display signal plus a convergence ("stuck loop") warning. Subagents and todos are parsed but not yet rendered (explicit follow-on).
+- **One-line goal:** Replace fragile screen-scraping of Claude token/cost with a correct, structured reader of Claude Code's JSONL session logs; add a turn-state "working" display signal and a convergence ("stuck loop") warning — without ever perturbing the pipeline `active→done` edge.
 
-> **Rev 2 note.** Round 1 of red-teaming verified the original assumptions against the real logs on disk and refuted several. The biggest: Claude writes **one JSONL line per content block, each repeating the same `usage` object**, so a naive whole-file sum over-counts tokens/cost by ~2.6× — and the Agent-Dashboard parser this spec originally cited as "proven" has exactly that bug. Treat AD as a structural reference only, not a correctness oracle. All corrections are folded in below and called out with **[R1]**.
+> **Why Rev 3.** Round 1 refuted the naive token sum (per-block `usage` duplication → ~2.6× over-count) and the "id always known" assumption. Round 2 verified the dedup-by-id fix holds (measured 2.04–2.93×; zero id-less assistant lines; zero same-id usage conflicts; compaction-safe) and the `done`-edge decoupling holds (the queue reads `prevActivity`, never `GetTokens`), but found three remaining bugs and recommended decomposition. Rev 3 folds in all fixes, **cuts the over-engineered reader** (no worker pool, no incremental-delta summing), and splits the work into three independently-mergeable sub-plans. Findings tagged **[R1]/[R2]**.
 
-## Context
+---
 
-MTUI currently derives Claude token/cost/activity data by scraping the **rendered terminal screen** (`internal/terminal/activity.go`):
+## Shared model (applies to all sub-plans)
 
-- `ScanTokens()` matches `$\d+\.\d+` for cost and `"15.2k input"` / `"3.8k output"` regexes — only two token counters, no cache tokens, dependent on whatever Claude happens to print.
-- `DetectActivity()` / `classifyScreenState()` classify activity from prompt/question heuristics over the last 15 screen rows.
+### Format facts verified against real logs
 
-Claude Code already writes complete structured data to `~/.claude/projects/{encoded_path}/{sessionId}.jsonl`. Reading it directly yields exact tokens, per-model cost, subagent state, todos, and a turn-state — **if parsed correctly** (see the format hazards below).
+Verified against `C:\Users\PatrickHenniggoeComm\.claude\projects\D--repos-Multiterminal\` (64 jsonl, 6 branches) + siblings.
 
-**MTUI's structural advantage:** MTUI owns the PTY. It can know each session's working directory (`session.Dir`), and — when it launches Claude itself — the session id and start time. This removes the `ps`/`lsof` discovery layer that makes external monitors Unix-only; this design is Windows-native by construction. **[R1] But "MTUI always knows the session id at launch" is false** for several real launch paths (worktree panes, background agents, keepalive, restored sessions via `--resume`, and `claude` typed manually in a shell pane). The resolver must not assume it (see Components §1).
+1. **Per-block `usage` duplication [R1].** One API response (one `message.id`, one `usage`) is written as multiple JSONL lines — one per content block (`thinking`/`text`/`tool_use`) — each repeating the identical `usage`. **Token totals MUST dedup by `message.id`** (count each id once). Verified: 0/3676 assistant lines lack `message.id`; 0 same-id usage conflicts across all 64 files; compaction does not reuse ids.
+2. **~10 line types [R1].** Besides `assistant`/`user`/`system`: `mode`, `permission-mode`, `attachment`, `last-prompt`, `ai-title`, `file-history-snapshot`, `queue-operation`. Turn-state must consider only `user`/`assistant` lines.
+3. **Partial trailing line is the steady state during generation [R1].** The live file's last bytes are an unterminated append on nearly every read — normal, not an error.
+4. **Token field names (exact)** on `type:"assistant"` `message.usage`: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`. Model at `message.model`.
+5. **tool_use/tool_result:** `tool_use`(`id`) in assistant `content[]`; matching `tool_result`(`tool_use_id`) in the next `user` line's `content[]`.
+6. **compact_boundary** (`type:"system", subtype:"compact_boundary"`). Per-message usage is per-turn → dedup-by-id sum is compaction-safe.
+7. **`cwd` + `gitBranch` exist in every file but never on the last line [R2].** In 53/64 files the last complete line is metadata (`permission-mode`/`ai-title`/…) carrying neither. Both fields appear ≤16 lines from EOF in every file (0/64 lack them entirely). The resolver must scan **backward** for the last complete line that has both.
+8. **Subagents:** `{sessionId}/subagents/*.jsonl` + sibling `*.meta.json` (`agentType`, `description`, `toolUseId`). **No `Status` field** — must be derived (deferred; ship empty).
+9. **TodoWrite:** shape unverified locally (no real TodoWrite call in these logs). Parse path written but `Todos` ships empty until a real fixture is captured.
 
-### Format hazards verified against real logs **[R1]**
+### Path encoding [R1]
 
-Verified against `C:\Users\PatrickHenniggoeComm\.claude\projects\D--repos-Multiterminal\` (64 jsonl files, 6 branches) and sibling projects:
+Claude encodes the abs path by replacing **`: \ / . _ ~ → -`** (the `~` is real: `C:\Users\PATRIC~1\…` → `C--Users-PATRIC-1-…`). Verified: `D:\repos\Multiterminal` → `D--repos-Multiterminal`; worktree `…\.worktrees\chat-pane-display-mode` → `…--worktrees-chat-pane-display-mode`. The encoding is **non-injective** (`.`,`_`,`-`,separators all → `-`): `a.b`, `a_b`, `a-b` collide. The resolver treats a >1-candidate match as ambiguous → no overwrite.
 
-1. **Per-block usage duplication (the critical one).** A single API response (one `message.id`, one `requestId`, one `usage`) is written as multiple JSONL lines — one per content block (`thinking`, `text`, `tool_use`) — and **each line repeats the identical `usage`**. Measured over-count: 2.0–2.7× across every file. The token sum **must deduplicate by `message.id`** (count each distinct id's usage once; occurrences are identical).
-2. **~10 line types, not 3.** Besides `assistant`/`user`/`system`, real files contain `mode`, `permission-mode`, `attachment`, `last-prompt`, `ai-title`, `file-history-snapshot`, `queue-operation`. Trailing lines are usually one of these, NOT `user`/`assistant`. Turn-state logic must consider only `user`/`assistant` lines and skip the rest.
-3. **Partial trailing line is the steady state during generation** — the live file's last bytes are an unterminated append on nearly every read. This is normal, not an error.
-4. **Token field names confirmed exact** on `type:"assistant"` `message.usage`: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`. Model at `message.model` (e.g. `claude-opus-4-8`).
-5. **tool_use/tool_result pairing confirmed:** `tool_use` (with `id`) in an assistant line's `content[]`; matching `tool_result` (with `tool_use_id`) in the next `user` line's `content[]`.
-6. **compact_boundary confirmed** (`type:"system", subtype:"compact_boundary"`). Per-message usage is per-turn (not cumulative), so dedup-by-id summation is compaction-safe.
-7. **Subagents:** live in `{sessionId}/subagents/*.jsonl` with a sibling `*.meta.json` (`agentType`, `description`, `toolUseId`). There is **no `Status` field** in the data — status must be derived. Confirmed present on this machine.
-8. **TodoWrite todos:** shape (`tool_use.input.todos[] = {content, status, ...}`) is unconfirmed on this machine — no real TodoWrite call exists in local logs. A fixture from a real TodoWrite session is required before claiming todos work.
+### Pinned decisions [R2]
 
-### The Windows path-encoding finding
+| # | Decision | Value |
+|---|---|---|
+| D1 | `Confidence` type | `type Confidence int; const (ConfNone Confidence = iota; ConfLow; ConfHigh)`. **Zero value = `ConfNone`** (safe: never accidentally High). `Latest()` returns `SessionData` whose `Confidence==ConfNone` means "no usable data" (replaces a separate `ok`). |
+| D2 | Refresh cadence | **Tail-state** (turn-state, last tools, pending tool) recomputed **every scan tick** from the last ≤64 KB only. **Full token recompute** (whole-file dedup-by-id) at most **every 5 s**, or immediately when the file **shrank** (compaction). No per-read delta summing — full recompute rebuilds the id→usage map from scratch each time. |
+| D3 | Concurrency model | **One goroutine per Claude session** (pane count is capped by `max_panes_per_tab`). **No worker pool** (cut as premature). The scan loop only reads published last-known-good — non-blocking. |
+| D4 | Reader lifecycle owner | A `readerRegistry` owned by `AppService` (its own `sync.Mutex`, not `App.mu`). A reader is created lazily on the first `Latest(session)` for a Claude pane and torn down from the existing `cleanupActivityTracking(id)` site (`app.go:287`). |
+| D5 | "Is a Claude pane" predicate | The session's launch `mode` starts with `"claude"` **and** a non-empty `SessionID` was resolved. `codex`/`gemini` panes are out of scope for the foundation. |
+| D6 | Subagent `Status` | Ship `""` (unknown) in the foundation; derivation deferred to the visualization follow-on. |
+| D7 | Todos | Parse path implemented but `Todos` ships **empty** until a real TodoWrite fixture is captured. |
+| D8 | `CLAUDE_CONFIG_DIR` | Read **once** from the MTUI process env at startup; one config dir process-wide. No per-session override (documented limitation). |
 
-Claude encodes the absolute project path into the directory name by replacing separators/punctuation with `-`. Verified: `D:\repos\Multiterminal` → `D--repos-Multiterminal`; `D:\repos\Multiterminal\.worktrees\chat-pane-display-mode` → `D--repos-Multiterminal--worktrees-chat-pane-display-mode`. **[R1]** The real encoder also replaces **`~`** (real dir `C--Users-PATRIC-1-…` came from `PATRIC~1`). So the set is **`: \ / . _ ~ → -`**. The encoding is **non-injective** (`.`, `_`, `-`, separators all collapse to `-`): `D:\repos\a.b`, `…\a_b`, `…\a-b` all encode to `D--repos-a-b`. The resolver must treat a >1-candidate match as ambiguous (see §1).
+### Token totals — the only correct algorithm [R1/R2]
 
-## Goals
+```
+ids := map[string]Usage{}          // message.id -> usage (rebuilt every full recompute)
+for each COMPLETE line (terminated by \n):
+    if type=="assistant" && message.id != "":
+        ids[message.id] = message.usage   // identical on repeats; last-write is fine
+total := sum(ids)                   // each id counted once
+```
 
-1. Exact Claude token usage (four counters, **deduped by `message.id`**) and computed API-equivalent cost per pane, replacing the regex scrape when the JSONL is confidently resolved.
-2. A distinct **working** (generating) display signal derived from turn-state fused with PTY liveness — **as a display hint only, decoupled from the pipeline `done` edge**.
-3. A **convergence** warning flag when the agent repeats the same tool 5× in a row.
-4. Zero regression: non-Claude panes, unresolvable/ambiguous Claude sessions, and torn reads keep today's screen-scraping behavior via a soft fallback. **The pipeline queue/orchestrator `active→done` edge must behave byte-identically to today.**
+**No incremental delta. [R2]** 83 % of ids span >1 physical line (up to 13), so a "sum appended bytes" delta double-counts an id split across refreshes. The byte offset is used **only** for cheap tail-state, never for the token total. The full recompute reads the whole file on D2's cadence.
 
-## Non-Goals (deferred follow-ons)
+### Line framing — the only correct read [R1]
 
-- Rendering subagents/todos in the UI (parsed and shipped on the event; visualization is a separate plan).
-- `linesAdded` / `filesModified` / `gitCommits` / `toolErrors` extraction.
-- fsnotify watcher subsystem. (But the off-loop reader below is the stepping stone to it.)
-- Multi-provider (Codex/Gemini) parsing.
+Split the buffer on `\n`; **discard bytes after the last `\n`** (incomplete append). Never `Unmarshal` a partial line; a partial trailing line is **not** an error. Only a *complete* line that fails to parse is corruption → keep last-known-good, do not panic, do not log-spam.
 
-## Prerequisites (small enabling changes, tracked in the plan) **[R1]**
+---
 
-These do not exist today and must land first:
+## Sub-plan 1 — `claudelog` package (pure, stdlib only)
 
-1. **`Session.SessionID string`** — the Claude session id. Source of truth is the frontend tab-store pane field `claudeSessionId` (`frontend/src/stores/tabs.ts:25`); thread it through `CreateSession(...)` as an explicit parameter onto the struct. Do **not** rely on argv-parsing as the primary source. (Argv-parse in `Start` may serve as a secondary recovery, and must handle both `--session-id <uuid>` and `--session-id=<uuid>`.)
-2. **`Session.StartedAt time.Time`** — set in `Start()`. Required by the fallback resolver; only `LastOutputAt` exists today.
-3. **Pin the id on id-less launch sites** so they become resolvable: worktree panes (`App.svelte:392`), background agents (`background-agents.ts:56`), keepalive (`keepalive.ts:46`) must pass a generated `sessionId`.
-4. **Persist/expose `CLAUDE_CONFIG_DIR`** per session if MTUI is to honor an override: MTUI does not set it today and `Start` keeps the assembled env only as a local. Either capture the relevant env onto the session or accept `~/.claude` as the only supported location in this foundation (and document the limitation). Default decision: **support `~/.claude` and an explicit `CLAUDE_CONFIG_DIR` read from the MTUI process env**; per-session overrides are out of scope for the foundation.
-
-## Architecture
-
-New leaf package **`internal/terminal/claudelog`** — stdlib only, no backend imports, independently testable. Max 300 lines per file.
+A leaf package `internal/terminal/claudelog`, no backend imports, fully unit-tested with fixtures. **Zero product behavior change.** Max 300 lines/file.
 
 | File | Responsibility |
 |---|---|
-| `encode.go` | path encoder (`: \ / . _ ~ → -`), normalization, config-dir resolution |
-| `resolve.go` | session-file resolution + ambiguity detection |
-| `parse.go` | line framing, token sum (dedup by message.id), turn-state, tool tracking, subagents, todos |
-| `pricing.go` | `MODEL_PRICING` table + cost computation |
-| `reader.go` | per-session off-loop reader: cache, incremental offset, last-known-good `SessionData` |
-| `types.go` | result types |
-| `*_test.go` | per-file table tests + `testdata/*.jsonl` fixtures |
+| `types.go` | `TokenUsage`, `PendingTool`, `SubAgent`, `Todo`, `SessionData`, `Confidence` (D1) |
+| `encode.go` | `EncodePath` (`: \ / . _ ~ → -`, normalize: strip trailing sep), `ConfigDir()` (D8) |
+| `resolve.go` | `ResolveSessionFile(configDir, cwd, sessionID, startedAt) (path string, conf Confidence)` |
+| `parse.go` | line framing, dedup-by-id token total, turn-state (user/assistant only), pending tool, convergence, subagents (status=""), todos (empty per D7) |
+| `pricing.go` | `MODEL_PRICING` (per-1M incl. cache tiers), `CostUSD(model, TokenUsage)`, unknown→0 |
 
-### Data model (`types.go`)
+`ResolveSessionFile` order:
+1. projDir = `{configDir}/projects/{EncodePath(cwd)}`; cwd empty/`/` → `ConfNone`.
+2. `sessionID != ""` and `{projDir}/{sessionID}.jsonl` exists → `ConfHigh`.
+3. else list `{projDir}/*.jsonl`; for each, **scan backward for the last complete line carrying both `cwd` and `gitBranch`** (≤32 lines) and match against the session's dir/branch; among matches require mtime `> startedAt` (ns), newest wins → `ConfLow`; **0 or >1 matches → `ConfNone`** (ambiguous, never guess).
 
-```go
-type TokenUsage struct {
-    InputTokens, OutputTokens, CacheCreationTokens, CacheReadTokens int
-}
-type PendingTool struct { ID, Tool, Pattern string }
-type SubAgent struct { ID, Type, Description string; ToolUseID string; TokensUsed, DurationSeconds int; Status string /* derived */ }
-type Todo struct { Content, Status string }
+**Tests:** encoder (Windows paths, `PATRIC~1`→`PATRIC-1`, worktree, trailing sep, collisions→ambiguous); resolver (High by id; Low by cwd+gitBranch backward-scan; >1 match→None; missing dir); **token dedup with a multi-block same-`message.id` fixture** (the 2.6× regression guard) + compaction fixture; framing (partial last line ignored, valid prefix returned); turn-state (metadata-trailing must not flip `TurnOpen`; user-trailing open; pending-tool open; assistant-final closed; trailing-assistant-with-tool_use open); convergence; pricing (incl. cache tiers, unknown→0). `go test ./internal/terminal/claudelog/...` green.
 
-type SessionData struct {
-    SessionID, Model string
-    Tokens           TokenUsage   // deduped by message.id
-    CostUSD          float64
-    TurnOpen         bool         // agent owes next step; user/assistant lines only
-    PendingTool      *PendingTool
-    Convergence      bool
-    ConvergenceTool  string
-    Subagents        []SubAgent
-    Todos            []Todo
-    Confidence       Confidence   // High (id match) | Low (fallback guess)  [R1]
-    UpdatedAt        time.Time
-}
-```
+**Deliverable:** a tested library. Mergeable immediately, no behavior change.
 
-`Confidence` lets the caller refuse to overwrite good data with a low-confidence fallback guess.
+---
 
-## Components
+## Sub-plan 2 — Tokens/cost integration (the value increment)
 
-### 1. Encoder + resolver (`encode.go`, `resolve.go`) **[R1]**
+Delivers exact, deduped tokens/cost for the **already-id-pinned happy path** (launch-dialog and restored panes already emit `--session-id <uuid>` — verified `App.svelte:427`, `claude.ts:87`, `session.ts:30`).
 
-```go
-func EncodePath(absPath string) string   // normalize then replace : \ / . _ ~ → -
-func ConfigDir() string                  // CLAUDE_CONFIG_DIR (process env) or ~/.claude
-func ResolveSessionFile(configDir, cwd, sessionID string, startedAt time.Time) (path string, conf Confidence, ok bool)
-```
+**Minimal prerequisite — no frontend churn, no `CreateSession` signature change [R2]:**
+- Add `Session.SessionID string`, populated by **parsing `--session-id` out of the launch argv in `Start()`** (before the `cmd.exe /c` wrap). Handle both `--session-id <uuid>` and `--session-id=<uuid>`. MTUI emits the two-token form; manual/id-less launches simply leave it empty → those fall back to screen-scrape (handled in Sub-plan 3). This deliberately avoids touching the ~13 `CreateSession` call sites + 3 Wails binding files; canonical-field threading is deferred to Sub-plan 3 only if needed.
 
-`EncodePath` first **normalizes**: strip trailing separators, no case-fold of the drive letter is applied to the *encoded* string (NTFS lookup is case-insensitive, but the cache key must use the normalized form consistently).
+**Reader (simplest correct form, D3 deferred):** a **synchronous** `Latest(session) SessionData` that, on the scan tick, re-reads + caches last-known-good (full recompute gated by D2's 5 s / shrink rule; tail every tick). Off-loop goroutines are introduced in Sub-plan 3 — Sub-plan 2 ships the synchronous version to de-risk lock discipline first.
 
-Resolution order:
+**Wiring in `scanAllSessions`:**
+- `data := claudelog.Latest(session)` for Claude panes (D5).
+- If `data.Confidence == ConfHigh` → set `s.Tokens` (incl. new `CacheCreationTokens`/`CacheReadTokens`) + cost. Else → keep today's `ScanTokens()`. **Never overwrite good values with `ConfLow`/`ConfNone`.**
+- **Lock discipline [R1]:** read/parse entirely outside any session lock; acquire `s.mu` only for the final assignment; never hold `s.mu` across I/O.
+- **`done` edge untouched [R1/R2]:** the pipeline edge (`app_scan.go:157`) stays driven by `DetectActivity`/`HasHookData`, debounced by the existing 1.5 s gate. Tokens are a separate write the queue never reads.
 
-1. Project dir = `{configDir}/projects/{EncodePath(cwd)}`. cwd empty/`/` → not ok.
-2. **`sessionID` known** → `{projDir}/{sessionID}.jsonl` if it exists → `Confidence=High`. (Restored sessions resolve here too: `--resume <id>` keeps the same `<id>.jsonl`, verified.)
-3. **Unknown id** → list `{projDir}/*.jsonl`. To pick:
-   - Read the **last complete line** of each candidate and match its embedded `cwd` **and** `gitBranch` against the session's dir/branch. This kills cross-branch contamination (the dir mixes 6 branches' files).
-   - Among matches, require mtime **strictly >** `startedAt` (sub-second; Go exposes ns mtime on NTFS) and pick the newest. → `Confidence=Low`.
-   - If **zero or >1** candidates survive matching → `ok=false` (ambiguous) → caller keeps screen-scrape. Never guess under ambiguity.
+**Bindings:** extend `terminal.TokenInfo` with the two cache counters; **mirror into `frontend/wailsjs/go/models.ts`** (class field + constructor) — its own step (CLAUDE.md/memory recurring silent-strip bug).
 
-### 2. Parser (`parse.go`) **[R1]**
+**Tests:** the **scan-loop regression guard** — replay an append-by-append stream and assert `processQueue` fires **exactly once per turn** (never 0, never 2) with tokens changing underneath; **race test** (`-race`) running the reader concurrently with a `readLoop`-style writer to `s.LastOutputAt`, asserting no lock held across I/O; fallback (corrupt complete line / missing file → keep screen-scrape).
 
-**Line framing first:** split the read buffer on `\n`; **discard any bytes after the last `\n`** as an incomplete append. Never `Unmarshal` a partial line; never let a partial trailing line trigger the error/fallback path. Only a *complete* line that fails to parse counts as corruption.
+**Deliverable:** exact deduped tokens/cost for the happy path. Does **not** need `StartedAt`, the launch-site pins, or the working/convergence signal.
 
-- **Token total — dedup by `message.id`:** scan all complete lines; for each `type:"assistant"` line, key by `message.id` and record its `usage` once (occurrences are identical). Sum over distinct ids. Byte-prefilter on `"usage"`/`"compact_boundary"` to skip irrelevant lines cheaply. Compaction-safe (per-turn usage). **Validate the dedup with a multi-block fixture** — a same-`message.id`-across-3-lines case — or the test passes while still 2.6× wrong.
-- **Turn-state:** track the last line whose type ∈ {`user`,`assistant`}; ignore all metadata types. `TurnOpen = (lastRelevantType == "user") || (PendingTool != nil)`. `PendingTool` = most recent `tool_use` with no matching `tool_result`.
-- **Convergence:** last 5 recorded tool names identical → flag + name.
-- **Subagents:** enumerate `{projDir}/{sessionID}/subagents/*.jsonl` + `*.meta.json` sidecars; `Type←agentType`, link via `toolUseId`; `Status` **derived** (e.g. process/pid liveness or presence of a terminal record), not read.
-- **Todos:** last-write-wins over `TodoWrite` `tool_use.input.todos[]`. Gated behind a real fixture before being trusted.
+---
 
-Robustness: tolerate unknown fields; any I/O error (open/stat/read) or corrupt complete line → return last-known-good with `ok=false`, never panic, never log-spam.
+## Sub-plan 3 — Fallback coverage + working/convergence signal
 
-### 3. Pricing (`pricing.go`)
+Two independent slices; ship in either order.
 
-`MODEL_PRICING` map of per-1M-token rates incl. cache tiers; `CostUSD(model, TokenUsage) float64`. Unknown model → 0, no crash. Cost is an **API-equivalent estimate**, labeled as such in the UI.
+**3a — Low-confidence fallback + peripheral panes:**
+- Add `Session.StartedAt time.Time` (set in `Start()`); enables the `ConfLow` resolver's `mtime > startedAt` gate.
+- Pin `--session-id` on the three id-less sites so they become `ConfHigh`: worktree pane (`App.svelte:392`), background agents (`background-agents.ts:56`), keepalive (`keepalive.ts:46`) — each a one-liner mirroring the existing pinned path.
+- Upgrade the reader to **one goroutine per session** (D3) publishing last-known-good behind a small mutex; `Latest()` becomes a non-blocking read. Cache invalidation on `(size, mtime)`; on shrink → compaction → reset offset + full recompute; the ≤5 s full recompute also catches a same-size rewrite. On repeated read-deadline miss, downgrade `Confidence` so the caller reverts to live scrape.
 
-### 4. Off-loop reader + cache (`reader.go`) **[R1 — the key integration fix]**
+**3b — `working` + `convergence` display signal:**
+- Derive a display-only `working` state: JSONL `TurnOpen` (D2 tail) fused with `LastOutputAt < 1.5 s`. Priority for the *display* hint: hooks > JSONL(`ConfHigh`) > screen-scrape. **This never feeds the authoritative activity state or the `done` edge** — it is display-only.
+- `convergence` flag (last 5 tools identical) likewise display-only.
+- Extend the `ActivityInfo` event with `working bool`, `convergence bool` (+ parsed subagents/todos for later UI); **mirror into `models.ts`**. Frontend renders badges.
+- A transition table (inputs: `HasHookData`, `Confidence`, `TurnOpen`, `LastOutputAt<1.5 s` → display state) with tests asserting these fields never trigger `processQueue`.
 
-The reader does **not** run on the scan-loop goroutine. Each Claude session gets a lightweight reader that:
+**Deliverable:** worktree/background/keepalive panes resolve exactly; live "working" + stuck-loop badges.
 
-- Holds the last-known-good `SessionData`, published behind a small mutex / atomic pointer.
-- Refreshes on its own cadence (a worker pool with a hard per-read deadline, or a per-session goroutine), so a slow/large file never blocks other panes.
-- Uses an **incremental byte offset**: remember the last offset parsed; on refresh, read only appended bytes for the running token delta and tail state. A full recompute runs at a slow cadence (e.g. every N seconds), not every tick. This is the actual fix for "continuous append = permanent cache miss."
-- **Cache invalidation primarily on file size** (monotonic for an append log; more reliable than NTFS mtime). Tolerate **shrink/truncate** (compaction rewrites the file) by resetting the offset and re-reading.
-- **Eviction:** hook teardown into the existing `cleanupActivityTracking(id)` call site so closed sessions don't leak cache entries.
+---
 
-`scanAllSessions` only ever reads the published last-known-good struct — **non-blocking**.
+## Risks (residual)
 
-## Data flow (scan-loop integration) **[R1]**
+- **Schema drift** — Claude's JSONL is undocumented/version-dependent → isolated parser, tolerant unmarshal, soft fallback, fixtures pinned to a known CLI version.
+- **Low-confidence misattribution** — mitigated by backward cwd+gitBranch match + "ambiguous → don't guess"; residual only when two same-branch+cwd id-less sessions run concurrently → screen-scrape (acceptable).
+- **Cost** — API-equivalent estimate, labeled in UI.
+- **Todos** — unverified locally; ship empty until a fixture exists (D7).
 
-In `scanAllSessions` (`internal/backend/app_scan.go`), for Claude panes:
+## Follow-ons (out of scope)
 
-1. `data, ok := reader.Latest(session)` — non-blocking read of last-known-good.
-2. **Tokens/cost:** if `ok && data.Confidence==High` → set `s.Tokens` from `data` + `data.CostUSD`. Else (`Low`/`!ok`) → keep today's `ScanTokens()` regex; do **not** overwrite good values with a low-confidence guess.
-3. **Lock discipline:** the file read/parse happens entirely in the reader, off-loop and outside any session lock. `scanAllSessions` acquires `s.mu` **only** for the final `s.Tokens = …` assignment and releases immediately. Never hold `s.mu` across I/O (`activity.go` `ScanTokens` shape must not be extended to read files under its lock).
-
-**Activity — the `done` edge is sacrosanct:**
-
-- The pipeline edge (`activityChanged && actStr=="done"` → `processQueue` + `notifyOrchestratorDone`, `app_scan.go:157`) stays driven by the **existing** `DetectActivity` path, debounced by the existing 1.5s PTY-quiescence gate. **JSONL turn-state does NOT move or replace this edge in the foundation.**
-- The new **`working`** signal (JSONL `TurnOpen` fused with `LastOutputAt`) and **`convergence`** flag are **display-only**, emitted as additional fields on the activity event. They never trigger `processQueue`/`notifyOrchestratorDone`.
-- Priority for the *display* `working`/state hint: hooks (`HasHookData`) > JSONL (when `Confidence==High`) > screen-scrape. The *authoritative* activity state that gates the queue is unchanged.
-
-A transition table for the display hint (inputs: hasHookData, JSONL ok+Confidence, TurnOpen, LastOutputAt<1.5s → output state) is defined in the plan and covered by tests.
-
-### Struct & binding changes
-
-- Extend `terminal.TokenInfo` with `CacheCreationTokens`, `CacheReadTokens`.
-- Extend the `ActivityInfo` event payload with `working bool`, `convergence bool` (+ parsed subagents/todos for the follow-on UI).
-- **Mandatory (CLAUDE.md & memory — recurring silent-strip bug):** mirror every new field into `frontend/wailsjs/go/models.ts` (class field + constructor assignment). Tracked as its own plan step.
-
-## Testing **[R1 — adds the edge tests the v1 plan lacked]**
-
-- **Encoder:** Windows paths (`D:\…`, `C:\…`), `~`/8.3 (`PATRIC~1`→`PATRIC-1`), worktree paths, trailing separator, collision cases asserted as ambiguous.
-- **Resolver:** id-known High path; id-unknown fallback with cwd+gitBranch match; **two sessions same cwd different branch** → correct file or ambiguous; >1 match → `ok=false`; missing dir.
-- **Parser — token dedup:** a **multi-block, same-`message.id`** fixture asserting the sum counts the message once (the regression guard for the 2.6× bug). Plus compaction-boundary fixture.
-- **Parser — framing:** a fixture whose last line is a partial append → parser ignores it, returns valid data for the complete prefix, `ok` stays true.
-- **Parser — turn-state:** trailing metadata lines (`mode`, `system`, …) must not flip `TurnOpen`; user-trailing → open; pending-tool → open; assistant-final → closed. Convergence 5-identical / not.
-- **Subagents:** `.meta.json` sidecar parsing; derived status. **Todos:** behind a real fixture (acquire one first).
-- **Pricing:** per-model incl. cache tiers; unknown → 0.
-- **Scan-loop integration (the highest-stakes test):** replay an append-by-append JSONL stream through the actual activity-derivation and assert `processQueue` fires **exactly once per turn** — never zero, never twice — and that the `working`/`convergence` display fields never trigger it.
-- **Race:** run the reader concurrently with a `readLoop`-style writer to `s.LastOutputAt`/`s.Tokens` under `-race`; assert no lock held across I/O.
-- **Fallback:** corrupt complete line + missing file → `ok=false`, no crash, screen-scrape drives state.
-
-## Risks (residual, after fixes)
-
-- **Schema drift:** Claude's JSONL is undocumented and version-dependent → isolated parser, tolerant unmarshal, soft fallback, fixtures pinned to a known CLI version.
-- **Low-confidence misattribution:** mitigated by cwd+gitBranch matching and the "ambiguous → don't guess" rule; residual risk when two sessions on the same branch+cwd run concurrently without ids → falls back to screen-scrape (acceptable).
-- **Cost accuracy:** estimate only, labeled.
-- **Todos unverified locally** until a real fixture is captured.
-
-## Follow-ons (out of scope here)
-
-1. Subagent + todo visualization (pane / future Kanban card).
+1. Subagent + todo visualization (and `Status` derivation).
 2. `linesAdded`/`filesModified`/`gitCommits`/`toolErrors`.
-3. fsnotify watcher (replaces the off-loop reader's polling without changing callers).
+3. fsnotify watcher (replaces the per-session goroutine's polling without changing callers).
 4. Multi-provider (Codex/Gemini) resolution.
+
+---
+
+## Build order
+
+**Sub-plan 1 → Sub-plan 2 (value lands here) → Sub-plan 3a / 3b (either order).** Every step keeps the branch green: any unresolved/low-confidence/non-Claude pane keeps today's screen-scrape behavior by construction (Goal: zero regression).
