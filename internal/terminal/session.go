@@ -63,10 +63,9 @@ type Session struct {
 
 	// Statusline-sourced telemetry (Claude's statusLine JSON via the forwarder shim).
 	// When costSource == CostSourceStatusline, the screen scrape must not overwrite cost.
-	statuslineCost float64
-	contextPct     int
-	model          string
-	costSource     CostSource
+	contextPct int
+	model      string
+	costSource CostSource
 
 	// hookSessionID / hasHookData: set by Claude Code hook events.
 	// hasHookData=true means the scan loop skips DetectActivity() for this session.

@@ -15,7 +15,6 @@ const (
 func (s *Session) SetStatuslineData(cost float64, contextPct int, model string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.statuslineCost = cost
 	s.contextPct = contextPct
 	s.model = model
 	s.costSource = CostSourceStatusline
