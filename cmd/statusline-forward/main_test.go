@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,7 +42,7 @@ func TestForwardPostsSessionIdAndPayload(t *testing.T) {
 		ch <- g
 	}))
 	defer srv.Close()
-	port := strings.TrimPrefix(srv.URL, "http://127.0.0.1:")
+	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
 
 	forward([]byte(`{"cost":{"total_cost_usd":0.42}}`), port, "7")
 
