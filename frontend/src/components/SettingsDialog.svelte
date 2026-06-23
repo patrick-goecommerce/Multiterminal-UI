@@ -85,7 +85,13 @@
     if (sttDownloadUnsubscribe) sttDownloadUnsubscribe();
   });
 
-  $: if (visible) {
+  // IMPORTANT: only `visible` may be referenced in this reactive statement.
+  // The body is a function so Svelte does NOT track the dozens of variables it
+  // assigns/reads — otherwise editing any field (e.g. font size) re-runs the
+  // block and resets every control to the config defaults (recurring bug).
+  $: if (visible) initDialog();
+
+  function initDialog() {
     requestAnimationFrame(() => dialogEl?.focus());
     colorValue = $config.terminal_color || '#39ff14';
     selectedTheme = ($config.theme as ThemeName) || 'konzept';

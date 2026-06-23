@@ -296,7 +296,10 @@
 
     wheelHandler = (e: WheelEvent) => {
       if (!e.ctrlKey || !termInstance) return;
+      // Capture-phase + stopPropagation: own the Ctrl+wheel gesture before
+      // xterm's own viewport wheel handler (scroll) consumes it.
       e.preventDefault();
+      e.stopPropagation();
       const baseSize = $config.font_size || 10;
       const currentDelta = pane.zoomDelta || 0;
       const newDelta = e.deltaY < 0 ? currentDelta + 1 : currentDelta - 1;
@@ -316,7 +319,7 @@
         }, 150);
       }
     };
-    containerEl.addEventListener('wheel', wheelHandler, { passive: false });
+    containerEl.addEventListener('wheel', wheelHandler, { passive: false, capture: true });
 
     resizeObserver = new ResizeObserver(() => {
       if (!termInstance || isZooming) return;
@@ -367,6 +370,17 @@
         }, 50);
       });
 
+      // The first fit runs before web fonts have finished loading and before the
+      // flex layout fully settles, so the grid can be sized against fallback
+      // glyph metrics — the view then looks slightly offset until a later reflow.
+      // Re-fit once fonts are ready so the initial sizing is correct.
+      document.fonts.ready.then(() => {
+        if (!termInstance) return;
+        termInstance.fitAddon.fit();
+        const dims = termInstance.fitAddon.proposeDimensions();
+        if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
+      });
+
       termInstance.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
         if (e.type !== 'keydown') return true;
         if (e.ctrlKey && e.key === 'v') {
@@ -398,7 +412,7 @@
     if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
     if (cleanupFn) cleanupFn();
     if (queueCleanup) queueCleanup();
-    if (wheelHandler && containerEl) containerEl.removeEventListener('wheel', wheelHandler);
+    if (wheelHandler && containerEl) containerEl.removeEventListener('wheel', wheelHandler, { capture: true });
     resizeObserver?.disconnect();
     termInstance?.dispose();
   });

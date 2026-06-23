@@ -180,9 +180,10 @@
         {#if tab.unreadActivity}
           <span class="tab-activity-dot tab-dot-{tab.unreadActivity}"></span>
         {/if}
-        <button class="tab-close" on:click={(e) => handleCloseTab(e, tab.id)}>
+        <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+        <span class="tab-close" role="button" tabindex="-1" on:click={(e) => handleCloseTab(e, tab.id)}>
           &times;
-        </button>
+        </span>
       </button>
     {/each}
   </div>
