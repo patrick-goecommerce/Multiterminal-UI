@@ -58,6 +58,32 @@ const baseOptions: Partial<import('@xterm/xterm').ITerminalOptions> = {
 
 // Terminal themes matching the app themes
 const terminalThemes: Record<string, import('@xterm/xterm').ITheme> = {
+  // Matches the "konzept" app palette so the terminal background is identical to
+  // the pane background (--pane-bg #0e1210) — no seam where the grid doesn't yet
+  // fill the pane, and the semantic green/violet accents carry through.
+  konzept: {
+    background: '#0e1210',
+    foreground: '#dadfd2',
+    cursor: '#4cc56a',
+    cursorAccent: '#0e1210',
+    selectionBackground: '#4cc56a40',
+    black: '#222a20',
+    red: '#d65f5f',
+    green: '#4cc56a',
+    yellow: '#d6a85c',
+    blue: '#6f9fd8',
+    magenta: '#a184f4',
+    cyan: '#5bbf8c',
+    white: '#dadfd2',
+    brightBlack: '#5a6457',
+    brightRed: '#e07a7a',
+    brightGreen: '#6fd989',
+    brightYellow: '#e3bd76',
+    brightBlue: '#8fb6e6',
+    brightMagenta: '#b89ff7',
+    brightCyan: '#7fcfa6',
+    brightWhite: '#f0f3ea',
+  },
   dark: {
     background: '#11111b',
     foreground: '#cdd6f4',
