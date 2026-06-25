@@ -80,7 +80,13 @@ func (a *AppService) applyStatusLine(cfg config.StatusLineSettings) {
 
 	// Use forward slashes so PowerShell resolves the path correctly on Windows.
 	fwdPath := strings.ReplaceAll(scriptPath, `\`, `/`)
-	command := `powershell -NonInteractive -NoProfile -File "` + fwdPath + `"`
+	inner := `powershell -NonInteractive -NoProfile -File "` + fwdPath + `"`
+	// Wrap with the forwarder shim so MTUI captures Claude's statusline telemetry.
+	// If the user already has a statusline, wrap THAT instead so capture still works.
+	if st := a.GetStatusLineStatus(); st.HasExisting && !st.IsOurs && st.ExistingCommand != "" {
+		inner = st.ExistingCommand
+	}
+	command := wrapStatuslineCommand(ensureStatuslineForward(), inner)
 
 	settingsPath := claudeSettingsPath()
 	data, _ := os.ReadFile(settingsPath)
