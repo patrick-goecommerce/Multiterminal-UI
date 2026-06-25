@@ -34,6 +34,7 @@ func runWrapped(args []string, stdin []byte, stdout, stderr io.Writer) int {
 	cmd.Stdin = bytes.NewReader(stdin)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	hideChildWindow(cmd) // prevent a console window flashing on each statusline render (Windows)
 	if err := cmd.Run(); err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
 			return ee.ExitCode()
