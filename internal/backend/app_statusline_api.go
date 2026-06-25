@@ -3,6 +3,7 @@ package backend
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -48,6 +49,9 @@ func (a *AppService) handleStatusline(w http.ResponseWriter, r *http.Request) {
 			p.Payload.Model.DisplayName,
 		)
 	}
+	log.Printf("[statusline] session %d cost=%.4f ctx=%d%% model=%q found=%t",
+		p.SessionID, p.Payload.Cost.TotalCostUSD,
+		int(p.Payload.ContextWindow.UsedPercentage), p.Payload.Model.DisplayName, sess != nil)
 
 	w.WriteHeader(http.StatusOK)
 }

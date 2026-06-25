@@ -86,7 +86,9 @@ func (a *AppService) applyStatusLine(cfg config.StatusLineSettings) {
 	if st := a.GetStatusLineStatus(); st.HasExisting && !st.IsOurs && st.ExistingCommand != "" {
 		inner = st.ExistingCommand
 	}
-	command := wrapStatuslineCommand(ensureStatuslineForward(), inner)
+	fwd := ensureStatuslineForward()
+	command := wrapStatuslineCommand(fwd, inner)
+	log.Printf("[statusline] applyStatusLine: forwarder=%q wrapped=%t command=%q", fwd, fwd != "", command)
 
 	settingsPath := claudeSettingsPath()
 	data, _ := os.ReadFile(settingsPath)
