@@ -3,6 +3,7 @@ package backend
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // statuslineForwardSiblingPath returns the path to a statusline-forward shim
@@ -76,4 +77,33 @@ func wrapStatuslineCommand(forwarder, inner string) string {
 		return inner
 	}
 	return `"` + forwarder + `" ` + inner
+}
+
+// unwrapStatuslineCommand strips a forwarder prefix from cmd if the first
+// quoted token's basename is "statusline-forward" or "statusline-forward.exe".
+// This makes re-wrapping idempotent: applyStatusLine can call it on an
+// existing user statusline command without accumulating nested shim prefixes
+// across restarts or settings saves. The match is done on the basename alone
+// so it is robust to path differences between dev (sibling) and production
+// (extracted temp dir) runs.
+func unwrapStatuslineCommand(cmd string) string {
+	if len(cmd) == 0 || cmd[0] != '"' {
+		return cmd
+	}
+	// Find the closing quote of the first token.
+	end := strings.Index(cmd[1:], `"`)
+	if end < 0 {
+		return cmd
+	}
+	firstToken := cmd[1 : end+1] // path inside the quotes
+	base := strings.ToLower(filepath.Base(firstToken))
+	if base != "statusline-forward.exe" && base != "statusline-forward" {
+		return cmd
+	}
+	// Strip the quoted token and the single space that follows it.
+	rest := cmd[end+2:] // skip closing quote
+	if strings.HasPrefix(rest, " ") {
+		rest = rest[1:]
+	}
+	return rest
 }

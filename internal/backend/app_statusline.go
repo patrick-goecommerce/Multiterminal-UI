@@ -83,8 +83,11 @@ func (a *AppService) applyStatusLine(cfg config.StatusLineSettings) {
 	inner := `powershell -NonInteractive -NoProfile -File "` + fwdPath + `"`
 	// Wrap with the forwarder shim so MTUI captures Claude's statusline telemetry.
 	// If the user already has a statusline, wrap THAT instead so capture still works.
+	// Unwrap any existing forwarder prefix first so repeated applyStatusLine calls
+	// (on startup and on every settings save) are idempotent and do not accumulate
+	// nested shim prefixes.
 	if st := a.GetStatusLineStatus(); st.HasExisting && !st.IsOurs && st.ExistingCommand != "" {
-		inner = st.ExistingCommand
+		inner = unwrapStatuslineCommand(st.ExistingCommand)
 	}
 	fwd := ensureStatuslineForward()
 	command := wrapStatuslineCommand(fwd, inner)
