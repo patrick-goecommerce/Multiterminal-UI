@@ -46,10 +46,13 @@ func (s *Session) ScanTokens() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Look for cost patterns like $0.12 or $1.50
-	if matches := costPattern.FindStringSubmatch(content); len(matches) >= 2 {
-		if v, err := strconv.ParseFloat(matches[1], 64); err == nil {
-			s.Tokens.TotalCost = v
+	// Look for cost patterns like $0.12 or $1.50 — but never overwrite an
+	// authoritative statusline-sourced cost.
+	if s.costSource != CostSourceStatusline {
+		if matches := costPattern.FindStringSubmatch(content); len(matches) >= 2 {
+			if v, err := strconv.ParseFloat(matches[1], 64); err == nil {
+				s.Tokens.TotalCost = v
+			}
 		}
 	}
 

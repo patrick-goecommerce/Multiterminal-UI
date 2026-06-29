@@ -20,6 +20,7 @@ type TmuxLogEntry struct {
 func (a *AppService) startTmuxAPI() (int, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/tmux/log", a.handleTmuxLog)
+	mux.HandleFunc("/api/statusline", a.handleStatusline)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

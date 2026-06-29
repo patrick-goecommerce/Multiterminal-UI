@@ -12,10 +12,12 @@ import (
 
 // ActivityInfo is sent to the frontend when a session's activity state changes.
 type ActivityInfo struct {
-	ID       int    `json:"id"`
-	Activity string `json:"activity"` // "idle", "active", "done", "waitingPermission", "waitingAnswer", "error"
-	Cost     string `json:"cost"`
-	Title    string `json:"title"` // OSC-derived window title (fallback pane name)
+	ID         int    `json:"id"`
+	Activity   string `json:"activity"` // "idle", "active", "done", "waitingPermission", "waitingAnswer", "error"
+	Cost       string `json:"cost"`
+	Title      string `json:"title"`      // OSC-derived window title (fallback pane name)
+	ContextPct int    `json:"contextPct"` // % of context window used (statusline); 0 if unknown
+	Model      string `json:"model"`      // model display name (statusline); "" if unknown
 }
 
 // prevActivity tracks the last emitted state per session to avoid spamming.
@@ -128,6 +130,8 @@ func (a *AppService) scanAllSessions() {
 			costStr = fmt.Sprintf("$%.2f", tokens.TotalCost)
 		}
 
+		ctxPct, model, _ := sess.StatuslineInfo()
+
 		title := sess.GetTitle()
 
 		// Only emit when state, cost, or title actually changed
@@ -146,10 +150,12 @@ func (a *AppService) scanAllSessions() {
 		if changed && a.app != nil {
 			log.Printf("[scan] session %d: activity=%s cost=%s title=%q", id, actStr, costStr, title)
 			a.app.Event.Emit("terminal:activity", ActivityInfo{
-				ID:       id,
-				Activity: actStr,
-				Cost:     costStr,
-				Title:    title,
+				ID:         id,
+				Activity:   actStr,
+				Cost:       costStr,
+				Title:      title,
+				ContextPct: ctxPct,
+				Model:      model,
 			})
 		}
 
