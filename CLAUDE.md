@@ -158,6 +158,9 @@ wails build            # Production build
 wails build -debug     # Debug build (with devtools)
 # Binary: build/bin/mtui-portable.exe (Windows)
 ```
+> **`-tags production` requires a pre-built shim.** `internal/backend/statusline_shim_embed.go`
+> embeds `statusline-forward.exe`, which is `.gitignored` and only produced by the release
+> workflow. Plain `go build` / `wails` builds use the dev (sibling-binary) path and work fine.
 
 ## Testing
 ```bash

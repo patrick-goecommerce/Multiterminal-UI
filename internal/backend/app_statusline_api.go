@@ -43,6 +43,8 @@ func (a *AppService) handleStatusline(w http.ResponseWriter, r *http.Request) {
 	sess := a.sessions[p.SessionID]
 	a.mu.Unlock()
 	if sess != nil {
+		// int(UsedPercentage) intentionally truncates: 40.9 → 40. Exact decimal
+		// precision is not required for the progress-bar display.
 		sess.SetStatuslineData(
 			p.Payload.Cost.TotalCostUSD,
 			int(p.Payload.ContextWindow.UsedPercentage),

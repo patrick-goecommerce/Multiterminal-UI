@@ -16,6 +16,8 @@ import (
 )
 
 func main() {
+	// Error deliberately ignored: a read failure yields an empty payload, which
+	// forward() handles gracefully, and must never break the wrapped statusline.
 	data, _ := io.ReadAll(os.Stdin)
 	// Display first: relay the wrapped statusline so the POST never delays it.
 	code := runWrapped(os.Args[1:], data, os.Stdout, os.Stderr)

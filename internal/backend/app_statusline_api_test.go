@@ -52,3 +52,30 @@ func TestHandleStatuslineGarbageBodyIsBadRequest(t *testing.T) {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
 }
+
+func TestHandleStatuslineNonPostReturns405(t *testing.T) {
+	a := &AppService{sessions: map[int]*terminal.Session{}}
+	req := httptest.NewRequest("GET", "/api/statusline", nil)
+	rec := httptest.NewRecorder()
+	a.handleStatusline(rec, req)
+	if rec.Code != 405 {
+		t.Fatalf("status = %d, want 405 for GET", rec.Code)
+	}
+}
+
+func TestHandleStatuslineFractionalPercentageTruncates(t *testing.T) {
+	// float64 40.9 must truncate to int 40 (not round to 41).
+	a := &AppService{sessions: map[int]*terminal.Session{}}
+	sess := terminal.NewSession(7, 24, 80)
+	a.sessions[7] = sess
+
+	body := `{"sessionId":7,"payload":{"context_window":{"used_percentage":40.9}}}`
+	req := httptest.NewRequest("POST", "/api/statusline", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	a.handleStatusline(rec, req)
+
+	pct, _, _ := sess.StatuslineInfo()
+	if pct != 40 {
+		t.Fatalf("context pct = %d, want 40 (truncated from 40.9)", pct)
+	}
+}
