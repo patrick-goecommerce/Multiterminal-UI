@@ -27,10 +27,20 @@ func TestRenderMinimalNoColorNoBar(t *testing.T) {
 
 func TestRenderContextColorThresholds(t *testing.T) {
 	cfg := RenderConfig{Template: "standard", ShowContext: true}
-	for pct, color := range map[int]string{50: "\x1b[32m", 75: "\x1b[33m", 95: "\x1b[31m"} {
-		got := Render(cfg, Status{ContextPct: p(pct)}, "")
-		if got[:len(color)] != color {
-			t.Fatalf("pct=%d got prefix %q want %q", pct, got[:len(color)], color)
+	cases := []struct {
+		pct  int
+		want string
+	}{
+		{50, "\x1b[32m█████░░░░░\x1b[0m 50%\n"},
+		{70, "\x1b[33m███████░░░\x1b[0m 70%\n"},
+		{75, "\x1b[33m███████░░░\x1b[0m 75%\n"},
+		{90, "\x1b[31m█████████░\x1b[0m 90%\n"},
+		{100, "\x1b[31m██████████\x1b[0m 100%\n"},
+	}
+	for _, tc := range cases {
+		got := Render(cfg, Status{ContextPct: p(tc.pct)}, "")
+		if got != tc.want {
+			t.Fatalf("pct=%d\n got=%q\nwant=%q", tc.pct, got, tc.want)
 		}
 	}
 }
