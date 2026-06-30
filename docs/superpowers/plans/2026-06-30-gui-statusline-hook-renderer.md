@@ -820,3 +820,5 @@ Append "E2E verified on <date>: no flash, statusline renders, cost captured, fai
 **Placeholder scan:** every code step has complete code; every command has expected output; no TBD/TODO. ✓
 
 **Type consistency:** `RenderConfig`/`Status`/`Render(cfg,s,gitBranch)` used identically across Tasks 4 and 7; `resolveBundledBinary(name, embedded)` defined Task 1, used Tasks 2 & 8; `statuslineBin`/`hookBin` embeds defined Task 8, the temporary `hookBin` stub in Task 2 is removed in Task 8 Step 4; `postCapture`/`gitBranch`/`parseStatus` consistent. ✓
+
+> **GUI-stdout gate: PASS on 2026-06-30** — confirmed `[GUI-PROBE] ctx 0% main` rendered in a live Claude pane.
