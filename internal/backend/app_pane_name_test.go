@@ -32,6 +32,9 @@ func TestPaneNameArgs(t *testing.T) {
 	if !strings.Contains(joined, "--model claude-haiku-4-5") {
 		t.Errorf("args must contain model flag, got %v", args)
 	}
+	if !strings.Contains(joined, "--strict-mcp-config") {
+		t.Errorf("args must contain --strict-mcp-config (no MCP child spawns), got %v", args)
+	}
 	// the prompt must be passed as its own argv element (not split)
 	found := false
 	for _, a := range args {

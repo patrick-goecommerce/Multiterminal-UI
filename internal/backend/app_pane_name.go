@@ -86,7 +86,11 @@ func buildNamePrompt(userPrompt string) string {
 // paneNameArgs builds the claude argv for a one-shot, non-interactive naming
 // call. The prompt is passed as a single argv element.
 func paneNameArgs(model, prompt string) []string {
-	args := []string{"-p", prompt}
+	// --strict-mcp-config: with no --mcp-config provided, this loads ZERO MCP
+	// servers, so the one-shot naming call never spawns MCP child processes
+	// (e.g. `npx @upstash/context7-mcp`) that flash a console window on Windows.
+	// OAuth/model/settings still apply (unlike --bare, which drops auth).
+	args := []string{"--strict-mcp-config", "-p", prompt}
 	if model != "" {
 		args = append(args, "--model", model)
 	}
@@ -115,7 +119,9 @@ func (a *AppService) generatePaneName(model, userPrompt string) string {
 
 	args := paneNameArgs(model, buildNamePrompt(userPrompt))
 	cmd := wrapClaudeCmdContext(ctx, path, args)
-	cmd.Env = filterEnv(os.Environ(), "CLAUDECODE")
+	// Disable IDE auto-detection (a `tasklist` child spawn that flashes a console
+	// window) for this background naming call.
+	cmd.Env = append(filterEnv(os.Environ(), "CLAUDECODE"), "CLAUDE_CODE_AUTO_CONNECT_IDE=false")
 
 	out, err := cmd.Output()
 	if err != nil {
