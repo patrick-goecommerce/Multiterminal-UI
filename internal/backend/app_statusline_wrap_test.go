@@ -135,7 +135,7 @@ func TestExtractShimIdempotentWhenSameSize(t *testing.T) {
 	}
 }
 
-func TestResolveBundledBinaryPrefersSibling(t *testing.T) {
+func TestResolveBundledBinaryExtractFallback(t *testing.T) {
 	// A sibling next to the test binary's own dir is hard to fake; instead
 	// assert the embed-extract fallback path is returned when no sibling and
 	// embedded bytes are present.
@@ -148,5 +148,34 @@ func TestResolveBundledBinaryPrefersSibling(t *testing.T) {
 	}
 	if filepath.Base(got) != "mtui-probe.exe" && filepath.Base(got) != "mtui-probe" {
 		t.Fatalf("unexpected basename: %q", got)
+	}
+}
+
+func TestResolveBundledBinaryPrefersSibling(t *testing.T) {
+	// Plant a sibling binary next to os.Executable() (the test binary itself).
+	// resolveBundledBinary must return that sibling path, ignoring the embedded bytes.
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	exeDir := filepath.Dir(exe)
+
+	// Derive the expected name with the same rule used by the production code.
+	sibName := "mtui-probe"
+	if isWindows() {
+		sibName += ".exe"
+	}
+	sibPath := filepath.Join(exeDir, sibName)
+
+	// Plant the sibling file.
+	if err := os.WriteFile(sibPath, []byte("placeholder"), 0755); err != nil {
+		t.Skipf("cannot write sibling binary next to test exe (%v) — skipping sibling-priority test", err)
+	}
+	t.Cleanup(func() { os.Remove(sibPath) })
+
+	got := resolveBundledBinary("mtui-probe", []byte("ignored-embed"))
+	want := filepath.ToSlash(sibPath)
+	if got != want {
+		t.Fatalf("resolveBundledBinary = %q, want sibling path %q", got, want)
 	}
 }

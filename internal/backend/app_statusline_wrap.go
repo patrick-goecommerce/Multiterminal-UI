@@ -50,7 +50,7 @@ func resolveBundledBinary(name string, embedded []byte) string {
 	}
 	home, _ := os.UserHomeDir()
 	ext := ""
-	if filepath.Ext(os.Args[0]) == ".exe" || isWindows() {
+	if isWindows() {
 		ext = ".exe"
 	}
 	dst := filepath.Join(home, ".claude", name+ext)
