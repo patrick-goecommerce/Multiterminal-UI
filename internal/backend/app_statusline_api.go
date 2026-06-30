@@ -8,7 +8,7 @@ import (
 )
 
 // statuslinePayload is MTUI's wrapper around Claude's raw statusLine JSON,
-// posted by the statusline-forward shim. Only the fields MTUI consumes are typed;
+// posted by mtui-statusline. Only the fields MTUI consumes are typed;
 // unknown fields are ignored.
 type statuslinePayload struct {
 	SessionID int `json:"sessionId"`

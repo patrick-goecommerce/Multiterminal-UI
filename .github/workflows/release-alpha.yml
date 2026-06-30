@@ -64,11 +64,6 @@ jobs:
             -info build/windows/info.json \
             -out wails_windows_amd64.syso
 
-      - name: Build statusline-forward shim (embedded into the main binary)
-        shell: bash
-        run: |
-          go build -o internal/backend/statusline-forward.exe ./cmd/statusline-forward
-
       - name: Build embedded helper binaries (GUI subsystem, no console flash)
         shell: bash
         run: |

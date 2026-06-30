@@ -1,5 +1,5 @@
 // cmd/mtui-statusline/render.go
-// Pure rendering function — byte-parity with buildStatusLineScript (PowerShell).
+// Pure rendering function — renders the Claude statusLine JSON to a string.
 package main
 
 import (

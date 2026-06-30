@@ -93,72 +93,23 @@ func statuslineRenderFlags(cfg config.StatusLineSettings) string {
 }
 
 // applyStatusLine registers the statusline renderer in ~/.claude/settings.json.
-// Primary path: resolve the bundled mtui-statusline binary and register it directly
-// (no PowerShell, no console-window flash). Fail-safe path (binary not found):
-// write the legacy PS1 script and wrap it via the statusline-forward shim.
+// It resolves the bundled mtui-statusline binary and registers it directly
+// (no PowerShell, no console-window flash). If the binary cannot be resolved the
+// statusline is left untouched (there is no PowerShell fallback anymore).
 func (a *AppService) applyStatusLine(cfg config.StatusLineSettings) {
 	settingsPath := claudeSettingsPath()
 
-	// --- Primary path: use the GUI-subsystem renderer binary ---
+	// Best-effort: delete a stale PS1 script left over from an older build.
+	_ = os.Remove(statusLineScriptPath())
+
 	rendererExe := resolveBundledBinary("mtui-statusline", statuslineBin)
-	if rendererExe != "" {
-		flags := statuslineRenderFlags(cfg)
-		command := fmt.Sprintf(`"%s" %s`, rendererExe, flags)
-		log.Printf("[statusline] applyStatusLine: renderer=%q command=%q", rendererExe, command)
-
-		data, _ := os.ReadFile(settingsPath)
-		var settings map[string]any
-		if len(data) > 0 {
-			_ = json.Unmarshal(data, &settings)
-		}
-		if settings == nil {
-			settings = make(map[string]any)
-		}
-		settings["statusLine"] = map[string]any{
-			"type":    "command",
-			"command": command,
-		}
-		out, err := json.MarshalIndent(settings, "", "  ")
-		if err != nil {
-			log.Printf("[statusline] marshal: %v", err)
-			return
-		}
-		if err := os.MkdirAll(filepath.Dir(settingsPath), 0755); err != nil {
-			log.Printf("[statusline] mkdir settings: %v", err)
-			return
-		}
-		if err := os.WriteFile(settingsPath, out, 0644); err != nil {
-			log.Printf("[statusline] write settings: %v", err)
-		}
+	if rendererExe == "" {
+		log.Printf("[statusline] mtui-statusline binary not found — statusline not registered")
 		return
 	}
 
-	// --- Fail-safe path: write PS1 script + wrap with forwarder shim ---
-	log.Printf("[statusline] applyStatusLine: renderer binary not found, falling back to PS1")
-	scriptPath := statusLineScriptPath()
-	if err := os.MkdirAll(filepath.Dir(scriptPath), 0755); err != nil {
-		log.Printf("[statusline] mkdir: %v", err)
-		return
-	}
-	if err := os.WriteFile(scriptPath, []byte(buildStatusLineScript(cfg)), 0644); err != nil {
-		log.Printf("[statusline] write script: %v", err)
-		return
-	}
-
-	// Use forward slashes so PowerShell resolves the path correctly on Windows.
-	fwdPath := strings.ReplaceAll(scriptPath, `\`, `/`)
-	inner := `powershell -NonInteractive -NoProfile -File "` + fwdPath + `"`
-	// Wrap with the forwarder shim so MTUI captures Claude's statusline telemetry.
-	// If the user already has a statusline, wrap THAT instead so capture still works.
-	// Unwrap any existing forwarder prefix first so repeated applyStatusLine calls
-	// (on startup and on every settings save) are idempotent and do not accumulate
-	// nested shim prefixes.
-	if st := a.GetStatusLineStatus(); st.HasExisting && !st.IsOurs && st.ExistingCommand != "" {
-		inner = unwrapStatuslineCommand(st.ExistingCommand)
-	}
-	fwd := ensureStatuslineForward()
-	command := wrapStatuslineCommand(fwd, inner)
-	log.Printf("[statusline] applyStatusLine: forwarder=%q wrapped=%t command=%q", fwd, fwd != "", command)
+	command := fmt.Sprintf(`"%s" %s`, rendererExe, statuslineRenderFlags(cfg))
+	log.Printf("[statusline] applyStatusLine: renderer=%q command=%q", rendererExe, command)
 
 	data, _ := os.ReadFile(settingsPath)
 	var settings map[string]any
@@ -184,6 +135,10 @@ func (a *AppService) applyStatusLine(cfg config.StatusLineSettings) {
 	if err := os.WriteFile(settingsPath, out, 0644); err != nil {
 		log.Printf("[statusline] write settings: %v", err)
 	}
+
+	// Best-effort: delete the stale PS1 again post-write (covers the rare race
+	// where the renderer just extracted it next to the script path).
+	_ = os.Remove(statusLineScriptPath())
 }
 
 // removeStatusLine deletes the statusLine key from ~/.claude/settings.json
@@ -222,112 +177,4 @@ func claudeSettingsPath() string {
 func statusLineScriptPath() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".claude", "mtui-statusline.ps1")
-}
-
-// buildStatusLineScript generates a PowerShell script for the given statusline configuration.
-func buildStatusLineScript(cfg config.StatusLineSettings) string {
-	switch cfg.Template {
-	case "minimal":
-		return buildMinimalScript(cfg)
-	case "extended":
-		return buildExtendedScript(cfg)
-	default: // "standard"
-		return buildStandardScript(cfg)
-	}
-}
-
-func buildMinimalScript(cfg config.StatusLineSettings) string {
-	var b strings.Builder
-	b.WriteString("$d = $input | Out-String | ConvertFrom-Json\n")
-	b.WriteString("$parts = @()\n")
-	if cfg.ShowModel {
-		b.WriteString("$model = if ($d.model.display_name) { $d.model.display_name } else { '?' }\n")
-		b.WriteString("$parts += \"[$model]\"\n")
-	}
-	if cfg.ShowContext {
-		b.WriteString("$pct = if ($null -ne $d.context_window.used_percentage) { [int]$d.context_window.used_percentage } else { 0 }\n")
-		b.WriteString("$parts += \"$pct%\"\n")
-	}
-	if cfg.ShowCost {
-		b.WriteString("if ($null -ne $d.cost.total_cost_usd) { $parts += ('$' + [Math]::Round($d.cost.total_cost_usd, 3).ToString('0.000')) }\n")
-	}
-	if cfg.ShowGitBranch {
-		b.WriteString("try { $br = (git branch --show-current 2>$null); if ($br) { $parts += \"git:$br\" } } catch {}\n")
-	}
-	if cfg.ShowDuration {
-		b.WriteString("if ($null -ne $d.cost.total_duration_ms) { $ms = [int]$d.cost.total_duration_ms; $parts += ('' + [Math]::Floor($ms/60000) + 'm ' + [Math]::Floor(($ms%60000)/1000) + 's') }\n")
-	}
-	b.WriteString("Write-Host ($parts -join ' | ')\n")
-	return b.String()
-}
-
-func buildStandardScript(cfg config.StatusLineSettings) string {
-	var b strings.Builder
-	b.WriteString("$d = $input | Out-String | ConvertFrom-Json\n")
-	b.WriteString("$ESC = [char]27\n")
-	b.WriteString("$GREEN = \"$ESC[32m\"; $YELLOW = \"$ESC[33m\"; $RED = \"$ESC[31m\"; $RESET = \"$ESC[0m\"\n")
-	b.WriteString("$parts = @()\n")
-	if cfg.ShowModel {
-		b.WriteString("$model = if ($d.model.display_name) { $d.model.display_name } else { '?' }\n")
-		b.WriteString("$parts += \"[$model]\"\n")
-	}
-	if cfg.ShowContext {
-		b.WriteString("$pct = if ($null -ne $d.context_window.used_percentage) { [int]$d.context_window.used_percentage } else { 0 }\n")
-		b.WriteString("$barColor = if ($pct -ge 90) { $RED } elseif ($pct -ge 70) { $YELLOW } else { $GREEN }\n")
-		b.WriteString("$filled = [Math]::Floor($pct / 10)\n")
-		b.WriteString("$filledBar = ([string][char]0x2588) * $filled\n")
-		b.WriteString("$emptyBar = ([string][char]0x2591) * (10 - $filled)\n")
-		b.WriteString("$bar = $barColor + $filledBar + $emptyBar + $RESET\n")
-		b.WriteString("$parts += \"$bar $pct%\"\n")
-	}
-	if cfg.ShowCost {
-		b.WriteString("if ($null -ne $d.cost.total_cost_usd) { $parts += ('$' + [Math]::Round($d.cost.total_cost_usd, 3).ToString('0.000')) }\n")
-	}
-	if cfg.ShowGitBranch {
-		b.WriteString("try { $br = (git branch --show-current 2>$null); if ($br) { $parts += \"git:$br\" } } catch {}\n")
-	}
-	if cfg.ShowDuration {
-		b.WriteString("if ($null -ne $d.cost.total_duration_ms) { $ms = [int]$d.cost.total_duration_ms; $parts += ('' + [Math]::Floor($ms/60000) + 'm ' + [Math]::Floor(($ms%60000)/1000) + 's') }\n")
-	}
-	b.WriteString("Write-Host ($parts -join ' | ')\n")
-	return b.String()
-}
-
-func buildExtendedScript(cfg config.StatusLineSettings) string {
-	var b strings.Builder
-	b.WriteString("$d = $input | Out-String | ConvertFrom-Json\n")
-	b.WriteString("$ESC = [char]27\n")
-	b.WriteString("$CYAN = \"$ESC[36m\"; $GREEN = \"$ESC[32m\"; $YELLOW = \"$ESC[33m\"; $RED = \"$ESC[31m\"; $RESET = \"$ESC[0m\"\n")
-
-	// Line 1: model + dir + git branch
-	b.WriteString("$line1 = @()\n")
-	if cfg.ShowModel {
-		b.WriteString("$model = if ($d.model.display_name) { $d.model.display_name } else { '?' }\n")
-		b.WriteString("$line1 += \"$CYAN[$model]$RESET\"\n")
-	}
-	b.WriteString("if ($d.workspace.current_dir) { $line1 += [System.IO.Path]::GetFileName($d.workspace.current_dir) }\n")
-	if cfg.ShowGitBranch {
-		b.WriteString("try { $br = (git branch --show-current 2>$null); if ($br) { $line1 += \"git:$br\" } } catch {}\n")
-	}
-	b.WriteString("Write-Host ($line1 -join ' | ')\n")
-
-	// Line 2: context bar + cost + duration
-	b.WriteString("$line2 = @()\n")
-	if cfg.ShowContext {
-		b.WriteString("$pct = if ($null -ne $d.context_window.used_percentage) { [int]$d.context_window.used_percentage } else { 0 }\n")
-		b.WriteString("$barColor = if ($pct -ge 90) { $RED } elseif ($pct -ge 70) { $YELLOW } else { $GREEN }\n")
-		b.WriteString("$filled = [Math]::Floor($pct / 10)\n")
-		b.WriteString("$filledBar = ([string][char]0x2588) * $filled\n")
-		b.WriteString("$emptyBar = ([string][char]0x2591) * (10 - $filled)\n")
-		b.WriteString("$bar = $barColor + $filledBar + $emptyBar + $RESET\n")
-		b.WriteString("$line2 += \"$bar $pct%\"\n")
-	}
-	if cfg.ShowCost {
-		b.WriteString("if ($null -ne $d.cost.total_cost_usd) { $line2 += ('$' + [Math]::Round($d.cost.total_cost_usd, 3).ToString('0.000')) }\n")
-	}
-	if cfg.ShowDuration {
-		b.WriteString("if ($null -ne $d.cost.total_duration_ms) { $ms = [int]$d.cost.total_duration_ms; $line2 += ('' + [Math]::Floor($ms/60000) + 'm ' + [Math]::Floor(($ms%60000)/1000) + 's') }\n")
-	}
-	b.WriteString("if ($line2.Count -gt 0) { Write-Host ($line2 -join ' | ') }\n")
-	return b.String()
 }

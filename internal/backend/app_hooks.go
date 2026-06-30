@@ -14,7 +14,7 @@ import (
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
-// rawHookEvent is the JSONL structure written by hook_handler.ps1.
+// rawHookEvent is the JSONL structure written by mtui-hook.
 type rawHookEvent struct {
 	Ts        int64  `json:"ts"`
 	Event     string `json:"event"`
@@ -206,7 +206,7 @@ func (hm *HookManager) handleEvent(ev rawHookEvent) {
 		return
 	}
 
-	// UserPromptSubmit carries the user's prompt text (see hook_handler.ps1).
+	// UserPromptSubmit carries the user's prompt text (see cmd/mtui-hook).
 	// Forward it so the host can derive an automatic pane name.
 	if ev.Event == "UserPromptSubmit" && ev.Message != "" && hm.onPrompt != nil {
 		hm.onPrompt(ev.MtID, ev.Message)

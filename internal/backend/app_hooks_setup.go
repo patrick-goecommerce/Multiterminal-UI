@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/backend/hooks"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
@@ -21,15 +20,21 @@ func (a *AppService) setupHooks(ctx context.Context) {
 	}
 
 	hooksDir := filepath.Join(appDataDir, "Multiterminal", "hooks")
-	scriptPath := filepath.Join(appDataDir, "Multiterminal", "hook_handler.ps1")
 
-	// Deploy/update the hook script from embedded bytes
-	if err := os.MkdirAll(filepath.Dir(scriptPath), 0755); err != nil {
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
 		log.Printf("[hooks] could not create app dir: %v", err)
 		return
 	}
-	if err := os.WriteFile(scriptPath, []byte(hooks.HookHandlerScript), 0644); err != nil {
-		log.Printf("[hooks] could not write hook script: %v", err)
+
+	// Best-effort: delete a stale PS1 hook handler left over from an older build.
+	_ = os.Remove(filepath.Join(appDataDir, "Multiterminal", "hook_handler.ps1"))
+
+	// Register the GUI-subsystem hook binary directly (no powershell → no console
+	// window flash). There is no PowerShell fallback: if the binary cannot be
+	// resolved, skip hook integration entirely.
+	hookExe := resolveBundledBinary("mtui-hook", hookBin)
+	if hookExe == "" {
+		log.Printf("[hooks] mtui-hook binary not found — hook integration skipped")
 		return
 	}
 
@@ -40,16 +45,7 @@ func (a *AppService) setupHooks(ctx context.Context) {
 		return
 	}
 	settingsPath := filepath.Join(homeDir, ".claude", "settings.json")
-	// Register the GUI-subsystem hook binary directly (no powershell → no console
-	// window flash). Fall back to the powershell script only if the binary cannot
-	// be resolved (keeps hooks working in a misconfigured/partial build).
-	hookExe := resolveBundledBinary("mtui-hook", hookBin)
-	var command string
-	if hookExe != "" {
-		command = fmt.Sprintf(`"%s"`, hookExe)
-	} else {
-		command = fmt.Sprintf(`powershell -NonInteractive -File "%s"`, scriptPath)
-	}
+	command := fmt.Sprintf(`"%s"`, hookExe)
 	installer := newHookInstaller(settingsPath, command)
 	if err := installer.Install(); err != nil {
 		log.Printf("[hooks] could not install hooks: %v", err)
