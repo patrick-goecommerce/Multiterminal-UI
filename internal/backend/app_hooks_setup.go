@@ -11,10 +11,6 @@ import (
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
-// hookBin holds the embedded mtui-hook.exe bytes for production builds.
-// Task 8 replaces this stub with a real //go:embed directive.
-var hookBin []byte
-
 // setupHooks deploys the hook script, registers hooks in ~/.claude/settings.json,
 // and starts the HookManager polling loop.
 func (a *AppService) setupHooks(ctx context.Context) {

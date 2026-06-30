@@ -2,6 +2,7 @@ package backend
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -66,8 +67,74 @@ func (a *AppService) GetStatusLineStatus() StatusLineStatus {
 	}
 }
 
-// applyStatusLine writes the PS1 script and registers it in ~/.claude/settings.json.
+// statuslineRenderFlags builds the CLI flag string for the mtui-statusline renderer.
+// It always includes --template <name>; then appends --model, --context, --cost,
+// --git, --duration for each enabled flag in that order.
+func statuslineRenderFlags(cfg config.StatusLineSettings) string {
+	var b strings.Builder
+	b.WriteString("--template ")
+	b.WriteString(cfg.Template)
+	if cfg.ShowModel {
+		b.WriteString(" --model")
+	}
+	if cfg.ShowContext {
+		b.WriteString(" --context")
+	}
+	if cfg.ShowCost {
+		b.WriteString(" --cost")
+	}
+	if cfg.ShowGitBranch {
+		b.WriteString(" --git")
+	}
+	if cfg.ShowDuration {
+		b.WriteString(" --duration")
+	}
+	return b.String()
+}
+
+// applyStatusLine registers the statusline renderer in ~/.claude/settings.json.
+// Primary path: resolve the bundled mtui-statusline binary and register it directly
+// (no PowerShell, no console-window flash). Fail-safe path (binary not found):
+// write the legacy PS1 script and wrap it via the statusline-forward shim.
 func (a *AppService) applyStatusLine(cfg config.StatusLineSettings) {
+	settingsPath := claudeSettingsPath()
+
+	// --- Primary path: use the GUI-subsystem renderer binary ---
+	rendererExe := resolveBundledBinary("mtui-statusline", statuslineBin)
+	if rendererExe != "" {
+		flags := statuslineRenderFlags(cfg)
+		command := fmt.Sprintf(`"%s" %s`, rendererExe, flags)
+		log.Printf("[statusline] applyStatusLine: renderer=%q command=%q", rendererExe, command)
+
+		data, _ := os.ReadFile(settingsPath)
+		var settings map[string]any
+		if len(data) > 0 {
+			_ = json.Unmarshal(data, &settings)
+		}
+		if settings == nil {
+			settings = make(map[string]any)
+		}
+		settings["statusLine"] = map[string]any{
+			"type":    "command",
+			"command": command,
+		}
+		out, err := json.MarshalIndent(settings, "", "  ")
+		if err != nil {
+			log.Printf("[statusline] marshal: %v", err)
+			return
+		}
+		if err := os.MkdirAll(filepath.Dir(settingsPath), 0755); err != nil {
+			log.Printf("[statusline] mkdir settings: %v", err)
+			return
+		}
+		if err := os.WriteFile(settingsPath, out, 0644); err != nil {
+			log.Printf("[statusline] write settings: %v", err)
+		}
+		return
+	}
+
+	// --- Fail-safe path: write PS1 script + wrap with forwarder shim ---
+	log.Printf("[statusline] applyStatusLine: renderer binary not found, falling back to PS1")
 	scriptPath := statusLineScriptPath()
 	if err := os.MkdirAll(filepath.Dir(scriptPath), 0755); err != nil {
 		log.Printf("[statusline] mkdir: %v", err)
@@ -93,7 +160,6 @@ func (a *AppService) applyStatusLine(cfg config.StatusLineSettings) {
 	command := wrapStatuslineCommand(fwd, inner)
 	log.Printf("[statusline] applyStatusLine: forwarder=%q wrapped=%t command=%q", fwd, fwd != "", command)
 
-	settingsPath := claudeSettingsPath()
 	data, _ := os.ReadFile(settingsPath)
 	var settings map[string]any
 	if len(data) > 0 {
