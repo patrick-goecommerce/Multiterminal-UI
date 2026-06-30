@@ -11,6 +11,10 @@ import (
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
+// hookBin holds the embedded mtui-hook.exe bytes for production builds.
+// Task 8 replaces this stub with a real //go:embed directive.
+var hookBin []byte
+
 // setupHooks deploys the hook script, registers hooks in ~/.claude/settings.json,
 // and starts the HookManager polling loop.
 func (a *AppService) setupHooks(ctx context.Context) {
@@ -40,7 +44,16 @@ func (a *AppService) setupHooks(ctx context.Context) {
 		return
 	}
 	settingsPath := filepath.Join(homeDir, ".claude", "settings.json")
-	command := fmt.Sprintf(`powershell -NonInteractive -File "%s"`, scriptPath)
+	// Register the GUI-subsystem hook binary directly (no powershell → no console
+	// window flash). Fall back to the powershell script only if the binary cannot
+	// be resolved (keeps hooks working in a misconfigured/partial build).
+	hookExe := resolveBundledBinary("mtui-hook", hookBin)
+	var command string
+	if hookExe != "" {
+		command = fmt.Sprintf(`"%s"`, hookExe)
+	} else {
+		command = fmt.Sprintf(`powershell -NonInteractive -File "%s"`, scriptPath)
+	}
 	installer := newHookInstaller(settingsPath, command)
 	if err := installer.Install(); err != nil {
 		log.Printf("[hooks] could not install hooks: %v", err)

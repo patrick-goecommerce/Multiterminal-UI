@@ -69,6 +69,12 @@ jobs:
         run: |
           go build -o internal/backend/statusline-forward.exe ./cmd/statusline-forward
 
+      - name: Build embedded helper binaries (GUI subsystem, no console flash)
+        shell: bash
+        run: |
+          go build -ldflags "-H windowsgui" -o internal/backend/mtui-hook.exe ./cmd/mtui-hook
+          go build -ldflags "-H windowsgui" -o internal/backend/mtui-statusline.exe ./cmd/mtui-statusline
+
       - name: Build Go binary
         shell: bash
         run: |

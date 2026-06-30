@@ -50,3 +50,5 @@ tmux-shim.exe
 # Embedded statusline-forward shim — built into internal/backend/ by the release
 # pipeline before the production build, then embedded via go:embed. Never committed.
 internal/backend/statusline-forward.exe
+internal/backend/mtui-hook.exe
+internal/backend/mtui-statusline.exe
