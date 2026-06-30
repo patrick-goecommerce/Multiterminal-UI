@@ -4,7 +4,6 @@ package backend
 import (
 	"fmt"
 	"log"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -86,18 +85,14 @@ func issueBranchName(number int, title string) string {
 
 // isGitRepo checks whether dir is inside a git repository.
 func isGitRepo(dir string) bool {
-	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "rev-parse", "--is-inside-work-tree")
 	out, err := cmd.Output()
 	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
 // hasCleanWorkingTree returns true if there are no uncommitted changes.
 func hasCleanWorkingTree(dir string) bool {
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "status", "--porcelain")
 	out, err := cmd.Output()
 	if err != nil {
 		return false
@@ -107,9 +102,7 @@ func hasCleanWorkingTree(dir string) bool {
 
 // branchExists checks if a git branch with the given name exists locally.
 func branchExists(dir string, branch string) bool {
-	cmd := exec.Command("git", "rev-parse", "--verify", branch)
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "rev-parse", "--verify", branch)
 	return cmd.Run() == nil
 }
 
@@ -136,18 +129,14 @@ func (a *AppService) GetOrCreateIssueBranch(dir string, number int, title string
 
 	if branchExists(dir, branch) {
 		// Switch to existing branch
-		cmd := exec.Command("git", "checkout", branch)
-		cmd.Dir = dir
-		hideConsole(cmd)
+		cmd := gitCmd(dir, "checkout", branch)
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("checkout failed: %w", err)
 		}
 		log.Printf("[GetOrCreateIssueBranch] switched to existing branch %s", branch)
 	} else {
 		// Create and switch to new branch
-		cmd := exec.Command("git", "checkout", "-b", branch)
-		cmd.Dir = dir
-		hideConsole(cmd)
+		cmd := gitCmd(dir, "checkout", "-b", branch)
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("branch create failed: %w", err)
 		}

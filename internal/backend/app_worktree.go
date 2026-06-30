@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -31,9 +30,7 @@ func worktreePath(repoDir string, issueNumber int) string {
 
 // repoRoot returns the git toplevel for a directory.
 func repoRoot(dir string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "rev-parse", "--show-toplevel")
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("not a git repo: %w", err)
@@ -65,14 +62,13 @@ func (a *AppService) CreateWorktree(dir string, issueNumber int, title string) (
 	}
 
 	// Create worktree with new branch (or existing branch)
-	var cmd *exec.Cmd
+	var worktreeArgs []string
 	if branchExists(root, branch) {
-		cmd = exec.Command("git", "worktree", "add", wtPath, branch)
+		worktreeArgs = []string{"worktree", "add", wtPath, branch}
 	} else {
-		cmd = exec.Command("git", "worktree", "add", "-b", branch, wtPath)
+		worktreeArgs = []string{"worktree", "add", "-b", branch, wtPath}
 	}
-	cmd.Dir = root
-	hideConsole(cmd)
+	cmd := gitCmd(root, worktreeArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("worktree add failed: %s – %w", strings.TrimSpace(string(out)), err)
@@ -94,9 +90,7 @@ func (a *AppService) RemoveWorktree(dir string, issueNumber int) error {
 		return nil // already gone
 	}
 
-	cmd := exec.Command("git", "worktree", "remove", "--force", wtPath)
-	cmd.Dir = root
-	hideConsole(cmd)
+	cmd := gitCmd(root, "worktree", "remove", "--force", wtPath)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("worktree remove failed: %w", err)
 	}
@@ -112,9 +106,7 @@ func (a *AppService) ListWorktrees(dir string) []WorktreeInfo {
 		return nil
 	}
 
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
-	cmd.Dir = root
-	hideConsole(cmd)
+	cmd := gitCmd(root, "worktree", "list", "--porcelain")
 	out, err := cmd.Output()
 	if err != nil {
 		log.Printf("[ListWorktrees] error: %v", err)
@@ -175,9 +167,7 @@ func (a *AppService) ListAllWorktrees(dir string) []WorktreeInfo {
 	if err != nil {
 		return nil
 	}
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
-	cmd.Dir = root
-	hideConsole(cmd)
+	cmd := gitCmd(root, "worktree", "list", "--porcelain")
 	out, err := cmd.Output()
 	if err != nil {
 		log.Printf("[ListAllWorktrees] error: %v", err)
@@ -273,16 +263,15 @@ func (a *AppService) CreateNamedWorktree(dir, name, baseBranch string) (*Worktre
 		return nil, fmt.Errorf("mkdir failed: %w", err)
 	}
 
-	var cmd *exec.Cmd
+	var namedArgs []string
 	if branchExists(root, branch) {
-		cmd = exec.Command("git", "worktree", "add", wtPath, branch)
+		namedArgs = []string{"worktree", "add", wtPath, branch}
 	} else if baseBranch != "" && baseBranch != "HEAD" {
-		cmd = exec.Command("git", "worktree", "add", "-b", branch, wtPath, baseBranch)
+		namedArgs = []string{"worktree", "add", "-b", branch, wtPath, baseBranch}
 	} else {
-		cmd = exec.Command("git", "worktree", "add", "-b", branch, wtPath)
+		namedArgs = []string{"worktree", "add", "-b", branch, wtPath}
 	}
-	cmd.Dir = root
-	hideConsole(cmd)
+	cmd := gitCmd(root, namedArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("worktree add failed: %s – %w", strings.TrimSpace(string(out)), err)

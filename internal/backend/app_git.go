@@ -3,7 +3,6 @@ package backend
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -11,9 +10,7 @@ import (
 
 // GetGitBranch returns the current git branch for the given directory.
 func (a *AppService) GetGitBranch(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "rev-parse", "--abbrev-ref", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -23,9 +20,7 @@ func (a *AppService) GetGitBranch(dir string) string {
 
 // GetLastCommitTime returns the Unix timestamp (seconds) of the last git commit.
 func (a *AppService) GetLastCommitTime(dir string) int64 {
-	cmd := exec.Command("git", "log", "-1", "--format=%ct")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "log", "-1", "--format=%ct")
 	out, err := cmd.Output()
 	if err != nil {
 		return 0
@@ -39,9 +34,7 @@ func (a *AppService) GetLastCommitTime(dir string) int64 {
 
 // GetLastCommitHash returns the full SHA of the last commit.
 func (a *AppService) GetLastCommitHash(dir string) string {
-	cmd := exec.Command("git", "log", "-1", "--format=%H")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "log", "-1", "--format=%H")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -51,9 +44,7 @@ func (a *AppService) GetLastCommitHash(dir string) string {
 
 // GetLastCommitDiff returns the diff of the last commit (max 8000 chars).
 func (a *AppService) GetLastCommitDiff(dir string) string {
-	cmd := exec.Command("git", "diff", "HEAD~1", "HEAD")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "diff", "HEAD~1", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -79,9 +70,7 @@ func (a *AppService) GetGitFileStatuses(dir string) map[string]string {
 	}
 
 	// Get git repo root to compute relative paths correctly
-	rootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	rootCmd.Dir = dir
-	hideConsole(rootCmd)
+	rootCmd := gitCmd(dir, "rev-parse", "--show-toplevel")
 	rootOut, err := rootCmd.Output()
 	if err != nil {
 		return result
@@ -91,9 +80,7 @@ func (a *AppService) GetGitFileStatuses(dir string) map[string]string {
 		repoRoot = resolved
 	}
 
-	cmd := exec.Command("git", "status", "--porcelain", "-uall")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "status", "--porcelain", "-uall")
 	out, err := cmd.Output()
 	if err != nil {
 		return result
@@ -162,9 +149,7 @@ func (a *AppService) GetMergeConflicts(dir string) MergeConflictInfo {
 		return info
 	}
 
-	cmd := exec.Command("git", "diff", "--name-only", "--diff-filter=U")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "diff", "--name-only", "--diff-filter=U")
 	out, err := cmd.Output()
 	if err != nil {
 		return info
@@ -186,9 +171,7 @@ func (a *AppService) GetMergeConflicts(dir string) MergeConflictInfo {
 // detectMergeOperation checks git sentinel files to determine the active operation.
 func detectMergeOperation(dir string) string {
 	// Find .git directory
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "rev-parse", "--git-dir")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -234,9 +217,7 @@ func markParentDirs(statuses map[string]string, filePath string, rootDir string)
 
 // GetLocalBranches returns local branch names for the repo containing dir.
 func (a *AppService) GetLocalBranches(dir string) []string {
-	cmd := exec.Command("git", "branch", "--format=%(refname:short)")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "branch", "--format=%(refname:short)")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -258,9 +239,7 @@ func (a *AppService) AddToGitignore(dir, relPath string) error {
 	entry := strings.ReplaceAll(relPath, `\`, "/")
 
 	// Find repo root
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "rev-parse", "--show-toplevel")
 	out, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("not a git repository: %w", err)

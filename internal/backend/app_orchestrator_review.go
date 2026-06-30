@@ -41,9 +41,7 @@ func (a *AppService) runReviewTests(card *KanbanCard, reviewCmd string) (bool, s
 
 // getWorktreeDiff returns the git diff HEAD output for a worktree directory.
 func (a *AppService) getWorktreeDiff(worktreePath string) string {
-	cmd := exec.Command("git", "diff", "HEAD")
-	cmd.Dir = worktreePath
-	hideConsole(cmd)
+	cmd := gitCmd(worktreePath, "diff", "HEAD")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("[review] diff failed in %s: %v", worktreePath, err)
@@ -89,9 +87,7 @@ func (a *AppService) createPRForCard(card *KanbanCard, dir string) (int, error) 
 		return 0, fmt.Errorf("git add failed: %w", err)
 	}
 	commitMsg := fmt.Sprintf("feat: %s\n\nAgent-generated for card %s", card.Title, card.ID)
-	commitCmd := exec.Command("git", "commit", "-m", commitMsg, "--allow-empty")
-	commitCmd.Dir = card.WorktreePath
-	hideConsole(commitCmd)
+	commitCmd := gitCmd(card.WorktreePath, "commit", "-m", commitMsg, "--allow-empty")
 	if out, err := commitCmd.CombinedOutput(); err != nil {
 		if !strings.Contains(string(out), "nothing to commit") {
 			return 0, fmt.Errorf("git commit failed: %s – %w", string(out), err)
@@ -123,9 +119,7 @@ func (a *AppService) createPRForCard(card *KanbanCard, dir string) (int, error) 
 
 // runGit runs a simple git command in dir. Returns error on failure.
 func runGit(dir string, args ...string) error {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %s", strings.Join(args, " "), string(out))
@@ -164,8 +158,7 @@ func (a *AppService) removeAgentWorktree(card *KanbanCard) error {
 	if card.WorktreePath == "" {
 		return nil
 	}
-	cmd := exec.Command("git", "worktree", "remove", "--force", card.WorktreePath)
-	hideConsole(cmd)
+	cmd := gitCmd(card.WorktreePath, "worktree", "remove", "--force", card.WorktreePath)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("worktree remove %s: %w", card.WorktreePath, err)
 	}
