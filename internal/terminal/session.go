@@ -332,3 +332,12 @@ func (s *Session) GetTokens() TokenInfo {
 func (s *Session) GetTitle() string {
 	return s.Screen.GetTitle()
 }
+
+// Name returns the session's display title (the sticky last-non-empty OSC title
+// cached on the session). Read thread-safe under s.mu — readLoop writes Title
+// under the same lock.
+func (s *Session) Name() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Title
+}

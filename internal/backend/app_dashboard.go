@@ -156,7 +156,7 @@ func (a *AppService) GetDashboardPanes() []DashboardPane {
 
 		dp := DashboardPane{
 			SessionID: id,
-			Name:      sess.Title,
+			Name:      sess.Name(),
 			Activity:  activity,
 			Cost:      costStr,
 			Dir:       sess.Dir,

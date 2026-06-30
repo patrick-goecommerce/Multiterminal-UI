@@ -48,7 +48,7 @@ func (a *AppService) CheckAskUser(sessionID int) *AskUserQuestion {
 
 	return &AskUserQuestion{
 		SessionID:   sessionID,
-		SessionName: sess.Title,
+		SessionName: sess.Name(),
 		Question:    question,
 		Options:     options,
 		Timestamp:   time.Now().Format(time.RFC3339),

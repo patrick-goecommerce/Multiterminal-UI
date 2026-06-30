@@ -30,7 +30,7 @@ func (a *AppService) GetAllQueues() []QueueOverviewItem {
 
 		oi := QueueOverviewItem{
 			SessionID:   id,
-			SessionName: sess.Title,
+			SessionName: sess.Name(),
 			Dir:         sess.Dir,
 			Activity:    activityString(sess.GetActivity()),
 			Items:       items,
