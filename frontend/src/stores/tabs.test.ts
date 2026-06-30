@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { tabStore, activeTab, allTabs, computeTabActivity, paneDisplayName } from './tabs';
+import { tabStore, activeTab, allTabs, computeTabActivity, paneDisplayName, windowTitle } from './tabs';
 
 // Note: tabStore uses internal counters that persist across tests.
 // We work with that by testing behavior rather than exact IDs.
@@ -412,6 +412,29 @@ describe('paneDisplayName', () => {
       autoName: 'auth-refactor', oscTitle: '', autoNameSource: 'osc',
     } as any;
     expect(paneDisplayName(pane)).toBe('auth-refactor');
+  });
+});
+
+describe('windowTitle', () => {
+  it('returns the plain app name when there is no tab', () => {
+    expect(windowTitle(null)).toBe('Multiterminal');
+    expect(windowTitle(undefined)).toBe('Multiterminal');
+  });
+
+  it('uses the focused pane display name as context', () => {
+    const tab = {
+      name: 'Tab 1', focusedPaneId: 'pane-2',
+      panes: [
+        { id: 'pane-1', name: 'Shell', userRenamed: false, autoName: '', oscTitle: '', autoNameSource: '' },
+        { id: 'pane-2', name: 'Shell', userRenamed: false, autoName: 'auth-refactor', oscTitle: '', autoNameSource: 'llm' },
+      ],
+    } as any;
+    expect(windowTitle(tab)).toBe('auth-refactor — Multiterminal');
+  });
+
+  it('falls back to the tab name when no pane is focused', () => {
+    const tab = { name: 'Backend', focusedPaneId: '', panes: [] } as any;
+    expect(windowTitle(tab)).toBe('Backend — Multiterminal');
   });
 });
 

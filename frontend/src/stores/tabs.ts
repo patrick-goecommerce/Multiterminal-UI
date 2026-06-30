@@ -45,6 +45,16 @@ export function paneDisplayName(pane: Pane): string {
   return recent || pane.autoName || pane.oscTitle || pane.name;
 }
 
+/** Native OS window title for the given active tab. Reflects the focused pane
+ *  (so multi-window setups are distinguishable), falling back to the tab name. */
+export function windowTitle(tab: Tab | null | undefined): string {
+  const base = 'Multiterminal';
+  if (!tab) return base;
+  const focused = tab.panes.find((p) => p.id === tab.focusedPaneId);
+  const ctx = focused ? paneDisplayName(focused) : tab.name;
+  return ctx ? `${ctx} — ${base}` : base;
+}
+
 export interface Tab {
   id: string;
   name: string;

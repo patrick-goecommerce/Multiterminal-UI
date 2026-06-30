@@ -20,7 +20,7 @@
   import KanbanBoard from './components/KanbanBoard.svelte';
   import AskUserDialog from './components/AskUserDialog.svelte';
   import { get } from 'svelte/store';
-  import { tabStore, activeTab, allTabs } from './stores/tabs';
+  import { tabStore, activeTab, allTabs, windowTitle } from './stores/tabs';
   import { workspace } from './stores/workspace';
   import { kanban } from './stores/kanban';
   import { config } from './stores/config';
@@ -38,7 +38,7 @@
   import { buildIssuePrompt, setupIssueBranch, resolveBranchConflict } from './lib/launch';
   import type { IssueContext } from './lib/launch';
   import * as App from '../wailsjs/go/backend/App';
-  import { EventsOn } from '../wailsjs/runtime/runtime';
+  import { EventsOn, Window } from '../wailsjs/runtime/runtime';
   import { subscribeChatEvents } from './lib/chat-events';
 
   const MAX_PANES_PER_TAB = 10;
@@ -733,6 +733,18 @@
   $: currentPanes = $activeTab?.panes.length ?? 0;
   $: canChangeDir = currentPanes === 0;
   $: tabInfo = `Tab ${($allTabs.findIndex((t) => t.id === $activeTab?.id) ?? 0) + 1}/${$allTabs.length}  Pane ${currentPanes}/${MAX_PANES_PER_TAB}`;
+
+  // Reflect the focused pane in the native window title (distinguishes multi-window).
+  // Only $activeTab is a reactive dependency; the dedup lives inside the function so
+  // Svelte does not track _lastWindowTitle (see CLAUDE.md $: footgun note).
+  let _lastWindowTitle = '';
+  function syncWindowTitle(tab: typeof $activeTab) {
+    const title = windowTitle(tab);
+    if (title === _lastWindowTitle) return;
+    _lastWindowTitle = title;
+    Window.SetTitle(title).catch(() => {});
+  }
+  $: syncWindowTitle($activeTab);
 
   async function handleChangeDir() {
     const tab = $activeTab;
