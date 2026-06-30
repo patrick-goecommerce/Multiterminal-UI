@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { t } from '../stores/i18n';
-  import type { Pane } from '../stores/tabs';
+  import { paneDisplayName, type Pane } from '../stores/tabs';
   import WorktreeDropdown from './WorktreeDropdown.svelte';
   import WorktreeCreateDialog from './WorktreeCreateDialog.svelte';
 
@@ -35,8 +35,8 @@
   }
 
   $: displayBranch = pane.branch || pane.issueBranch || '';
-  // Auto names (LLM > OSC) only apply until the user manually renames the pane.
-  $: displayName = pane.userRenamed ? pane.name : (pane.autoName || pane.oscTitle || pane.name);
+  // Auto names (most-recently-updated source wins) apply until the user manually renames.
+  $: displayName = paneDisplayName(pane);
 
   function startRename() {
     editName = displayName;

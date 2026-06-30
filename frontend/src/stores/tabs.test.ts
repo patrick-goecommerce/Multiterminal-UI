@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { tabStore, activeTab, allTabs, computeTabActivity } from './tabs';
+import { tabStore, activeTab, allTabs, computeTabActivity, paneDisplayName } from './tabs';
 
 // Note: tabStore uses internal counters that persist across tests.
 // We work with that by testing behavior rather than exact IDs.
@@ -345,6 +345,73 @@ describe('tabStore', () => {
       const after = get(allTabs).length;
       expect(after).toBe(before + 1);
     });
+  });
+});
+
+describe('setAutoName — most-recent-wins recency', () => {
+  it('records the source of the most recent auto name', () => {
+    const tabId = tabStore.addTab('AutoRecency');
+    tabStore.addPane(tabId, 6001, 'Shell', 'shell', '');
+
+    tabStore.setAutoName(6001, 'auth-refactor', 'llm');
+    let pane = tabStore.getState().tabs.find((t) => t.id === tabId)!.panes[0];
+    expect(pane.autoNameSource).toBe('llm');
+
+    tabStore.setAutoName(6001, 'vim README.md', 'osc');
+    pane = tabStore.getState().tabs.find((t) => t.id === tabId)!.panes[0];
+    expect(pane.autoNameSource).toBe('osc');
+  });
+
+  it('does not change auto names once the pane is user-renamed', () => {
+    const tabId = tabStore.addTab('AutoRenamed');
+    const paneId = tabStore.addPane(tabId, 6002, 'Shell', 'shell', '');
+    tabStore.renamePane(tabId, paneId, 'My Pane');
+
+    tabStore.setAutoName(6002, 'should-be-ignored', 'osc');
+    const pane = tabStore.getState().tabs.find((t) => t.id === tabId)!.panes[0];
+    expect(pane.autoNameSource).toBe('');
+  });
+});
+
+describe('paneDisplayName', () => {
+  it('shows the most recently updated auto source (OSC after LLM)', () => {
+    const pane = {
+      name: 'Shell', userRenamed: false,
+      autoName: 'auth-refactor', oscTitle: 'vim', autoNameSource: 'osc',
+    } as any;
+    expect(paneDisplayName(pane)).toBe('vim');
+  });
+
+  it('shows the most recently updated auto source (LLM after OSC)', () => {
+    const pane = {
+      name: 'Shell', userRenamed: false,
+      autoName: 'auth-refactor', oscTitle: 'vim', autoNameSource: 'llm',
+    } as any;
+    expect(paneDisplayName(pane)).toBe('auth-refactor');
+  });
+
+  it('manual rename always wins over auto names', () => {
+    const pane = {
+      name: 'My Pane', userRenamed: true,
+      autoName: 'auth-refactor', oscTitle: 'vim', autoNameSource: 'osc',
+    } as any;
+    expect(paneDisplayName(pane)).toBe('My Pane');
+  });
+
+  it('falls back to the pane name when no auto name is set', () => {
+    const pane = {
+      name: 'Shell', userRenamed: false,
+      autoName: '', oscTitle: '', autoNameSource: '',
+    } as any;
+    expect(paneDisplayName(pane)).toBe('Shell');
+  });
+
+  it('falls back to the other source if the recent one is empty', () => {
+    const pane = {
+      name: 'Shell', userRenamed: false,
+      autoName: 'auth-refactor', oscTitle: '', autoNameSource: 'osc',
+    } as any;
+    expect(paneDisplayName(pane)).toBe('auth-refactor');
   });
 });
 

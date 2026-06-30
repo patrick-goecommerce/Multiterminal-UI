@@ -24,12 +24,25 @@ export interface Pane {
   conversationId: string;
   /** Claude session id pinned at launch (--session-id), used to resume on terminal⇄chat toggle. Empty for shell/codex/gemini. */
   claudeSessionId: string;
-  /** LLM-generated pane name (from the user's prompt). Highest-priority auto name. */
+  /** LLM-generated pane name (from the user's prompt). */
   autoName: string;
-  /** OSC-derived window title from the PTY. Fallback auto name. */
+  /** OSC-derived window title from the PTY. */
   oscTitle: string;
+  /** Which auto source was updated most recently — drives display (most-recent-wins). */
+  autoNameSource: '' | 'llm' | 'osc';
   /** True once the user manually renamed the pane — suppresses all auto names. */
   userRenamed: boolean;
+}
+
+/** Resolve the name shown in a pane titlebar.
+ *  Priority: manual rename > most-recently-updated auto source > pane name.
+ *  If the most-recent auto source happens to be empty, fall back to the other. */
+export function paneDisplayName(pane: Pane): string {
+  if (pane.userRenamed) return pane.name;
+  const recent = pane.autoNameSource === 'llm' ? pane.autoName
+    : pane.autoNameSource === 'osc' ? pane.oscTitle
+    : '';
+  return recent || pane.autoName || pane.oscTitle || pane.name;
 }
 
 export interface Tab {
@@ -167,7 +180,8 @@ function createTabStore() {
     },
 
     /** Apply an auto-generated name (by session id). Ignored once the user
-     *  manually renamed the pane. source 'llm' sets autoName, 'osc' sets oscTitle. */
+     *  manually renamed the pane. The most recently applied source wins on
+     *  display (see paneDisplayName). source 'llm' sets autoName, 'osc' sets oscTitle. */
     setAutoName(sessionId: number, value: string, source: 'llm' | 'osc') {
       update((state) => {
         for (const tab of state.tabs) {
@@ -175,6 +189,7 @@ function createTabStore() {
           if (!pane || pane.userRenamed) continue;
           if (source === 'llm') pane.autoName = value;
           else pane.oscTitle = value;
+          pane.autoNameSource = source;
         }
         return state;
       });
@@ -210,6 +225,7 @@ function createTabStore() {
           claudeSessionId,
           autoName: '',
           oscTitle: '',
+          autoNameSource: '',
           userRenamed: false,
         });
         tab.focusedPaneId = paneId;
