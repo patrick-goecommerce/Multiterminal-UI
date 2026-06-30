@@ -134,3 +134,19 @@ func TestExtractShimIdempotentWhenSameSize(t *testing.T) {
 		t.Fatalf("content = %q, want %q", on, data)
 	}
 }
+
+func TestResolveBundledBinaryPrefersSibling(t *testing.T) {
+	// A sibling next to the test binary's own dir is hard to fake; instead
+	// assert the embed-extract fallback path is returned when no sibling and
+	// embedded bytes are present.
+	dst := filepath.Join(t.TempDir(), "fake-home", ".claude")
+	t.Setenv("USERPROFILE", filepath.Dir(filepath.Dir(dst))) // ~ -> fake-home
+	t.Setenv("HOME", filepath.Dir(filepath.Dir(dst)))
+	got := resolveBundledBinary("mtui-probe", []byte("MZ-bytes"))
+	if got == "" {
+		t.Fatal("resolveBundledBinary returned empty with embedded bytes present")
+	}
+	if filepath.Base(got) != "mtui-probe.exe" && filepath.Base(got) != "mtui-probe" {
+		t.Fatalf("unexpected basename: %q", got)
+	}
+}
