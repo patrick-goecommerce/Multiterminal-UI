@@ -14,7 +14,7 @@ import (
 // StatusLineStatus describes the current state of the statusLine key in ~/.claude/settings.json.
 type StatusLineStatus struct {
 	HasExisting     bool   `json:"has_existing"`
-	IsOurs          bool   `json:"is_ours"` // true when the command references mtui-statusline.ps1
+	IsOurs          bool   `json:"is_ours"` // true when the command references mtui-statusline (binary or legacy .ps1)
 	ExistingCommand string `json:"existing_command"`
 }
 
@@ -62,7 +62,7 @@ func (a *AppService) GetStatusLineStatus() StatusLineStatus {
 	cmd, _ := sl["command"].(string)
 	return StatusLineStatus{
 		HasExisting:     true,
-		IsOurs:          strings.Contains(cmd, "mtui-statusline.ps1"),
+		IsOurs:          strings.Contains(cmd, "mtui-statusline"),
 		ExistingCommand: cmd,
 	}
 }
@@ -142,7 +142,8 @@ func (a *AppService) applyStatusLine(cfg config.StatusLineSettings) {
 }
 
 // removeStatusLine deletes the statusLine key from ~/.claude/settings.json
-// and removes the PS1 script file.
+// and best-effort removes any stale legacy .ps1 script (migration cleanup —
+// the new registration uses a binary, no script is written).
 func (a *AppService) removeStatusLine() {
 	settingsPath := claudeSettingsPath()
 	data, err := os.ReadFile(settingsPath)

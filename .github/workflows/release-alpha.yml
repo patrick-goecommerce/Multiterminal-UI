@@ -70,6 +70,14 @@ jobs:
           go build -ldflags "-H windowsgui" -o internal/backend/mtui-hook.exe ./cmd/mtui-hook
           go build -ldflags "-H windowsgui" -o internal/backend/mtui-statusline.exe ./cmd/mtui-statusline
 
+      - name: Assert helper binaries are GUI subsystem (no console flash)
+        shell: bash
+        run: |
+          for exe in internal/backend/mtui-statusline.exe internal/backend/mtui-hook.exe; do
+            sub=$(python -c "import struct,sys;d=open(sys.argv[1],'rb').read();pe=struct.unpack_from('<I',d,0x3c)[0];print(struct.unpack_from('<H',d,pe+0x5c)[0])" "$exe")
+            echo "$exe subsystem=$sub"; [ "$sub" = "2" ] || { echo "ERROR: $exe is not GUI subsystem (2)"; exit 1; }
+          done
+
       - name: Build Go binary
         shell: bash
         run: |
