@@ -505,6 +505,8 @@ git commit -m "feat(statusline): /api/statusline endpoint records cost/context/m
 
 ### Task 4: Wrap the statusline command with the forwarder
 
+> **Implementation divergence (post-review, 2026-06-25).** As built (commit `76bc53d`), the shim is **embedded via `go:embed`** (`internal/backend/statusline_shim_embed.go` / `statusline_shim_noembed.go`, extracted at runtime by `ensureStatuslineForward`/`extractShim` in `app_statusline_wrap.go`) rather than shipped as a sibling `statusline-forward.exe` on `PATH` with a `Taskfile.yml` step. Rationale (accepted by the final whole-branch review): MTUI's distribution model is a single portable `.exe`, so a sibling-on-PATH binary would break it; the embedded approach keeps the binary self-contained and falls back to a dev sibling when present. The build step therefore lives in `.github/workflows/release-alpha.yml` (production embed), not `Taskfile.yml`. `statuslineForwardPath()` was renamed `statuslineForwardSiblingPath()`. The steps below describe the original sibling design and are retained for history; the embedded design is the source of truth.
+
 **Files:**
 - Modify: `internal/backend/app_statusline.go` (`applyStatusLine`, lines 81-83 — build the wrapping command)
 - Create: `internal/backend/app_statusline_wrap.go` (forwarder-path resolution + command builder)
