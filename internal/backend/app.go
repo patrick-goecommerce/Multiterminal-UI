@@ -37,6 +37,7 @@ type AppService struct {
 	finishStates       map[int]*finishState  // active worktree-finish flows, keyed by session ID
 	sessionIssues      map[int]*sessionIssue // issue linked to each session
 	mu                 sync.Mutex
+	finishMu           sync.Mutex // serializes merge+cleanup globally (index.lock, TOCTOU)
 	nextID             int
 	cancelAll          context.CancelFunc
 	batcher            *outputBatcher
