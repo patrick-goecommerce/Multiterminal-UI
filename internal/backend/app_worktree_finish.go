@@ -75,6 +75,12 @@ func (a *AppService) StartWorktreeFinish(sessionId int, worktreePath, branch, ta
 			return
 		}
 		prevPrepID = st.PrepItemID
+		// Retry from "blocked": remove the stale entry now so no state exists
+		// during the upcoming AddToQueue call below. Task 8's finish lock in
+		// AddToQueue rejects every item while a.finishStates[sessionId] != nil,
+		// which would otherwise reject the fresh prep item (ID 0) and strand
+		// the retry in "preparing" forever.
+		delete(a.finishStates, sessionId)
 	}
 	q := a.queues[sessionId]
 	pending := 0
@@ -93,13 +99,14 @@ func (a *AppService) StartWorktreeFinish(sessionId int, worktreePath, branch, ta
 		}
 	}
 	if pending > 0 {
+		reason := fmt.Sprintf("Queue nicht leer (%d Prompts) — erst abarbeiten oder verwerfen", pending)
 		a.finishStates[sessionId] = &finishState{
 			Phase: "blocked", TargetBranch: target, WorktreePath: worktreePath,
 			Branch: branch, Mode: mode,
-			BlockReason: fmt.Sprintf("Queue nicht leer (%d Prompts) — erst abarbeiten oder verwerfen", pending),
+			BlockReason: reason,
 		}
 		a.mu.Unlock()
-		a.emitFinishBlocked(sessionId, "blocked", a.getFinishState(sessionId).BlockReason)
+		a.emitFinishBlocked(sessionId, "blocked", reason)
 		return
 	}
 	a.mu.Unlock()
@@ -186,12 +193,16 @@ func (a *AppService) CheckWorktreeFinish(sessionId int) {
 		return
 	}
 	a.mu.Lock()
-	if cur := a.finishStates[sessionId]; cur != nil {
+	cur := a.finishStates[sessionId]
+	stillActive := cur != nil
+	if stillActive {
 		cur.Phase = "ready"
 		cur.BlockReason = ""
 	}
 	a.mu.Unlock()
-	if a.app != nil {
+	// Only emit if the flow wasn't cancelled while the async git check ran —
+	// otherwise a stale "ready" event would resurrect a torn-down flow.
+	if stillActive && a.app != nil {
 		a.app.Event.Emit("worktree:finish-ready", WorktreeFinishReadyEvent{
 			SessionID: sessionId, TargetBranch: st.TargetBranch,
 			Commits: status.Commits, Stat: status.Stat, Untracked: status.Untracked,

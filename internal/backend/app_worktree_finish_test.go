@@ -60,7 +60,11 @@ func TestBlockedRetry_StartsNewPrepCycle(t *testing.T) {
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	a.setFinishBlocked(1, "test reason")
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
-	if st := a.getFinishState(1); st == nil || st.Phase != "preparing" {
+	st := a.getFinishState(1)
+	if st == nil || st.Phase != "preparing" {
 		t.Fatalf("retry from blocked did not re-enter preparing: %+v", st)
+	}
+	if st.PrepItemID == 0 {
+		t.Fatal("retry must enqueue a fresh prep item (survives the Task-8 AddToQueue finish lock)")
 	}
 }
