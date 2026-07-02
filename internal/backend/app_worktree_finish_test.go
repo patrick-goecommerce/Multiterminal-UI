@@ -68,3 +68,15 @@ func TestBlockedRetry_StartsNewPrepCycle(t *testing.T) {
 		t.Fatal("retry must enqueue a fresh prep item (survives the Task-8 AddToQueue finish lock)")
 	}
 }
+
+func TestNotifyFinishOnActivity_WaitingKeepsPreparing(t *testing.T) {
+	a := newTestApp()
+	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
+	a.notifyFinishOnActivity(1, "waitingAnswer")
+	if st := a.getFinishState(1); st == nil || st.Phase != "preparing" {
+		t.Fatalf("waitingAnswer must NOT change phase: %+v", st)
+	}
+	// Non-finish sessions and other states are ignored:
+	a.notifyFinishOnActivity(2, "waitingAnswer")
+	a.notifyFinishOnActivity(1, "active")
+}

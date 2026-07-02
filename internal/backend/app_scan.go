@@ -166,6 +166,11 @@ func (a *AppService) scanAllSessions() {
 			a.notifyOrchestratorDone(id)
 		}
 
+		// Surface waiting states to an active finish flow (spec 5.1/2)
+		if activityChanged && a.app != nil {
+			a.notifyFinishOnActivity(id, actStr)
+		}
+
 		// Report issue progress on activity transitions
 		if activityChanged && a.app != nil {
 			a.onActivityChangeForIssue(id, actStr, costStr)

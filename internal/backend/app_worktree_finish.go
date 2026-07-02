@@ -222,3 +222,14 @@ func (a *AppService) onQueueItemDone(sessionId, itemID int) {
 	}
 	go a.CheckWorktreeFinish(sessionId)
 }
+
+// notifyFinishOnActivity surfaces "Claude has a question" while preparing.
+// The phase stays preparing — the prep item correlation keeps running.
+func (a *AppService) notifyFinishOnActivity(sessionId int, actStr string) {
+	if actStr != "waitingPermission" && actStr != "waitingAnswer" {
+		return
+	}
+	if st := a.getFinishState(sessionId); st != nil && st.Phase == "preparing" {
+		a.emitFinishBlocked(sessionId, "preparing", "Claude hat eine Rückfrage — bitte im Pane antworten")
+	}
+}
