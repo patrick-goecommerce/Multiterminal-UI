@@ -56,3 +56,37 @@ func TestMainRepoRoot_NotARepo(t *testing.T) {
 		t.Error("expected error for non-repo dir")
 	}
 }
+
+func TestPaneWorktreeBase(t *testing.T) {
+	got := paneWorktreeBase(filepath.Join("D:", "repos", "Foo"))
+	want := filepath.Join("D:", "repos", "Foo.mt-worktrees")
+	if got != want {
+		t.Errorf("paneWorktreeBase = %q, want %q", got, want)
+	}
+}
+
+func TestFindFreePaneName_NoCollision(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	if got := findFreePaneName(repo, "My Feature!"); got != "my-feature" {
+		t.Errorf("got %q, want my-feature", got)
+	}
+}
+
+func TestFindFreePaneName_BranchCollisionIncrements(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	gitRun(t, repo, "branch", "terminal/fix")
+	if got := findFreePaneName(repo, "fix"); got != "fix-2" {
+		t.Errorf("got %q, want fix-2", got)
+	}
+}
+
+func TestFindFreePaneName_DirCollisionIncrements(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	dir := filepath.Join(paneWorktreeBase(repo), "fix")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if got := findFreePaneName(repo, "fix"); got != "fix-2" {
+		t.Errorf("got %q, want fix-2", got)
+	}
+}
