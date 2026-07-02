@@ -33,6 +33,9 @@ type SavedPane struct {
 	Model           string `json:"model"`                       // model label (empty for shell)
 	IssueNumber     int    `json:"issue_number,omitempty"`      // linked GitHub issue number
 	IssueBranch     string `json:"issue_branch,omitempty"`      // branch created for issue
+	WorktreePath    string `json:"worktree_path,omitempty"`     // pane worktree CWD (restore MUST use this as session dir)
+	WorktreeBranch  string `json:"worktree_branch,omitempty"`   // terminal/<name>
+	TargetBranch    string `json:"target_branch,omitempty"`     // merge-back target
 	ZoomDelta       int    `json:"zoom_delta,omitempty"`        // per-pane font zoom offset
 	Display         string `json:"display,omitempty"`           // "chat" for chat panes; empty/"terminal" otherwise
 	ConversationID  string `json:"conversation_id,omitempty"`   // chat conversation id (when Display=="chat")
