@@ -635,3 +635,37 @@ export function EnableSessionDebugLog(arg1, arg2) {
 export function UpdateKanbanCard(arg1, arg2) {
   return $Call.ByID(48718319, arg1, arg2);
 }
+
+// --- Worktree-pro-Pane ---
+
+export function CreatePaneWorktree(arg1, arg2, arg3) {
+  return $Call.ByID(224966636, arg1, arg2, arg3);
+}
+
+export function GetPaneWorktreeDefaults(arg1, arg2) {
+  return $Call.ByID(4163323024, arg1, arg2);
+}
+
+export function GetWorktreeFinishStatus(arg1, arg2, arg3) {
+  return $Call.ByID(4073537469, arg1, arg2, arg3);
+}
+
+export function StartWorktreeFinish(arg1, arg2, arg3, arg4, arg5) {
+  return $Call.ByID(3471967, arg1, arg2, arg3, arg4, arg5);
+}
+
+export function CancelWorktreeFinish(arg1) {
+  return $Call.ByID(1695614107, arg1);
+}
+
+export function FinishWorktree(arg1) {
+  return $Call.ByID(932292253, arg1);
+}
+
+export function CheckWorktreeFinish(arg1) {
+  return $Call.ByID(650873923, arg1);
+}
+
+export function ReconcileFinishMarkers(arg1) {
+  return $Call.ByID(4210278637, arg1);
+}

@@ -317,3 +317,21 @@ export function InstallSttEngine(arg1:string):Promise<void>;
 export function EnableSessionDebugLog(arg1:number,arg2:string):Promise<void>;
 
 export function UpdateKanbanCard(arg1:string,arg2:any):Promise<void>;
+
+// --- Worktree-pro-Pane ---
+
+export function CreatePaneWorktree(arg1:string,arg2:string,arg3:string):Promise<backend.PaneWorktreeInfo>;
+
+export function GetPaneWorktreeDefaults(arg1:string,arg2:string):Promise<backend.PaneWorktreeDefaults>;
+
+export function GetWorktreeFinishStatus(arg1:string,arg2:string,arg3:string):Promise<backend.WorktreeFinishStatus>;
+
+export function StartWorktreeFinish(arg1:number,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+
+export function CancelWorktreeFinish(arg1:number):Promise<void>;
+
+export function FinishWorktree(arg1:number):Promise<void>;
+
+export function CheckWorktreeFinish(arg1:number):Promise<void>;
+
+export function ReconcileFinishMarkers(arg1:string):Promise<void>;

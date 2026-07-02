@@ -616,16 +616,66 @@ export namespace backend {
 	    path: string;
 	    branch: string;
 	    issue: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new WorktreeInfo(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
 	        this.branch = source["branch"];
 	        this.issue = source["issue"];
+	    }
+	}
+	export class PaneWorktreeInfo {
+	    path: string;
+	    branch: string;
+	    target_branch: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PaneWorktreeInfo(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.branch = source["branch"];
+	        this.target_branch = source["target_branch"];
+	    }
+	}
+	export class PaneWorktreeDefaults {
+	    name: string;
+	    target_branch: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PaneWorktreeDefaults(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.target_branch = source["target_branch"];
+	    }
+	}
+	export class WorktreeFinishStatus {
+	    state: string;
+	    reason: string;
+	    commits: string[];
+	    stat: string;
+	    untracked: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new WorktreeFinishStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.reason = source["reason"];
+	        this.commits = source["commits"];
+	        this.stat = source["stat"];
+	        this.untracked = source["untracked"];
 	    }
 	}
 
@@ -859,12 +909,15 @@ export namespace config {
 	    model: string;
 	    issue_number?: number;
 	    issue_branch?: string;
+	    worktree_path?: string;
+	    worktree_branch?: string;
+	    target_branch?: string;
 	    zoom_delta?: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new SavedPane(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -872,6 +925,9 @@ export namespace config {
 	        this.model = source["model"];
 	        this.issue_number = source["issue_number"];
 	        this.issue_branch = source["issue_branch"];
+	        this.worktree_path = source["worktree_path"];
+	        this.worktree_branch = source["worktree_branch"];
+	        this.target_branch = source["target_branch"];
 	        this.zoom_delta = source["zoom_delta"];
 	    }
 	}
