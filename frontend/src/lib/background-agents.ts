@@ -59,7 +59,7 @@ async function ensureReviewPane(
     const sessionId = await App.CreateSession(argv, dir, 24, 80, tool);
     if (sessionId > 0) {
       tabStore.addPane(tabId, sessionId, `Review ${toolLabel} (BG)`, tool, model,
-        null, '', '', '', '', true);
+        null, '', '', '', '', '', true);
       bgReviewPanes.set(dir, sessionId);
       return sessionId;
     }
@@ -80,7 +80,7 @@ async function ensureTestPane(
     const sessionId = await App.CreateSession([], dir, 24, 80, 'shell');
     if (sessionId > 0) {
       tabStore.addPane(tabId, sessionId, 'Test (BG)', 'shell', '',
-        null, '', '', '', '', true);
+        null, '', '', '', '', '', true);
       bgTestPanes.set(dir, sessionId);
       return sessionId;
     }

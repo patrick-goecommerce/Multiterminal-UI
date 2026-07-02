@@ -416,7 +416,7 @@
       try {
         const conv = await App.CreateConversation(provider, model || '', tab.dir || '', permissionMode, '');
         const name = getClaudeName(type, model);
-        tabStore.addPane(tab.id, 0, name, type, model || '', null, '', '', '', '', false, 'chat', conv.id);
+        tabStore.addPane(tab.id, 0, name, type, model || '', null, '', '', '', '', '', false, 'chat', conv.id);
         workspace.setView('terminals');
       } catch (err) { console.error('[handleLaunch] CreateConversation failed:', err); }
       return;
@@ -464,7 +464,7 @@
         }
         tabStore.addPane(tab.id, sessionId, name, type, model,
           issueCtx?.number, issueCtx?.title, issueBranch, worktreePath, paneBranch,
-          false, 'terminal', '', claudeSessionId);
+          '', false, 'terminal', '', claudeSessionId);
         if (issueCtx) {
           App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
           setTimeout(() => {
@@ -499,7 +499,7 @@
         }
         tabStore.addPane(tab.id, sessionId, name, type, model,
           issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.worktreePath, paneBranch,
-          false, 'terminal', '', claudeSessionId);
+          '', false, 'terminal', '', claudeSessionId);
         App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.sessionDir);
         setTimeout(() => {
           const prompt = buildIssuePrompt(issueCtx);
@@ -615,7 +615,7 @@
     try {
       const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
       if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model,
-        null, '', '', '', '', false, 'terminal', '', sid);
+        null, '', '', '', '', '', false, 'terminal', '', sid);
     } catch (err) { console.error('[handleRestartPane] failed:', err); }
   }
 
@@ -646,7 +646,7 @@
       try {
         const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
         if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model,
-          null, '', '', '', '', false, 'terminal', '', sid);
+          null, '', '', '', '', '', false, 'terminal', '', sid);
       } catch (err) { console.error('[toggleDisplay→terminal] failed:', err); }
     } else {
       // Terminal → Chat: an interactive terminal session id is NOT a resumable
@@ -661,7 +661,7 @@
       const provider = mode.startsWith('codex') ? 'codex' : mode.startsWith('gemini') ? 'gemini' : 'claude';
       try {
         const conv = await App.CreateConversation(provider, model || '', tab.dir || '', modeToPermissionMode(mode), '');
-        tabStore.addPane(tab.id, 0, name, mode, model || '', null, '', '', '', '', false, 'chat', conv.id, resumeId);
+        tabStore.addPane(tab.id, 0, name, mode, model || '', null, '', '', '', '', '', false, 'chat', conv.id, resumeId);
       } catch (err) { console.error('[toggleDisplay→chat] failed:', err); }
     }
   }

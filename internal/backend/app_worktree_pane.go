@@ -120,3 +120,16 @@ func (a *AppService) CreatePaneWorktree(dir, name, targetBranch string) (*PaneWo
 	log.Printf("[CreatePaneWorktree] %s on %s (target %s)", wtPath, branch, targetBranch)
 	return &PaneWorktreeInfo{Path: wtPath, Branch: branch, TargetBranch: targetBranch}, nil
 }
+
+// WorktreeDirExists reports whether a saved pane worktree still exists on
+// disk (restore fallback, spec 4.2). Prunes stale git metadata when gone so a
+// later create with the same name doesn't trip over a dangling registration.
+func (a *AppService) WorktreeDirExists(path string) bool {
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		return true
+	}
+	if root, err := mainRepoRoot(filepath.Dir(path)); err == nil {
+		_ = gitCmd(root, "worktree", "prune").Run()
+	}
+	return false
+}

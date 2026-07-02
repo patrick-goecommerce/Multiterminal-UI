@@ -335,3 +335,5 @@ export function FinishWorktree(arg1:number):Promise<void>;
 export function CheckWorktreeFinish(arg1:number):Promise<void>;
 
 export function ReconcileFinishMarkers(arg1:string):Promise<void>;
+
+export function WorktreeDirExists(arg1:string):Promise<boolean>;

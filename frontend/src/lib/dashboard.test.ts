@@ -7,7 +7,7 @@ function makePane(overrides: Partial<Pane>): Pane {
     id: 'p1', sessionId: 1, name: 'Claude', mode: 'claude', model: '',
     focused: false, activity: 'idle', cost: '', running: true, maximized: false,
     issueNumber: null, issueTitle: '', issueBranch: '', worktreePath: '',
-    branch: 'main', zoomDelta: 0,
+    branch: 'main', targetBranch: '', zoomDelta: 0,
     background: false, display: 'terminal', conversationId: '', claudeSessionId: '',
     ...overrides,
   };

@@ -669,3 +669,7 @@ export function CheckWorktreeFinish(arg1) {
 export function ReconcileFinishMarkers(arg1) {
   return $Call.ByID(4210278637, arg1);
 }
+
+export function WorktreeDirExists(arg1) {
+  return $Call.ByID(1750193053, arg1);
+}

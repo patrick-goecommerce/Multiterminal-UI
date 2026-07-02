@@ -18,6 +18,8 @@ export interface Pane {
   issueBranch: string;
   worktreePath: string;
   branch: string;
+  /** Merge-back target branch for a pane worktree (empty when not a worktree pane). */
+  targetBranch: string;
   zoomDelta: number;
   background: boolean;
   display: 'terminal' | 'chat';
@@ -205,7 +207,7 @@ function createTabStore() {
       });
     },
 
-    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = '', claudeSessionId = ''): string {
+    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, targetBranch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = '', claudeSessionId = ''): string {
       const paneId = `pane-${nextPaneNum++}`;
       update((state) => {
         const tab = state.tabs.find((t) => t.id === tabId);
@@ -228,6 +230,7 @@ function createTabStore() {
           issueBranch: issueBranch ?? '',
           worktreePath: worktreePath ?? '',
           branch: branch ?? issueBranch ?? '',
+          targetBranch: targetBranch ?? '',
           zoomDelta: 0,
           background: background ?? false,
           display,
