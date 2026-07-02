@@ -3,12 +3,14 @@
   import { config } from '../stores/config';
   import { t } from '../stores/i18n';
   import type { PaneMode } from '../stores/tabs';
+  import * as App from '../../wailsjs/go/backend/App';
 
   export let visible: boolean = false;
   export let issueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
   export let claudeDetected: boolean = true;
   export let codexDetected: boolean = false;
   export let geminiDetected: boolean = false;
+  export let dir: string = ''; // Projektverzeichnis des aktiven Tabs (von App.svelte durchgereicht)
 
   const dispatch = createEventDispatcher();
 
@@ -16,6 +18,31 @@
   let selectedDisplay: 'terminal' | 'chat' = 'terminal';
   let selectedPermissionMode: 'plan' | 'acceptEdits' | 'bypassPermissions' = 'plan';
   let dialogEl: HTMLDivElement;
+
+  let useWorktree = localStorage.getItem('mtui.worktreeLaunchDefault') === '1';
+  let wtName = '';
+  let wtTarget = '';
+  let wtDefaultsLoaded = false;
+
+  async function loadWorktreeDefaults() {
+    if (wtDefaultsLoaded || !dir) return;
+    wtDefaultsLoaded = true;
+    try {
+      const d = await App.GetPaneWorktreeDefaults(dir, 'pane');
+      wtName = d.name || 'pane';
+      wtTarget = d.target_branch || '';
+    } catch { /* kein git-Repo: Felder bleiben leer, Launch ohne Worktree */ }
+  }
+
+  function toggleWorktree() {
+    useWorktree = !useWorktree;
+    localStorage.setItem('mtui.worktreeLaunchDefault', useWorktree ? '1' : '0');
+    if (useWorktree) loadWorktreeDefaults();
+  }
+
+  // Gemerkt-aktiv ⇒ Felder beim Öffnen direkt laden (präventiv, Spec §2).
+  // KEINE Zuweisungen im $:-Block (Recurring Bug) — nur Funktionsaufruf:
+  $: if (visible && useWorktree) loadWorktreeDefaults();
 
   const agentModes: PaneMode[] = ['claude', 'claude-yolo', 'codex', 'codex-auto', 'gemini', 'gemini-yolo'];
 
@@ -59,11 +86,14 @@
     const isAgent = agentModes.includes(type);
     const display = isAgent ? selectedDisplay : 'terminal';
     const permissionMode = display === 'chat' ? selectedPermissionMode : 'plan';
-    dispatch('launch', { type, model: selectedModel, issue: issueContext, display, permissionMode });
+    const worktree = useWorktree && display !== 'chat' && wtTarget
+      ? { name: wtName, targetBranch: wtTarget } : null;
+    dispatch('launch', { type, model: selectedModel, issue: issueContext, display, permissionMode, worktree });
     dispatch('close');
     selectedModel = '';
     selectedDisplay = 'terminal';
     selectedPermissionMode = 'plan';
+    wtDefaultsLoaded = false;
   }
 
   function close() {
@@ -71,6 +101,7 @@
     selectedModel = '';
     selectedDisplay = 'terminal';
     selectedPermissionMode = 'plan';
+    wtDefaultsLoaded = false;
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -190,6 +221,20 @@
               </optgroup>
             {/if}
           </select>
+        </div>
+      {/if}
+
+      {#if selectedDisplay !== 'chat'}
+        <div class="worktree-opt">
+          <label class="wt-check">
+            <input type="checkbox" checked={useWorktree} on:change={toggleWorktree} />
+            <span>⎇ Isolierter Worktree</span>
+          </label>
+          {#if useWorktree}
+            <input class="wt-field" type="text" bind:value={wtName} placeholder="Name" />
+            <input class="wt-field" type="text" bind:value={wtTarget} placeholder="Ziel-Branch (z.B. alpha-main)" />
+            <div class="wt-hint">Eigener Branch <code>terminal/{wtName}</code>, Merge zurück nach <code>{wtTarget || '?'}</code> per ✓</div>
+          {/if}
         </div>
       {/if}
 
@@ -449,4 +494,9 @@
     color: var(--fg);
     font-size: 12px;
   }
+
+  .worktree-opt { margin: 10px 0; }
+  .wt-check { display:flex; gap:6px; align-items:center; font-size:12px; cursor:pointer; }
+  .wt-field { width:100%; margin-top:6px; padding:6px 8px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; color:var(--fg); font-size:12px; }
+  .wt-hint { font-size:10px; color:var(--fg-muted); margin-top:4px; }
 </style>
