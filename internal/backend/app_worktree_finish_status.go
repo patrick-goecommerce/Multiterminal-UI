@@ -76,6 +76,11 @@ func (a *AppService) GetWorktreeFinishStatus(worktreePath, branch, target string
 		// Branch fully contained in target: either never worked, or a crash
 		// happened after merge but before the marker — both end in a safe
 		// cleanup instead of a deadlock (spec 5.3/1, red-team G2-K2).
+		// EXCEPT: tracked uncommitted changes must never reach the --force
+		// cleanup path — that would silently destroy work.
+		if trackedDirty(worktreePath) {
+			return blocked("Uncommittete Änderungen im Worktree — committen oder verwerfen, bevor aufgeräumt wird")
+		}
 		return WorktreeFinishStatus{State: "cleanup_only", Untracked: untrackedFiles(worktreePath)}
 	}
 	if !isAncestor(root, target, branch) {

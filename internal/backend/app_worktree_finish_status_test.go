@@ -81,6 +81,23 @@ func TestFinishStatus_Blocked_DirtyTracked_ButUntrackedOK(t *testing.T) {
 	}
 }
 
+func TestFinishStatus_Blocked_CleanupOnlyButDirtyTracked(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	a := &AppService{}
+	info, err := a.CreatePaneWorktree(repo, "dirtyempty", "alpha-main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 0 commits on the branch, but a TRACKED file is modified:
+	if err := os.WriteFile(filepath.Join(info.Path, "README.md"), []byte("uncommitted\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	s := a.GetWorktreeFinishStatus(info.Path, "terminal/dirtyempty", "alpha-main")
+	if s.State != "blocked" {
+		t.Fatalf("state = %s, want blocked (tracked changes must never be force-removed)", s.State)
+	}
+}
+
 func TestFinishStatus_Blocked_MainDirtyOrWrongBranch(t *testing.T) {
 	repo, wt := finishFixture(t)
 	a := &AppService{}
