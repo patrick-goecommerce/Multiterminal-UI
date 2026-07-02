@@ -341,3 +341,16 @@ func (s *Session) Name() string {
 	defer s.mu.Unlock()
 	return s.Title
 }
+
+// Pid returns the wrapper process id (cmd.exe on Windows), or 0 before Start.
+// The finish flow needs it to kill the whole process tree BEFORE Close():
+// after Process.Kill() the grandchildren are orphaned and taskkill /T cannot
+// find them anymore.
+func (s *Session) Pid() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cmd != nil && s.cmd.Process != nil {
+		return s.cmd.Process.Pid
+	}
+	return 0
+}
