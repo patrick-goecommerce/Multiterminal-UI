@@ -27,32 +27,33 @@ type sessionIssue struct {
 // AppService is the main Wails application struct. All exported methods are
 // automatically available to the frontend via generated TypeScript bindings.
 type AppService struct {
-	app            *application.App           // Wails v3 application instance
-	mainWindow     *application.WebviewWindow  // main window reference for dialogs
-	serviceCtx     context.Context             // context from ServiceStartup
-	cfg            config.Config
-	health         config.HealthState
-	sessions       map[int]*terminal.Session
-	queues         map[int]*sessionQueue
-	sessionIssues  map[int]*sessionIssue // issue linked to each session
-	mu                sync.Mutex
-	nextID            int
-	cancelAll         context.CancelFunc
-	batcher           *outputBatcher
-	batcherOnce       sync.Once
+	app                *application.App           // Wails v3 application instance
+	mainWindow         *application.WebviewWindow // main window reference for dialogs
+	serviceCtx         context.Context            // context from ServiceStartup
+	cfg                config.Config
+	health             config.HealthState
+	sessions           map[int]*terminal.Session
+	queues             map[int]*sessionQueue
+	finishStates       map[int]*finishState  // active worktree-finish flows, keyed by session ID
+	sessionIssues      map[int]*sessionIssue // issue linked to each session
+	mu                 sync.Mutex
+	nextID             int
+	cancelAll          context.CancelFunc
+	batcher            *outputBatcher
+	batcherOnce        sync.Once
 	resolvedClaudePath string
 	claudeDetected     bool
-	winMgr            *windowManager // tracks all open windows for multi-window support
-	detachCount       int            // monotonic counter for detached window IDs
-	safeMode      bool
-	sessionBackup *config.SessionState // populated in safe-mode; restored on shutdown
-	hookMgr       *HookManager
+	winMgr             *windowManager // tracks all open windows for multi-window support
+	detachCount        int            // monotonic counter for detached window IDs
+	safeMode           bool
+	sessionBackup      *config.SessionState // populated in safe-mode; restored on shutdown
+	hookMgr            *HookManager
 	resolvedCodexPath  string
 	codexDetected      bool
 	resolvedGeminiPath string
 	geminiDetected     bool
-	tmuxAPIPort        int // port for the tmux shim HTTP API
-	chatSessions       map[string]*ChatSession  // active chat sessions keyed by conversation ID
+	tmuxAPIPort        int                         // port for the tmux shim HTTP API
+	chatSessions       map[string]*ChatSession     // active chat sessions keyed by conversation ID
 	chatBuffers        map[string]*strings.Builder // buffered assistant text per conversation
 }
 
@@ -63,6 +64,7 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		cfg:           cfg,
 		sessions:      make(map[int]*terminal.Session),
 		queues:        make(map[int]*sessionQueue),
+		finishStates:  make(map[int]*finishState),
 		sessionIssues: make(map[int]*sessionIssue),
 		chatSessions:  make(map[string]*ChatSession),
 		chatBuffers:   make(map[string]*strings.Builder),
@@ -281,6 +283,7 @@ func (a *AppService) CloseSession(id int) {
 		a.mu.Lock()
 		delete(a.sessions, id)
 		delete(a.queues, id)
+		delete(a.finishStates, id)
 		delete(a.sessionIssues, id)
 		a.mu.Unlock()
 		// Clean up per-session activity tracking to prevent memory leak
@@ -320,5 +323,3 @@ func (a *AppService) LoadTabs() *config.SessionState {
 	}
 	return state
 }
-
-

@@ -17,3 +17,28 @@ type TerminalErrorEvent struct {
 	ID      int    `json:"id"`
 	Message string `json:"message"`
 }
+
+// WorktreeFinishReadyEvent: checks green, show confirm overlay.
+type WorktreeFinishReadyEvent struct {
+	SessionID    int      `json:"sessionId"`
+	TargetBranch string   `json:"targetBranch"`
+	Commits      []string `json:"commits"`
+	Stat         string   `json:"stat"`
+	Untracked    []string `json:"untracked"`
+	CleanupOnly  bool     `json:"cleanupOnly"`
+}
+
+// WorktreeFinishBlockedEvent: a check failed or the flow was reset/informed.
+type WorktreeFinishBlockedEvent struct {
+	SessionID int    `json:"sessionId"`
+	Phase     string `json:"phase"`
+	Reason    string `json:"reason"`
+}
+
+// WorktreeFinishDoneEvent: merge+cleanup finished; frontend relaunches the pane.
+type WorktreeFinishDoneEvent struct {
+	SessionID    int    `json:"sessionId"`
+	MainRoot     string `json:"mainRoot"`
+	TargetBranch string `json:"targetBranch"`
+	Mode         string `json:"mode"`
+}

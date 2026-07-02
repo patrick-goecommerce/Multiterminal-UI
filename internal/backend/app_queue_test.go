@@ -14,6 +14,7 @@ func newTestApp() *AppService {
 		sessionIssues: make(map[int]*sessionIssue),
 		chatSessions:  make(map[string]*ChatSession),
 		chatBuffers:   make(map[string]*strings.Builder),
+		finishStates:  make(map[int]*finishState),
 	}
 }
 
