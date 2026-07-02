@@ -90,3 +90,54 @@ func TestFindFreePaneName_DirCollisionIncrements(t *testing.T) {
 		t.Errorf("got %q, want fix-2", got)
 	}
 }
+
+func TestCreatePaneWorktree_HappyPath(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	a := &AppService{}
+	wt, err := a.CreatePaneWorktree(repo, "login fix", "alpha-main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wt.Branch != "terminal/login-fix" || wt.TargetBranch != "alpha-main" {
+		t.Errorf("unexpected info: %+v", wt)
+	}
+	if !strings.HasPrefix(strings.ToLower(wt.Path), strings.ToLower(paneWorktreeBase(repo)+string(filepath.Separator))) {
+		t.Errorf("worktree not in sibling base: %q", wt.Path)
+	}
+	if _, err := os.Stat(filepath.Join(wt.Path, "CLAUDE.local.md")); err != nil {
+		t.Error("CLAUDE.local.md missing")
+	}
+	if _, err := os.Stat(filepath.Join(wt.Path, ".claude", "settings.local.json")); err != nil {
+		t.Error("settings.local.json missing")
+	}
+}
+
+func TestCreatePaneWorktree_MissingTargetBranch(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	a := &AppService{}
+	if _, err := a.CreatePaneWorktree(repo, "x", "nope"); err == nil {
+		t.Error("expected error for missing target branch")
+	}
+	if _, err := a.CreatePaneWorktree(repo, "x", ""); err == nil {
+		t.Error("expected error for empty target branch")
+	}
+}
+
+func TestCreatePaneWorktree_ExistingBranchIsHardError(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	gitRun(t, repo, "branch", "terminal/x")
+	a := &AppService{}
+	if _, err := a.CreatePaneWorktree(repo, "x", "alpha-main"); err == nil {
+		t.Error("expected error for manually chosen colliding name")
+	}
+}
+
+func TestGetPaneWorktreeDefaults(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	gitRun(t, repo, "branch", "terminal/fix")
+	a := &AppService{}
+	d := a.GetPaneWorktreeDefaults(repo, "fix")
+	if d.Name != "fix-2" || d.TargetBranch != "alpha-main" {
+		t.Errorf("defaults = %+v, want fix-2/alpha-main", d)
+	}
+}
