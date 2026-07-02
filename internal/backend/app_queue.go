@@ -38,6 +38,13 @@ func truncateStr(s string, max int) string {
 // If the session is idle/done and nothing is in-flight, it triggers immediately.
 func (a *AppService) AddToQueue(sessionId int, prompt string) QueueItem {
 	a.mu.Lock()
+	// Queue is locked for new items while a finish flow is active. The prep
+	// item itself is enqueued BEFORE the state is created (task 7 ordering).
+	if st := a.finishStates[sessionId]; st != nil {
+		a.mu.Unlock()
+		log.Printf("[queue] session %d: rejected item during finish phase %q", sessionId, st.Phase)
+		return QueueItem{}
+	}
 	q := a.queues[sessionId]
 	if q == nil {
 		q = &sessionQueue{}
@@ -76,17 +83,28 @@ func (a *AppService) GetQueue(sessionId int) []QueueItem {
 func (a *AppService) RemoveFromQueue(sessionId int, itemId int) {
 	a.mu.Lock()
 	q := a.queues[sessionId]
+	removed := false
 	if q != nil {
 		for i, item := range q.items {
 			if item.ID == itemId && item.Status != "sent" {
 				q.items = append(q.items[:i], q.items[i+1:]...)
 				log.Printf("[queue] session %d: removed item %d", sessionId, itemId)
+				removed = true
 				break
 			}
 		}
 	}
 	a.mu.Unlock()
 	a.emitQueueUpdate(sessionId)
+
+	if removed {
+		if st := a.getFinishState(sessionId); st != nil && st.PrepItemID == itemId {
+			a.mu.Lock()
+			delete(a.finishStates, sessionId)
+			a.mu.Unlock()
+			a.emitFinishBlocked(sessionId, "", "Fertigstellen abgebrochen (Prep-Prompt entfernt)")
+		}
+	}
 }
 
 // ClearDoneFromQueue removes all completed items from the queue.
@@ -112,6 +130,13 @@ func (a *AppService) ClearQueue(sessionId int) {
 	delete(a.queues, sessionId)
 	a.mu.Unlock()
 	a.emitQueueUpdate(sessionId)
+
+	if st := a.getFinishState(sessionId); st != nil && st.Phase == "preparing" {
+		a.mu.Lock()
+		delete(a.finishStates, sessionId)
+		a.mu.Unlock()
+		a.emitFinishBlocked(sessionId, "", "Fertigstellen abgebrochen (Queue geleert)")
+	}
 }
 
 // tryProcessQueue sends the next pending item if the session is ready.
@@ -136,9 +161,11 @@ func (a *AppService) processQueue(sessionId int) {
 	}
 
 	// Mark current "sent" item as "done"
+	doneItemID := 0
 	for i := range q.items {
 		if q.items[i].Status == "sent" {
 			q.items[i].Status = "done"
+			doneItemID = q.items[i].ID
 			break
 		}
 	}
@@ -157,6 +184,10 @@ func (a *AppService) processQueue(sessionId int) {
 
 	sess := a.sessions[sessionId]
 	a.mu.Unlock()
+
+	if doneItemID != 0 {
+		a.onQueueItemDone(sessionId, doneItemID)
+	}
 
 	if hasNext && sess != nil {
 		// Write prompt text first, then Enter separately with a small delay.
