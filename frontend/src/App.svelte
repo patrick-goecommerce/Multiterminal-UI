@@ -89,6 +89,7 @@
     files: { path: string; status: string; selected: boolean }[];
     commitMessage: string;
     rebaseConflict: boolean;
+    cleanupFailed: boolean;
   } = {
     visible: false,
     sessionId: 0,
@@ -103,6 +104,7 @@
     files: [],
     commitMessage: '',
     rebaseConflict: false,
+    cleanupFailed: false,
   };
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
   let launchIssueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
@@ -327,16 +329,18 @@
         files: [],
         commitMessage: '',
         rebaseConflict: false,
+        cleanupFailed: false,
       };
     });
     EventsOn('worktree:finish-blocked', (event: any) => {
       const p = event.data ?? event;
       if (!ownsSession(p.sessionId)) return;
       tabStore.setFinishPhase(p.sessionId, p.phase || '');
-      // Only a real block ('blocked') should surface the overlay. 'preparing' is an
+      // A real block ('blocked') and a post-merge cleanup failure (phase
+      // 'cleanup' + cleanupFailed) both surface the overlay. 'preparing' is an
       // informative phase update (prep still running), and '' means cancel/abort
       // (e.g. CancelWorktreeFinish) — neither should reopen the confirm dialog.
-      if (p.phase === 'blocked') {
+      if (p.phase === 'blocked' || p.cleanupFailed) {
         finishDialog = {
           ...finishDialog,
           visible: true,
@@ -344,6 +348,7 @@
           state: 'blocked',
           reason: p.reason || '',
           rebaseConflict: false,
+          cleanupFailed: !!p.cleanupFailed,
         };
       }
     });
@@ -1008,6 +1013,7 @@
       commitMessage: '',
       rebaseConflict: false,
       reason: '',
+      cleanupFailed: false,
     };
   }
 
@@ -1188,6 +1194,7 @@
     {...finishDialog}
     on:confirm={() => { tabStore.setFinishPhase(finishDialog.sessionId, 'merging'); finishDialog.visible = false; App.FinishWorktree(finishDialog.sessionId); }}
     on:retry={() => { finishDialog.visible = false; handleRetryFinish(finishDialog.sessionId); }}
+    on:retryCleanup={() => { tabStore.setFinishPhase(finishDialog.sessionId, 'merging'); finishDialog.visible = false; App.FinishWorktree(finishDialog.sessionId); }}
     on:cancel={() => { finishDialog.visible = false; App.CancelWorktreeFinish(finishDialog.sessionId); tabStore.setFinishPhase(finishDialog.sessionId, ''); }}
     on:stageCommit={(e) => runShellStage(finishDialog.sessionId, finishDialog.worktreePath, finishDialog.targetBranch, e.detail.files, e.detail.message)}
     on:rebaseOnly={() => runShellStage(finishDialog.sessionId, finishDialog.worktreePath, finishDialog.targetBranch, [], '')}

@@ -29,10 +29,14 @@ type WorktreeFinishReadyEvent struct {
 }
 
 // WorktreeFinishBlockedEvent: a check failed or the flow was reset/informed.
+// CleanupFailed marks the special case where the merge already went through
+// but the worktree removal failed — the frontend then offers "Cleanup erneut
+// versuchen" (routes to FinishWorktree/resume), not "Erneut vorbereiten".
 type WorktreeFinishBlockedEvent struct {
-	SessionID int    `json:"sessionId"`
-	Phase     string `json:"phase"`
-	Reason    string `json:"reason"`
+	SessionID     int    `json:"sessionId"`
+	Phase         string `json:"phase"`
+	Reason        string `json:"reason"`
+	CleanupFailed bool   `json:"cleanupFailed"`
 }
 
 // WorktreeFinishDoneEvent: merge+cleanup finished; frontend relaunches the pane.

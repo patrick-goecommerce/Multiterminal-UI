@@ -43,11 +43,15 @@ func (a *AppService) getFinishState(sessionId int) *finishState {
 }
 
 func (a *AppService) emitFinishBlocked(sessionId int, phase, reason string) {
+	a.emitFinishBlockedEvent(sessionId, phase, reason, false)
+}
+
+func (a *AppService) emitFinishBlockedEvent(sessionId int, phase, reason string, cleanupFailed bool) {
 	if a.app == nil {
 		return
 	}
 	a.app.Event.Emit("worktree:finish-blocked", WorktreeFinishBlockedEvent{
-		SessionID: sessionId, Phase: phase, Reason: reason,
+		SessionID: sessionId, Phase: phase, Reason: reason, CleanupFailed: cleanupFailed,
 	})
 }
 
@@ -61,6 +65,26 @@ func (a *AppService) setFinishBlocked(sessionId int, reason string) {
 	a.mu.Unlock()
 	if st != nil {
 		a.emitFinishBlocked(sessionId, "blocked", reason)
+	}
+}
+
+// setFinishCleanupBlocked parks a post-merge cleanup failure: the merge is
+// through and the marker persists, so the phase stays "cleanup" (NOT "blocked")
+// and the emitted event carries CleanupFailed so the overlay offers "Cleanup
+// erneut versuchen" — that retry routes through FinishWorktree, which accepts
+// "cleanup"+marker and resumes straight into the cleanup (no re-prep, no
+// re-merge). Routing it through Start instead would re-prep the already-closed
+// session and strand the flow in "preparing" (spec 4.3 transition table).
+func (a *AppService) setFinishCleanupBlocked(sessionId int, reason string) {
+	a.mu.Lock()
+	st := a.finishStates[sessionId]
+	if st != nil {
+		st.Phase = "cleanup"
+		st.BlockReason = reason
+	}
+	a.mu.Unlock()
+	if st != nil {
+		a.emitFinishBlockedEvent(sessionId, "cleanup", reason, true)
 	}
 }
 

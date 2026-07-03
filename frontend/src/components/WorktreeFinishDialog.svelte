@@ -18,6 +18,10 @@
   // Distinguishes a rebase-conflict block (abort / resolve-in-terminal) from a
   // regular prep block (cancel / retry).
   export let rebaseConflict = false;
+  // A post-merge cleanup failure: the merge is already through, only the
+  // worktree removal failed. The block then offers "Cleanup erneut versuchen"
+  // (→ retryCleanup / FinishWorktree resume), not "Erneut vorbereiten".
+  export let cleanupFailed = false;
 
   const dispatch = createEventDispatcher();
 
@@ -60,6 +64,11 @@
           <div class="dialog-footer">
             <button class="btn-cancel" on:click={() => dispatch('abortRebase')}>Rebase abbrechen</button>
             <button class="btn-create" on:click={() => dispatch('resolveInTerminal')}>Im Terminal auflösen</button>
+          </div>
+        {:else if cleanupFailed}
+          <div class="dialog-footer">
+            <button class="btn-cancel" on:click={() => dispatch('cancel')}>Abbrechen</button>
+            <button class="btn-create" on:click={() => dispatch('retryCleanup')}>Cleanup erneut versuchen</button>
           </div>
         {:else}
           <div class="dialog-footer">

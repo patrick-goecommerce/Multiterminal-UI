@@ -112,6 +112,57 @@ func TestFinishWorktree_BlockedRetryAfterMergeCleansUp(t *testing.T) {
 	}
 }
 
+// TestFinishWorktree_CleanupPhaseRetryCleansUp proves the in-session recovery
+// path for a cleanup failure that happened AFTER the merge went through: the
+// flow is parked in phase "cleanup" (not "blocked") with the marker still in
+// place, and the retry routes back through FinishWorktree (not Start). The
+// call must be accepted, skip the re-merge (count==0) and finish the cleanup.
+func TestFinishWorktree_CleanupPhaseRetryCleansUp(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
+
+	repo, wt := finishFixture(t)
+	if err := mergeWorktreeBranch(repo, "terminal/feat", "alpha-main"); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveFinishMarker(finishMarkerPath(), wt, finishMarker{
+		Phase: "merged", Branch: "terminal/feat", TargetBranch: "alpha-main",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	a := newTestApp()
+	// Parked in "cleanup" — the state the backend leaves behind when the merge
+	// succeeded but cleanupWorktree failed (e.g. a held handle on Windows).
+	a.finishStates[1] = &finishState{
+		Phase: "cleanup", WorktreePath: wt, Branch: "terminal/feat",
+		TargetBranch: "alpha-main", Mode: "shell",
+	}
+	a.FinishWorktree(1)
+
+	deadline := time.After(5 * time.Second)
+	for {
+		if a.getFinishState(1) == nil {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("cleanup never completed: %+v", a.getFinishState(1))
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	if _, err := os.Stat(wt); !os.IsNotExist(err) {
+		t.Error("worktree dir still exists after cleanup-phase retry")
+	}
+	if branchExists(repo, "terminal/feat") {
+		t.Error("branch still exists after cleanup-phase retry")
+	}
+	if _, ok := loadFinishMarkers(finishMarkerPath())[wt]; ok {
+		t.Error("finish marker not deleted after cleanup-phase retry")
+	}
+}
+
 // TestReconcileFinishMarkers_ResumesCleanup covers startup recovery: a marker
 // points at a merged, still-existing worktree ⇒ reconcile removes the
 // worktree, deletes the branch and drops the marker (no re-merge).

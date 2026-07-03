@@ -117,13 +117,16 @@ func (a *AppService) FinishWorktree(sessionId int) {
 	phase, wtPath := st.Phase, st.WorktreePath
 	a.mu.Unlock()
 
-	// A "blocked" retry is only valid once the merge already went through
-	// (a marker exists) — a pre-merge block must go back through Start. The
-	// marker read runs under finishMu (never a.mu), keeping every marker
-	// access serialized (f); it may briefly wait on an in-flight finish,
-	// which is the intended global serialization.
+	// A "blocked" or "cleanup" retry is only valid once the merge already went
+	// through (a marker exists) — a pre-merge block must go back through Start.
+	// "cleanup" is the parked state left behind when the merge succeeded but
+	// cleanupWorktree failed (setFinishCleanupBlocked); its retry resumes here,
+	// skips the re-merge via count==0 and re-runs only the cleanup. The marker
+	// read runs under finishMu (never a.mu), keeping every marker access
+	// serialized (f); it may briefly wait on an in-flight finish, which is the
+	// intended global serialization.
 	if phase != "ready" {
-		if phase != "blocked" {
+		if phase != "blocked" && phase != "cleanup" {
 			return
 		}
 		a.finishMu.Lock()
@@ -182,7 +185,12 @@ func (a *AppService) FinishWorktree(sessionId int) {
 			sess.Close()
 		}
 		if err := cleanupWorktree(root, cp.WorktreePath, cp.Branch); err != nil {
-			a.setFinishBlocked(sessionId, "Merge ist durch, Cleanup fehlgeschlagen: "+err.Error()+" — erneut versuchen")
+			// Merge is through and the marker persists — only the worktree
+			// removal failed (typically a held handle on Windows). Stay in
+			// phase "cleanup" (NOT "blocked") so the retry routes back through
+			// FinishWorktree into this very cleanup instead of re-prepping the
+			// already-closed session (spec 4.3 transition table).
+			a.setFinishCleanupBlocked(sessionId, "Merge ist durch, Cleanup fehlgeschlagen: "+err.Error()+" — erneut versuchen")
 			return
 		}
 		_ = deleteFinishMarker(finishMarkerPath(), cp.WorktreePath)
