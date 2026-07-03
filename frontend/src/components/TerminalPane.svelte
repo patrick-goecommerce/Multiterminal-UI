@@ -96,7 +96,7 @@
 
     switch (action) {
       case 'copy':
-        copySelection(termInstance.terminal);
+        void copySelection(termInstance.terminal);
         break;
       case 'paste':
         pasteToSession(pane.sessionId, termInstance?.terminal ?? null);
@@ -390,7 +390,11 @@
           return false;
         }
         if (e.ctrlKey && e.key === 'c' && termInstance?.terminal.hasSelection()) {
-          copySelection(termInstance.terminal);
+          // preventDefault so the WebView's native copy (which sees no DOM
+          // selection in the canvas-rendered terminal) can't race and clobber
+          // the clipboard write we just issued.
+          e.preventDefault();
+          void copySelection(termInstance.terminal);
           return false;
         }
         if (e.ctrlKey && e.key === 'f') { openSearch(); return false; }

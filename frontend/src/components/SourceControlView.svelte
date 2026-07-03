@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy } from 'svelte';
   import { t } from '../stores/i18n';
-  import { ClipboardSetText } from '../../wailsjs/runtime/runtime';
+  import { writeClipboard } from '../lib/clipboard';
   import { AddToGitignore } from '../../wailsjs/go/backend/App';
 
   export let dir: string = '';
@@ -121,10 +121,10 @@
     dispatch('selectFile', { path });
   }
 
-  function handleScCopy(e: MouseEvent, path: string) {
+  async function handleScCopy(e: MouseEvent, path: string) {
     e.stopPropagation();
-    ClipboardSetText(path);
-    setCopied(path);
+    // Show the "kopiert!" badge only after the write really succeeded.
+    if (await writeClipboard(path)) setCopied(path);
   }
 
   $: groupedChanges = getGroupedChanges(gitStatuses);

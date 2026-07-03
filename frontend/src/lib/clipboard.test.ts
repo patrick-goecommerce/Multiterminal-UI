@@ -14,8 +14,12 @@ vi.mock('../../wailsjs/runtime/runtime', () => ({
   ClipboardSetText: clipboardSet,
 }));
 
-import { pasteToSession, copySelection, writeTextToSession } from './clipboard';
+import { pasteToSession, copySelection, writeTextToSession, writeClipboard } from './clipboard';
 import { encodeForPty } from './claude';
+
+// The WebView2-native clipboard API is the preferred write path; jsdom has no
+// real one, so install a controllable stub.
+const clipboardWriteText = vi.fn();
 
 // Mirror the backend WriteToSession decode (base64.StdEncoding.DecodeString +
 // raw bytes → UTF-8) so a test asserts the exact string the PTY would receive.
@@ -39,7 +43,15 @@ function terminalWithBracketMode(on: boolean) {
 beforeEach(() => {
   writeToSession.mockClear();
   clipboardGet.mockClear();
-  clipboardSet.mockClear();
+  clipboardSet.mockReset();
+  clipboardSet.mockResolvedValue(undefined);
+  clipboardWriteText.mockReset();
+  clipboardWriteText.mockResolvedValue(undefined);
+  Object.defineProperty(globalThis.navigator, 'clipboard', {
+    value: { writeText: clipboardWriteText },
+    configurable: true,
+    writable: true,
+  });
 });
 
 describe('encodeForPty (the encode half of the paste chain)', () => {
@@ -109,20 +121,52 @@ describe('pasteToSession (clipboard → PTY)', () => {
   });
 });
 
+describe('writeClipboard (the actual clipboard write)', () => {
+  it('prefers navigator.clipboard and does not fall back on success', async () => {
+    expect(await writeClipboard('hello')).toBe(true);
+    expect(clipboardWriteText).toHaveBeenCalledWith('hello');
+    expect(clipboardSet).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the Wails runtime when navigator.clipboard rejects', async () => {
+    clipboardWriteText.mockRejectedValue(new Error('not allowed'));
+    expect(await writeClipboard('hello')).toBe(true);
+    expect(clipboardSet).toHaveBeenCalledWith('hello');
+  });
+
+  it('reports FAILURE when both write paths fail (no false success)', async () => {
+    clipboardWriteText.mockRejectedValue(new Error('not allowed'));
+    clipboardSet.mockRejectedValue(new Error('wails failed'));
+    expect(await writeClipboard('hello')).toBe(false);
+  });
+});
+
 describe('copySelection (terminal → clipboard)', () => {
-  it('copies the selection, clears it, and reports success', () => {
+  it('copies the selection, clears it, and reports success', async () => {
     const clearSelection = vi.fn();
     const term = { hasSelection: () => true, getSelection: () => 'selected text', clearSelection } as any;
-    expect(copySelection(term)).toBe(true);
-    expect(clipboardSet).toHaveBeenCalledWith('selected text');
+    expect(await copySelection(term)).toBe(true);
+    expect(clipboardWriteText).toHaveBeenCalledWith('selected text');
     expect(clearSelection).toHaveBeenCalledTimes(1);
   });
 
-  it('does nothing and reports false when there is no selection', () => {
+  it('reports failure and KEEPS the selection when the clipboard write fails', async () => {
+    // The reported bug: UI claimed success while the clipboard kept its old
+    // content. A failed write must return false AND leave the selection intact
+    // so the user can retry — never a silent false success.
+    clipboardWriteText.mockRejectedValue(new Error('not allowed'));
+    clipboardSet.mockRejectedValue(new Error('wails failed'));
+    const clearSelection = vi.fn();
+    const term = { hasSelection: () => true, getSelection: () => 'x', clearSelection } as any;
+    expect(await copySelection(term)).toBe(false);
+    expect(clearSelection).not.toHaveBeenCalled();
+  });
+
+  it('does nothing and reports false when there is no selection', async () => {
     const clearSelection = vi.fn();
     const term = { hasSelection: () => false, getSelection: () => '', clearSelection } as any;
-    expect(copySelection(term)).toBe(false);
-    expect(clipboardSet).not.toHaveBeenCalled();
+    expect(await copySelection(term)).toBe(false);
+    expect(clipboardWriteText).not.toHaveBeenCalled();
     expect(clearSelection).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { t } from '../stores/i18n';
-  import { ClipboardSetText } from '../../wailsjs/runtime/runtime';
+  import { writeClipboard } from '../lib/clipboard';
   import * as App from '../../wailsjs/go/backend/App';
 
   interface FileEntry {
@@ -49,10 +49,11 @@
     }
   }
 
-  function handleCopy(e: MouseEvent) {
+  async function handleCopy(e: MouseEvent) {
     e.stopPropagation();
-    ClipboardSetText(entry.path);
-    dispatch('copied', { path: entry.path });
+    // Only signal "kopiert!" once the write actually succeeded — a failed write
+    // must not claim success while the clipboard keeps its old content.
+    if (await writeClipboard(entry.path)) dispatch('copied', { path: entry.path });
   }
 
   function handleToggleFavorite(e: MouseEvent) {
