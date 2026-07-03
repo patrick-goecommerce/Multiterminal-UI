@@ -19,9 +19,11 @@ Nutze für Aufgaben mit eigenem, klar abgegrenztem Arbeitsbereich das
 ` + "`EnterWorktree`" + `-Tool, um deine Änderungen zu isolieren. Der Haupt-Branch
 dieses Projekts darf dabei nie direkt gewechselt werden.
 
-Wenn eine Aufgabe erledigt ist: committe, pushe bei Bedarf und öffne einen
-Pull Request (` + "`gh pr create`" + `), oder frage den Nutzer nach dem gewünschten
-Vorgehen.
+Wenn eine Aufgabe erledigt ist: committe deine Arbeit in nachvollziehbaren
+Commits. Push, das Erstellen eines Pull Requests (` + "`gh pr create`" + `) und jeder
+Merge oder Fast-Forward durch dich selbst erfordern IMMER vorherige Zustimmung
+des Nutzers — frage vorher nach, statt eigenständig zu pushen, zu mergen oder
+einen PR zu öffnen.
 
 Nutze ` + "`ExitWorktree`" + ` mit ` + "`discard_changes: true`" + ` oder erzwungenem Entfernen
 NIEMALS eigenständig — nur nach ausdrücklicher Rückfrage beim Nutzer und

@@ -20,7 +20,7 @@ func TestEnsureProjectWorktreeSetup_CreatesFilesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("memory file not created: %v", err)
 	}
-	for _, want := range []string{"EnterWorktree", "discard_changes", "NIEMALS"} {
+	for _, want := range []string{"EnterWorktree", "discard_changes", "NIEMALS", "Zustimmung"} {
 		if !strings.Contains(string(mem), want) {
 			t.Errorf("memory file missing %q", want)
 		}
