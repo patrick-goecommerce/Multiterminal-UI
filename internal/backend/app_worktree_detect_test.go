@@ -80,7 +80,7 @@ func TestOnWorktreeChange_NoOpWhenCwdStaysInsideKnownWorktree(t *testing.T) {
 	a := newDetectTestApp()
 	events := 0
 	a.emitWorktreeEvent = func(string, any) { events++ }
-	a.onWorktreeChange(1, wt, "worktree-feature-a", wt)          // enter: 1 event
+	a.onWorktreeChange(1, wt, "worktree-feature-a", wt)     // enter: 1 event
 	a.onWorktreeChange(1, "", "", filepath.Join(wt, "sub")) // still inside: no new event
 
 	if events != 1 {
