@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -46,6 +47,30 @@ func TestParseWorktreePorcelainDetachedHead(t *testing.T) {
 	}
 	if result[0].Branch != "(detached)" {
 		t.Errorf("expected (detached), got %q", result[0].Branch)
+	}
+}
+
+func TestCategorizeWorktree_ClaudeNativePrefix(t *testing.T) {
+	root := filepath.Join("D:", "repos", "proj")
+	mtPrefix := filepath.Join(root, worktreeDir) + string(filepath.Separator)
+	wt := &WorktreeInfo{Path: filepath.Join(root, ".claude", "worktrees", "feature-a")}
+	categorizeWorktree(wt, root, mtPrefix)
+	if wt.Category != "claude" {
+		t.Errorf("category = %q, want claude", wt.Category)
+	}
+	if wt.Name != "feature-a" {
+		t.Errorf("name = %q, want feature-a", wt.Name)
+	}
+}
+
+func TestCategorizeWorktree_ClaudeNativeNestedName(t *testing.T) {
+	// EnterWorktree names may contain "/"-separated segments.
+	root := filepath.Join("D:", "repos", "proj")
+	mtPrefix := filepath.Join(root, worktreeDir) + string(filepath.Separator)
+	wt := &WorktreeInfo{Path: filepath.Join(root, ".claude", "worktrees", "area", "feature-a")}
+	categorizeWorktree(wt, root, mtPrefix)
+	if wt.Category != "claude" {
+		t.Errorf("category = %q, want claude", wt.Category)
 	}
 }
 

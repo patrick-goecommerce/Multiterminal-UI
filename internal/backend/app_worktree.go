@@ -216,6 +216,16 @@ func categorizeWorktree(wt *WorktreeInfo, root, mtPrefix string) {
 		}
 		return
 	}
+	claudeWtPrefix := strings.ToLower(filepath.Join(root, ".claude", "worktrees")) + string(filepath.Separator)
+	if strings.HasPrefix(wtPathNorm, claudeWtPrefix) {
+		rel, err := filepath.Rel(filepath.Join(root, ".claude", "worktrees"), wt.Path)
+		if err != nil {
+			rel = filepath.Base(wt.Path)
+		}
+		wt.Category = "claude"
+		wt.Name = filepath.ToSlash(rel)
+		return
+	}
 	wt.Category = "terminal"
 	wt.Name = filepath.Base(wt.Path)
 }
