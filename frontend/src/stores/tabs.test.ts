@@ -305,6 +305,37 @@ describe('tabStore', () => {
     });
   });
 
+  describe('finishPhase', () => {
+    it('initializes finishPhase to empty string on a new pane', () => {
+      const tabId = tabStore.addTab('T', '/d');
+      tabStore.addPane(tabId, 8100, 'Claude', 'claude', '');
+      const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
+      const pane = tab!.panes.find((p) => p.sessionId === 8100);
+      expect(pane!.finishPhase).toBe('');
+    });
+
+    it('setFinishPhase sets the phase by session id', () => {
+      const tabId = tabStore.addTab('T', '/d');
+      tabStore.addPane(tabId, 8101, 'Claude', 'claude', '');
+      tabStore.setFinishPhase(8101, 'preparing');
+      const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
+      const pane = tab!.panes.find((p) => p.sessionId === 8101);
+      expect(pane!.finishPhase).toBe('preparing');
+    });
+
+    it('setFinishPhase leaves worktree fields untouched', () => {
+      const tabId = tabStore.addTab('T', '/d');
+      tabStore.addPane(tabId, 8102, 'Claude', 'claude', '');
+      tabStore.setWorktree(8102, '/wt', 'worktree-x', 'alpha-main');
+      tabStore.setFinishPhase(8102, 'merging');
+      const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
+      const pane = tab!.panes.find((p) => p.sessionId === 8102);
+      expect(pane!.worktreePath).toBe('/wt');
+      expect(pane!.branch).toBe('worktree-x');
+      expect(pane!.finishPhase).toBe('merging');
+    });
+  });
+
   describe('markExited', () => {
     it('sets running to false', () => {
       const tabId = tabStore.addTab('ExitTest');
