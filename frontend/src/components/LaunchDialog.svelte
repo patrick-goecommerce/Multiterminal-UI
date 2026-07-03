@@ -86,7 +86,7 @@
     const isAgent = agentModes.includes(type);
     const display = isAgent ? selectedDisplay : 'terminal';
     const permissionMode = display === 'chat' ? selectedPermissionMode : 'plan';
-    const worktree = useWorktree && display !== 'chat' && wtTarget
+    const worktree = useWorktree && display !== 'chat' && !issueContext && wtTarget && wtName.trim()
       ? { name: wtName, targetBranch: wtTarget } : null;
     dispatch('launch', { type, model: selectedModel, issue: issueContext, display, permissionMode, worktree });
     dispatch('close');
@@ -224,7 +224,7 @@
         </div>
       {/if}
 
-      {#if selectedDisplay !== 'chat'}
+      {#if selectedDisplay !== 'chat' && !issueContext}
         <div class="worktree-opt">
           <label class="wt-check">
             <input type="checkbox" checked={useWorktree} on:change={toggleWorktree} />
