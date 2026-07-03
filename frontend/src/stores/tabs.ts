@@ -34,6 +34,8 @@ export interface Pane {
   autoNameSource: '' | 'llm' | 'osc';
   /** True once the user manually renamed the pane — suppresses all auto names. */
   userRenamed: boolean;
+  /** Worktree finish-flow progress ('' when idle/not applicable). */
+  finishPhase: '' | 'preparing' | 'ready' | 'blocked' | 'merging' | 'cleanup';
 }
 
 /** Resolve the name shown in a pane titlebar.
@@ -240,6 +242,7 @@ function createTabStore() {
           oscTitle: '',
           autoNameSource: '',
           userRenamed: false,
+          finishPhase: '',
         });
         tab.focusedPaneId = paneId;
         return state;
@@ -320,6 +323,16 @@ function createTabStore() {
         return;
       }
       applyActivity(sessionId, activity, cost);
+    },
+
+    setFinishPhase(sessionId: number, phase: string) {
+      update((state) => {
+        for (const tab of state.tabs) {
+          const pane = tab.panes.find((p) => p.sessionId === sessionId);
+          if (pane) pane.finishPhase = phase as Pane['finishPhase'];
+        }
+        return state;
+      });
     },
 
     markExited(sessionId: number) {

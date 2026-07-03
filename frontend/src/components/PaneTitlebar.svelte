@@ -198,6 +198,16 @@
     <button class="pane-btn commit-btn" on:click|stopPropagation={() => dispatch('commitPush', { paneId: pane.id, sessionId: pane.sessionId })} title="Commit & Push">
       ☁
     </button>
+    {#if pane.worktreePath}
+      <span class="wt-badge" title={`Worktree: ${pane.worktreePath}\nZiel: ${pane.targetBranch || '?'}`}>⎇ {pane.branch}</span>
+      {#if pane.finishPhase === 'preparing' || pane.finishPhase === 'merging' || pane.finishPhase === 'cleanup'}
+        <button class="pane-btn finish-btn spinning" title="Fertigstellen läuft – klicken zum Abbrechen"
+          on:click|stopPropagation={() => dispatch('cancelFinish', { sessionId: pane.sessionId })}>◌</button>
+      {:else}
+        <button class="pane-btn finish-btn" title="Worktree fertigstellen: mergen & aufräumen"
+          on:click|stopPropagation={() => dispatch('finishWorktree', { paneId: pane.id, sessionId: pane.sessionId })}>✓</button>
+      {/if}
+    {/if}
     {#if pane.issueNumber}
       <div class="issue-actions-wrap">
         <button class="pane-btn issue-actions-btn" on:click|stopPropagation={() => (showIssueActions = !showIssueActions)} title={$t('titlebar.issueActions')}>
@@ -413,6 +423,11 @@
 
   .commit-btn { font-size: 12px !important; font-weight: 700; }
   .commit-btn:hover { color: var(--success) !important; }
+
+  .wt-badge { font-size: 10px; color: var(--accent); background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .finish-btn { color: #4ade80; font-weight: 700; }
+  .finish-btn.spinning { animation: wt-spin 1s linear infinite; }
+  @keyframes wt-spin { to { transform: rotate(360deg); } }
 
   .issue-actions-wrap { position: relative; }
   .issue-actions-btn { font-size: 16px !important; letter-spacing: 1px; }

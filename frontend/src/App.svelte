@@ -857,6 +857,15 @@
     }
   }
 
+  // TODO(Task 18): replace with the full Finish-Overlay flow (progress UI, conflict handling).
+  function handleFinishWorktree(e: CustomEvent<{ paneId: string; sessionId: number }>) {
+    console.log('[handleFinishWorktree] stub', e.detail);
+  }
+
+  function handleCancelFinish(e: CustomEvent<{ sessionId: number }>) {
+    App.CancelWorktreeFinish(e.detail.sessionId);
+  }
+
   async function handleIssueAction(e: CustomEvent<{ paneId: string; sessionId: number; issueNumber: number; action: string }>) {
     const { sessionId, issueNumber, action } = e.detail;
     const tab = $activeTab;
@@ -928,6 +937,8 @@
               on:toggleDisplayPane={handleToggleDisplay}
               on:issueAction={handleIssueAction}
               on:commitPush={handleCommitPush}
+              on:finishWorktree={handleFinishWorktree}
+              on:cancelFinish={handleCancelFinish}
               on:navigateFile={handleNavigateFile}
               on:splitPane={() => (showLaunchDialog = true)}
               on:openWorktreePane={handleOpenWorktreePane}

@@ -553,6 +553,8 @@
     on:toggleQueue={() => (showQueue = !showQueue)}
     on:issueAction
     on:commitPush
+    on:finishWorktree
+    on:cancelFinish
     on:openWorktreePane
     on:worktreeListChanged
   />
