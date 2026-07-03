@@ -12,6 +12,20 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
       // setActive=false: avoid triggering xterm.js creation for each tab during
       // restore. Only the final setActiveTab() call below mounts the active tab.
       const tabId = tabStore.addTab(savedTab.name, savedTab.dir, false);
+
+      // Mirror the launch-time setup call (App.svelte handleLaunch): restored
+      // sessions read their memory files on process start too, so a project
+      // whose CLAUDE.local.md/settings.local.json setup never ran (or is
+      // stale) must be re-checked here, not just on the next fresh launch.
+      const hasNonShellPane = savedTab.panes.some((p) => (INDEX_TO_MODE[p.mode] || 'shell') !== 'shell');
+      if (hasNonShellPane && savedTab.dir) {
+        try {
+          await App.EnsureProjectWorktreeSetup(savedTab.dir);
+        } catch (err) {
+          console.error('[EnsureProjectWorktreeSetup]', err);
+        }
+      }
+
       for (const savedPane of savedTab.panes) {
         const mode = INDEX_TO_MODE[savedPane.mode] || 'shell';
         const display = (savedPane as any).display || 'terminal';
