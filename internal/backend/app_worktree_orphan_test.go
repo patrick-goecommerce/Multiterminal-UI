@@ -3,6 +3,7 @@ package backend
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -42,6 +43,15 @@ func TestRemoveOrphanedWorktree_RefusesUnmergedBranch(t *testing.T) {
 	err := a.RemoveOrphanedWorktree(wt)
 	if err == nil {
 		t.Fatal("expected error: unmerged branch must not be force-deleted")
+	}
+	if !strings.Contains(err.Error(), "nicht gemergt") {
+		t.Errorf("error message = %q, want it to mention the branch is unmerged", err.Error())
+	}
+	// The worktree directory IS expected to be gone at this point — only the
+	// branch delete refuses. Asserting it pins down that the failure comes
+	// from the branch -d step specifically, not an earlier worktree-remove error.
+	if _, statErr := os.Stat(wt); !os.IsNotExist(statErr) {
+		t.Error("worktree directory should have been removed before the branch -d refusal")
 	}
 	if !branchExists(repo, "worktree-wip-feature") {
 		t.Fatal("DATA LOSS: unmerged branch was deleted")
