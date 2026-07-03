@@ -231,6 +231,10 @@
       tabStore.addTab('Workspace', workDir);
     }
 
+    // Reconcile pane-worktree finish markers left over from a previous run.
+    const reconcileDir = $activeTab?.dir || '';
+    if (reconcileDir) App.ReconcileFinishMarkers(reconcileDir).catch(() => {});
+
     // Start keep-alive loop (auto-start + periodic ping).
     // NOTE: restoreSession() calls tabStore.addPane() with running=true before
     // CreateSession resolves, so findFirstClaudePane() in startKeepAliveLoop
@@ -399,7 +403,7 @@
     } catch (err) { console.error('[handleOpenWorktreePane] failed:', err); }
   }
 
-  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string }>) {
+  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string; worktree?: { name: string; targetBranch: string } | null }>) {
     const { type, model, issue, display = 'terminal', permissionMode = 'plan' } = e.detail;
     showLaunchDialog = false;
     const issueCtx = issue || launchIssueContext;
@@ -456,6 +460,19 @@
         sessionDir = result.sessionDir;
       }
 
+      // Per-pane worktree (opt-in via LaunchDialog checkbox). Chat launches never
+      // carry a worktree detail; issue worktrees keep their existing flow above.
+      let paneWt: { path: string; branch: string; target_branch: string } | null = null;
+      if (e.detail.worktree) {
+        try {
+          paneWt = await App.CreatePaneWorktree(tab.dir || '', e.detail.worktree.name, e.detail.worktree.targetBranch);
+          if (paneWt) sessionDir = paneWt.path;
+        } catch (err: any) {
+          alert(`Worktree-Erstellung fehlgeschlagen:\n${err?.message || err}`);
+          return; // no silent fallback into the main branch
+        }
+      }
+
       const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, type);
       if (sessionId > 0) {
         let paneBranch = issueBranch;
@@ -463,8 +480,8 @@
           try { paneBranch = await App.GetGitBranch(sessionDir); } catch {}
         }
         tabStore.addPane(tab.id, sessionId, name, type, model,
-          issueCtx?.number, issueCtx?.title, issueBranch, worktreePath, paneBranch,
-          '', false, 'terminal', '', claudeSessionId);
+          issueCtx?.number, issueCtx?.title, issueBranch, paneWt?.path ?? worktreePath, paneWt?.branch ?? paneBranch,
+          paneWt?.target_branch ?? '', false, 'terminal', '', claudeSessionId);
         if (issueCtx) {
           App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
           setTimeout(() => {
