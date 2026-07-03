@@ -1,7 +1,11 @@
 # Design: Worktree-Isolation über natives Claude-Code-`EnterWorktree`
 
 **Datum:** 2026-07-03
-**Status:** Entwurf, freigegeben zur Ausschreibung (brainstorming abgeschlossen)
+**Status:** Implementiert (Branch `feat/worktree-enterworktree`, 13 Tasks, alle SDD-reviewed). `needs-e2e-testing` bis zur manuellen Verifikation (s. u.).
+
+## 0. Umsetzungs-Notiz (Nachtrag 2026-07-03)
+
+`frontend/src/lib/session.ts` (Save/Restore der Tab-/Pane-Konfiguration) wurde vom Plan bewusst NICHT angefasst — sie stammt unverändert vom Vorgänger-Branch `feat/worktree-pro-pane` und erwies sich als voll kompatibel mit diesem Design: Sie serialisiert/restauriert `worktreePath`/`branch`/`targetBranch` rein über Pfad-Existenz (`App.WorktreeDirExists`), unabhängig davon, ob der Wert einst von MTUI selbst gesetzt wurde oder — wie jetzt — von `tabStore.setWorktree()` aus der Hook-Erkennung stammt. Ergebnis: App-Neustart während ein Pane in einem Claude-erzeugten `.claude/worktrees/`-Verzeichnis arbeitet, restauriert die Session korrekt in diesem Verzeichnis (oder fällt sauber auf das Hauptverzeichnis zurück, falls der Worktree inzwischen weg ist) — ohne dass dieser Plan dafür etwas bauen musste.
 **Ersetzt:** `docs/superpowers/specs/2026-07-02-worktree-pro-pane-design.md` als Design-Richtung. Der zugehörige Branch `feat/worktree-pro-pane` (21 Tasks + Fixes, fertig implementiert und reviewed) wird **nicht verworfen** — er bleibt unangetastet liegen, da große Teile seiner Backend-Logik (Verifikations-Gate, Merge, Cleanup, Idempotenz, Prozessbaum-Kill) hier wiederverwendet werden. Siehe Abschnitt 8.
 
 ## 1. Ziel & Philosophie-Wechsel
@@ -100,14 +104,25 @@ Der Branch bleibt **unverändert liegen** (nicht gemerged, nicht verworfen), da 
 
 Die endgültige Entscheidung, ob/wie der alte Branch geschlossen wird (verwerfen, als Referenz behalten, Teile per Cherry-Pick übernehmen), wird beim Schreiben des Implementierungsplans getroffen, nicht in diesem Dokument vorweggenommen.
 
-## 9. Offene Implementierungsfragen (bei der Umsetzung zu klären, nicht mehr Teil des Brainstormings)
+## 9. Offene Implementierungsfragen — Ergebnis nach Umsetzung
 
-- Exaktes Deny-Pattern, um direkten Branch-Wechsel im Haupt-Verzeichnis zu verhindern, ohne legitime Nutzung von `git checkout -- <datei>` zu blockieren.
-- Ob Claude-Code-Permissions das Matching auf einzelne Tool-Parameter (z. B. `discard_changes`) unterstützen, oder nur auf Tool-Name/Bash-Befehlstext.
-- Exakte Hook-Registrierungssyntax für `PostToolUse:EnterWorktree` in `app_hooks_setup.go`, im selben Muster wie die bestehende `UserPromptSubmit`-Registrierung.
-- Verifikation der `session_id` → MTUI-`sessionId`-Korrelation (vermutlich bereits im Auto-Naming-Pfad vorhanden, `app_pane_name.go`).
-- Zuverlässigkeit der PR-Status-Erkennung (Polling-Intervall, Rate-Limits von `gh`).
-- Ob/wie `.mt-worktrees`-artige Altlasten (aus dem alten Branch, falls dieser in der Zwischenzeit doch Spuren hinterlassen hat) mit der neuen `.claude/worktrees/`-Konvention koexistieren.
+- **Deny-Pattern für Branch-Wechsel im Haupt-Verzeichnis:** NICHT umgesetzt — das Sicherheitsmodell (Abschnitt 5) verzichtet bewusst auf harte Deny-Regeln für Merge/Push/PR/Worktree-Entfernen (User-Korrektur während des Brainstormings: „nicht einfach so", nicht „gar nicht"). Es gibt daher auch keine Deny-Regel gegen Branch-Wechsel im Hauptverzeichnis — dieser Schutz besteht nicht.
+- **Tool-Parameter-Matching (`discard_changes`) bei Claude-Code-Permissions:** nicht verifiziert, da keine Deny-Regeln mehr Teil des Designs sind — die Frage ist gegenstandslos geworden.
+- **Hook-Registrierungssyntax für `PostToolUse:EnterWorktree`:** **erledigt sich von selbst** — `PostToolUse` ist in `app_hooks_installer.go` bereits global (ohne Tool-Matcher) für alle Tools registriert. Es war keine neue Registrierung nötig, nur eine Erweiterung der Payload-Auswertung (Tasks 1–3).
+- **`session_id` → MTUI-`sessionId`-Korrelation:** bestätigt vorhanden und wiederverwendet — `MULTITERMINAL_SESSION_ID` wird beim Sessionstart gesetzt (`app.go`) und von `mtui-hook` unverändert durchgereicht (`mt_id`-Feld).
+- **PR-Status-Erkennung (`gh pr list`):** nicht umgesetzt (v1-Scope-Reduktion) — die Badge-Anzeige beschränkt sich auf Branch-Name, kein PR-Status. Kandidat für ein Folge-Ticket.
+- **Koexistenz mit `.mt-worktrees`-Altlasten:** `categorizeWorktree` unterscheidet die Präfixe eindeutig (`.mt-worktrees/` → Kategorie `terminal`/`issue`, `.claude/worktrees/` → Kategorie `claude`) — keine Kollision, beide Schemata laufen nebeneinander.
+
+## 9a. E2E-Checkliste (`needs-e2e-testing`, mit echtem Claude Code)
+
+1. Neues Projekt in MTUI öffnen, Claude-Pane starten → `CLAUDE.local.md` + `.claude/settings.local.json` (`worktree.baseRef: head`) entstehen im Projekt-Root.
+2. Claude eine Aufgabe geben, die isolierte Arbeit nahelegt → beobachten, ob Claude von sich aus `EnterWorktree` aufruft; ⎇-Badge muss innerhalb der 100ms-Hook-Polling-Latenz erscheinen.
+3. Claude fertigstellen lassen (committen, `gh pr create`) → beobachten, ob Claude eigenständig sinnvoll handelt.
+4. Claude bitten, den Worktree zu entfernen, OHNE dass Arbeit gemergt/gepusht wurde → prüfen, ob Claude gemäß Memory-Anweisung beim Nutzer nachfragt, bevor es `discard_changes: true` nutzt (Beobachtungstest, kein hartes Gate — die Memory-Anweisung ist Kontext, keine Durchsetzung).
+5. Pane schließen, während ein Worktree mit offener Arbeit existiert → Bestätigungsdialog erscheint, Worktree bleibt liegen.
+6. Verwaisten Worktree über die Dropdown-Sektion „Verwaist" manuell entfernen — Fall „bereits gemergt" (klaglos entfernt) und „nicht gemergt" (Fehlermeldung, Branch bleibt stehen).
+7. App-Neustart mit einem Pane, das gerade in einem `.claude/worktrees/`-Verzeichnis arbeitet → Session restauriert korrekt in diesem Verzeichnis (`session.ts`, unverändert vom Vorgänger-Branch — siehe Abschnitt 0); Badge erscheint nach dem nächsten Hook-Event erneut.
+8. Zwei parallele Claude-Panes im selben Projekt, beide erzeugen eigene `EnterWorktree`-Worktrees → keine gegenseitige Störung, beide Badges unabhängig korrekt.
 
 ## 10. Nicht im Scope
 
