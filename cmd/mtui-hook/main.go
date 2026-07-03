@@ -23,20 +23,30 @@ import (
 )
 
 type claudeEvent struct {
-	SessionID string `json:"session_id"`
-	ToolName  string `json:"tool_name"`
-	Message   string `json:"message"`
-	Prompt    string `json:"prompt"`
+	SessionID    string          `json:"session_id"`
+	ToolName     string          `json:"tool_name"`
+	Message      string          `json:"message"`
+	Prompt       string          `json:"prompt"`
+	Cwd          string          `json:"cwd"`
+	ToolResponse json.RawMessage `json:"tool_response"`
+}
+
+type enterWorktreeResponse struct {
+	WorktreePath   string `json:"worktreePath"`
+	WorktreeBranch string `json:"worktreeBranch"`
 }
 
 // hookLine mirrors internal/backend.rawHookEvent — keep the json tags in sync.
 type hookLine struct {
-	Ts        int64  `json:"ts"`
-	Event     string `json:"event"`
-	SessionID string `json:"session_id"`
-	MtID      int    `json:"mt_id"`
-	Tool      string `json:"tool"`
-	Message   string `json:"message"`
+	Ts             int64  `json:"ts"`
+	Event          string `json:"event"`
+	SessionID      string `json:"session_id"`
+	MtID           int    `json:"mt_id"`
+	Tool           string `json:"tool"`
+	Message        string `json:"message"`
+	Cwd            string `json:"cwd,omitempty"`
+	WorktreePath   string `json:"worktree_path,omitempty"`
+	WorktreeBranch string `json:"worktree_branch,omitempty"`
 }
 
 func main() {
@@ -68,13 +78,25 @@ func run() {
 		message = ev.Prompt
 	}
 
+	var worktreePath, worktreeBranch string
+	if ev.ToolName == "EnterWorktree" && len(ev.ToolResponse) > 0 {
+		var wt enterWorktreeResponse
+		if json.Unmarshal(ev.ToolResponse, &wt) == nil {
+			worktreePath = wt.WorktreePath
+			worktreeBranch = wt.WorktreeBranch
+		}
+	}
+
 	line, err := json.Marshal(hookLine{
-		Ts:        time.Now().Unix(),
-		Event:     eventType,
-		SessionID: sessionID,
-		MtID:      mtID,
-		Tool:      ev.ToolName,
-		Message:   message,
+		Ts:             time.Now().Unix(),
+		Event:          eventType,
+		SessionID:      sessionID,
+		MtID:           mtID,
+		Tool:           ev.ToolName,
+		Message:        message,
+		Cwd:            ev.Cwd,
+		WorktreePath:   worktreePath,
+		WorktreeBranch: worktreeBranch,
 	})
 	if err != nil {
 		return
