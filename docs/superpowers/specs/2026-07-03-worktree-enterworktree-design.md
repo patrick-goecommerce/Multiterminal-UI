@@ -1,7 +1,7 @@
 # Design: Worktree-Isolation über natives Claude-Code-`EnterWorktree`
 
 **Datum:** 2026-07-03
-**Status:** Implementiert (Branch `feat/worktree-enterworktree`, 13 Tasks, alle SDD-reviewed). `needs-e2e-testing` bis zur manuellen Verifikation (s. u.).
+**Status:** Implementiert (13 Tasks, alle SDD-reviewed), **Rev. 2 in Arbeit** (Abschnitt 11) nach realem Dev-Test: Nutzer-Feedback zeigte, dass ein rein beobachtender MTUI-Modus zu wenig Kontrolle über den finalen Rückfluss in den Branch gibt.
 
 ## 0. Umsetzungs-Notiz (Nachtrag 2026-07-03)
 
@@ -128,3 +128,30 @@ Die endgültige Entscheidung, ob/wie der alte Branch geschlossen wird (verwerfen
 
 - Shell-Panes (kein natives `EnterWorktree` ohne Claude) — bleiben unverändert, wie heute.
 - MTUI-seitiger, aktiv orchestrierter Merge als PRIMÄRER Pfad (das war das alte Design) — bleibt als möglicher Zusatzweg für später denkbar (Abschnitt 8), ist aber nicht Teil dieses Entwurfs.
+
+## 11. Rev. 2 — MTUI-seitiger Merge-Trigger reaktiviert (Nachtrag nach Dev-Test)
+
+**Auslöser:** Realer Dev-Test zeigte, dass der reine Beobachter-Modus (Abschnitt 1, „MTUI beobachtet nur") zu wenig Kontrolle über den finalen Rückfluss in den Ziel-Branch bietet. Der Nutzer bestätigt: Claude darf PRs öffnen, pushen, Fast-Forward-Merges etc. — **aber nur mit Zustimmung**, nicht als generelle Freigabe. Für den lokalen „direkt in den Branch zurück"-Fall soll wieder ein Kontrollpunkt in MTUI existieren.
+
+### 11.1 Entscheidung
+
+Der ✓-Finish-Button, `WorktreeFinishDialog.svelte` und die komplette Finish-State-Machine aus `docs/superpowers/plans/2026-07-02-worktree-pro-pane.md` (Tasks 5, 7, 8, 9, 10, 11, 17, 18) werden **unverändert reaktiviert** und auf per Hook erkannte Worktrees umverdrahtet, statt auf von MTUI selbst erzeugte:
+
+- Backend (`app_worktree_finish.go`, `app_worktree_finish_status.go`, `app_worktree_cleanup.go`, `app_worktree_marker.go`, kill_windows/other.go): **keine Code-Änderung nötig** — alle Funktionen sind pfad-/branch-parametrisiert, nicht an die alte `.mt-worktrees`-Erzeugung gebunden. `StartWorktreeFinish(sessionId, worktreePath, branch, targetBranch, mode)` wird einfach mit den Werten aufgerufen, die die Hook-Erkennung (Abschnitt 4) bereits in `pane.worktreePath`/`branch`/`targetBranch` geschrieben hat.
+- Frontend: `finishPhase` kommt zurück ins `Pane`-Interface (zusätzlich zu, nicht anstelle von `worktreePath`/`branch`/`targetBranch` — zwei unabhängige Zustände: „ist ein Worktree aktiv" vs. „läuft gerade ein Finish-Vorgang"). ✓-Button + Spinner kommen zurück in `PaneTitlebar.svelte` (gleiche Sichtbarkeitsbedingung wie das Badge: nur bei `pane.worktreePath`). `WorktreeFinishDialog.svelte` wird aus der Git-Historie wiederhergestellt (`git show <commit-vor-Task-9>:frontend/src/components/WorktreeFinishDialog.svelte`). Die `worktree:finish-*`-Event-Listener kommen zurück in `App.svelte`, **zusätzlich** zu den bestehenden `worktree:detected`/`worktree:cleared`-Listenern (Abschnitt 4) — beide Event-Familien laufen parallel, ohne sich zu stören.
+
+**Verworfene Alternativen:** (a) Erkennungs- und Finish-Zustand in einer Struktur vereinen — unnötiges Risiko an zwei bereits geprüften Backend-Teilen für keinen funktionalen Gewinn. (b) Vereinfachte State-Machine ohne Zwischenzustände — würde bereits durch Red-Team gefundene und gefixte Probleme (Rebase-Konflikt, Claude beschäftigt, Cleanup-Retry) erneut aufmachen.
+
+### 11.2 Verhältnis zu Claudes autonomem Push/PR
+
+Der Button löst **ausschließlich einen lokalen ff-only-Merge** aus (kein Push, kein PR durch MTUI) — das war bereits der v1-Scope des alten Designs. Beide Wege koexistieren unabhängig:
+- Claude kann jederzeit selbständig pushen/PR öffnen (weiterhin nur nach Zustimmung, siehe 11.3).
+- Der Button ist für den lokalen „direkt in den Branch"-Fall gedacht. Ist die Arbeit bereits extern gemerged, erkennt `GetWorktreeFinishStatus` das (0 neue Commits gegenüber dem Ziel-Branch) und der Button führt nur noch den Cleanup aus, statt zu mergen.
+
+### 11.3 Memory-Text verschärft (Zustimmungspflicht statt Kann-Option)
+
+`projectWorktreeMemoryContent` (`app_worktree_setup.go`, Task 6) wird geändert von „push bei Bedarf und öffne PR, **oder** frage nach" zu einer verbindlichen Rückfrage-Pflicht: Push, PR-Erstellung und jede Art von Merge/Fast-Forward durch Claude selbst erfordern **immer** vorherige Zustimmung des Nutzers — nicht nur `discard_changes`/erzwungenes Entfernen wie bisher. Bestehende Projekte mit bereits geschriebener `CLAUDE.local.md` werden davon NICHT rückwirkend aktualisiert (Task 6 überschreibt nie bestehende Dateien) — das ist als Abweichung zu dokumentieren, kein neuer Automatismus zum Nachziehen.
+
+### 11.4 Umfang
+
+Im Kern eine **Wiederherstellung** (Revert der Frontend-Entfernung aus Tasks 9/10 des alten Plans + Wiederverdrahtung), kein Neubau. Geschätzt kleiner als die ursprüngliche Entfernung, da die komplexe Logik unverändert bleibt.
