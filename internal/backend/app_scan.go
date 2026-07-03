@@ -166,6 +166,17 @@ func (a *AppService) scanAllSessions() {
 			a.notifyOrchestratorDone(id)
 		}
 
+		// A settled-"idle" pane (output stopped, no recognizable prompt) with an
+		// active finish prep must still advance the queue: the "done" trigger
+		// above never fires when Claude finishes without a visible ❯ prompt, which
+		// would otherwise strand the finish prep as "pending" forever. Scoped to a
+		// preparing finish flow so general pipeline timing is unaffected.
+		if activityChanged && actStr == "idle" && a.app != nil {
+			if st := a.getFinishState(id); st != nil && st.Phase == "preparing" {
+				a.processQueue(id)
+			}
+		}
+
 		// Surface waiting states to an active finish flow (spec 5.1/2)
 		if activityChanged && a.app != nil {
 			a.notifyFinishOnActivity(id, actStr)
