@@ -16,12 +16,15 @@ import (
 
 // rawHookEvent is the JSONL structure written by mtui-hook.
 type rawHookEvent struct {
-	Ts        int64  `json:"ts"`
-	Event     string `json:"event"`
-	SessionID string `json:"session_id"`
-	MtID      int    `json:"mt_id"`
-	Tool      string `json:"tool"`
-	Message   string `json:"message"`
+	Ts             int64  `json:"ts"`
+	Event          string `json:"event"`
+	SessionID      string `json:"session_id"`
+	MtID           int    `json:"mt_id"`
+	Tool           string `json:"tool"`
+	Message        string `json:"message"`
+	Cwd            string `json:"cwd"`
+	WorktreePath   string `json:"worktree_path"`
+	WorktreeBranch string `json:"worktree_branch"`
 }
 
 // hookEventToActivity maps a Claude Code event name to an ActivityState.
@@ -55,6 +58,12 @@ type HookManager struct {
 	// onPrompt, if set, is called with the user's prompt text on every
 	// UserPromptSubmit event (used to auto-generate a pane name). Optional.
 	onPrompt func(mtID int, prompt string)
+	// onWorktreeChange, if set, is called on EVERY hook event with the
+	// session's current cwd, plus worktreePath/worktreeBranch when the event
+	// is a PostToolUse:EnterWorktree detection (empty strings otherwise — the
+	// caller uses cwd to notice when a session has left a previously known
+	// worktree, spec 2026-07-03 section 4).
+	onWorktreeChange func(mtID int, worktreePath, worktreeBranch, cwd string)
 
 	mu      sync.Mutex
 	offsets map[string]int64 // filename → bytes already read
@@ -210,6 +219,10 @@ func (hm *HookManager) handleEvent(ev rawHookEvent) {
 	// Forward it so the host can derive an automatic pane name.
 	if ev.Event == "UserPromptSubmit" && ev.Message != "" && hm.onPrompt != nil {
 		hm.onPrompt(ev.MtID, ev.Message)
+	}
+
+	if hm.onWorktreeChange != nil {
+		hm.onWorktreeChange(ev.MtID, ev.WorktreePath, ev.WorktreeBranch, ev.Cwd)
 	}
 
 	newState := hookEventToActivity(ev.Event, ev.Message)

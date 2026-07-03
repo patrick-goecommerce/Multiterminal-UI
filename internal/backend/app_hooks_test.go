@@ -199,3 +199,58 @@ func TestHookManager_IgnoresZeroMtID(t *testing.T) {
 		t.Error("lookup should not be called when mt_id = 0")
 	}
 }
+
+func TestHandleEvent_CallsOnWorktreeChangeForEnterWorktree(t *testing.T) {
+	sess := terminal.NewSession(1, 24, 80)
+	hm := newHookManager("", func(mtID int) *terminal.Session {
+		if mtID == 1 {
+			return sess
+		}
+		return nil
+	}, nil)
+
+	var gotPath, gotBranch, gotCwd string
+	var calls int
+	hm.onWorktreeChange = func(mtID int, worktreePath, worktreeBranch, cwd string) {
+		calls++
+		gotPath, gotBranch, gotCwd = worktreePath, worktreeBranch, cwd
+	}
+
+	hm.handleEvent(rawHookEvent{
+		Event: "PostToolUse", MtID: 1, SessionID: "s1", Tool: "EnterWorktree",
+		Cwd:            `D:\repos\proj\.claude\worktrees\feature-a`,
+		WorktreePath:   `D:\repos\proj\.claude\worktrees\feature-a`,
+		WorktreeBranch: "worktree-feature-a",
+	})
+
+	if calls != 1 {
+		t.Fatalf("onWorktreeChange called %d times, want 1", calls)
+	}
+	if gotPath != `D:\repos\proj\.claude\worktrees\feature-a` || gotBranch != "worktree-feature-a" {
+		t.Errorf("got path=%q branch=%q", gotPath, gotBranch)
+	}
+	if gotCwd != `D:\repos\proj\.claude\worktrees\feature-a` {
+		t.Errorf("got cwd=%q", gotCwd)
+	}
+}
+
+func TestHandleEvent_CallsOnWorktreeChangeWithEmptyPathForOrdinaryEvents(t *testing.T) {
+	sess := terminal.NewSession(1, 24, 80)
+	hm := newHookManager("", func(mtID int) *terminal.Session { return sess }, nil)
+
+	var gotPath string
+	var calls int
+	hm.onWorktreeChange = func(mtID int, worktreePath, worktreeBranch, cwd string) {
+		calls++
+		gotPath = worktreePath
+	}
+
+	hm.handleEvent(rawHookEvent{Event: "PostToolUse", MtID: 1, SessionID: "s1", Tool: "Bash", Cwd: `D:\repos\proj`})
+
+	if calls != 1 {
+		t.Fatalf("onWorktreeChange called %d times, want 1 (ordinary event must still report cwd)", calls)
+	}
+	if gotPath != "" {
+		t.Errorf("worktreePath = %q, want empty for non-EnterWorktree event", gotPath)
+	}
+}
