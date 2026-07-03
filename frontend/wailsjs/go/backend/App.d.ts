@@ -347,3 +347,7 @@ export function CommitWorktreeFiles(arg1:string,arg2:Array<string>,arg3:string):
 export function RebaseWorktreeOntoTarget(arg1:string,arg2:string):Promise<void>;
 
 export function AbortWorktreeRebase(arg1:string):Promise<void>;
+
+export function RemoveOrphanedWorktree(arg1:string):Promise<void>;
+
+export function EnsureProjectWorktreeSetup(arg1:string):Promise<void>;

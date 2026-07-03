@@ -691,3 +691,11 @@ export function RebaseWorktreeOntoTarget(arg1, arg2) {
 export function AbortWorktreeRebase(arg1) {
   return $Call.ByID(3760935466, arg1);
 }
+
+export function RemoveOrphanedWorktree(arg1) {
+  return $Call.ByID(3479922401, arg1);
+}
+
+export function EnsureProjectWorktreeSetup(arg1) {
+  return $Call.ByID(2109684008, arg1);
+}
