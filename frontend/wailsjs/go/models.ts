@@ -628,6 +628,20 @@ export namespace backend {
 	        this.issue = source["issue"];
 	    }
 	}
+	export class WorktreeFileChange {
+	    path: string;
+	    status: string;
+
+	    static createFrom(source: any = {}) {
+	        return new WorktreeFileChange(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.status = source["status"];
+	    }
+	}
 	export class PaneWorktreeInfo {
 	    path: string;
 	    branch: string;

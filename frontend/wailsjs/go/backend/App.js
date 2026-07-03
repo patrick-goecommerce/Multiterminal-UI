@@ -673,3 +673,21 @@ export function ReconcileFinishMarkers(arg1) {
 export function WorktreeDirExists(arg1) {
   return $Call.ByID(1750193053, arg1);
 }
+
+// --- Shell-Finish (selective commit + rebase) ---
+
+export function GetWorktreeChangedFiles(arg1) {
+  return $Call.ByID(4191264199, arg1);
+}
+
+export function CommitWorktreeFiles(arg1, arg2, arg3) {
+  return $Call.ByID(1004175878, arg1, arg2, arg3);
+}
+
+export function RebaseWorktreeOntoTarget(arg1, arg2) {
+  return $Call.ByID(2826609831, arg1, arg2);
+}
+
+export function AbortWorktreeRebase(arg1) {
+  return $Call.ByID(3760935466, arg1);
+}

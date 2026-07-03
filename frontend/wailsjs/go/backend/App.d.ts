@@ -337,3 +337,13 @@ export function CheckWorktreeFinish(arg1:number):Promise<void>;
 export function ReconcileFinishMarkers(arg1:string):Promise<void>;
 
 export function WorktreeDirExists(arg1:string):Promise<boolean>;
+
+// --- Shell-Finish (selective commit + rebase) ---
+
+export function GetWorktreeChangedFiles(arg1:string):Promise<Array<backend.WorktreeFileChange>>;
+
+export function CommitWorktreeFiles(arg1:string,arg2:Array<string>,arg3:string):Promise<void>;
+
+export function RebaseWorktreeOntoTarget(arg1:string,arg2:string):Promise<void>;
+
+export function AbortWorktreeRebase(arg1:string):Promise<void>;
