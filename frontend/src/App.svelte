@@ -78,23 +78,31 @@
   let finishDialog: {
     visible: boolean;
     sessionId: number;
-    state: 'ready' | 'blocked';
+    state: 'ready' | 'blocked' | 'staging';
+    worktreePath: string;
     targetBranch: string;
     commits: string[];
     stat: string;
     untracked: string[];
     cleanupOnly: boolean;
     reason: string;
+    files: { path: string; status: string; selected: boolean }[];
+    commitMessage: string;
+    rebaseConflict: boolean;
   } = {
     visible: false,
     sessionId: 0,
     state: 'ready',
+    worktreePath: '',
     targetBranch: '',
     commits: [],
     stat: '',
     untracked: [],
     cleanupOnly: false,
     reason: '',
+    files: [],
+    commitMessage: '',
+    rebaseConflict: false,
   };
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
   let launchIssueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
@@ -309,12 +317,16 @@
         visible: true,
         sessionId: p.sessionId,
         state: 'ready',
+        worktreePath: '',
         targetBranch: p.targetBranch || '',
         commits: p.commits || [],
         stat: p.stat || '',
         untracked: p.untracked || [],
         cleanupOnly: !!p.cleanupOnly,
         reason: '',
+        files: [],
+        commitMessage: '',
+        rebaseConflict: false,
       };
     });
     EventsOn('worktree:finish-blocked', (event: any) => {
@@ -331,6 +343,7 @@
           sessionId: p.sessionId,
           state: 'blocked',
           reason: p.reason || '',
+          rebaseConflict: false,
         };
       }
     });
@@ -962,8 +975,65 @@
     tabStore.setFinishPhase(sessionId, 'preparing');
     App.StartWorktreeFinish(sessionId, pane.worktreePath, pane.branch, t, mode);
     if (mode === 'shell') {
-      // shell staging → Task 20 (openShellStaging)
+      // Shell panes have no Claude to prepare the merge — MTUI stages, commits
+      // and rebases itself via the staging dialog (backend set phase 'preparing').
+      openShellStaging(sessionId, pane.worktreePath, t);
     }
+  }
+
+  // Files matching build artefacts / secrets are deselected by default so a shell
+  // finish never blindly commits them.
+  const stagingDeselect = /\.env|node_modules|dist\/|build\//;
+
+  async function openShellStaging(sessionId: number, wtPath: string, target: string) {
+    let files: { path: string; status: string; selected: boolean }[] = [];
+    try {
+      const changed = await App.GetWorktreeChangedFiles(wtPath);
+      files = (changed || []).map((f: any) => ({
+        path: f.path,
+        status: f.status,
+        selected: !stagingDeselect.test(f.path),
+      }));
+    } catch (err) {
+      console.error('GetWorktreeChangedFiles failed', err);
+    }
+    finishDialog = {
+      ...finishDialog,
+      visible: true,
+      sessionId,
+      state: 'staging',
+      worktreePath: wtPath,
+      targetBranch: target,
+      files,
+      commitMessage: '',
+      rebaseConflict: false,
+      reason: '',
+    };
+  }
+
+  // Runs the commit (optional) + rebase, then hands back to the shared verify gate.
+  // A rebase conflict flips the dialog into a rebase-specific blocked state.
+  async function runShellStage(sessionId: number, wtPath: string, target: string,
+                               paths: string[], message: string) {
+    try {
+      if (paths.length > 0) {
+        await App.CommitWorktreeFiles(wtPath, paths, message);
+      }
+      await App.RebaseWorktreeOntoTarget(wtPath, target);
+    } catch (err) {
+      console.error('shell stage/rebase failed', err);
+      finishDialog = {
+        ...finishDialog,
+        visible: true,
+        state: 'blocked',
+        rebaseConflict: true,
+        reason: `Rebase auf ${target} fehlgeschlagen — Konflikte im Terminal auflösen oder Rebase abbrechen.`,
+      };
+      return;
+    }
+    // Success: the shared verify gate emits finish-ready/blocked and reopens the
+    // dialog in the matching state.
+    App.CheckWorktreeFinish(sessionId);
   }
 
   function handleFinishWorktree(e: CustomEvent<{ paneId: string; sessionId: number }>) {
@@ -1119,6 +1189,10 @@
     on:confirm={() => { tabStore.setFinishPhase(finishDialog.sessionId, 'merging'); finishDialog.visible = false; App.FinishWorktree(finishDialog.sessionId); }}
     on:retry={() => { finishDialog.visible = false; handleRetryFinish(finishDialog.sessionId); }}
     on:cancel={() => { finishDialog.visible = false; App.CancelWorktreeFinish(finishDialog.sessionId); tabStore.setFinishPhase(finishDialog.sessionId, ''); }}
+    on:stageCommit={(e) => runShellStage(finishDialog.sessionId, finishDialog.worktreePath, finishDialog.targetBranch, e.detail.files, e.detail.message)}
+    on:rebaseOnly={() => runShellStage(finishDialog.sessionId, finishDialog.worktreePath, finishDialog.targetBranch, [], '')}
+    on:abortRebase={() => { finishDialog.visible = false; App.AbortWorktreeRebase(finishDialog.worktreePath); App.CancelWorktreeFinish(finishDialog.sessionId); tabStore.setFinishPhase(finishDialog.sessionId, ''); }}
+    on:resolveInTerminal={() => (finishDialog.visible = false)}
     on:close={() => (finishDialog.visible = false)}
   />
 </div>

@@ -3,19 +3,37 @@
   import { createEventDispatcher } from 'svelte';
 
   export let visible = false;
-  export let state: 'ready' | 'blocked' = 'ready';
+  export let state: 'ready' | 'blocked' | 'staging' = 'ready';
   export let sessionId = 0; // spread from finishDialog; not used directly here
+  export let worktreePath = ''; // spread from finishDialog; consumed by App.svelte handlers
   export let targetBranch = '';
   export let commits: string[] = [];
   export let stat = '';
   export let untracked: string[] = [];
   export let cleanupOnly = false;
   export let reason = '';
+  // Staging state (shell panes): changed files + commit message.
+  export let files: { path: string; status: string; selected: boolean }[] = [];
+  export let commitMessage = '';
+  // Distinguishes a rebase-conflict block (abort / resolve-in-terminal) from a
+  // regular prep block (cancel / retry).
+  export let rebaseConflict = false;
 
   const dispatch = createEventDispatcher();
 
-  // Reference sessionId so the linter does not flag the (spread) prop as unused.
+  // Reference spread-only props so the linter does not flag them as unused.
   $: void sessionId;
+  $: void worktreePath;
+
+  // Current selection, computed on demand (no reactive assignment — avoids the
+  // known SettingsDialog `$:`-reset trap).
+  const selected = () => files.filter((f) => f.selected).map((f) => f.path);
+
+  function toggleFile() {
+    // Reassign to retrigger the each-block / button state after bind:checked
+    // mutates a nested property in place.
+    files = files;
+  }
 </script>
 
 {#if visible}
@@ -28,6 +46,8 @@
         <h3>
           {state === 'blocked'
             ? 'Fertigstellen blockiert'
+            : state === 'staging'
+            ? 'Änderungen prüfen'
             : cleanupOnly
             ? 'Nur aufräumen'
             : `Mergen nach ${targetBranch}`}
@@ -36,9 +56,54 @@
 
       {#if state === 'blocked'}
         <p class="reason">{reason}</p>
+        {#if rebaseConflict}
+          <div class="dialog-footer">
+            <button class="btn-cancel" on:click={() => dispatch('abortRebase')}>Rebase abbrechen</button>
+            <button class="btn-create" on:click={() => dispatch('resolveInTerminal')}>Im Terminal auflösen</button>
+          </div>
+        {:else}
+          <div class="dialog-footer">
+            <button class="btn-cancel" on:click={() => dispatch('cancel')}>Abbrechen</button>
+            <button class="btn-create" on:click={() => dispatch('retry')}>Erneut vorbereiten</button>
+          </div>
+        {/if}
+      {:else if state === 'staging'}
+        <p class="reason">
+          Wähle die Dateien, die nach <code>{targetBranch}</code> committet werden sollen. Artefakte
+          und Secrets sind standardmäßig abgewählt.
+        </p>
+        {#if files.length > 0}
+          <div class="file-list">
+            {#each files as f}
+              <label class="file-row">
+                <input type="checkbox" bind:checked={f.selected} on:change={toggleFile} />
+                <span class="file-status">{f.status}</span>
+                <span class="file-path">{f.path}</span>
+              </label>
+            {/each}
+          </div>
+        {:else}
+          <p class="reason">Keine geänderten Dateien im Worktree.</p>
+        {/if}
+        <input
+          class="msg-input"
+          type="text"
+          placeholder="Commit-Nachricht"
+          bind:value={commitMessage}
+        />
         <div class="dialog-footer">
           <button class="btn-cancel" on:click={() => dispatch('cancel')}>Abbrechen</button>
-          <button class="btn-create" on:click={() => dispatch('retry')}>Erneut vorbereiten</button>
+          {#if selected().length === 0}
+            <button class="btn-create" on:click={() => dispatch('rebaseOnly')}>Nur Rebasen</button>
+          {:else}
+            <button
+              class="btn-create"
+              disabled={!commitMessage.trim()}
+              on:click={() => dispatch('stageCommit', { files: selected(), message: commitMessage })}
+            >
+              Committen &amp; Rebasen
+            </button>
+          {/if}
         </div>
       {:else}
         {#if cleanupOnly}
@@ -101,6 +166,23 @@
   .commit-line { padding: 2px 0; color: var(--fg); }
   .stat { font-size: 10px; color: var(--fg-muted); max-height: 120px; overflow: auto; margin: 0 0 8px; }
   .untracked { font-size: 11px; color: #fbbf24; margin: 8px 0; }
+
+  .file-list { max-height: 200px; overflow-y: auto; margin: 8px 0; }
+  .file-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 0; font-family: monospace; font-size: 11px; cursor: pointer;
+  }
+  .file-row input { cursor: pointer; }
+  .file-status { color: var(--accent); width: 24px; flex: none; text-transform: uppercase; }
+  .file-path { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .msg-input {
+    width: 100%; box-sizing: border-box; margin: 4px 0 0;
+    padding: 7px 10px; font-size: 12px;
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--fg);
+  }
+  .msg-input:focus { outline: none; border-color: var(--accent); }
+  .btn-create:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   .btn-cancel {
