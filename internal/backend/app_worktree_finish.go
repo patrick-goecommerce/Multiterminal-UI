@@ -7,8 +7,20 @@ package backend
 import (
 	"fmt"
 	"log"
+	"runtime/debug"
 	"time"
 )
+
+// recoverFinishPanic keeps a panic inside a finish goroutine from taking down
+// the whole GUI process: it logs the panic with its stack (captured in the
+// log file) and parks the flow as "blocked" so the overlay offers a retry
+// instead of the app silently vanishing.
+func (a *AppService) recoverFinishPanic(sessionId int, where string) {
+	if r := recover(); r != nil {
+		log.Printf("[finish] PANIC in %s (session %d): %v\n%s", where, sessionId, r, debug.Stack())
+		a.setFinishBlocked(sessionId, "Interner Fehler beim Fertigstellen — siehe Log, bitte erneut versuchen")
+	}
+}
 
 const prepPromptTemplate = "Committe alle offenen Änderungen in nachvollziehbaren Commits. " +
 	"Committe keine Secrets, .env-Dateien oder Build-Artefakte — ergänze für solche Dateien " +
@@ -207,6 +219,7 @@ func (a *AppService) forceRemoveQueueItem(sessionId, itemId int) {
 // Called by onQueueItemDone (claude) and by the frontend after the shell
 // staging dialog committed+rebased.
 func (a *AppService) CheckWorktreeFinish(sessionId int) {
+	defer a.recoverFinishPanic(sessionId, "CheckWorktreeFinish")
 	st := a.getFinishState(sessionId)
 	if st == nil {
 		return

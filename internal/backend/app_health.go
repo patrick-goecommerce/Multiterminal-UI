@@ -2,7 +2,6 @@ package backend
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -128,9 +127,12 @@ func setupFileLogging(path string) error {
 		logFile.Close()
 	}
 	logFile = f
-	// Write to both file and stderr for visibility
-	w := io.MultiWriter(os.Stderr, f)
-	log.SetOutput(w)
+	// Redirect the process stderr (fd 2) at the log file so Go runtime panic
+	// traces — which bypass the log package — land in the log instead of being
+	// discarded by the GUI subsystem. After this os.Stderr IS the log file, so
+	// logging straight to f (no MultiWriter) avoids double-writing every line.
+	redirectStderrToFile(f)
+	log.SetOutput(f)
 	return nil
 }
 

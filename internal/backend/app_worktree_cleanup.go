@@ -149,6 +149,7 @@ func (a *AppService) FinishWorktree(sessionId int) {
 	a.mu.Unlock()
 
 	go func() {
+		defer a.recoverFinishPanic(sessionId, "FinishWorktree")
 		a.finishMu.Lock()
 		defer a.finishMu.Unlock()
 
