@@ -595,9 +595,14 @@
       }
 
       // Claude may decide on its own to isolate work via the native EnterWorktree
-      // tool; the project must be prepared for that (setup runs at most once).
+      // tool; the project must be prepared for that before the process starts,
+      // since it only reads its memory files once at launch.
       if (type !== 'shell' && tab.dir) {
-        App.EnsureProjectWorktreeSetup(tab.dir).catch((err) => console.error('[EnsureProjectWorktreeSetup]', err));
+        try {
+          await App.EnsureProjectWorktreeSetup(tab.dir);
+        } catch (err) {
+          console.error('[EnsureProjectWorktreeSetup]', err);
+        }
       }
 
       const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, type);
