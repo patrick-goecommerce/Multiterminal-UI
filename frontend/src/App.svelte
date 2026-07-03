@@ -321,9 +321,10 @@
       const p = event.data ?? event;
       if (!ownsSession(p.sessionId)) return;
       tabStore.setFinishPhase(p.sessionId, p.phase || '');
-      // 'preparing' is an informative phase update only (prep still running) —
-      // do not surface the blocked overlay for it.
-      if (p.phase !== 'preparing') {
+      // Only a real block ('blocked') should surface the overlay. 'preparing' is an
+      // informative phase update (prep still running), and '' means cancel/abort
+      // (e.g. CancelWorktreeFinish) — neither should reopen the confirm dialog.
+      if (p.phase === 'blocked') {
         finishDialog = {
           ...finishDialog,
           visible: true,
