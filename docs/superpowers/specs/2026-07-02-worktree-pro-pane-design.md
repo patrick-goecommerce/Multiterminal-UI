@@ -1,8 +1,31 @@
 # Design: Worktree-pro-Pane mit Finish-Flow
 
 **Datum:** 2026-07-02
-**Status:** Entwurf, Rev. 2 (zwei Red-Team-Runden: 3 + 4 adversariale Reviews eingearbeitet)
+**Status:** Rev. 2 implementiert (Branch `feat/worktree-pro-pane`, 20 Tasks + Fixes, alle SDD-reviewed). `needs-e2e-testing` bis zur manuellen Verifikation (s. u.).
 **Branch-Ziel:** `alpha-main`
+
+## 0. v1-Implementierungsabweichungen (Nachtrag 2026-07-03)
+
+Bewusste Abweichungen der Implementierung von dieser Spec — dokumentiert statt still divergiert (CLAUDE.md-Regel):
+
+- **§5.3/1 Verschärfung (Datenverlust-Fix):** Der `cleanup_only`-Pfad (0 Commits) blockt zusätzlich, wenn der Worktree uncommittete **getrackte** Änderungen hat — sonst könnte der `--force`-Cleanup sie zerstören. Untracked bleibt wie spezifiziert durchgelassen.
+- **§5.1/2 Rebase-Polling NICHT implementiert:** Ein hängender Rebase wird über den 10-min-`preparing`-Timeout abgedeckt, nicht über aktives Pollen von `.git/worktrees/<name>/rebase-merge`. Ausreichend für v1.
+- **Multi-Window-Limitierung (neu erkannt):** Die Finish-Event-Listener werden nur im Hauptfenster registriert (bestehende MTUI-Architektur). Worktree-Panes in Sekundärfenstern bekommen KEIN Finish-Overlay. Folge-Issue erforderlich, bevor Multi-Window + Worktree-Finish kombiniert beworben wird.
+- **§6 Sidebar-Umschaltung auf Worktree-Pfad:** nicht umgesetzt/verifiziert — offener E2E-Punkt.
+- **Shell-Finish „Nur Rebasen":** erscheint bei jeder leeren Datei-Auswahl (nicht nur bei vorhandenen Commits); da ff-Rebase idempotent, benign.
+- **Bekannte Minors** (Ledger `.superpowers/sdd/progress.md`): Guard-TOCTOU in Queue-Remove/Clear, AddToQueue-Rejection ohne Frontend-Toast, Reconcile-Ownership-Reihenfolge, irreführende Fehlermeldung im Shell-Rebase-catch — alle nachweislich datenverlust-frei, für Final-Review-Triage gesammelt.
+
+## E2E-Checkliste (`needs-e2e-testing`, mit echtem Claude CLI + echtem Repo)
+
+1. Launch mit Worktree (Claude-Pane) → Sibling-Worktree entsteht, CWD im Pane ist `terminal/<name>`, `CLAUDE.local.md` + `.claude/settings.local.json` vorhanden, `git status` im Worktree leer.
+2. `permissions.deny` real: Claude auffordern `git merge <ziel>` auszuführen → muss verweigert werden. Pattern ggf. anpassen.
+3. ✓-Flow komplett inkl. Rebase-Konflikt (Ziel-Branch parallel bewegen) → blocked → auflösen → Merge + Cleanup, Pane zurück im Haupt-Repo.
+4. App-Kill zwischen Merge und Cleanup (sobald Marker-Datei existiert) → Neustart-Reconcile räumt auf, mergt nicht doppelt.
+5. Zwei Panes, gleicher Ziel-Branch: nacheinander finishen — zweites bekommt „erneut vorbereiten", läuft nach Re-Prep durch.
+6. Zwei Panes, UNTERSCHIEDLiche Ziel-Branches: zweites bleibt blocked (dokumentierte Grenze §1).
+7. Windows-Handles: Claude-Session mit MCP-Servern im Worktree → ✓ → Worktree wird trotz Kindprozessen entfernt (killProcessTree).
+8. Shell-Pane-Finish: Staging-Dialog, `.env` ist default abgewählt, Commit+Rebase, Merge.
+9. Session-Restore: App-Neustart mit aktivem Worktree-Pane → Session startet im Worktree-CWD, Badge korrekt.
 
 ## 1. Ziel & Kontext
 
