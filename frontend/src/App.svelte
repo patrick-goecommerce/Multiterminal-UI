@@ -19,6 +19,7 @@
   import SkillPicker from './components/SkillPicker.svelte';
   import KanbanBoard from './components/KanbanBoard.svelte';
   import AskUserDialog from './components/AskUserDialog.svelte';
+  import WorktreeFinishDialog from './components/WorktreeFinishDialog.svelte';
   import { get } from 'svelte/store';
   import { tabStore, activeTab, allTabs, windowTitle } from './stores/tabs';
   import { workspace } from './stores/workspace';
@@ -74,6 +75,27 @@
   let askUserQuestion = '';
   let askUserOptions: string[] = [];
   let previewFilePath = '';
+  let finishDialog: {
+    visible: boolean;
+    sessionId: number;
+    state: 'ready' | 'blocked';
+    targetBranch: string;
+    commits: string[];
+    stat: string;
+    untracked: string[];
+    cleanupOnly: boolean;
+    reason: string;
+  } = {
+    visible: false,
+    sessionId: 0,
+    state: 'ready',
+    targetBranch: '',
+    commits: [],
+    stat: '',
+    untracked: [],
+    cleanupOnly: false,
+    reason: '',
+  };
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
   let launchIssueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
   let issueCount = 0;
@@ -276,6 +298,46 @@
           }
         }
       }
+    });
+    // Worktree finish flow: confirm overlay + phase tracking + pane relaunch.
+    // Payloads are filtered to sessions owned by a pane of THIS window (ownsSession).
+    EventsOn('worktree:finish-ready', (event: any) => {
+      const p = event.data ?? event;
+      if (!ownsSession(p.sessionId)) return;
+      tabStore.setFinishPhase(p.sessionId, 'ready');
+      finishDialog = {
+        visible: true,
+        sessionId: p.sessionId,
+        state: 'ready',
+        targetBranch: p.targetBranch || '',
+        commits: p.commits || [],
+        stat: p.stat || '',
+        untracked: p.untracked || [],
+        cleanupOnly: !!p.cleanupOnly,
+        reason: '',
+      };
+    });
+    EventsOn('worktree:finish-blocked', (event: any) => {
+      const p = event.data ?? event;
+      if (!ownsSession(p.sessionId)) return;
+      tabStore.setFinishPhase(p.sessionId, p.phase || '');
+      // 'preparing' is an informative phase update only (prep still running) —
+      // do not surface the blocked overlay for it.
+      if (p.phase !== 'preparing') {
+        finishDialog = {
+          ...finishDialog,
+          visible: true,
+          sessionId: p.sessionId,
+          state: 'blocked',
+          reason: p.reason || '',
+        };
+      }
+    });
+    EventsOn('worktree:finish-done', async (event: any) => {
+      const p = event.data ?? event;
+      if (!ownsSession(p.sessionId)) return;
+      finishDialog = { ...finishDialog, visible: false };
+      await relaunchPaneAfterFinish(p.sessionId, p.mainRoot, p.mode);
     });
     // Auto-generated pane name (LLM summary of the user's prompt)
     EventsOn('pane:autoname', (event: any) => {
@@ -597,6 +659,12 @@
     const pane = tab.panes.find((p) => p.id === e.detail.paneId);
     if (!pane) return;
     if (!confirm(`"${pane.name || 'Pane'}" wirklich schließen?`)) return;
+    // A pane with an active worktree that hasn't been finished (✓) is not removed
+    // automatically — the worktree stays on disk and remains reachable via the ⎇
+    // dropdown. Warn so the user does not silently orphan it (spec 5.6).
+    if (pane.worktreePath && pane.finishPhase === '') {
+      if (!confirm('Dieses Pane hat einen aktiven Worktree. Trotzdem schließen?\n\n(Der Worktree bleibt liegen und ist weiterhin über das ⎇-Dropdown erreichbar. Zum Mergen/Aufräumen den ✓-Button nutzen.)')) return;
+    }
     if (pane.display === 'chat') {
       if (pane.conversationId) App.CloseChatSession(pane.conversationId);
     } else {
@@ -857,13 +925,75 @@
     }
   }
 
-  // TODO(Task 18): replace with the full Finish-Overlay flow (progress UI, conflict handling).
+  // --- Worktree finish flow -------------------------------------------------
+
+  /** True when a pane of THIS window owns the given session id. */
+  function ownsSession(sessionId: number): boolean {
+    for (const tab of get(allTabs)) {
+      if (tab.panes.some((p) => p.sessionId === sessionId)) return true;
+    }
+    return false;
+  }
+
+  function findPaneBySession(sessionId: number) {
+    for (const tab of get(allTabs)) {
+      const pane = tab.panes.find((p) => p.sessionId === sessionId);
+      if (pane) return pane;
+    }
+    return null;
+  }
+
+  function findPaneLocation(sessionId: number) {
+    for (const tab of get(allTabs)) {
+      const pane = tab.panes.find((p) => p.sessionId === sessionId);
+      if (pane) return { tab, pane };
+    }
+    return null;
+  }
+
+  function startFinish(sessionId: number) {
+    const pane = findPaneBySession(sessionId);
+    if (!pane?.worktreePath) return;
+    // Alt-Worktrees without a stored target branch: v1 fallback prompt.
+    const t = pane.targetBranch || window.prompt('Ziel-Branch für den Merge:', branch || 'alpha-main') || '';
+    if (!t) return;
+    const mode = pane.mode === 'shell' ? 'shell' : 'claude';
+    tabStore.setFinishPhase(sessionId, 'preparing');
+    App.StartWorktreeFinish(sessionId, pane.worktreePath, pane.branch, t, mode);
+    if (mode === 'shell') {
+      // shell staging → Task 20 (openShellStaging)
+    }
+  }
+
   function handleFinishWorktree(e: CustomEvent<{ paneId: string; sessionId: number }>) {
-    console.log('[handleFinishWorktree] stub', e.detail);
+    startFinish(e.detail.sessionId);
+  }
+
+  function handleRetryFinish(sessionId: number) {
+    startFinish(sessionId);
   }
 
   function handleCancelFinish(e: CustomEvent<{ sessionId: number }>) {
     App.CancelWorktreeFinish(e.detail.sessionId);
+    tabStore.setFinishPhase(e.detail.sessionId, '');
+  }
+
+  async function relaunchPaneAfterFinish(sessionId: number, mainRoot: string, mode: string) {
+    const loc = findPaneLocation(sessionId);
+    if (!loc) return;
+    const { tab, pane } = loc;
+    tabStore.closePane(tab.id, pane.id);
+    const sid = mode !== 'shell' ? genSessionId() : '';
+    const argv = mode !== 'shell'
+      ? buildClaudeArgv(pane.mode, pane.model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, { sessionId: sid })
+      : [];
+    try {
+      const newId = await App.CreateSession(argv, mainRoot, 24, 80, pane.mode);
+      if (newId > 0) {
+        tabStore.addPane(tab.id, newId, pane.name, pane.mode, pane.model,
+          null, '', '', '', '', '', false, 'terminal', '', sid);
+      }
+    } catch (err) { console.error('[relaunchPaneAfterFinish] failed:', err); }
   }
 
   async function handleIssueAction(e: CustomEvent<{ paneId: string; sessionId: number; issueNumber: number; action: string }>) {
@@ -982,6 +1112,13 @@
     options={askUserOptions}
     on:answer={handleAskUserAnswer}
     on:dismiss={handleAskUserDismiss}
+  />
+  <WorktreeFinishDialog
+    {...finishDialog}
+    on:confirm={() => { tabStore.setFinishPhase(finishDialog.sessionId, 'merging'); finishDialog.visible = false; App.FinishWorktree(finishDialog.sessionId); }}
+    on:retry={() => { finishDialog.visible = false; handleRetryFinish(finishDialog.sessionId); }}
+    on:cancel={() => { finishDialog.visible = false; App.CancelWorktreeFinish(finishDialog.sessionId); tabStore.setFinishPhase(finishDialog.sessionId, ''); }}
+    on:close={() => (finishDialog.visible = false)}
   />
 </div>
 
