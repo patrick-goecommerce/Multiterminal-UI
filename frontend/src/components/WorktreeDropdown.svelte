@@ -11,6 +11,7 @@
   }
 
   export let worktrees: WorktreeInfo[] = [];
+  export let orphanedWorktrees: { path: string; branch: string; name: string }[] = [];
   export let currentBranch: string = '';
 
   const dispatch = createEventDispatcher();
@@ -89,6 +90,17 @@
     {/each}
   {/if}
 
+  {#if orphanedWorktrees.length > 0}
+    <div class="section-header">Verwaist (Claude EnterWorktree)</div>
+    {#each orphanedWorktrees as wt}
+      <div class="menu-item orphan-item" title={wt.path}>
+        <span class="branch-icon">⎇</span>
+        <span class="branch-name">{wt.name}</span>
+        <button class="orphan-remove" title="Entfernen" on:click|stopPropagation={() => dispatch('removeOrphanedWorktree', { path: wt.path })}>×</button>
+      </div>
+    {/each}
+  {/if}
+
   {#if worktrees.length === 0}
     <div class="empty">Kein Git-Repository gefunden</div>
   {/if}
@@ -154,4 +166,7 @@
   .wt-issue { font-size: 10px; color: #22c55e; font-weight: 600; }
   .current-dot { color: var(--accent); font-size: 8px; }
   .empty { padding: 12px; color: var(--fg-muted); font-size: 11px; text-align: center; }
+  .orphan-item { display: flex; align-items: center; gap: 6px; padding: 6px 12px; }
+  .orphan-remove { margin-left: auto; background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 14px; padding: 0 4px; }
+  .orphan-remove:hover { color: #f87171; }
 </style>

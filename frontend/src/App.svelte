@@ -365,6 +365,24 @@
     try { allWorktrees = await App.ListAllWorktrees(tab.dir); } catch {}
   }
 
+  function orphanedClaudeWorktrees(): { path: string; branch: string; name: string }[] {
+    const tab = $activeTab;
+    if (!tab) return [];
+    const activePaths = new Set(tab.panes.map((p) => p.worktreePath).filter(Boolean));
+    return allWorktrees
+      .filter((w: any) => w.category === 'claude' && !activePaths.has(w.path))
+      .map((w: any) => ({ path: w.path, branch: w.branch, name: w.name }));
+  }
+
+  async function handleRemoveOrphanedWorktree(e: CustomEvent<{ path: string }>) {
+    try {
+      await App.RemoveOrphanedWorktree(e.detail.path);
+      await loadWorktrees();
+    } catch (err: any) {
+      alert(`Aufräumen fehlgeschlagen:\n${err?.message || err}`);
+    }
+  }
+
   $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); updateConflicts(); loadWorktrees(); checkProjectInit($activeTab.dir); }
 
   async function updateCommitAge() {
@@ -940,6 +958,7 @@
               panes={tab.panes}
               active={tab.id === $activeTab?.id}
               worktrees={allWorktrees}
+              orphanedWorktrees={orphanedClaudeWorktrees()}
               tabDir={$activeTab?.dir || ''}
               on:closePane={handleClosePane}
               on:maximizePane={handleMaximizePane}
@@ -953,6 +972,7 @@
               on:splitPane={() => (showLaunchDialog = true)}
               on:openWorktreePane={handleOpenWorktreePane}
               on:worktreeListChanged={loadWorktrees}
+              on:removeOrphanedWorktree={handleRemoveOrphanedWorktree}
             />
           </div>
         {/each}

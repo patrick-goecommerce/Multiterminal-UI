@@ -9,6 +9,7 @@
   export let paneIndex: number = 0;
   export let queueCount: number = 0;
   export let worktrees: any[] = [];
+  export let orphanedWorktrees: { path: string; branch: string; name: string }[] = [];
   export let tabDir: string = '';
 
   const dispatch = createEventDispatcher();
@@ -183,10 +184,12 @@
         <div class="dropdown-backdrop" on:click={() => showWorktreeDropdown = false}></div>
         <WorktreeDropdown
           {worktrees}
+          {orphanedWorktrees}
           currentBranch={displayBranch}
           on:select={handleWorktreeSelect}
           on:createNew={() => { showWorktreeDropdown = false; showWorktreeCreate = true; }}
           on:close={() => showWorktreeDropdown = false}
+          on:removeOrphanedWorktree
         />
       {/if}
     </div>
