@@ -152,7 +152,7 @@ func ensureProjectWorktreeSettings(root string) error {
 		return fmt.Errorf("settings file: %w", err)
 	}
 
-	merged, changed, err := mergeWorktreeBaseRef(existing)
+	merged, changed, err := mergeWorktreeSettings(existing)
 	if err != nil {
 		log.Printf("[worktree-setup] %s: %v — leaving file untouched", settingsPath, err)
 		return nil
@@ -166,29 +166,79 @@ func ensureProjectWorktreeSettings(root string) error {
 	return nil
 }
 
-// mergeWorktreeBaseRef adds worktree.baseRef="head" to settings JSON if
-// missing, preserving every other key untouched. changed is false (and raw is
-// returned as-is) when a baseRef is already present, whatever its value.
-func mergeWorktreeBaseRef(raw []byte) (merged []byte, changed bool, err error) {
+// mergeWorktreeSettings brings an existing settings.local.json up to date
+// with two independent, additive changes, preserving every other key
+// untouched: worktree.baseRef="head" if no baseRef is set at all (an
+// existing custom value, e.g. "fresh", is left alone), and each rule in
+// worktreeDenyRules appended to permissions.deny if not already present
+// (order-preserving, no duplicates). Either half can apply on its own —
+// e.g. a project with baseRef already set from an older MTUI version still
+// gets the deny rules added when this fix rolls out. changed is false (and
+// raw is returned as-is) when both are already satisfied.
+func mergeWorktreeSettings(raw []byte) (merged []byte, changed bool, err error) {
 	var settings map[string]any
 	if err := json.Unmarshal(raw, &settings); err != nil {
 		return raw, false, fmt.Errorf("parse settings.local.json: %w", err)
 	}
 
-	worktree, _ := settings["worktree"].(map[string]any)
-	if worktree != nil {
-		if _, ok := worktree["baseRef"]; ok {
-			return raw, false, nil
-		}
-	} else {
-		worktree = map[string]any{}
+	baseRefChanged := ensureWorktreeBaseRef(settings)
+	denyChanged := ensureWorktreeDenyRules(settings)
+	if !baseRefChanged && !denyChanged {
+		return raw, false, nil
 	}
-	worktree["baseRef"] = "head"
-	settings["worktree"] = worktree
 
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return raw, false, fmt.Errorf("marshal settings.local.json: %w", err)
 	}
 	return append(out, '\n'), true, nil
+}
+
+// ensureWorktreeBaseRef sets settings["worktree"]["baseRef"]="head" if no
+// baseRef is present yet. Reports whether it changed anything.
+func ensureWorktreeBaseRef(settings map[string]any) bool {
+	worktree, _ := settings["worktree"].(map[string]any)
+	if worktree != nil {
+		if _, ok := worktree["baseRef"]; ok {
+			return false
+		}
+	} else {
+		worktree = map[string]any{}
+	}
+	worktree["baseRef"] = "head"
+	settings["worktree"] = worktree
+	return true
+}
+
+// ensureWorktreeDenyRules appends any of worktreeDenyRules missing from
+// settings["permissions"]["deny"], preserving existing entries and order.
+// Reports whether it changed anything.
+func ensureWorktreeDenyRules(settings map[string]any) bool {
+	permissions, _ := settings["permissions"].(map[string]any)
+	if permissions == nil {
+		permissions = map[string]any{}
+	}
+
+	existingDeny, _ := permissions["deny"].([]any)
+	have := make(map[string]bool, len(existingDeny))
+	for _, v := range existingDeny {
+		if s, ok := v.(string); ok {
+			have[s] = true
+		}
+	}
+
+	changed := false
+	for _, rule := range worktreeDenyRules {
+		if !have[rule] {
+			existingDeny = append(existingDeny, rule)
+			changed = true
+		}
+	}
+	if !changed {
+		return false
+	}
+
+	permissions["deny"] = existingDeny
+	settings["permissions"] = permissions
+	return true
 }

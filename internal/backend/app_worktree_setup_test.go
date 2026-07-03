@@ -150,8 +150,78 @@ func TestEnsureProjectWorktreeSetup_MergesBaseRefIntoExistingSettings(t *testing
 	}
 }
 
+// Real-world case (found live in the D:\repos\gotime project): a
+// settings.local.json written long before the worktree feature existed can
+// already have a broad "Bash(git checkout:*)" ALLOW entry and a large,
+// unrelated allow-list. EnsureProjectWorktreeSetup must still add the
+// branch-switch deny rules without touching any of that — Deny always wins
+// over Allow, but only if the deny rule actually gets written.
+func TestEnsureProjectWorktreeSetup_AddsDenyRulesToExistingSettingsWithAllowlist(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	a := &AppService{}
+	claudeDir := filepath.Join(repo, ".claude")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(claudeDir, "settings.local.json")
+	existing := `{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(npm run build:*)"
+    ]
+  }
+}
+`
+	if err := os.WriteFile(settingsPath, []byte(existing), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.EnsureProjectWorktreeSetup(repo); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"Bash(git checkout:*)"`, `"Bash(npm run build:*)"`} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("merge dropped existing allow entry %s: %s", want, got)
+		}
+	}
+	for _, want := range worktreeDenyRules {
+		if !strings.Contains(string(got), `"`+want+`"`) {
+			t.Errorf("merge did not add deny rule %q: %s", want, got)
+		}
+	}
+}
+
+// Calling EnsureProjectWorktreeSetup twice on a settings file that already
+// has the deny rules must not duplicate them.
+func TestEnsureProjectWorktreeSetup_DoesNotDuplicateDenyRules(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	a := &AppService{}
+
+	if err := a.EnsureProjectWorktreeSetup(repo); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.EnsureProjectWorktreeSetup(repo); err != nil {
+		t.Fatal(err)
+	}
+
+	settingsPath := filepath.Join(repo, ".claude", "settings.local.json")
+	got, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(got), `"Bash(git checkout *)"`); n != 1 {
+		t.Errorf("expected exactly 1 occurrence of the checkout deny rule, got %d: %s", n, got)
+	}
+}
+
 // If worktree.baseRef is already present (any value), EnsureProjectWorktreeSetup
-// must not touch the settings file at all.
+// must leave it as-is (but still add the separately-tracked deny rules).
 func TestEnsureProjectWorktreeSetup_DoesNotOverwriteExistingBaseRef(t *testing.T) {
 	repo := initPaneTestRepo(t)
 	a := &AppService{}
@@ -175,7 +245,7 @@ func TestEnsureProjectWorktreeSetup_DoesNotOverwriteExistingBaseRef(t *testing.T
 	}
 
 	got, _ := os.ReadFile(settingsPath)
-	if string(got) != existing {
-		t.Error("EnsureProjectWorktreeSetup touched a settings file that already had worktree.baseRef set")
+	if !strings.Contains(string(got), `"baseRef": "fresh"`) {
+		t.Error("EnsureProjectWorktreeSetup overwrote an existing custom worktree.baseRef value")
 	}
 }
