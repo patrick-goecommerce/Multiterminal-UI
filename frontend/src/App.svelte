@@ -19,7 +19,6 @@
   import SkillPicker from './components/SkillPicker.svelte';
   import KanbanBoard from './components/KanbanBoard.svelte';
   import AskUserDialog from './components/AskUserDialog.svelte';
-  import WorktreeFinishDialog from './components/WorktreeFinishDialog.svelte';
   import { get } from 'svelte/store';
   import { tabStore, activeTab, allTabs, windowTitle } from './stores/tabs';
   import { workspace } from './stores/workspace';
@@ -75,37 +74,6 @@
   let askUserQuestion = '';
   let askUserOptions: string[] = [];
   let previewFilePath = '';
-  let finishDialog: {
-    visible: boolean;
-    sessionId: number;
-    state: 'ready' | 'blocked' | 'staging';
-    worktreePath: string;
-    targetBranch: string;
-    commits: string[];
-    stat: string;
-    untracked: string[];
-    cleanupOnly: boolean;
-    reason: string;
-    files: { path: string; status: string; selected: boolean }[];
-    commitMessage: string;
-    rebaseConflict: boolean;
-    cleanupFailed: boolean;
-  } = {
-    visible: false,
-    sessionId: 0,
-    state: 'ready',
-    worktreePath: '',
-    targetBranch: '',
-    commits: [],
-    stat: '',
-    untracked: [],
-    cleanupOnly: false,
-    reason: '',
-    files: [],
-    commitMessage: '',
-    rebaseConflict: false,
-    cleanupFailed: false,
-  };
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
   let launchIssueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
   let issueCount = 0;
@@ -309,54 +277,17 @@
         }
       }
     });
-    // Worktree finish flow: confirm overlay + phase tracking + pane relaunch.
-    // Payloads are filtered to sessions owned by a pane of THIS window (ownsSession).
-    EventsOn('worktree:finish-ready', (event: any) => {
+    // Native EnterWorktree detection: Claude decided on its own to isolate
+    // work; MTUI only tracks and displays it (spec 2026-07-03).
+    EventsOn('worktree:detected', (event: any) => {
       const p = event.data ?? event;
-      if (!ownsSession(p.sessionId)) return;
-      tabStore.setFinishPhase(p.sessionId, 'ready');
-      finishDialog = {
-        visible: true,
-        sessionId: p.sessionId,
-        state: 'ready',
-        worktreePath: '',
-        targetBranch: p.targetBranch || '',
-        commits: p.commits || [],
-        stat: p.stat || '',
-        untracked: p.untracked || [],
-        cleanupOnly: !!p.cleanupOnly,
-        reason: '',
-        files: [],
-        commitMessage: '',
-        rebaseConflict: false,
-        cleanupFailed: false,
-      };
+      if (!ownsSession(p.id)) return;
+      tabStore.setWorktree(p.id, p.worktreePath, p.worktreeBranch, p.targetBranch || '');
     });
-    EventsOn('worktree:finish-blocked', (event: any) => {
+    EventsOn('worktree:cleared', (event: any) => {
       const p = event.data ?? event;
-      if (!ownsSession(p.sessionId)) return;
-      tabStore.setFinishPhase(p.sessionId, p.phase || '');
-      // A real block ('blocked') and a post-merge cleanup failure (phase
-      // 'cleanup' + cleanupFailed) both surface the overlay. 'preparing' is an
-      // informative phase update (prep still running), and '' means cancel/abort
-      // (e.g. CancelWorktreeFinish) — neither should reopen the confirm dialog.
-      if (p.phase === 'blocked' || p.cleanupFailed) {
-        finishDialog = {
-          ...finishDialog,
-          visible: true,
-          sessionId: p.sessionId,
-          state: 'blocked',
-          reason: p.reason || '',
-          rebaseConflict: false,
-          cleanupFailed: !!p.cleanupFailed,
-        };
-      }
-    });
-    EventsOn('worktree:finish-done', async (event: any) => {
-      const p = event.data ?? event;
-      if (!ownsSession(p.sessionId)) return;
-      finishDialog = { ...finishDialog, visible: false };
-      await relaunchPaneAfterFinish(p.sessionId, p.mainRoot, p.mode);
+      if (!ownsSession(p.id)) return;
+      tabStore.clearWorktree(p.id);
     });
     // Auto-generated pane name (LLM summary of the user's prompt)
     EventsOn('pane:autoname', (event: any) => {
@@ -484,7 +415,7 @@
     } catch (err) { console.error('[handleOpenWorktreePane] failed:', err); }
   }
 
-  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string; worktree?: { name: string; targetBranch: string } | null }>) {
+  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string }>) {
     const { type, model, issue, display = 'terminal', permissionMode = 'plan' } = e.detail;
     showLaunchDialog = false;
     const issueCtx = issue || launchIssueContext;
@@ -541,17 +472,10 @@
         sessionDir = result.sessionDir;
       }
 
-      // Per-pane worktree (opt-in via LaunchDialog checkbox). Chat launches never
-      // carry a worktree detail; issue worktrees keep their existing flow above.
-      let paneWt: { path: string; branch: string; target_branch: string } | null = null;
-      if (e.detail.worktree) {
-        try {
-          paneWt = await App.CreatePaneWorktree(tab.dir || '', e.detail.worktree.name, e.detail.worktree.targetBranch);
-          if (paneWt) sessionDir = paneWt.path;
-        } catch (err: any) {
-          alert(`Worktree-Erstellung fehlgeschlagen:\n${err?.message || err}`);
-          return; // no silent fallback into the main branch
-        }
+      // Claude may decide on its own to isolate work via the native EnterWorktree
+      // tool; the project must be prepared for that (setup runs at most once).
+      if (type !== 'shell' && tab.dir) {
+        App.EnsureProjectWorktreeSetup(tab.dir).catch((err) => console.error('[EnsureProjectWorktreeSetup]', err));
       }
 
       const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, type);
@@ -561,8 +485,8 @@
           try { paneBranch = await App.GetGitBranch(sessionDir); } catch {}
         }
         tabStore.addPane(tab.id, sessionId, name, type, model,
-          issueCtx?.number, issueCtx?.title, issueBranch, paneWt?.path ?? worktreePath, paneWt?.branch ?? paneBranch,
-          paneWt?.target_branch ?? '', false, 'terminal', '', claudeSessionId);
+          issueCtx?.number, issueCtx?.title, issueBranch, worktreePath, paneBranch,
+          '', false, 'terminal', '', claudeSessionId);
         if (issueCtx) {
           App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
           setTimeout(() => {
@@ -678,11 +602,11 @@
     const pane = tab.panes.find((p) => p.id === e.detail.paneId);
     if (!pane) return;
     if (!confirm(`"${pane.name || 'Pane'}" wirklich schließen?`)) return;
-    // A pane with an active worktree that hasn't been finished (✓) is not removed
-    // automatically — the worktree stays on disk and remains reachable via the ⎇
-    // dropdown. Warn so the user does not silently orphan it (spec 5.6).
-    if (pane.worktreePath && pane.finishPhase === '') {
-      if (!confirm('Dieses Pane hat einen aktiven Worktree. Trotzdem schließen?\n\n(Der Worktree bleibt liegen und ist weiterhin über das ⎇-Dropdown erreichbar. Zum Mergen/Aufräumen den ✓-Button nutzen.)')) return;
+    // A pane with an active worktree is not removed automatically — the worktree
+    // stays on disk and remains reachable via the ⎇ dropdown. Warn so the user
+    // does not silently orphan it (spec 5.6).
+    if (pane.worktreePath) {
+      if (!confirm('Dieses Pane hat einen aktiven Worktree. Trotzdem schließen?\n\n(Der Worktree bleibt liegen und ist weiterhin über das ⎇-Dropdown erreichbar.)')) return;
     }
     if (pane.display === 'chat') {
       if (pane.conversationId) App.CloseChatSession(pane.conversationId);
@@ -954,125 +878,6 @@
     return false;
   }
 
-  function findPaneBySession(sessionId: number) {
-    for (const tab of get(allTabs)) {
-      const pane = tab.panes.find((p) => p.sessionId === sessionId);
-      if (pane) return pane;
-    }
-    return null;
-  }
-
-  function findPaneLocation(sessionId: number) {
-    for (const tab of get(allTabs)) {
-      const pane = tab.panes.find((p) => p.sessionId === sessionId);
-      if (pane) return { tab, pane };
-    }
-    return null;
-  }
-
-  function startFinish(sessionId: number) {
-    const pane = findPaneBySession(sessionId);
-    if (!pane?.worktreePath) return;
-    // Alt-Worktrees without a stored target branch: v1 fallback prompt.
-    const t = pane.targetBranch || window.prompt('Ziel-Branch für den Merge:', branch || 'alpha-main') || '';
-    if (!t) return;
-    const mode = pane.mode === 'shell' ? 'shell' : 'claude';
-    tabStore.setFinishPhase(sessionId, 'preparing');
-    App.StartWorktreeFinish(sessionId, pane.worktreePath, pane.branch, t, mode);
-    if (mode === 'shell') {
-      // Shell panes have no Claude to prepare the merge — MTUI stages, commits
-      // and rebases itself via the staging dialog (backend set phase 'preparing').
-      openShellStaging(sessionId, pane.worktreePath, t);
-    }
-  }
-
-  // Files matching build artefacts / secrets are deselected by default so a shell
-  // finish never blindly commits them.
-  const stagingDeselect = /\.env|node_modules|dist\/|build\//;
-
-  async function openShellStaging(sessionId: number, wtPath: string, target: string) {
-    let files: { path: string; status: string; selected: boolean }[] = [];
-    try {
-      const changed = await App.GetWorktreeChangedFiles(wtPath);
-      files = (changed || []).map((f: any) => ({
-        path: f.path,
-        status: f.status,
-        selected: !stagingDeselect.test(f.path),
-      }));
-    } catch (err) {
-      console.error('GetWorktreeChangedFiles failed', err);
-    }
-    finishDialog = {
-      ...finishDialog,
-      visible: true,
-      sessionId,
-      state: 'staging',
-      worktreePath: wtPath,
-      targetBranch: target,
-      files,
-      commitMessage: '',
-      rebaseConflict: false,
-      reason: '',
-      cleanupFailed: false,
-    };
-  }
-
-  // Runs the commit (optional) + rebase, then hands back to the shared verify gate.
-  // A rebase conflict flips the dialog into a rebase-specific blocked state.
-  async function runShellStage(sessionId: number, wtPath: string, target: string,
-                               paths: string[], message: string) {
-    try {
-      if (paths.length > 0) {
-        await App.CommitWorktreeFiles(wtPath, paths, message);
-      }
-      await App.RebaseWorktreeOntoTarget(wtPath, target);
-    } catch (err) {
-      console.error('shell stage/rebase failed', err);
-      finishDialog = {
-        ...finishDialog,
-        visible: true,
-        state: 'blocked',
-        rebaseConflict: true,
-        reason: `Rebase auf ${target} fehlgeschlagen — Konflikte im Terminal auflösen oder Rebase abbrechen.`,
-      };
-      return;
-    }
-    // Success: the shared verify gate emits finish-ready/blocked and reopens the
-    // dialog in the matching state.
-    App.CheckWorktreeFinish(sessionId);
-  }
-
-  function handleFinishWorktree(e: CustomEvent<{ paneId: string; sessionId: number }>) {
-    startFinish(e.detail.sessionId);
-  }
-
-  function handleRetryFinish(sessionId: number) {
-    startFinish(sessionId);
-  }
-
-  function handleCancelFinish(e: CustomEvent<{ sessionId: number }>) {
-    App.CancelWorktreeFinish(e.detail.sessionId);
-    tabStore.setFinishPhase(e.detail.sessionId, '');
-  }
-
-  async function relaunchPaneAfterFinish(sessionId: number, mainRoot: string, mode: string) {
-    const loc = findPaneLocation(sessionId);
-    if (!loc) return;
-    const { tab, pane } = loc;
-    tabStore.closePane(tab.id, pane.id);
-    const sid = mode !== 'shell' ? genSessionId() : '';
-    const argv = mode !== 'shell'
-      ? buildClaudeArgv(pane.mode, pane.model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, { sessionId: sid })
-      : [];
-    try {
-      const newId = await App.CreateSession(argv, mainRoot, 24, 80, pane.mode);
-      if (newId > 0) {
-        tabStore.addPane(tab.id, newId, pane.name, pane.mode, pane.model,
-          null, '', '', '', '', '', false, 'terminal', '', sid);
-      }
-    } catch (err) { console.error('[relaunchPaneAfterFinish] failed:', err); }
-  }
-
   async function handleIssueAction(e: CustomEvent<{ paneId: string; sessionId: number; issueNumber: number; action: string }>) {
     const { sessionId, issueNumber, action } = e.detail;
     const tab = $activeTab;
@@ -1144,8 +949,6 @@
               on:toggleDisplayPane={handleToggleDisplay}
               on:issueAction={handleIssueAction}
               on:commitPush={handleCommitPush}
-              on:finishWorktree={handleFinishWorktree}
-              on:cancelFinish={handleCancelFinish}
               on:navigateFile={handleNavigateFile}
               on:splitPane={() => (showLaunchDialog = true)}
               on:openWorktreePane={handleOpenWorktreePane}
@@ -1189,18 +992,6 @@
     options={askUserOptions}
     on:answer={handleAskUserAnswer}
     on:dismiss={handleAskUserDismiss}
-  />
-  <WorktreeFinishDialog
-    {...finishDialog}
-    on:confirm={() => { tabStore.setFinishPhase(finishDialog.sessionId, 'merging'); finishDialog.visible = false; App.FinishWorktree(finishDialog.sessionId); }}
-    on:retry={() => { finishDialog.visible = false; handleRetryFinish(finishDialog.sessionId); }}
-    on:retryCleanup={() => { tabStore.setFinishPhase(finishDialog.sessionId, 'merging'); finishDialog.visible = false; App.FinishWorktree(finishDialog.sessionId); }}
-    on:cancel={() => { finishDialog.visible = false; App.CancelWorktreeFinish(finishDialog.sessionId); tabStore.setFinishPhase(finishDialog.sessionId, ''); }}
-    on:stageCommit={(e) => runShellStage(finishDialog.sessionId, finishDialog.worktreePath, finishDialog.targetBranch, e.detail.files, e.detail.message)}
-    on:rebaseOnly={() => runShellStage(finishDialog.sessionId, finishDialog.worktreePath, finishDialog.targetBranch, [], '')}
-    on:abortRebase={() => { finishDialog.visible = false; App.AbortWorktreeRebase(finishDialog.worktreePath); App.CancelWorktreeFinish(finishDialog.sessionId); tabStore.setFinishPhase(finishDialog.sessionId, ''); }}
-    on:resolveInTerminal={() => (finishDialog.visible = false)}
-    on:close={() => (finishDialog.visible = false)}
   />
 </div>
 
