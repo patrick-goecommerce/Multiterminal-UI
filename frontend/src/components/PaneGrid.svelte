@@ -41,14 +41,6 @@
     dispatch('commitPush', e.detail);
   }
 
-  function handleFinishWorktree(e: CustomEvent) {
-    dispatch('finishWorktree', e.detail);
-  }
-
-  function handleCancelFinish(e: CustomEvent) {
-    dispatch('cancelFinish', e.detail);
-  }
-
   function handleNavigateFile(e: CustomEvent) {
     dispatch('navigateFile', e.detail);
   }
@@ -91,8 +83,6 @@
         on:toggleDisplay={handleToggleDisplay}
         on:issueAction={handleIssueAction}
         on:commitPush={handleCommitPush}
-        on:finishWorktree={handleFinishWorktree}
-        on:cancelFinish={handleCancelFinish}
         on:navigateFile={handleNavigateFile}
         on:splitPane={handleSplitPane}
         on:openWorktreePane
