@@ -30,9 +30,25 @@ NIEMALS eigenständig — nur nach ausdrücklicher Rückfrage beim Nutzer und
 dessen Bestätigung.
 `
 
+// Hard rule (user-mandated after a real dev test caught Claude switching
+// branches while a worktree was open): deny git checkout/switch via Bash for
+// the whole session. This is the only verified enforcement mechanism —
+// settings.local.json rules written at the project root apply session-wide,
+// even after EnterWorktree moves the cwd into the worktree (design doc
+// 2026-07-03 section 2) — so it blocks a self-switch both inside an active
+// worktree and in the main checkout. Accepted collateral: also blocks the
+// file-restore form (`git checkout -- <file>`), same trade-off already made
+// for the merge-abort collateral in the pre-EnterWorktree design (spec
+// 2026-07-02 section 3.5).
 const projectWorktreeSettingsContent = `{
   "worktree": {
     "baseRef": "head"
+  },
+  "permissions": {
+    "deny": [
+      "Bash(git checkout *)",
+      "Bash(git switch *)"
+    ]
   }
 }
 `
