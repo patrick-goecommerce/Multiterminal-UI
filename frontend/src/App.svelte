@@ -466,7 +466,28 @@
     }
   }
 
-  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); updateConflicts(); loadWorktrees(); checkProjectInit($activeTab.dir); }
+  // Refresh per-tab git/issue/worktree state only when the ACTIVE TAB actually
+  // changes (id or dir), NOT on every tabStore mutation. The derived $activeTab
+  // re-emits on every scan-driven activity/cost update (many times per second),
+  // and the old inline block re-ran all of these each time — updateIssueCount()
+  // spawns a `gh` process per call, which produced a runaway spawn storm
+  // (hundreds/sec across tabs) that could exhaust the process and crash the app.
+  // Periodic refresh for branch/conflicts/commitAge is already handled by the
+  // interval timers in onMount; this block is purely the on-tab-switch refresh.
+  let lastActiveTabKey = '';
+  $: if ($activeTab) pollActiveTab($activeTab);
+
+  function pollActiveTab(tab: { id: string; dir: string }) {
+    const key = `${tab.id} ${tab.dir}`;
+    if (key === lastActiveTabKey) return;
+    lastActiveTabKey = key;
+    updateBranch();
+    updateCommitAge();
+    updateIssueCount();
+    updateConflicts();
+    loadWorktrees();
+    checkProjectInit(tab.dir);
+  }
 
   async function updateCommitAge() {
     const tab = $activeTab;
