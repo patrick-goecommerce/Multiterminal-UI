@@ -538,3 +538,28 @@ describe('updateActivity — tab unreadActivity', () => {
     expect(tab!.unreadActivity).toBe('waitingAnswer');
   });
 });
+
+describe('worktree detection state', () => {
+  it('setWorktree populates worktreePath/branch/targetBranch on the matching pane', () => {
+    const tabId = tabStore.addTab('Test', '/tmp/proj');
+    const paneId = tabStore.addPane(tabId, 42, 'pane', 'claude', '');
+    tabStore.setWorktree(42, '/tmp/proj/.claude/worktrees/feature-a', 'worktree-feature-a', 'alpha-main');
+    const state = tabStore.getState();
+    const pane = state.tabs.find((t) => t.id === tabId)!.panes.find((p) => p.id === paneId)!;
+    expect(pane.worktreePath).toBe('/tmp/proj/.claude/worktrees/feature-a');
+    expect(pane.branch).toBe('worktree-feature-a');
+    expect(pane.targetBranch).toBe('alpha-main');
+  });
+
+  it('clearWorktree resets worktree fields to empty', () => {
+    const tabId = tabStore.addTab('Test2', '/tmp/proj2');
+    const paneId = tabStore.addPane(tabId, 43, 'pane', 'claude', '');
+    tabStore.setWorktree(43, '/tmp/proj2/.claude/worktrees/x', 'worktree-x', 'main');
+    tabStore.clearWorktree(43);
+    const state = tabStore.getState();
+    const pane = state.tabs.find((t) => t.id === tabId)!.panes.find((p) => p.id === paneId)!;
+    expect(pane.worktreePath).toBe('');
+    expect(pane.branch).toBe('');
+    expect(pane.targetBranch).toBe('');
+  });
+});
