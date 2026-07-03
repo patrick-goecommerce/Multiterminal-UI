@@ -77,5 +77,6 @@ func (a *AppService) setupHooks(ctx context.Context) {
 		},
 	)
 	a.hookMgr.onPrompt = a.maybeGeneratePaneName
+	a.hookMgr.onWorktreeChange = a.onWorktreeChange
 	a.hookMgr.Start(ctx)
 }

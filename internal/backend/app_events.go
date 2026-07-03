@@ -46,3 +46,18 @@ type WorktreeFinishDoneEvent struct {
 	TargetBranch string `json:"targetBranch"`
 	Mode         string `json:"mode"`
 }
+
+// WorktreeDetectedEvent is emitted when a Claude session enters a native
+// EnterWorktree-created worktree.
+type WorktreeDetectedEvent struct {
+	ID             int    `json:"id"`
+	WorktreePath   string `json:"worktreePath"`
+	WorktreeBranch string `json:"worktreeBranch"`
+	TargetBranch   string `json:"targetBranch"`
+}
+
+// WorktreeClearedEvent is emitted when a session's cwd is no longer inside a
+// previously detected worktree (Claude called ExitWorktree, or otherwise left).
+type WorktreeClearedEvent struct {
+	ID int `json:"id"`
+}

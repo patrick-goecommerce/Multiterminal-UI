@@ -56,6 +56,12 @@ type AppService struct {
 	tmuxAPIPort        int                         // port for the tmux shim HTTP API
 	chatSessions       map[string]*ChatSession     // active chat sessions keyed by conversation ID
 	chatBuffers        map[string]*strings.Builder // buffered assistant text per conversation
+	worktreeStateMu    sync.Mutex
+	worktreeState      map[int]worktreeState
+	// emitWorktreeEvent is a seam for testing; production wiring assigns it to
+	// a.app.Event.Emit in setupHooks. Never nil-checked directly — callers use
+	// the emitWorktreeEventSafe helper below.
+	emitWorktreeEvent func(name string, payload any)
 }
 
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
@@ -69,6 +75,7 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		sessionIssues: make(map[int]*sessionIssue),
 		chatSessions:  make(map[string]*ChatSession),
 		chatBuffers:   make(map[string]*strings.Builder),
+		worktreeState: make(map[int]worktreeState),
 		winMgr:        newWindowManager(app),
 		safeMode:      safeMode,
 	}
@@ -287,6 +294,9 @@ func (a *AppService) CloseSession(id int) {
 		delete(a.finishStates, id)
 		delete(a.sessionIssues, id)
 		a.mu.Unlock()
+		a.worktreeStateMu.Lock()
+		delete(a.worktreeState, id)
+		a.worktreeStateMu.Unlock()
 		// Clean up per-session activity tracking to prevent memory leak
 		cleanupActivityTracking(id)
 		cleanupNameTracking(id)
