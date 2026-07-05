@@ -111,7 +111,6 @@
   let issueCount = 0;
   let sidebarView: 'explorer' | 'source-control' | 'issues' = 'explorer';
   let branch = '';
-  let allWorktrees: any[] = [];
   let commitAgeMinutes = -1;
   let updateAvailable = false;
   let latestVersion = '';
@@ -442,30 +441,6 @@
     branch = await fetchBranch(tab.dir || '.');
   }
 
-  async function loadWorktrees() {
-    const tab = $activeTab;
-    if (!tab?.dir) return;
-    try { allWorktrees = await App.ListAllWorktrees(tab.dir); } catch {}
-  }
-
-  function orphanedClaudeWorktrees(): { path: string; branch: string; name: string }[] {
-    const tab = $activeTab;
-    if (!tab) return [];
-    const activePaths = new Set(tab.panes.map((p) => p.worktreePath).filter(Boolean));
-    return allWorktrees
-      .filter((w: any) => w.category === 'claude' && !activePaths.has(w.path))
-      .map((w: any) => ({ path: w.path, branch: w.branch, name: w.name }));
-  }
-
-  async function handleRemoveOrphanedWorktree(e: CustomEvent<{ path: string }>) {
-    try {
-      await App.RemoveOrphanedWorktree(e.detail.path);
-      await loadWorktrees();
-    } catch (err: any) {
-      alert(`Aufräumen fehlgeschlagen:\n${err?.message || err}`);
-    }
-  }
-
   // Refresh per-tab git/issue/worktree state only when the ACTIVE TAB actually
   // changes (id or dir), NOT on every tabStore mutation. The derived $activeTab
   // re-emits on every scan-driven activity/cost update (many times per second),
@@ -485,7 +460,6 @@
     updateCommitAge();
     updateIssueCount();
     updateConflicts();
-    loadWorktrees();
     checkProjectInit(tab.dir);
   }
 
@@ -516,25 +490,6 @@
     conflictCount = info.count;
     conflictFiles = info.files;
     conflictOperation = info.operation;
-  }
-
-  async function handleOpenWorktreePane(e: CustomEvent<{ worktree: any }>) {
-    const tab = $activeTab;
-    if (!tab) return;
-    const wt = e.detail.worktree;
-    if (tab.panes.length >= MAX_PANES_PER_TAB) {
-      alert(`Max. ${MAX_PANES_PER_TAB} Terminals pro Tab erreicht.`);
-      return;
-    }
-    const claudeCmd = resolvedClaudePath;
-    const argv = buildClaudeArgv('claude', '', claudeCmd);
-    const name = `Claude – ⎇ ${wt.branch}`;
-    try {
-      const sessionId = await App.CreateSession(argv, wt.path, 24, 80, 'claude');
-      if (sessionId > 0) {
-        tabStore.addPane(tab.id, sessionId, name, 'claude', '', null, '', wt.branch, wt.path, wt.branch);
-      }
-    } catch (err) { console.error('[handleOpenWorktreePane] failed:', err); }
   }
 
   async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string }>) {
@@ -569,6 +524,7 @@
     try {
       let issueBranch = '';
       let worktreePath = '';
+      let targetBranch = '';
       let sessionDir = tab.dir || '';
 
       if (issueCtx) {
@@ -591,6 +547,7 @@
         }
         issueBranch = result.issueBranch;
         worktreePath = result.worktreePath;
+        targetBranch = result.targetBranch;
         sessionDir = result.sessionDir;
       }
 
@@ -613,7 +570,7 @@
         }
         tabStore.addPane(tab.id, sessionId, name, type, model,
           issueCtx?.number, issueCtx?.title, issueBranch, worktreePath, paneBranch,
-          '', false, 'terminal', '', claudeSessionId);
+          targetBranch, false, 'terminal', '', claudeSessionId);
         if (issueCtx) {
           App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
           setTimeout(() => {
@@ -648,7 +605,7 @@
         }
         tabStore.addPane(tab.id, sessionId, name, type, model,
           issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.worktreePath, paneBranch,
-          '', false, 'terminal', '', claudeSessionId);
+          resolved.targetBranch, false, 'terminal', '', claudeSessionId);
         App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.sessionDir);
         setTimeout(() => {
           const prompt = buildIssuePrompt(issueCtx);
@@ -1186,9 +1143,7 @@
               tabId={tab.id}
               panes={tab.panes}
               active={tab.id === $activeTab?.id}
-              worktrees={allWorktrees}
-              orphanedWorktrees={orphanedClaudeWorktrees()}
-              tabDir={$activeTab?.dir || ''}
+              tabDir={tab.dir || ''}
               on:closePane={handleClosePane}
               on:maximizePane={handleMaximizePane}
               on:focusPane={handleFocusPane}
@@ -1201,9 +1156,6 @@
               on:cancelFinish={handleCancelFinish}
               on:navigateFile={handleNavigateFile}
               on:splitPane={() => (showLaunchDialog = true)}
-              on:openWorktreePane={handleOpenWorktreePane}
-              on:worktreeListChanged={loadWorktrees}
-              on:removeOrphanedWorktree={handleRemoveOrphanedWorktree}
             />
           </div>
         {/each}

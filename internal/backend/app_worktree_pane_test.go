@@ -59,7 +59,7 @@ func TestMainRepoRoot_NotARepo(t *testing.T) {
 
 func TestPaneWorktreeBase(t *testing.T) {
 	got := paneWorktreeBase(filepath.Join("D:", "repos", "Foo"))
-	want := filepath.Join("D:", "repos", "Foo.mt-worktrees")
+	want := filepath.Join("D:", "repos", "Foo", ".claude", "worktrees")
 	if got != want {
 		t.Errorf("paneWorktreeBase = %q, want %q", got, want)
 	}
@@ -139,5 +139,50 @@ func TestGetPaneWorktreeDefaults(t *testing.T) {
 	d := a.GetPaneWorktreeDefaults(repo, "fix")
 	if d.Name != "fix-2" || d.TargetBranch != "alpha-main" {
 		t.Errorf("defaults = %+v, want fix-2/alpha-main", d)
+	}
+}
+
+func TestCreateIssueWorktree_HappyPath(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	a := &AppService{}
+	wt, err := a.CreateIssueWorktree(repo, 123, "Dashboard Filter!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wt.Branch != "issue/123-dashboard-filter" || wt.TargetBranch != "alpha-main" {
+		t.Errorf("unexpected info: %+v", wt)
+	}
+	wantPath := filepath.Join(paneWorktreeBase(repo), "issue-123-dashboard-filter")
+	if !strings.EqualFold(wt.Path, wantPath) {
+		t.Errorf("path = %q, want %q", wt.Path, wantPath)
+	}
+	// The main repo's own checked-out branch must never change.
+	if got := checkedOutBranch(repo); got != "alpha-main" {
+		t.Errorf("main repo branch changed to %q", got)
+	}
+}
+
+func TestCreateIssueWorktree_ReattachesSameIssue(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	a := &AppService{}
+	first, err := a.CreateIssueWorktree(repo, 42, "Fix login")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := a.CreateIssueWorktree(repo, 42, "Fix login")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Path != first.Path || second.Branch != first.Branch {
+		t.Errorf("re-attach mismatch: %+v vs %+v", first, second)
+	}
+}
+
+func TestCreateIssueWorktree_DetachedHeadRejected(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	gitRun(t, repo, "checkout", "--detach", "HEAD")
+	a := &AppService{}
+	if _, err := a.CreateIssueWorktree(repo, 1, "x"); err == nil {
+		t.Error("expected error on detached HEAD")
 	}
 }
