@@ -20,8 +20,6 @@
   export let paneIndex: number = 0;
   export let active: boolean = true;
   export let tabId: string = '';
-  export let worktrees: any[] = [];
-  export let orphanedWorktrees: { path: string; branch: string; name: string }[] = [];
   export let tabDir: string = '';
 
   const dispatch = createEventDispatcher();
@@ -548,8 +546,6 @@
     {pane}
     {paneIndex}
     {queueCount}
-    {worktrees}
-    {orphanedWorktrees}
     {tabDir}
     on:close
     on:maximize
@@ -561,9 +557,6 @@
     on:commitPush
     on:finishWorktree
     on:cancelFinish
-    on:openWorktreePane
-    on:worktreeListChanged
-    on:removeOrphanedWorktree
   />
   <QueuePanel sessionId={pane.sessionId} visible={showQueue} />
   {#if showSearch}

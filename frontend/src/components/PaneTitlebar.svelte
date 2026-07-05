@@ -2,12 +2,12 @@
   import { createEventDispatcher } from 'svelte';
   import { t } from '../stores/i18n';
   import { paneDisplayName, type Pane } from '../stores/tabs';
+  import * as App from '../../wailsjs/go/backend/App';
+  import { fetchBranch } from '../lib/git-polling';
 
   export let pane: Pane;
   export let paneIndex: number = 0;
   export let queueCount: number = 0;
-  export let worktrees: any[] = [];
-  export let orphanedWorktrees: { path: string; branch: string; name: string }[] = [];
   export let tabDir: string = '';
 
   const dispatch = createEventDispatcher();
@@ -18,6 +18,21 @@
 
   // Auto names (most-recently-updated source wins) apply until the user manually renames.
   $: displayName = paneDisplayName(pane);
+
+  // Repository root for the worktree tooltip — fetched once per worktree path
+  // (assignment happens inside the .then callback, not read back in this
+  // block, so it is not itself tracked as a reactive dependency).
+  let mainRepoRoot = '';
+  $: if (pane.worktreePath) {
+    App.GetMainRepoRoot(pane.worktreePath).then((r) => { mainRepoRoot = r; });
+  }
+
+  // Fallback branch badge for panes with no worktree (running directly in the
+  // main repo's own working directory) — same async-assignment shape as above.
+  let fallbackBranch = '';
+  $: if (!pane.worktreePath && tabDir) {
+    fetchBranch(tabDir).then((b) => { fallbackBranch = b; });
+  }
 
   function startRename() {
     editName = displayName;
@@ -157,7 +172,7 @@
       ☁
     </button>
     {#if pane.worktreePath}
-      <span class="wt-badge" title={`Worktree: ${pane.worktreePath}\nZiel: ${pane.targetBranch || '?'}`}>⎇ {pane.branch}</span>
+      <span class="wt-badge" title={`Repository: ${mainRepoRoot || '?'}\nWorktree: ${pane.worktreePath}\nBasis-Branch: ${pane.targetBranch || '?'}`}>⎇ {pane.branch}</span>
       {#if pane.finishPhase === 'preparing' || pane.finishPhase === 'merging' || pane.finishPhase === 'cleanup'}
         <button class="pane-btn finish-btn spinning" title="Fertigstellen läuft – klicken zum Abbrechen"
           on:click|stopPropagation={() => dispatch('cancelFinish', { sessionId: pane.sessionId })}>◌</button>
@@ -165,6 +180,8 @@
         <button class="pane-btn finish-btn" title="Worktree fertigstellen: mergen & aufräumen"
           on:click|stopPropagation={() => dispatch('finishWorktree', { paneId: pane.id, sessionId: pane.sessionId })}>✓</button>
       {/if}
+    {:else if fallbackBranch}
+      <span class="wt-badge wt-badge-main" title={`Repository: ${tabDir}\nBranch: ${fallbackBranch} (Hauptrepo, kein Worktree)`}>⎇ {fallbackBranch}</span>
     {/if}
     {#if pane.issueNumber}
       <div class="issue-actions-wrap">
@@ -357,6 +374,7 @@
   .commit-btn:hover { color: var(--success) !important; }
 
   .wt-badge { font-size: 10px; color: var(--accent); background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wt-badge-main { color: var(--fg-muted); }
   .finish-btn { color: #4ade80; font-weight: 700; }
   .finish-btn.spinning { animation: wt-spin 1s linear infinite; }
   @keyframes wt-spin { to { transform: rotate(360deg); } }

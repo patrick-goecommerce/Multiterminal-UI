@@ -8,8 +8,6 @@
   export let panes: Pane[] = [];
   export let active: boolean = true;
   export let tabId: string = '';
-  export let worktrees: any[] = [];
-  export let orphanedWorktrees: { path: string; branch: string; name: string }[] = [];
   export let tabDir: string = '';
 
   const dispatch = createEventDispatcher();
@@ -81,8 +79,6 @@
         {pane}
         {active}
         {tabId}
-        {worktrees}
-        {orphanedWorktrees}
         {tabDir}
         paneIndex={panes.indexOf(pane) + 1}
         on:close={handleClose}
@@ -97,9 +93,6 @@
         on:cancelFinish={handleCancelFinish}
         on:navigateFile={handleNavigateFile}
         on:splitPane={handleSplitPane}
-        on:openWorktreePane
-        on:worktreeListChanged
-        on:removeOrphanedWorktree
       />
     {/if}
   {/each}
