@@ -31,6 +31,10 @@ type Config struct {
 	CommitReminderMinutes int            `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
 	RestoreSession        *bool          `yaml:"restore_session" json:"restore_session"`
 	LoggingEnabled        bool           `yaml:"logging_enabled" json:"logging_enabled"`
+	// AutoBranchOnIssue: true (default) isolates every issue-launched pane in
+	// its own deterministic worktree (CreateIssueWorktree) instead of leaving
+	// it in the main repo's working directory. false disables automatic
+	// branch/worktree handling entirely — the user manages branches manually.
 	AutoBranchOnIssue     *bool          `yaml:"auto_branch_on_issue" json:"auto_branch_on_issue"`
 	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
@@ -259,7 +263,8 @@ func (c Config) ShouldRestoreSession() bool {
 	return *c.RestoreSession
 }
 
-// ShouldAutoBranch returns whether to auto-create branches for issues.
+// ShouldAutoBranch returns whether to auto-isolate issue-launched panes into
+// their own worktree (see AutoBranchOnIssue).
 func (c Config) ShouldAutoBranch() bool {
 	if c.AutoBranchOnIssue == nil {
 		return true

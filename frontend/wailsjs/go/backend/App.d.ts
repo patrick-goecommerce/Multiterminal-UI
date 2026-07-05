@@ -322,6 +322,10 @@ export function UpdateKanbanCard(arg1:string,arg2:any):Promise<void>;
 
 export function CreatePaneWorktree(arg1:string,arg2:string,arg3:string):Promise<backend.PaneWorktreeInfo>;
 
+export function CreateIssueWorktree(arg1:string,arg2:number,arg3:string):Promise<backend.PaneWorktreeInfo>;
+
+export function GetMainRepoRoot(arg1:string):Promise<string>;
+
 export function GetPaneWorktreeDefaults(arg1:string,arg2:string):Promise<backend.PaneWorktreeDefaults>;
 
 export function GetWorktreeFinishStatus(arg1:string,arg2:string,arg3:string):Promise<backend.WorktreeFinishStatus>;

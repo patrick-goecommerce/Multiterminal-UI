@@ -642,6 +642,14 @@ export function CreatePaneWorktree(arg1, arg2, arg3) {
   return $Call.ByID(224966636, arg1, arg2, arg3);
 }
 
+export function CreateIssueWorktree(arg1, arg2, arg3) {
+  return $Call.ByID(2271933759, arg1, arg2, arg3);
+}
+
+export function GetMainRepoRoot(arg1) {
+  return $Call.ByID(2723131976, arg1);
+}
+
 export function GetPaneWorktreeDefaults(arg1, arg2) {
   return $Call.ByID(4163323024, arg1, arg2);
 }
