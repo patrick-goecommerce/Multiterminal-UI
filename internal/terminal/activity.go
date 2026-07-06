@@ -26,6 +26,13 @@ const (
 	ActivityError                                  // tool execution failed
 )
 
+// ActivityStaleThreshold is how long PTY output must have stopped before the
+// screen is classified instead of assuming output is still in flight. Used
+// both by DetectActivity (no hook data) and by the hook-driven scan's
+// stale-"active" fallback (a lost/delayed Stop hook event must not leave a
+// pane — and any pipeline queue waiting on it — stuck forever).
+const ActivityStaleThreshold = 1500 * time.Millisecond
+
 // ScanTokens scans the screen buffer for token/cost patterns and updates
 // the Tokens field. Call this periodically (e.g. from the tick handler).
 func (s *Session) ScanTokens() {
@@ -84,7 +91,7 @@ func (s *Session) DetectActivity() ActivityState {
 	// This is critical for pipeline queue advancement: after processQueue
 	// sends the next prompt, the PTY echo must transition the state from
 	// "done" to "active" so the next "done" is detected as a real change.
-	if elapsed < 1500*time.Millisecond {
+	if elapsed < ActivityStaleThreshold {
 		if currentActivity != ActivityActive {
 			s.mu.Lock()
 			s.Activity = ActivityActive

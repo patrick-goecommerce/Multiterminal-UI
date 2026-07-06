@@ -2,6 +2,7 @@ package backend
 
 import (
 	"testing"
+	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
@@ -81,6 +82,43 @@ func TestScan_TracksOSCTitleChange(t *testing.T) {
 	prevActivityMu.Unlock()
 	if exists {
 		t.Fatal("cleanupActivityTracking should remove the prevTitle entry")
+	}
+}
+
+// TestScanGuard_StaleActiveHookFallsBackToScreen reproduces the reported bug:
+// once a pane's first UserPromptSubmit hook fires, HasHookData() latches true
+// forever (only SessionEnd clears it), so the PTY heuristic is skipped for
+// the rest of the session's life. If the terminating Stop hook event is lost
+// or delayed, the pane — and the pipeline queue waiting on its "done"
+// transition — hung on "active" forever. The scan must fall back to the PTY
+// screen once output has gone stale.
+func TestScanGuard_StaleActiveHookFallsBackToScreen(t *testing.T) {
+	sess := terminal.NewSession(9, 10, 80)
+	sess.SetHookActivity(terminal.ActivityActive) // e.g. from UserPromptSubmit/PostToolUse
+	sess.Screen.Write([]byte(
+		"\x1b[32m✓ Task completed successfully\x1b[0m\r\n" +
+			"\x1b[1;35m❯\x1b[0m ",
+	))
+	// Simulate the Stop hook never arriving: PTY output stopped a while ago.
+	sess.SetLastOutputAtForTest(time.Now().Add(-2 * time.Second))
+
+	app := &AppService{
+		sessions: map[int]*terminal.Session{9: sess},
+		queues:   map[int]*sessionQueue{},
+	}
+
+	cleanupActivityTracking(9)
+	app.scanAllSessions()
+
+	got := activityString(sess.GetActivity())
+	// scanAllSessions doesn't persist the fallback into sess.Activity (same as
+	// the existing done→waitingAnswer cross-check), so assert on the emitted
+	// state via prevActivity instead of GetActivity().
+	prevActivityMu.Lock()
+	emitted := prevActivity[9]
+	prevActivityMu.Unlock()
+	if emitted != "done" {
+		t.Fatalf("after scan with stale active hook + completed-prompt screen, emitted activity = %q (raw hook state %q), want %q — Stop-event-lost fallback not working", emitted, got, "done")
 	}
 }
 
