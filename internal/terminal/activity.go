@@ -71,7 +71,17 @@ func (s *Session) DetectActivity() ActivityState {
 	s.mu.Lock()
 	lastOutput := s.LastOutputAt
 	currentActivity := s.Activity
+	hasHookData := s.hasHookData
 	s.mu.Unlock()
+
+	// Hook events are authoritative once present for this session — a stale or
+	// misrouted PTY-timing read must never clobber them. This guard belongs
+	// here (not just in the scan loop's call site) so no caller, present or
+	// future, can bypass it by calling DetectActivity() directly. See
+	// TestDetectActivity_HookDataPresent_NeverOverridesHookState.
+	if hasHookData {
+		return currentActivity
+	}
 
 	// Need output to have happened at all
 	if lastOutput.IsZero() {

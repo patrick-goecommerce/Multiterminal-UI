@@ -82,6 +82,41 @@ func TestDetectActivity_RecentOutput_TransitionsIdleToActive(t *testing.T) {
 	}
 }
 
+// TestDetectActivity_HookDataPresent_NeverOverridesHookState reproduces a bug
+// observed live (multiterminal-2026-07-03.log, session 17, 15:33:51): the Stop
+// hook correctly set Activity=Done, but a caller that skipped the
+// HasHookData() guard (e.g. the orchestrator's poll loop, app_orchestrator_
+// schedule.go) called DetectActivity() directly. Since PTY output was <1.5s
+// old (Claude's TUI redraw right before Stop), DetectActivity() clobbered the
+// authoritative Done back to Active — and nothing ever corrected it again,
+// because no further hook event was going to fire. The pane's badge (and the
+// pipeline queue, which only advances on a fresh "done" transition) got stuck
+// on "läuft" forever. DetectActivity() must be a no-op once hook data is
+// authoritative for a session, regardless of who calls it.
+func TestDetectActivity_HookDataPresent_NeverOverridesHookState(t *testing.T) {
+	sess := NewSession(1, 5, 80)
+	sess.Screen.Write([]byte("$ "))
+
+	sess.SetHookActivity(ActivityDone) // Stop hook fires — authoritative
+
+	// Recent PTY output (<1.5s), same as the TUI's last redraw before Stop.
+	sess.mu.Lock()
+	sess.LastOutputAt = time.Now()
+	sess.mu.Unlock()
+
+	state := sess.DetectActivity()
+	if state != ActivityDone {
+		t.Errorf("DetectActivity with hook data present = %d, want ActivityDone (%d) — must not override hook state", state, ActivityDone)
+	}
+
+	sess.mu.Lock()
+	stored := sess.Activity
+	sess.mu.Unlock()
+	if stored != ActivityDone {
+		t.Errorf("Session.Activity after DetectActivity = %d, want ActivityDone (%d) — must stay untouched", stored, ActivityDone)
+	}
+}
+
 func TestDetectActivity_StaleOutput_ClassifiesDone(t *testing.T) {
 	sess := NewSession(1, 5, 80)
 	sess.Screen.Write([]byte("$ ")) // prompt on screen → should classify as Done
