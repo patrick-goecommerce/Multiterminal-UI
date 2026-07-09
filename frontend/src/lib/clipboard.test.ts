@@ -14,7 +14,7 @@ vi.mock('../../wailsjs/runtime/runtime', () => ({
   ClipboardSetText: clipboardSet,
 }));
 
-import { pasteToSession, copySelection, writeTextToSession, writeClipboard } from './clipboard';
+import { pasteToSession, copySelection, writeTextToSession, writeClipboard, decodeOsc52, registerOsc52Handler } from './clipboard';
 import { encodeForPty } from './claude';
 
 // The WebView2-native clipboard API is the preferred write path; jsdom has no
@@ -168,6 +168,70 @@ describe('copySelection (terminal → clipboard)', () => {
     expect(await copySelection(term)).toBe(false);
     expect(clipboardWriteText).not.toHaveBeenCalled();
     expect(clearSelection).not.toHaveBeenCalled();
+  });
+});
+
+describe('decodeOsc52 (OSC 52 payload decoding)', () => {
+  it('decodes a base64 clipboard payload', () => {
+    expect(decodeOsc52('c;aGVsbG8=')).toBe('hello');
+  });
+
+  it('decodes UTF-8 multi-byte content', () => {
+    expect(decodeOsc52('c;Y2Fmw6k=')).toBe('café');
+  });
+
+  it('returns null for a query ("?"), which callers must not write back', () => {
+    expect(decodeOsc52('c;?')).toBeNull();
+  });
+
+  it('returns null for data with no selection separator', () => {
+    expect(decodeOsc52('aGVsbG8=')).toBeNull();
+  });
+
+  it('returns null for invalid base64 instead of throwing', () => {
+    expect(decodeOsc52('c;not-valid-base64!!!')).toBeNull();
+  });
+});
+
+describe('registerOsc52Handler (PTY-issued OSC 52 -> real clipboard)', () => {
+  // The reported bug: a CLI running inside the pane (e.g. Claude Code's own
+  // "copied N chars to clipboard" status line) writes via the OSC 52 escape
+  // sequence. xterm.js does not act on OSC 52 out of the box, so without a
+  // registered handler the sequence is silently dropped: the CLI believes it
+  // succeeded while nothing reaches the real OS clipboard.
+  function fakeTerminalCapturingOscHandler() {
+    let handler: ((data: string) => boolean | Promise<boolean>) | undefined;
+    const terminal = {
+      parser: {
+        registerOscHandler: vi.fn((_ident: number, cb: typeof handler) => {
+          handler = cb;
+          return { dispose: vi.fn() };
+        }),
+      },
+    } as any;
+    return { terminal, invoke: (data: string) => handler!(data) };
+  }
+
+  it('writes the decoded payload to the clipboard', async () => {
+    const { terminal, invoke } = fakeTerminalCapturingOscHandler();
+    registerOsc52Handler(terminal);
+    invoke('c;aGVsbG8=');
+    await Promise.resolve();
+    expect(clipboardWriteText).toHaveBeenCalledWith('hello');
+  });
+
+  it('registers on OSC ident 52', () => {
+    const { terminal } = fakeTerminalCapturingOscHandler();
+    registerOsc52Handler(terminal);
+    expect(terminal.parser.registerOscHandler).toHaveBeenCalledWith(52, expect.any(Function));
+  });
+
+  it('ignores a clipboard query without writing', async () => {
+    const { terminal, invoke } = fakeTerminalCapturingOscHandler();
+    registerOsc52Handler(terminal);
+    invoke('c;?');
+    await Promise.resolve();
+    expect(clipboardWriteText).not.toHaveBeenCalled();
   });
 });
 

@@ -3,6 +3,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { createWebLinksAddon, registerFileLinkProvider, type LinkHandler } from './links';
+import { registerOsc52Handler } from './clipboard';
 
 /** Curated list of monospace fonts. Order = priority for fallback chain. */
 export const MONOSPACE_FONTS = [
@@ -221,11 +222,14 @@ export function createTerminal(
     fileLinkDisposable = registerFileLinkProvider(terminal, linkHandler);
   }
 
+  const osc52Disposable = registerOsc52Handler(terminal);
+
   return {
     terminal,
     fitAddon,
     searchAddon,
     dispose: () => {
+      osc52Disposable.dispose();
       fileLinkDisposable?.dispose();
       searchAddon.dispose();
       fitAddon.dispose();

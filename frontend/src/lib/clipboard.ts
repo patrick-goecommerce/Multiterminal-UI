@@ -59,3 +59,33 @@ export async function copySelection(terminal: Terminal): Promise<boolean> {
 export function writeTextToSession(sessionId: number, text: string): void {
   App.WriteToSession(sessionId, encodeForPty(text));
 }
+
+/** Decode an OSC 52 handler payload ("<selection>;<base64-or-?>") into text.
+ *  Returns null for clipboard queries ("?") and malformed/invalid payloads —
+ *  callers must not write those back to the clipboard. */
+export function decodeOsc52(data: string): string | null {
+  const semi = data.indexOf(';');
+  if (semi === -1) return null;
+  const payload = data.slice(semi + 1);
+  if (payload === '' || payload === '?') return null;
+  try {
+    const binary = atob(payload);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+/** Register an OSC 52 handler so clipboard writes issued by the process
+ *  running inside the PTY (e.g. a CLI's own "copied N chars to clipboard"
+ *  feature) actually reach the OS clipboard. xterm.js does not act on OSC 52
+ *  out of the box, so without this the escape sequence is silently dropped:
+ *  the PTY-side program reports success while nothing is ever copied. */
+export function registerOsc52Handler(terminal: Terminal): { dispose(): void } {
+  return terminal.parser.registerOscHandler(52, (data: string) => {
+    const text = decodeOsc52(data);
+    if (text !== null) void writeClipboard(text);
+    return true;
+  });
+}
