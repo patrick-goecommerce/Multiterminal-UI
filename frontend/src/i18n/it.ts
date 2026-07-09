@@ -17,6 +17,12 @@ const it = {
     detachWindow: 'Apri in nuova finestra',
     closeTab: 'Chiudi tab',
   },
+  closeTabConfirm: {
+    title: 'Chiudere il tab?',
+    body: '"{name}" ha ancora {count} pane attivi. La chiusura terminerà tutte le sessioni in corso.',
+    cancel: 'Annulla',
+    confirm: 'Chiudi tab',
+  },
   toolbar: {
     noDir: '(nessuna directory)',
     changeDirEnabled: 'Cambia directory di lavoro: {dir}',

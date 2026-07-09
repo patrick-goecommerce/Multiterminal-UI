@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { tabStore, activeTab, allTabs, computeTabActivity, paneDisplayName, windowTitle } from './tabs';
+import { tabStore, activeTab, allTabs, computeTabActivity, paneDisplayName, windowTitle, tabNeedsCloseConfirm } from './tabs';
 
 // Note: tabStore uses internal counters that persist across tests.
 // We work with that by testing behavior rather than exact IDs.
@@ -518,6 +518,23 @@ describe('computeTabActivity', () => {
       { activity: 'active' } as any,
     ];
     expect(computeTabActivity(panes)).toBe('waitingPermission');
+  });
+});
+
+describe('tabNeedsCloseConfirm', () => {
+  it('returns false for a tab with no panes', () => {
+    const tab = { panes: [] } as any;
+    expect(tabNeedsCloseConfirm(tab)).toBe(false);
+  });
+
+  it('returns true for a tab with one pane', () => {
+    const tab = { panes: [{ id: 'pane-1' }] } as any;
+    expect(tabNeedsCloseConfirm(tab)).toBe(true);
+  });
+
+  it('returns true for a tab with multiple panes', () => {
+    const tab = { panes: [{ id: 'pane-1' }, { id: 'pane-2' }] } as any;
+    expect(tabNeedsCloseConfirm(tab)).toBe(true);
   });
 });
 

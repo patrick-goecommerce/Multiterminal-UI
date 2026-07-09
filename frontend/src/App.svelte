@@ -20,8 +20,9 @@
   import KanbanBoard from './components/KanbanBoard.svelte';
   import AskUserDialog from './components/AskUserDialog.svelte';
   import WorktreeFinishDialog from './components/WorktreeFinishDialog.svelte';
+  import CloseTabConfirmDialog from './components/CloseTabConfirmDialog.svelte';
   import { get } from 'svelte/store';
-  import { tabStore, activeTab, allTabs, windowTitle } from './stores/tabs';
+  import { tabStore, activeTab, allTabs, windowTitle, tabNeedsCloseConfirm } from './stores/tabs';
   import { workspace } from './stores/workspace';
   import { kanban } from './stores/kanban';
   import { config } from './stores/config';
@@ -68,6 +69,7 @@
   let skillPickerDir = '';
   let skillPickerMode: 'init' | 'edit' = 'init';
   let projectInitialized = false;
+  let pendingCloseTabId = '';
   let activeSkillCount = 0;
   let showAskUser = false;
   let askUserSessionId = 0;
@@ -155,7 +157,7 @@
   const handleGlobalKeydown = createGlobalKeyHandler({
     onNewPane: () => { showLaunchDialog = true; },
     onNewTab: () => { showProjectDialog = true; },
-    onCloseTab: () => { if ($activeTab) tabStore.closeTab($activeTab.id); },
+    onCloseTab: () => { if ($activeTab) requestCloseTab($activeTab.id); },
     onToggleSidebar: () => workspace.toggleSidebar(),
     onOpenIssues: () => workspace.openSidebar('issues'),
     onToggleMaximize: () => {
@@ -897,6 +899,20 @@
     config.update(c => ({ ...c, logging_enabled: true }));
   }
 
+  function requestCloseTab(tabId: string) {
+    const tab = $allTabs.find((t) => t.id === tabId);
+    if (tab && tabNeedsCloseConfirm(tab)) {
+      pendingCloseTabId = tabId;
+    } else {
+      tabStore.closeTab(tabId);
+    }
+  }
+
+  function confirmCloseTab() {
+    tabStore.closeTab(pendingCloseTabId);
+    pendingCloseTabId = '';
+  }
+
   async function updateIssueCount() {
     const tab = $activeTab;
     issueCount = await fetchIssueCount(tab?.dir || '');
@@ -1118,6 +1134,7 @@
     on:showDashboard={() => workspace.setView('dashboard')}
     on:closeDashboard={() => workspace.setView('terminals')}
     on:editSkills={openSkillEditor}
+    on:closeTab={(e) => requestCloseTab(e.detail.tabId)}
   />
   <Toolbar
     paneCount={currentPanes}
@@ -1175,6 +1192,13 @@
   <CommandPalette visible={showCommandPalette} on:send={handleSendCommand} on:close={() => (showCommandPalette = false)} />
   <SetupDialog visible={showSetupDialog} {claudeDetected} {codexDetected} {geminiDetected} on:finish={handleSetupFinish} on:langChange={handleSetupLangChange} on:close={() => { showSetupDialog = false; }} />
   <CrashDialog visible={showCrashDialog} on:enable={handleCrashEnable} on:dismiss={() => (showCrashDialog = false)} />
+  <CloseTabConfirmDialog
+    visible={!!pendingCloseTabId}
+    tabName={$allTabs.find((t) => t.id === pendingCloseTabId)?.name ?? ''}
+    paneCount={$allTabs.find((t) => t.id === pendingCloseTabId)?.panes.length ?? 0}
+    on:confirm={confirmCloseTab}
+    on:cancel={() => (pendingCloseTabId = '')}
+  />
   <IssueDialog visible={showIssueDialog} dir={$activeTab?.dir ?? ''} editIssue={editIssueData} on:saved={handleIssueSaved} on:close={() => { showIssueDialog = false; editIssueData = null; }} />
   <SkillPicker visible={showSkillPicker} dir={skillPickerDir} mode={skillPickerMode} on:done={handleSkillPickerDone} on:skip={handleSkillPickerSkip} on:close={() => { showSkillPicker = false; skillPickerDir = ''; }} />
   <BranchConflictDialog
