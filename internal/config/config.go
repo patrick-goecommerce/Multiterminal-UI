@@ -38,6 +38,11 @@ type Config struct {
 	AutoBranchOnIssue     *bool          `yaml:"auto_branch_on_issue" json:"auto_branch_on_issue"`
 	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
+	// FinishPrepPrompt overrides the built-in worktree-finish prep prompt
+	// (see app_worktree_finish.go prepPromptTemplate) when non-empty. Supports
+	// the same {{branch}}/{{targetBranch}}/{{worktreePath}} placeholders.
+	FinishPrepPrompt      string         `yaml:"finish_prep_prompt" json:"finish_prep_prompt"`
+	QuickActions          []QuickAction  `yaml:"quick_actions" json:"quick_actions"`
 	Audio                 AudioSettings  `yaml:"audio" json:"audio"`
 	KeepAlive             KeepAliveSettings `yaml:"keep_alive" json:"keep_alive"`
 	StatusLine            StatusLineSettings `yaml:"status_line" json:"status_line"`
@@ -82,6 +87,14 @@ type ModelEntry struct {
 type CommandEntry struct {
 	Name string `yaml:"name" json:"name"`
 	Text string `yaml:"text" json:"text"`
+}
+
+// QuickAction represents a user-defined pane-titlebar button that sends a
+// (placeholder-templated) prompt into the pane's prompt queue. Placeholders
+// {{branch}}, {{targetBranch}}, {{worktreePath}} are substituted at send time.
+type QuickAction struct {
+	Label  string `yaml:"label" json:"label"`
+	Prompt string `yaml:"prompt" json:"prompt"`
 }
 
 // AudioSettings holds audio feedback configuration.
