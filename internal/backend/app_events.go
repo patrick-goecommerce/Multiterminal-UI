@@ -61,3 +61,12 @@ type WorktreeDetectedEvent struct {
 type WorktreeClearedEvent struct {
 	ID int `json:"id"`
 }
+
+// WorktreePathBlockedEvent is emitted when mtui-hook's PreToolUse path
+// firewall blocked a write attempt targeting the main repo while a different
+// worktree was active for the session (spec 2026-07-09).
+type WorktreePathBlockedEvent struct {
+	ID     int    `json:"id"`
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+}
