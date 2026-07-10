@@ -136,3 +136,69 @@ func TestResolveWorktreeContext_EnvVarTakesPriorityOverSidecar(t *testing.T) {
 		t.Fatalf("env var should win, got wt=%q root=%q", wt, root)
 	}
 }
+
+func TestCheckPathFirewall(t *testing.T) {
+	hooksDir := t.TempDir()
+	writeWorktreeSidecar(hooksDir, "sess1", `D:\repo\.claude\worktrees\a`, `D:\repo`)
+
+	// blocked: path in main repo, outside the worktree
+	blocked, path, reason := checkPathFirewall(claudeEvent{
+		SessionID: "sess1", ToolName: "Edit",
+		ToolInput: []byte(`{"file_path":"D:\\repo\\internal\\backend\\app.go"}`),
+	}, hooksDir)
+	if !blocked || reason == "" || path != `D:\repo\internal\backend\app.go` {
+		t.Fatalf("expected block, got blocked=%v path=%q reason=%q", blocked, path, reason)
+	}
+
+	// allowed: path inside the active worktree
+	blocked, _, _ = checkPathFirewall(claudeEvent{
+		SessionID: "sess1", ToolName: "Edit",
+		ToolInput: []byte(`{"file_path":"D:\\repo\\.claude\\worktrees\\a\\internal\\backend\\app.go"}`),
+	}, hooksDir)
+	if blocked {
+		t.Fatal("expected no block for path inside the active worktree")
+	}
+
+	// allowed: path outside both (e.g. scratchpad)
+	blocked, _, _ = checkPathFirewall(claudeEvent{
+		SessionID: "sess1", ToolName: "Edit",
+		ToolInput: []byte(`{"file_path":"C:\\Temp\\scratch\\notes.md"}`),
+	}, hooksDir)
+	if blocked {
+		t.Fatal("expected no block for a path outside both repo and worktree")
+	}
+
+	// allowed: Read is never checked
+	blocked, _, _ = checkPathFirewall(claudeEvent{
+		SessionID: "sess1", ToolName: "Read",
+		ToolInput: []byte(`{"file_path":"D:\\repo\\internal\\backend\\app.go"}`),
+	}, hooksDir)
+	if blocked {
+		t.Fatal("expected Read to never be blocked")
+	}
+
+	// NotebookEdit uses notebook_path, not file_path
+	blocked, _, _ = checkPathFirewall(claudeEvent{
+		SessionID: "sess1", ToolName: "NotebookEdit",
+		ToolInput: []byte(`{"notebook_path":"D:\\repo\\.claude\\worktrees\\a\\nb.ipynb"}`),
+	}, hooksDir)
+	if blocked {
+		t.Fatal("expected NotebookEdit inside worktree to be allowed")
+	}
+	blocked, _, _ = checkPathFirewall(claudeEvent{
+		SessionID: "sess1", ToolName: "NotebookEdit",
+		ToolInput: []byte(`{"notebook_path":"D:\\repo\\nb.ipynb"}`),
+	}, hooksDir)
+	if !blocked {
+		t.Fatal("expected NotebookEdit in main repo to be blocked")
+	}
+
+	// allowed: no context active for this session
+	blocked, _, _ = checkPathFirewall(claudeEvent{
+		SessionID: "sess-none", ToolName: "Edit",
+		ToolInput: []byte(`{"file_path":"D:\\repo\\internal\\backend\\app.go"}`),
+	}, hooksDir)
+	if blocked {
+		t.Fatal("expected no block when no worktree context is active")
+	}
+}

@@ -97,3 +97,45 @@ func gitMainRepoRoot(dir string) (string, error) {
 	}
 	return "", errors.New("no worktree entries found")
 }
+
+// toolInputPath holds the path fields present in Edit/Write/NotebookEdit
+// tool_input payloads. Edit and Write use file_path; NotebookEdit uses
+// notebook_path — not the same field name.
+type toolInputPath struct {
+	FilePath     string `json:"file_path"`
+	NotebookPath string `json:"notebook_path"`
+}
+
+var writeTools = map[string]bool{"Edit": true, "Write": true, "NotebookEdit": true}
+
+// checkPathFirewall inspects a PreToolUse event for Edit/Write/NotebookEdit
+// and reports whether it should be blocked, plus the path it classified.
+// hooksDir/ev.SessionID resolve the sidecar file if no env var is set.
+func checkPathFirewall(ev claudeEvent, hooksDir string) (blocked bool, path string, reason string) {
+	if !writeTools[ev.ToolName] || len(ev.ToolInput) == 0 {
+		return false, "", ""
+	}
+	var input toolInputPath
+	if json.Unmarshal(ev.ToolInput, &input) != nil {
+		return false, "", ""
+	}
+	path = input.FilePath
+	if path == "" {
+		path = input.NotebookPath
+	}
+	if path == "" {
+		return false, "", ""
+	}
+
+	worktreePath, mainRoot := resolveWorktreeContext(hooksDir, ev.SessionID)
+	if worktreePath == "" || mainRoot == "" {
+		return false, path, ""
+	}
+	if isUnderDir(path, worktreePath) {
+		return false, path, ""
+	}
+	if isUnderDir(path, mainRoot) {
+		return true, path, "Pfad liegt im Hauptrepo (" + mainRoot + "), nicht im aktiven Worktree (" + worktreePath + "). Bitte den Pfad korrigieren."
+	}
+	return false, path, ""
+}

@@ -10,7 +10,10 @@
 // is GUI-subsystem and no console is ever allocated.
 //
 // The event type is passed as the first CLI argument. All failures are silent —
-// a hook must never block or break Claude Code.
+// a hook must never crash Claude Code. The one exception is the PreToolUse path
+// firewall (see firewall.go): it may print a structured deny decision to stdout
+// (exit code 0 + JSON, the documented Claude Code hook protocol) — this is not a
+// crash/break, just the officially supported way to answer a permission check.
 package main
 
 import (
@@ -28,6 +31,7 @@ type claudeEvent struct {
 	Message      string          `json:"message"`
 	Prompt       string          `json:"prompt"`
 	Cwd          string          `json:"cwd"`
+	ToolInput    json.RawMessage `json:"tool_input"`
 	ToolResponse json.RawMessage `json:"tool_response"`
 }
 
@@ -47,6 +51,20 @@ type hookLine struct {
 	Cwd            string `json:"cwd,omitempty"`
 	WorktreePath   string `json:"worktree_path,omitempty"`
 	WorktreeBranch string `json:"worktree_branch,omitempty"`
+	BlockedPath    string `json:"blocked_path,omitempty"`
+	BlockReason    string `json:"block_reason,omitempty"`
+}
+
+// hookSpecificOutput / preToolUseOutput implement Claude Code's documented
+// PreToolUse block protocol: exit code 0 + this JSON on stdout.
+type hookSpecificOutput struct {
+	HookEventName            string `json:"hookEventName"`
+	PermissionDecision       string `json:"permissionDecision"`
+	PermissionDecisionReason string `json:"permissionDecisionReason"`
+}
+
+type preToolUseOutput struct {
+	HookSpecificOutput hookSpecificOutput `json:"hookSpecificOutput"`
 }
 
 func main() {
@@ -63,11 +81,9 @@ func run() {
 	data, _ := io.ReadAll(os.Stdin)
 	var ev claudeEvent
 	_ = json.Unmarshal(data, &ev)
+	ev.SessionID = firstNonEmpty(ev.SessionID, "unknown")
 
 	sessionID := ev.SessionID
-	if sessionID == "" {
-		sessionID = "unknown"
-	}
 	mtID := 0
 	if v, err := strconv.Atoi(os.Getenv("MULTITERMINAL_SESSION_ID")); err == nil {
 		mtID = v
@@ -78,12 +94,40 @@ func run() {
 		message = ev.Prompt
 	}
 
+	hooksDir := filepath.Join(os.Getenv("APPDATA"), "Multiterminal", "hooks")
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		return
+	}
+
 	var worktreePath, worktreeBranch string
-	if ev.ToolName == "EnterWorktree" && len(ev.ToolResponse) > 0 {
+	if eventType == "PostToolUse" && ev.ToolName == "EnterWorktree" && len(ev.ToolResponse) > 0 {
 		var wt enterWorktreeResponse
 		if json.Unmarshal(ev.ToolResponse, &wt) == nil {
 			worktreePath = wt.WorktreePath
 			worktreeBranch = wt.WorktreeBranch
+			if worktreePath != "" {
+				if root, err := gitMainRepoRoot(worktreePath); err == nil {
+					writeWorktreeSidecar(hooksDir, sessionID, worktreePath, root)
+				}
+			}
+		}
+	}
+	if eventType == "PostToolUse" && ev.ToolName == "ExitWorktree" {
+		removeWorktreeSidecar(hooksDir, sessionID)
+	}
+	// A session that crashes/closes after EnterWorktree without ever calling
+	// ExitWorktree would otherwise leave the sidecar orphaned forever. SessionEnd
+	// already fires for every session (app_hooks.go cleans up the .jsonl file on
+	// it) — remove the sidecar there too as a symmetric backstop.
+	if eventType == "SessionEnd" {
+		removeWorktreeSidecar(hooksDir, sessionID)
+	}
+
+	var blockedPath, blockReason string
+	if eventType == "PreToolUse" {
+		if blocked, path, reason := checkPathFirewall(ev, hooksDir); blocked {
+			blockedPath = path
+			blockReason = reason
 		}
 	}
 
@@ -97,21 +141,33 @@ func run() {
 		Cwd:            ev.Cwd,
 		WorktreePath:   worktreePath,
 		WorktreeBranch: worktreeBranch,
+		BlockedPath:    blockedPath,
+		BlockReason:    blockReason,
 	})
-	if err != nil {
-		return
+	if err == nil {
+		if f, ferr := os.OpenFile(
+			filepath.Join(hooksDir, sessionID+".jsonl"),
+			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); ferr == nil {
+			_, _ = f.Write(append(line, '\n'))
+			f.Close()
+		}
 	}
 
-	hooksDir := filepath.Join(os.Getenv("APPDATA"), "Multiterminal", "hooks")
-	if err := os.MkdirAll(hooksDir, 0755); err != nil {
-		return
+	if blockReason != "" {
+		out, err := json.Marshal(preToolUseOutput{HookSpecificOutput: hookSpecificOutput{
+			HookEventName:            "PreToolUse",
+			PermissionDecision:       "deny",
+			PermissionDecisionReason: blockReason,
+		}})
+		if err == nil {
+			os.Stdout.Write(out)
+		}
 	}
-	f, err := os.OpenFile(
-		filepath.Join(hooksDir, sessionID+".jsonl"),
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
 	}
-	defer f.Close()
-	_, _ = f.Write(append(line, '\n'))
+	return b
 }
