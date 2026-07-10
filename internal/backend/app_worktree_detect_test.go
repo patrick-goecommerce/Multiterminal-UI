@@ -87,3 +87,22 @@ func TestOnWorktreeChange_NoOpWhenCwdStaysInsideKnownWorktree(t *testing.T) {
 		t.Errorf("events = %d, want 1 (no re-emit while still inside the same worktree)", events)
 	}
 }
+
+func TestOnWorktreePathBlocked_EmitsEvent(t *testing.T) {
+	a := newDetectTestApp()
+	var emitted *WorktreePathBlockedEvent
+	a.emitWorktreeEvent = func(name string, payload any) {
+		if ev, ok := payload.(WorktreePathBlockedEvent); ok {
+			emitted = &ev
+		}
+	}
+
+	a.onWorktreePathBlocked(1, `D:\repo\internal\backend\app.go`, "Pfad liegt im Hauptrepo...")
+
+	if emitted == nil {
+		t.Fatal("expected WorktreePathBlockedEvent to be emitted")
+	}
+	if emitted.ID != 1 || emitted.Path != `D:\repo\internal\backend\app.go` || emitted.Reason != "Pfad liegt im Hauptrepo..." {
+		t.Errorf("unexpected event: %+v", emitted)
+	}
+}

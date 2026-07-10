@@ -85,3 +85,11 @@ func (a *AppService) handleWorktreeCwdUpdate(mtID int, cwd string) {
 	log.Printf("[worktree-detect] session %d left %s", mtID, st.Path)
 	a.emitWorktreeEventSafe("worktree:cleared", WorktreeClearedEvent{ID: mtID})
 }
+
+// onWorktreePathBlocked is the HookManager callback for a blocked write
+// attempt (spec 2026-07-09). Purely informational — no state change, MTUI
+// does not intervene beyond surfacing it to the user.
+func (a *AppService) onWorktreePathBlocked(mtID int, path, reason string) {
+	log.Printf("[worktree-detect] session %d blocked write to %s: %s", mtID, path, reason)
+	a.emitWorktreeEventSafe("worktree:path-blocked", WorktreePathBlockedEvent{ID: mtID, Path: path, Reason: reason})
+}

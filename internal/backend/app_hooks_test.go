@@ -254,3 +254,42 @@ func TestHandleEvent_CallsOnWorktreeChangeWithEmptyPathForOrdinaryEvents(t *test
 		t.Errorf("worktreePath = %q, want empty for non-EnterWorktree event", gotPath)
 	}
 }
+
+func TestHandleEvent_CallsOnPathBlocked(t *testing.T) {
+	sess := terminal.NewSession(1, 24, 80)
+	hm := newHookManager("", func(mtID int) *terminal.Session { return sess }, nil)
+
+	var gotPath, gotReason string
+	var calls int
+	hm.onPathBlocked = func(mtID int, path, reason string) {
+		calls++
+		gotPath, gotReason = path, reason
+	}
+
+	hm.handleEvent(rawHookEvent{
+		Event: "PreToolUse", MtID: 1, SessionID: "s1", Tool: "Edit",
+		BlockedPath: `D:\repo\internal\backend\app.go`,
+		BlockReason: "Pfad liegt im Hauptrepo...",
+	})
+
+	if calls != 1 {
+		t.Fatalf("onPathBlocked called %d times, want 1", calls)
+	}
+	if gotPath != `D:\repo\internal\backend\app.go` || gotReason != "Pfad liegt im Hauptrepo..." {
+		t.Errorf("got path=%q reason=%q", gotPath, gotReason)
+	}
+}
+
+func TestHandleEvent_DoesNotCallOnPathBlockedWhenEmpty(t *testing.T) {
+	sess := terminal.NewSession(1, 24, 80)
+	hm := newHookManager("", func(mtID int) *terminal.Session { return sess }, nil)
+
+	calls := 0
+	hm.onPathBlocked = func(int, string, string) { calls++ }
+
+	hm.handleEvent(rawHookEvent{Event: "PreToolUse", MtID: 1, SessionID: "s1", Tool: "Edit"})
+
+	if calls != 0 {
+		t.Errorf("onPathBlocked should not fire without a BlockedPath, called %d times", calls)
+	}
+}

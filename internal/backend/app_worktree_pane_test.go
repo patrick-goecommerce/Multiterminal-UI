@@ -186,3 +186,50 @@ func TestCreateIssueWorktree_DetachedHeadRejected(t *testing.T) {
 		t.Error("expected error on detached HEAD")
 	}
 }
+
+func TestWorktreeEnvVars_MainRepoReturnsNil(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	if got := worktreeEnvVars(repo); got != nil {
+		t.Errorf("expected nil for main repo dir, got %v", got)
+	}
+}
+
+func TestWorktreeEnvVars_LinkedWorktreeReturnsEnvPairs(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	wt := filepath.Join(repo, ".claude", "worktrees", "feature-a")
+	os.MkdirAll(filepath.Dir(wt), 0755)
+	gitRun(t, repo, "worktree", "add", "-b", "feature-a", wt)
+
+	got := worktreeEnvVars(wt)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 env vars, got %v", got)
+	}
+	if got[0] != "MULTITERMINAL_WORKTREE_PATH="+wt {
+		t.Errorf("got %q", got[0])
+	}
+	// mainRepoRoot's own tests (TestMainRepoRoot_FromMainRepo) compare with
+	// strings.EqualFold, not exact equality, to tolerate git's own path
+	// casing/symlink-resolution quirks on Windows — match that convention here.
+	const rootPrefix = "MULTITERMINAL_MAIN_REPO_ROOT="
+	if !strings.HasPrefix(got[1], rootPrefix) || !strings.EqualFold(strings.TrimPrefix(got[1], rootPrefix), repo) {
+		t.Errorf("got %q, want root %q (case/symlink-insensitive)", got[1], repo)
+	}
+}
+
+func TestWorktreeEnvVars_MainRepoSubdirectoryReturnsNil(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	sub := filepath.Join(repo, "internal", "backend")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if got := worktreeEnvVars(sub); got != nil {
+		t.Errorf("expected nil for a subdirectory of the main repo, got %v", got)
+	}
+}
+
+func TestWorktreeEnvVars_NonGitDirReturnsNil(t *testing.T) {
+	dir := t.TempDir()
+	if got := worktreeEnvVars(dir); got != nil {
+		t.Errorf("expected nil for non-git dir, got %v", got)
+	}
+}

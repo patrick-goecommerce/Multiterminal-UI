@@ -25,6 +25,8 @@ type rawHookEvent struct {
 	Cwd            string `json:"cwd"`
 	WorktreePath   string `json:"worktree_path"`
 	WorktreeBranch string `json:"worktree_branch"`
+	BlockedPath    string `json:"blocked_path"`
+	BlockReason    string `json:"block_reason"`
 }
 
 // hookEventToActivity maps a Claude Code event name to an ActivityState.
@@ -64,6 +66,10 @@ type HookManager struct {
 	// caller uses cwd to notice when a session has left a previously known
 	// worktree, spec 2026-07-03 section 4).
 	onWorktreeChange func(mtID int, worktreePath, worktreeBranch, cwd string)
+	// onPathBlocked, if set, is called when mtui-hook's PreToolUse path
+	// firewall blocked a write attempt outside the active worktree
+	// (spec 2026-07-09-worktree-path-firewall-design.md).
+	onPathBlocked func(mtID int, path, reason string)
 
 	mu      sync.Mutex
 	offsets map[string]int64 // filename → bytes already read
@@ -223,6 +229,10 @@ func (hm *HookManager) handleEvent(ev rawHookEvent) {
 
 	if hm.onWorktreeChange != nil {
 		hm.onWorktreeChange(ev.MtID, ev.WorktreePath, ev.WorktreeBranch, ev.Cwd)
+	}
+
+	if ev.BlockedPath != "" && hm.onPathBlocked != nil {
+		hm.onPathBlocked(ev.MtID, ev.BlockedPath, ev.BlockReason)
 	}
 
 	newState := hookEventToActivity(ev.Event, ev.Message)
