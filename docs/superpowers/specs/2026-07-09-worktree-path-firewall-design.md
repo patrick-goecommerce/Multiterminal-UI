@@ -55,9 +55,13 @@ Beide Quellen laufen in **derselben** Prüf-Logik zusammen: Env-Var hat Vorrang 
    - Pfad liegt unter `worktreePath` → erlaubt.
    - Pfad liegt unter `mainRepoRoot`, aber NICHT unter `worktreePath` → **blockieren**.
    - Pfad liegt unter keinem von beiden (z. B. Scratchpad-Verzeichnis, ein anderes Projekt) → erlaubt (das ist nicht der gefährliche Fall, den dieses Design abdeckt).
-5. Blockieren = Exit-Code 2 + Meldungstext auf stderr (Claude-Code-PreToolUse-Blockier-Protokoll): `"Pfad liegt im Hauptrepo (<mainRepoRoot>), nicht im aktiven Worktree (<worktreePath>). Bitte den Pfad korrigieren."` Claude bekommt diesen Text als Kontext und kann den Tool-Call mit korrigiertem Pfad wiederholen.
+5. Blockieren = **Exit-Code 0 + JSON auf stdout** (verifiziert über den `claude-code-guide`-Agenten gegen die aktuelle Hooks-Referenz — nicht Exit-Code 2/stderr, wie in einer früheren Fassung dieser Spec angenommen):
+   ```json
+   {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Pfad liegt im Hauptrepo (<mainRepoRoot>), nicht im aktiven Worktree (<worktreePath>). Bitte den Pfad korrigieren."}}
+   ```
+   Claude bekommt `permissionDecisionReason` als Kontext und kann den Tool-Call mit korrigiertem Pfad wiederholen. Wird nichts auf stdout geschrieben (der Normalfall, kein Block), gilt das als Erlauben — unverändert zum bisherigen Verhalten.
 
-**Bewusste Abweichung von der bisherigen Hook-Philosophie:** Der Kommentar in `main.go:12-13` sagt heute „a hook must never block or break Claude Code". Dieses Design durchbricht das gezielt und ausschließlich für den einen Fall aus Abschnitt 2 (Schreibversuch im Hauptrepo bei aktivem Worktree) — alle anderen Events/Tools bleiben rein beobachtend wie bisher. Der Kommentar wird bei der Umsetzung entsprechend präzisiert, nicht ersatzlos entfernt.
+**Keine Abweichung von der bisherigen Hook-Philosophie nötig:** Der Kommentar in `main.go:12-13` („a hook must never block or break Claude Code") bleibt technisch korrekt — der Prozess selbst crasht/blockiert nie, er gibt nur strukturiert eine Entscheidung zurück, die Teil des offiziell unterstützten Hook-Protokolls ist. Keine Exit-Code-Änderung an `run()`/`main()` nötig.
 
 ### 4.3 Sichtbarkeit in der UI
 
