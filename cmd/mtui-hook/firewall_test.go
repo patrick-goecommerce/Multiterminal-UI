@@ -125,15 +125,26 @@ func TestResolveWorktreeContext_CorruptSidecarFailsOpen(t *testing.T) {
 	}
 }
 
-func TestResolveWorktreeContext_EnvVarTakesPriorityOverSidecar(t *testing.T) {
+func TestResolveWorktreeContext_SidecarTakesPriorityOverEnvVar(t *testing.T) {
 	hooksDir := t.TempDir()
-	writeWorktreeSidecar(hooksDir, "sess1", `D:\stale\worktree`, `D:\stale`)
-	t.Setenv("MULTITERMINAL_WORKTREE_PATH", `D:\fresh\worktree`)
-	t.Setenv("MULTITERMINAL_MAIN_REPO_ROOT", `D:\fresh`)
+	writeWorktreeSidecar(hooksDir, "sess1", `D:\repo\.claude\worktrees\b`, `D:\repo`)
+	t.Setenv("MULTITERMINAL_WORKTREE_PATH", `D:\repo\.claude\worktrees\a`)
+	t.Setenv("MULTITERMINAL_MAIN_REPO_ROOT", `D:\repo`)
 
 	wt, root := resolveWorktreeContext(hooksDir, "sess1")
-	if wt != `D:\fresh\worktree` || root != `D:\fresh` {
-		t.Fatalf("env var should win, got wt=%q root=%q", wt, root)
+	if wt != `D:\repo\.claude\worktrees\b` || root != `D:\repo` {
+		t.Fatalf("sidecar should win over the launch-time env var, got wt=%q root=%q", wt, root)
+	}
+}
+
+func TestResolveWorktreeContext_EnvVarIsFallbackWhenNoSidecar(t *testing.T) {
+	hooksDir := t.TempDir()
+	t.Setenv("MULTITERMINAL_WORKTREE_PATH", `D:\repo\.claude\worktrees\a`)
+	t.Setenv("MULTITERMINAL_MAIN_REPO_ROOT", `D:\repo`)
+
+	wt, root := resolveWorktreeContext(hooksDir, "sess-no-sidecar")
+	if wt != `D:\repo\.claude\worktrees\a` || root != `D:\repo` {
+		t.Fatalf("env var should be used when no sidecar exists, got wt=%q root=%q", wt, root)
 	}
 }
 

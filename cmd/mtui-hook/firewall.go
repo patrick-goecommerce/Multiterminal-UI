@@ -39,24 +39,28 @@ func removeWorktreeSidecar(hooksDir, sessionID string) {
 }
 
 // resolveWorktreeContext returns the expected worktree path and main-repo
-// root for a session, or two empty strings if no restriction is active. The
-// env vars (set once at pane launch for MTUI-created worktree panes) take
-// priority over the sidecar file (written by a mid-session EnterWorktree
-// call) since they require no disk I/O. Any failure (missing/corrupt
-// sidecar) is treated as "no context active" — fail open.
+// root for a session, or two empty strings if no restriction is active.
+// The sidecar file (written by a mid-session EnterWorktree call) takes
+// priority over the env vars (set once at pane launch for MTUI-created
+// worktree panes): the sidecar reflects an explicit, in-session worktree
+// change and is the fresher signal — without this priority, a pane already
+// isolated in worktree A that then calls EnterWorktree again to enter a
+// sibling worktree B would still be pinned to A by the launch-time env var,
+// wrongly blocking legitimate edits inside B (a real false positive found in
+// final review, spec 2026-07-09-worktree-path-firewall-design.md §4.1). Any
+// failure (missing/corrupt sidecar) falls through to the env var, then to
+// "no context active" — fail open throughout.
 func resolveWorktreeContext(hooksDir, sessionID string) (worktreePath, mainRepoRoot string) {
+	if data, err := os.ReadFile(sidecarPath(hooksDir, sessionID)); err == nil {
+		var sc worktreeSidecar
+		if json.Unmarshal(data, &sc) == nil && sc.WorktreePath != "" {
+			return sc.WorktreePath, sc.MainRepoRoot
+		}
+	}
 	if wt := os.Getenv("MULTITERMINAL_WORKTREE_PATH"); wt != "" {
 		return wt, os.Getenv("MULTITERMINAL_MAIN_REPO_ROOT")
 	}
-	data, err := os.ReadFile(sidecarPath(hooksDir, sessionID))
-	if err != nil {
-		return "", ""
-	}
-	var sc worktreeSidecar
-	if json.Unmarshal(data, &sc) != nil {
-		return "", ""
-	}
-	return sc.WorktreePath, sc.MainRepoRoot
+	return "", ""
 }
 
 // isUnderDir reports whether path is dir itself or nested inside it,

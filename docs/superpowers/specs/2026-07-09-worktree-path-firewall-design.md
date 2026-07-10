@@ -42,7 +42,7 @@ MULTITERMINAL_MAIN_REPO_ROOT=<hauptrepo-root>
 ```
 Bei `PostToolUse:ExitWorktree` (heute schon als Fall „`worktree:cleared`" erkannt) wird die Sidecar-Datei gelöscht — die Beschränkung endet damit für die Session.
 
-Beide Quellen laufen in **derselben** Prüf-Logik zusammen: Env-Var hat Vorrang (liegt bereits vor, kein Datei-Zugriff nötig); ist sie leer, wird die Sidecar-Datei gelesen (falls vorhanden). **Fail-open:** Fehlt die Sidecar-Datei, ist sie nicht lesbar oder nicht parsbar, gilt das wie „kein Kontext aktiv" — keine Prüfung, Tool läuft normal weiter. Konsistent mit der bestehenden Hook-Philosophie (`main.go:12-13`: „All failures are silent").
+Beide Quellen laufen in **derselben** Prüf-Logik zusammen: Die Sidecar-Datei hat Vorrang (falls vorhanden und lesbar) — sie spiegelt eine explizite, mid-session ausgelöste `EnterWorktree`-Änderung wider und ist damit das frischere Signal; ist sie nicht vorhanden/lesbar/parsbar, wird die Env-Var als Fallback verwendet. **Korrektur (2026-07-10, finales Review):** Eine frühere Fassung sah die Env-Var als vorrangig vor — das erzeugte einen False-Positive-Block, wenn eine bereits in Worktree A isolierte Pane per verschachteltem `EnterWorktree` in einen Geschwister-Worktree B wechselte (die Env-Var zeigte weiter auf A, obwohl die Sidecar korrekt B meldete). **Fail-open:** Fehlt die Sidecar-Datei, ist sie nicht lesbar oder nicht parsbar, und ist auch keine Env-Var gesetzt, gilt das wie „kein Kontext aktiv" — keine Prüfung, Tool läuft normal weiter. Konsistent mit der bestehenden Hook-Philosophie (`main.go:12-13`: „All failures are silent").
 
 ### 4.2 Die eigentliche Prüfung (`PreToolUse`)
 
@@ -75,20 +75,24 @@ Jeder Block wird zusätzlich als normale `hookLine`-JSONL-Zeile geschrieben (neu
 - **Race Conditions:** Stirbt der `mtui-hook`-Prozess zwischen `EnterWorktree`-Erkennung und Sidecar-Schreiben (z. B. durch Prozess-Kill), bleibt die Beschränkung für die Session inaktiv, bis das nächste `EnterWorktree` sie neu auslöst. Best-Effort, kein hundertprozentiger Schutz — schließt aber exakt die Lücke aus Abschnitt 1.
 - **Kein Schutz vor manuellem `cd` im Terminal außerhalb von Claude-Code-Tool-Aufrufen** (z. B. ein Shell-Befehl, der direkt im Hauptrepo committet) — das ist weiterhin nur durch die bestehenden `worktreeDenyRules` (Bash-Ebene) abgedeckt, nicht Gegenstand dieses Designs.
 - **Kein Ersatz für Disziplin bei der Pfad-Konstruktion selbst** — die Firewall verhindert das *Ausführen* eines fehlgeleiteten Schreibzugriffs, nicht, dass ein Agent überhaupt einen falschen Pfad vorschlägt. Sie ist ein Sicherheitsnetz, keine Verhaltensänderung.
+- **Fehlende `session_id` im Hook-Payload:** Sollte Claude Codes Hook-Payload `session_id` jemals auslassen (in der Praxis nicht beobachtet — der Wert ist immer eine UUID), fällt `cmd/mtui-hook` auf den literalen String `"unknown"` als Sidecar-/JSONL-Schlüssel zurück (`firstNonEmpty(ev.SessionID, "unknown")`, `main.go`). Zwei solche Sessions würden sich dann denselben Worktree-Kontext teilen. Rein theoretisch, kein Code-Änderungsbedarf — hier nur der Vollständigkeit halber als bewusste Grenze festgehalten.
 
 ## 6. Betroffene Dateien
 
-- `cmd/mtui-hook/main.go` — Kernlogik (Pfad-Firewall, Sidecar-Lese/Schreiben).
-- `cmd/mtui-hook/main_test.go` — neue Testfälle (siehe Abschnitt 7).
+- `cmd/mtui-hook/main.go` — Hook-Entry-Point, Event-Parsing, `EnterWorktree`/`ExitWorktree`-Erkennung, ruft die Firewall-Prüfung auf.
+- `cmd/mtui-hook/firewall.go` — Kernlogik der Pfad-Firewall (Sidecar-Lese/Schreiben, `resolveWorktreeContext`, `isUnderDir`, `gitMainRepoRoot`, `checkPathFirewall`), ausgelagert aus `main.go` (Code-Rule: max. 300 Zeilen pro Go-Datei).
+- `cmd/mtui-hook/firewall_test.go` — Testfälle für die Firewall-Kernlogik (siehe Abschnitt 7).
+- `cmd/mtui-hook/main_test.go` — Testfälle für Event-Parsing, Sidecar-Lebenszyklus und die End-to-End-`run()`-Blockierung.
+- `cmd/mtui-hook/hide_windows.go` / `hide_other.go` — Plattform-Split für `hideConsole` (Windows-Console-Unterdrückung beim `git`-Subprozess-Spawn in `gitMainRepoRoot`; no-op auf anderen Plattformen).
 - `internal/backend/app_worktree_pane.go` / `app.go` — neue Env-Vars beim PTY-Start für MTUI-eigene Worktree-Panes.
 - `internal/backend/app_hooks.go` — neuer Event-Typ `worktree:path-blocked` im `HookManager`-Dispatch.
-- Frontend: neuer Toast-Listener (z. B. in `App.svelte`, analog zu bestehenden `worktree:*`-Listenern) — kein neuer Dialog, keine neue Komponente nötig, bestehendes Toast/Notification-System (`lib/notifications.ts`) wiederverwenden, falls vorhanden (bei Implementierungsplan verifizieren).
+- Frontend: neuer Listener (z. B. in `App.svelte`, analog zu bestehenden `worktree:*`-Listenern) — kein neuer Dialog, keine neue Komponente nötig; nutzt das bestehende native Desktop-Benachrichtigungssystem (`lib/notifications.ts` → `sendNotification()`/`App.SendNotification`), **nicht** ein Toast/Snackbar-System (siehe Korrektur in Abschnitt 4.3 — die Codebase hat keine Toast-Komponente).
 
 ## 7. Testing
 
-- **`cmd/mtui-hook` Unit-Tests** (reine Pfad-Klassifizierung, kein echter Claude-Prozess nötig): Pfad innerhalb Worktree → erlaubt; Pfad innerhalb mainRepoRoot außerhalb Worktree → blockiert (Exit-Code 2, stderr-Text vorhanden); Pfad außerhalb beider → erlaubt; kein aktiver Kontext (keine Env-Var, keine Sidecar-Datei) → erlaubt (Regressionstest: bestehende Panes ohne Worktree-Bezug dürfen sich nicht ändern); `Read`-Tool wird nie geprüft, auch nicht mit einem Hauptrepo-Pfad.
+- **`cmd/mtui-hook` Unit-Tests** (reine Pfad-Klassifizierung, kein echter Claude-Prozess nötig): Pfad innerhalb Worktree → erlaubt; Pfad innerhalb mainRepoRoot außerhalb Worktree → blockiert (stdout enthält `hookSpecificOutput.permissionDecision: deny`); Pfad außerhalb beider → erlaubt; kein aktiver Kontext (keine Env-Var, keine Sidecar-Datei) → erlaubt (Regressionstest: bestehende Panes ohne Worktree-Bezug dürfen sich nicht ändern); `Read`-Tool wird nie geprüft, auch nicht mit einem Hauptrepo-Pfad.
 - **Sidecar-Lebenszyklus:** `EnterWorktree` schreibt Sidecar-Datei mit korrektem Inhalt → `ExitWorktree` löscht sie wieder → nach dem Löschen ist wieder alles erlaubt.
-- **Env-Var-Vorrang:** Ist sowohl Env-Var als auch (veraltete) Sidecar-Datei vorhanden, gewinnt die Env-Var.
+- **Sidecar-Vorrang:** Ist sowohl die (aktuelle) Sidecar-Datei als auch die Env-Var vorhanden, gewinnt die Sidecar-Datei.
 - **`app_hooks_installer_test.go`:** bestehende Idempotenz-Tests müssen weiter grün bleiben (keine Änderung an der Hook-Registrierung selbst nötig, nur an der Payload-Verarbeitung).
 - **E2E (`needs-e2e-testing`):** mit echtem `claude`-Prozess in einer MTUI-Pane: (1) `EnterWorktree` aufrufen, dann bewusst versuchen, eine Datei im Hauptrepo-Pfad zu editieren → Block + Toast erscheint. (2) Im selben Zustand eine Datei im Worktree editieren → funktioniert normal. (3) Im selben Zustand eine Datei im Hauptrepo lesen (`Read`) → funktioniert normal, kein Block. (4) `ExitWorktree` aufrufen → anschließend ist Editieren im Hauptrepo wieder uneingeschränkt möglich.
 

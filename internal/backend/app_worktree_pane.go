@@ -50,13 +50,14 @@ func gitToplevel(dir string) (string, error) {
 // simply launches without the restriction, exactly like before this feature
 // existed (spec 2026-07-09).
 //
-// Accepted cost: this runs a synchronous `git worktree list` subprocess (via
-// mainRepoRoot) on every Claude-mode CreateSession call — including the
-// orchestrator/schedule-runner call sites, not only interactive pane launches
-// — adding roughly one git-subprocess-spawn's worth of latency (already the
-// same order of magnitude as other one-time git calls CreateSession's callers
-// make elsewhere). Not measured; revisit if session launch latency ever
-// becomes a complaint.
+// Accepted cost: this runs one or two synchronous git subprocesses (mainRepoRoot,
+// then gitToplevel in the common case — two calls; only one if dir isn't a git
+// repo at all and the first call fails fast) on every Claude-mode CreateSession
+// call — including the orchestrator/schedule-runner call sites, not only
+// interactive pane launches — adding roughly one or two git-subprocess-spawns'
+// worth of latency (already the same order of magnitude as other one-time git
+// calls CreateSession's callers make elsewhere). Not measured; revisit if
+// session launch latency ever becomes a complaint.
 func worktreeEnvVars(dir string) []string {
 	root, err := mainRepoRoot(dir)
 	if err != nil {
