@@ -87,4 +87,16 @@ describe('PaneTitlebar — quick actions', () => {
 
     expect(received).toEqual([{ sessionId: 42, prompt: 'rebase feat/x onto alpha-main' }]);
   });
+
+  it('renders duplicate quick actions without an each_key_duplicate crash', () => {
+    config.update((c) => ({
+      ...c,
+      quick_actions: [
+        { label: '⭐', prompt: '' },
+        { label: '⭐', prompt: '' },
+      ],
+    }));
+    const { container } = render(PaneTitlebar, { props: { pane: basePane() } });
+    expect(container.querySelectorAll('.quick-action-btn').length).toBe(2);
+  });
 });

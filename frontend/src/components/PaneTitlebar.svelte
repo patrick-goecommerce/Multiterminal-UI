@@ -192,7 +192,7 @@
       <span class="wt-badge wt-badge-main" title={`Repository: ${tabDir}\nBranch: ${fallbackBranch} (Hauptrepo, kein Worktree)`}>⎇ {fallbackBranch}</span>
     {/if}
     {#if CLAUDE_MODES.has(pane.mode)}
-      {#each $config.quick_actions as qa (qa.label + qa.prompt)}
+      {#each $config.quick_actions as qa, i (i)}
         <button
           class="pane-btn quick-action-btn"
           title={qa.prompt}
