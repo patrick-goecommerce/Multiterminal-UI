@@ -791,6 +791,20 @@ export namespace config {
 	        this.text = source["text"];
 	    }
 	}
+	export class QuickAction {
+	    label: string;
+	    prompt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new QuickAction(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.prompt = source["prompt"];
+	    }
+	}
 	export class IssueTracking {
 	    auto_comment_on_start: boolean;
 	    auto_comment_on_done: boolean;
@@ -855,6 +869,8 @@ export namespace config {
 	    use_worktrees?: boolean;
 	    issue_tracking: IssueTracking;
 	    commands: CommandEntry[];
+	    finish_prep_prompt: string;
+	    quick_actions: QuickAction[];
 	    audio: AudioSettings;
 	    localhost_auto_open: string;
 	    sidebar_pinned: boolean;
@@ -886,6 +902,8 @@ export namespace config {
 	        this.use_worktrees = source["use_worktrees"];
 	        this.issue_tracking = this.convertValues(source["issue_tracking"], IssueTracking);
 	        this.commands = this.convertValues(source["commands"], CommandEntry);
+	        this.finish_prep_prompt = source["finish_prep_prompt"];
+	        this.quick_actions = this.convertValues(source["quick_actions"], QuickAction);
 	        this.audio = this.convertValues(source["audio"], AudioSettings);
 	        this.localhost_auto_open = source["localhost_auto_open"];
 	        this.sidebar_pinned = source["sidebar_pinned"];

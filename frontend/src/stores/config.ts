@@ -10,6 +10,11 @@ export interface CommandEntry {
   text: string;
 }
 
+export interface QuickAction {
+  label: string;
+  prompt: string;
+}
+
 export interface AudioConfig {
   enabled?: boolean;
   volume: number;
@@ -73,6 +78,8 @@ export interface AppConfig {
   restore_session?: boolean;
   logging_enabled?: boolean;
   commands: CommandEntry[];
+  finish_prep_prompt: string;
+  quick_actions: QuickAction[];
   audio: AudioConfig;
   keep_alive: KeepAliveConfig;
   status_line: StatusLineConfig;
@@ -121,6 +128,8 @@ export const config = writable<AppConfig>({
   commands: [
     { name: 'Commit & Push', text: "git add -A && git commit -m 'update' && git push" },
   ],
+  finish_prep_prompt: '',
+  quick_actions: [],
   keep_alive: {
     enabled: true,
     interval_minutes: 300,
