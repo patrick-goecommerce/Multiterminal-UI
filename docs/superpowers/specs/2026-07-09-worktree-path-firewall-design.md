@@ -65,7 +65,9 @@ Beide Quellen laufen in **derselben** Prüf-Logik zusammen: Env-Var hat Vorrang 
 
 ### 4.3 Sichtbarkeit in der UI
 
-Jeder Block wird zusätzlich als normale `hookLine`-JSONL-Zeile geschrieben (neues Feld `"blocked_path"`), die der bestehende `HookManager` ohnehin schon pollt. Ein neuer Event-Typ `worktree:path-blocked` (Pane-spezifisch, wie die bestehenden `worktree:detected`/`worktree:cleared`) löst einen Toast im Frontend aus: „Claude hat versucht, außerhalb des Worktrees zu schreiben — blockiert." Rein informativ, kein weiterer Nutzer-Eingriff nötig.
+Jeder Block wird zusätzlich als normale `hookLine`-JSONL-Zeile geschrieben (neues Feld `"blocked_path"`), die der bestehende `HookManager` ohnehin schon pollt. Ein neuer Event-Typ `worktree:path-blocked` (Pane-spezifisch, wie die bestehenden `worktree:detected`/`worktree:cleared`) löst eine Benachrichtigung im Frontend aus. Rein informativ, kein weiterer Nutzer-Eingriff nötig.
+
+**Korrektur zum Implementierungsplan (2026-07-10):** Diese Sektion sprach ursprünglich von einem „Toast". Die Codebase hat aber **keine** Toast-/Snackbar-Komponente (verifiziert: keine Treffer für „toast"/„snackbar" in `frontend/src/components/`) — der einzige bestehende Mechanismus für nicht-blockierende Hinweise ist `sendNotification()` (`frontend/src/lib/notifications.ts`, native Desktop-Benachrichtigung über `App.SendNotification`, bereits genutzt für `app.agentDone`/`app.mergeConflicts`). Der Plan nutzt deshalb bewusst diesen bestehenden Mechanismus statt eine neue Toast-Komponente zu bauen (Scope-Disziplin, kein neuer UI-Baustein für einen einzelnen Anwendungsfall) — Text: „Schreibversuch blockiert" / „Claude wollte außerhalb des aktiven Worktrees schreiben ({path}) — blockiert."
 
 ## 5. Bewusste Grenzen
 

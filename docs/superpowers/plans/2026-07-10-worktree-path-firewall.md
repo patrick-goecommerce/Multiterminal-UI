@@ -153,6 +153,17 @@ func TestResolveWorktreeContext_NoSidecarNoEnv(t *testing.T) {
 	}
 }
 
+func TestResolveWorktreeContext_CorruptSidecarFailsOpen(t *testing.T) {
+	hooksDir := t.TempDir()
+	if err := os.WriteFile(sidecarPath(hooksDir, "sess-corrupt"), []byte("{not valid json"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	wt, root := resolveWorktreeContext(hooksDir, "sess-corrupt")
+	if wt != "" || root != "" {
+		t.Fatalf("expected fail-open (empty context) for corrupt sidecar JSON, got wt=%q root=%q", wt, root)
+	}
+}
+
 func TestResolveWorktreeContext_EnvVarTakesPriorityOverSidecar(t *testing.T) {
 	hooksDir := t.TempDir()
 	writeWorktreeSidecar(hooksDir, "sess1", `D:\stale\worktree`, `D:\stale`)
@@ -294,12 +305,20 @@ func isUnderDir(path, dir string) bool {
 func gitMainRepoRoot(dir string) (string, error) {
 	cmd := exec.Command("git", "--no-optional-locks", "-c", "core.fsmonitor=false", "worktree", "list", "--porcelain")
 	cmd.Dir = dir
+	// Same suppression env as internal/backend.gitCmd (duplicated, not imported —
+	// see Global Constraints): stops git from prompting or spawning helpers.
+	cmd.Env = append(os.Environ(),
+		"GIT_OPTIONAL_LOCKS=0",
+		"GIT_TERMINAL_PROMPT=0",
+		"GCM_INTERACTIVE=never",
+	)
 	hideConsole(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
 	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line) // porcelain lines can carry a trailing \r
 		if strings.HasPrefix(line, "worktree ") {
 			return filepath.FromSlash(strings.TrimPrefix(line, "worktree ")), nil
 		}
@@ -509,6 +528,32 @@ func TestRunRemovesSidecarOnExitWorktree(t *testing.T) {
 	}
 }
 
+func TestRunRemovesSidecarOnSessionEnd(t *testing.T) {
+	appData := t.TempDir()
+	hooksDir := filepath.Join(appData, "Multiterminal", "hooks")
+	os.MkdirAll(hooksDir, 0755)
+	writeWorktreeSidecar(hooksDir, "sess-crash", `D:\repo\.claude\worktrees\a`, `D:\repo`)
+
+	t.Setenv("APPDATA", appData)
+	t.Setenv("MULTITERMINAL_SESSION_ID", "1")
+	os.Args = []string{"mtui-hook", "SessionEnd"}
+
+	stdin := `{"session_id":"sess-crash"}`
+	r, w, _ := os.Pipe()
+	w.Write([]byte(stdin))
+	w.Close()
+	old := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = old }()
+
+	run()
+
+	wtGot, _ := resolveWorktreeContext(hooksDir, "sess-crash")
+	if wtGot != "" {
+		t.Errorf("expected sidecar removed on SessionEnd (crash/close backstop), still got worktreePath=%q", wtGot)
+	}
+}
+
 func TestRunBlocksPreToolUseEditOutsideWorktree(t *testing.T) {
 	appData := t.TempDir()
 	hooksDir := filepath.Join(appData, "Multiterminal", "hooks")
@@ -598,7 +643,7 @@ func TestRunAllowsPreToolUseEditInsideWorktree(t *testing.T) {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `go test ./cmd/mtui-hook/... -run 'TestCheckPathFirewall|TestRunWritesSidecarOnEnterWorktree|TestRunRemovesSidecarOnExitWorktree|TestRunBlocksPreToolUseEditOutsideWorktree|TestRunAllowsPreToolUseEditInsideWorktree' -v`
+Run: `go test ./cmd/mtui-hook/... -run 'TestCheckPathFirewall|TestRunWritesSidecarOnEnterWorktree|TestRunRemovesSidecarOnExitWorktree|TestRunRemovesSidecarOnSessionEnd|TestRunBlocksPreToolUseEditOutsideWorktree|TestRunAllowsPreToolUseEditInsideWorktree' -v`
 Expected: FAIL — `checkPathFirewall` undefined; existing `run()` doesn't write sidecars/blocking output yet.
 
 - [ ] **Step 3: Write the implementation**
@@ -769,6 +814,13 @@ func run() {
 	if eventType == "PostToolUse" && ev.ToolName == "ExitWorktree" {
 		removeWorktreeSidecar(hooksDir, sessionID)
 	}
+	// A session that crashes/closes after EnterWorktree without ever calling
+	// ExitWorktree would otherwise leave the sidecar orphaned forever. SessionEnd
+	// already fires for every session (app_hooks.go cleans up the .jsonl file on
+	// it) — remove the sidecar there too as a symmetric backstop.
+	if eventType == "SessionEnd" {
+		removeWorktreeSidecar(hooksDir, sessionID)
+	}
 
 	var blockedPath, blockReason string
 	if eventType == "PreToolUse" {
@@ -870,9 +922,12 @@ func TestWorktreeEnvVars_LinkedWorktreeReturnsEnvPairs(t *testing.T) {
 	if got[0] != "MULTITERMINAL_WORKTREE_PATH="+wt {
 		t.Errorf("got %q", got[0])
 	}
-	wantRoot, _ := filepath.EvalSymlinks(repo)
-	if got[1] != "MULTITERMINAL_MAIN_REPO_ROOT="+wantRoot {
-		t.Errorf("got %q, want root %q", got[1], wantRoot)
+	// mainRepoRoot's own tests (TestMainRepoRoot_FromMainRepo) compare with
+	// strings.EqualFold, not exact equality, to tolerate git's own path
+	// casing/symlink-resolution quirks on Windows — match that convention here.
+	const rootPrefix = "MULTITERMINAL_MAIN_REPO_ROOT="
+	if !strings.HasPrefix(got[1], rootPrefix) || !strings.EqualFold(strings.TrimPrefix(got[1], rootPrefix), repo) {
+		t.Errorf("got %q, want root %q (case/symlink-insensitive)", got[1], repo)
 	}
 }
 
@@ -899,6 +954,14 @@ In `internal/backend/app_worktree_pane.go`, add after the `mainRepoRoot` functio
 // checkout). Returns nil for the main checkout itself, non-git directories, or
 // any other lookup failure — CreateSession then simply launches without the
 // restriction, exactly like before this feature existed (spec 2026-07-09).
+//
+// Accepted cost: this runs a synchronous `git worktree list` subprocess (via
+// mainRepoRoot) on every Claude-mode CreateSession call — including the
+// orchestrator/schedule-runner call sites, not only interactive pane launches
+// — adding roughly one git-subprocess-spawn's worth of latency (already the
+// same order of magnitude as other one-time git calls CreateSession's callers
+// make elsewhere). Not measured; revisit if session launch latency ever
+// becomes a complaint.
 func worktreeEnvVars(dir string) []string {
 	root, err := mainRepoRoot(dir)
 	if err != nil {
