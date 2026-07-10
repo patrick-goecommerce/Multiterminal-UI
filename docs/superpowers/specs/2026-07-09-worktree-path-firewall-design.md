@@ -94,7 +94,7 @@ Jeder Block wird zusätzlich als normale `hookLine`-JSONL-Zeile geschrieben (neu
 - **Sidecar-Lebenszyklus:** `EnterWorktree` schreibt Sidecar-Datei mit korrektem Inhalt → `ExitWorktree` löscht sie wieder → nach dem Löschen ist wieder alles erlaubt.
 - **Sidecar-Vorrang:** Ist sowohl die (aktuelle) Sidecar-Datei als auch die Env-Var vorhanden, gewinnt die Sidecar-Datei.
 - **`app_hooks_installer_test.go`:** bestehende Idempotenz-Tests müssen weiter grün bleiben (keine Änderung an der Hook-Registrierung selbst nötig, nur an der Payload-Verarbeitung).
-- **E2E (`needs-e2e-testing`):** mit echtem `claude`-Prozess in einer MTUI-Pane: (1) `EnterWorktree` aufrufen, dann bewusst versuchen, eine Datei im Hauptrepo-Pfad zu editieren → Block + Toast erscheint. (2) Im selben Zustand eine Datei im Worktree editieren → funktioniert normal. (3) Im selben Zustand eine Datei im Hauptrepo lesen (`Read`) → funktioniert normal, kein Block. (4) `ExitWorktree` aufrufen → anschließend ist Editieren im Hauptrepo wieder uneingeschränkt möglich.
+- **E2E (`needs-e2e-testing`):** mit echtem `claude`-Prozess in einer MTUI-Pane: (1) `EnterWorktree` aufrufen, dann bewusst versuchen, eine Datei im Hauptrepo-Pfad zu editieren → Block + Desktop-Benachrichtigung erscheint. (2) Im selben Zustand eine Datei im Worktree editieren → funktioniert normal. (3) Im selben Zustand eine Datei im Hauptrepo lesen (`Read`) → funktioniert normal, kein Block. (4) `ExitWorktree` aufrufen → anschließend ist Editieren im Hauptrepo wieder uneingeschränkt möglich.
 
 ## 8. Nicht im Scope
 
