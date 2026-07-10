@@ -216,6 +216,17 @@ func TestWorktreeEnvVars_LinkedWorktreeReturnsEnvPairs(t *testing.T) {
 	}
 }
 
+func TestWorktreeEnvVars_MainRepoSubdirectoryReturnsNil(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	sub := filepath.Join(repo, "internal", "backend")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if got := worktreeEnvVars(sub); got != nil {
+		t.Errorf("expected nil for a subdirectory of the main repo, got %v", got)
+	}
+}
+
 func TestWorktreeEnvVars_NonGitDirReturnsNil(t *testing.T) {
 	dir := t.TempDir()
 	if got := worktreeEnvVars(dir); got != nil {

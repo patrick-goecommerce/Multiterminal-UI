@@ -27,11 +27,28 @@ func mainRepoRoot(dir string) (string, error) {
 	return filepath.FromSlash(entries[0].Path), nil
 }
 
+// gitToplevel returns the git top-level directory containing dir — the
+// containing worktree's own root, whether dir is that root itself, a
+// subdirectory of it, a linked worktree's root, or a subdirectory of a
+// linked worktree. Used to distinguish "dir is somewhere inside the main
+// checkout" from "dir is inside a genuinely different linked worktree",
+// which a raw dir-vs-mainRepoRoot(dir) string comparison cannot do (a
+// subdirectory of the main checkout is never equal to the main checkout's
+// own root, but is not a linked worktree either).
+func gitToplevel(dir string) (string, error) {
+	out, err := gitCmd(dir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", err
+	}
+	return filepath.FromSlash(strings.TrimSpace(string(out))), nil
+}
+
 // worktreeEnvVars returns the MULTITERMINAL_WORKTREE_PATH/MULTITERMINAL_MAIN_REPO_ROOT
 // env var pairs for a Claude pane whose dir is a linked worktree (not the main
-// checkout). Returns nil for the main checkout itself, non-git directories, or
-// any other lookup failure — CreateSession then simply launches without the
-// restriction, exactly like before this feature existed (spec 2026-07-09).
+// checkout). Returns nil for the main checkout itself (including subdirectories
+// of it), non-git directories, or any other lookup failure — CreateSession then
+// simply launches without the restriction, exactly like before this feature
+// existed (spec 2026-07-09).
 //
 // Accepted cost: this runs a synchronous `git worktree list` subprocess (via
 // mainRepoRoot) on every Claude-mode CreateSession call — including the
@@ -45,11 +62,15 @@ func worktreeEnvVars(dir string) []string {
 	if err != nil {
 		return nil
 	}
-	if strings.EqualFold(filepath.Clean(root), filepath.Clean(dir)) {
+	topLevel, err := gitToplevel(dir)
+	if err != nil {
+		return nil
+	}
+	if strings.EqualFold(filepath.Clean(topLevel), filepath.Clean(root)) {
 		return nil
 	}
 	return []string{
-		"MULTITERMINAL_WORKTREE_PATH=" + dir,
+		"MULTITERMINAL_WORKTREE_PATH=" + topLevel,
 		"MULTITERMINAL_MAIN_REPO_ROOT=" + root,
 	}
 }
