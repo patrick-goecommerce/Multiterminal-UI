@@ -25,7 +25,7 @@ function basePane(overrides: Partial<Pane> = {}): Pane {
     issueNumber: null,
     issueTitle: '',
     issueBranch: '',
-    worktreePath: '/repo/.worktrees/feat-x',
+    worktreePath: '',
     branch: 'feat/x',
     targetBranch: 'alpha-main',
     zoomDelta: 0,
