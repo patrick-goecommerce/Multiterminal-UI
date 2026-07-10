@@ -64,6 +64,9 @@
   let orchReviewCommand = $config.orchestrator?.review_command || '';
   let orchSyncSubtasks = $config.orchestrator?.sync_subtasks_to_github ?? false;
 
+  let finishPrepPrompt = $config.finish_prep_prompt || '';
+  let quickActions: { label: string; prompt: string }[] = [];
+
   // STT engine install status
   let sttStatus: { installed: boolean; bin_found: boolean; model_found: boolean; dir: string; bin_path: string; model_path: string } | null = null;
   let sttInstalling = false;
@@ -127,8 +130,19 @@
     orchMaxRetries = $config.orchestrator?.max_retries ?? 1;
     orchReviewCommand = $config.orchestrator?.review_command || '';
     orchSyncSubtasks = $config.orchestrator?.sync_subtasks_to_github ?? false;
+    finishPrepPrompt = $config.finish_prep_prompt || '';
+    quickActions = ($config.quick_actions || []).map((qa) => ({ ...qa }));
     App.GetLogPath().then(p => logPath = p).catch(() => {});
     detectClaude();
+  }
+
+  function addQuickAction() {
+    if (quickActions.length >= 5) return;
+    quickActions = [...quickActions, { label: '⭐', prompt: '' }];
+  }
+
+  function removeQuickAction(index: number) {
+    quickActions = quickActions.filter((_, i) => i !== index);
   }
 
   // Isolated reactive: re-runs when `visible` or `sttProvider` change. Writes
@@ -242,6 +256,8 @@
       chat_style: chatStyle,
       logging_enabled: loggingEnabled,
       use_worktrees: useWorktrees,
+      finish_prep_prompt: finishPrepPrompt,
+      quick_actions: quickActions,
       claude_command: claudeCommand,
       font_family: fontFamily,
       font_size: fontSize,
@@ -600,6 +616,37 @@
         {/if}
       </div>
 
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Quick Actions</label>
+        <p class="setting-desc">
+          Platzhalter: <code>{'{{branch}}'}</code>, <code>{'{{targetBranch}}'}</code>,
+          <code>{'{{worktreePath}}'}</code> (leer, wenn kein Worktree aktiv ist).
+        </p>
+
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label" style="margin-top: 12px;">Fertigstellen-Prompt (✓-Button)</label>
+        <textarea
+          class="finish-prompt-input"
+          rows="4"
+          placeholder="Leer lassen für das Standardverhalten (lokal mergen &amp; aufräumen)"
+          bind:value={finishPrepPrompt}
+        ></textarea>
+
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label" style="margin-top: 12px;">Eigene Quick-Actions ({quickActions.length}/5)</label>
+        {#each quickActions as qa, i (i)}
+          <div class="quick-action-row">
+            <input class="quick-action-label" maxlength="2" bind:value={qa.label} placeholder="🔁" />
+            <input class="quick-action-prompt" bind:value={qa.prompt} placeholder="Prompt-Text..." />
+            <button class="quick-action-remove" on:click={() => removeQuickAction(i)}>✕</button>
+          </div>
+        {/each}
+        <button class="add-quick-action" on:click={addQuickAction} disabled={quickActions.length >= 5}>
+          + Quick Action
+        </button>
+      </div>
+
       <div class="dialog-footer">
         <button class="btn-reset" on:click={resetDefault}>Standard</button>
         <div class="footer-right-btns">
@@ -775,4 +822,26 @@
   .stt-install-error {
     font-size: 11px; color: #f38ba8; margin-top: 8px; word-break: break-word;
   }
+
+  .finish-prompt-input {
+    width: 100%; box-sizing: border-box; font-family: inherit; font-size: 12px;
+    background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--fg); padding: 8px; resize: vertical;
+  }
+  .quick-action-row { display: flex; gap: 6px; margin: 4px 0; align-items: center; }
+  .quick-action-label { width: 40px; text-align: center; }
+  .quick-action-prompt { flex: 1; }
+  .quick-action-row input {
+    background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px;
+    color: var(--fg); padding: 5px 8px; font-size: 12px;
+  }
+  .quick-action-remove {
+    background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 13px;
+  }
+  .quick-action-remove:hover { color: var(--error); }
+  .add-quick-action {
+    margin-top: 6px; padding: 6px 12px; background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--fg); cursor: pointer; font-size: 12px;
+  }
+  .add-quick-action:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

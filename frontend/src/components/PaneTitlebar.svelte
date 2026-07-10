@@ -4,6 +4,9 @@
   import { paneDisplayName, type Pane } from '../stores/tabs';
   import * as App from '../../wailsjs/go/backend/App';
   import { fetchBranch } from '../lib/git-polling';
+  import { CLAUDE_MODES } from '../lib/claude';
+  import { renderQuickActionPrompt } from '../lib/quickActions';
+  import { config } from '../stores/config';
 
   export let pane: Pane;
   export let paneIndex: number = 0;
@@ -54,6 +57,11 @@
   function handleRenameKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') { e.preventDefault(); finishRename(); }
     if (e.key === 'Escape') { editing = false; }
+  }
+
+  function handleQuickAction(prompt: string) {
+    const rendered = renderQuickActionPrompt(prompt, pane.branch, pane.targetBranch, pane.worktreePath);
+    dispatch('quickAction', { sessionId: pane.sessionId, prompt: rendered });
   }
 
   function getModeLabel(mode: string): string {
@@ -182,6 +190,15 @@
       {/if}
     {:else if fallbackBranch}
       <span class="wt-badge wt-badge-main" title={`Repository: ${tabDir}\nBranch: ${fallbackBranch} (Hauptrepo, kein Worktree)`}>⎇ {fallbackBranch}</span>
+    {/if}
+    {#if CLAUDE_MODES.has(pane.mode)}
+      {#each $config.quick_actions as qa, i (i)}
+        <button
+          class="pane-btn quick-action-btn"
+          title={qa.prompt}
+          on:click|stopPropagation={() => handleQuickAction(qa.prompt)}
+        >{qa.label}</button>
+      {/each}
     {/if}
     {#if pane.issueNumber}
       <div class="issue-actions-wrap">
@@ -378,6 +395,7 @@
   .finish-btn { color: #4ade80; font-weight: 700; }
   .finish-btn.spinning { animation: wt-spin 1s linear infinite; }
   @keyframes wt-spin { to { transform: rotate(360deg); } }
+  .quick-action-btn { font-size: 12px; }
   .issue-actions-wrap { position: relative; }
   .issue-actions-btn { font-size: 16px !important; letter-spacing: 1px; }
   .issue-actions-menu {

@@ -22,7 +22,7 @@ export interface SessionOpts {
 }
 
 /** Modes backed by the claude CLI, which understands --session-id / --resume. */
-const CLAUDE_MODES = new Set<PaneMode>(['claude', 'claude-yolo', 'claude-auto']);
+export const CLAUDE_MODES = new Set<PaneMode>(['claude', 'claude-yolo', 'claude-auto']);
 
 /** Generate a fresh session id (UUID v4) for pinning a claude session. */
 export function genSessionId(): string {

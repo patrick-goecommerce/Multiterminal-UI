@@ -25,7 +25,7 @@ func (a *AppService) recoverFinishPanic(sessionId int, where string) {
 const prepPromptTemplate = "Committe alle offenen Änderungen in nachvollziehbaren Commits. " +
 	"Committe keine Secrets, .env-Dateien oder Build-Artefakte — ergänze für solche Dateien " +
 	".gitignore-Einträge oder lass sie untracked und erwähne sie. " +
-	"Rebase dann %s auf den lokalen %s. Bei Rebase-Konflikten: nicht selbst lösen, " +
+	"Rebase dann {{branch}} auf den lokalen {{targetBranch}}. Bei Rebase-Konflikten: nicht selbst lösen, " +
 	"`git rebase --abort` ausführen und die Konfliktdateien nennen. " +
 	"Merge nicht selbst, pushe nicht, erstelle keinen PR."
 
@@ -159,7 +159,7 @@ func (a *AppService) StartWorktreeFinish(sessionId int, worktreePath, branch, ta
 		return
 	}
 
-	prompt := fmt.Sprintf(prepPromptTemplate, branch, target)
+	prompt := a.renderFinishPrompt(branch, target, worktreePath)
 	item := a.AddToQueue(sessionId, prompt) // enqueue BEFORE state exists (queue lock, task 8)
 	a.mu.Lock()
 	a.finishStates[sessionId] = &finishState{
