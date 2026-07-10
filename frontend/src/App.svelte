@@ -320,6 +320,11 @@
       if (!ownsSession(p.id)) return;
       tabStore.clearWorktree(p.id);
     });
+    EventsOn('worktree:path-blocked', (event: any) => {
+      const p = event.data ?? event;
+      if (!ownsSession(p.id)) return;
+      sendNotification($t('app.worktreePathBlocked'), $t('app.worktreePathBlockedBody', { path: p.path }));
+    });
     // Worktree finish flow: confirm overlay + phase tracking + pane relaunch.
     // Runs ALONGSIDE the detection listeners above (spec 2026-07-03 rev 2 §11.1):
     // detected/cleared track "worktree active"; these track "finish in progress".

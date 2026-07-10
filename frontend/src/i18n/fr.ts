@@ -9,6 +9,8 @@ const fr = {
     notifyDoneBody: 'Claude a terminé. Prompt prêt.',
     notifyInput: '{name} - Entrée requise',
     notifyInputBody: 'Claude attend une confirmation.',
+    worktreePathBlocked: 'Tentative d\'écriture bloquée',
+    worktreePathBlockedBody: 'Claude a tenté d\'écrire en dehors du worktree actif ({path}) — bloqué.',
   },
   tabBar: {
     rename: 'Renommer l\'onglet :',

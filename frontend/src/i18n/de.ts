@@ -10,6 +10,8 @@ const de = {
     notifyDoneBody: 'Claude ist fertig. Prompt bereit.',
     notifyInput: '{name} - Eingabe nötig',
     notifyInputBody: 'Claude wartet auf Bestätigung.',
+    worktreePathBlocked: 'Schreibversuch blockiert',
+    worktreePathBlockedBody: 'Claude wollte außerhalb des aktiven Worktrees schreiben ({path}) — blockiert.',
   },
 
   // TabBar

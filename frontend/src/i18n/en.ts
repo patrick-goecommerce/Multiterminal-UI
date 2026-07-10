@@ -9,6 +9,8 @@ const en = {
     notifyDoneBody: 'Claude is done. Prompt ready.',
     notifyInput: '{name} - Input needed',
     notifyInputBody: 'Claude is waiting for confirmation.',
+    worktreePathBlocked: 'Write attempt blocked',
+    worktreePathBlockedBody: 'Claude tried to write outside the active worktree ({path}) — blocked.',
   },
   tabBar: {
     rename: 'Rename tab:',
