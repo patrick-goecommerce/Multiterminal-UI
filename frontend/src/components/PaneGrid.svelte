@@ -44,6 +44,10 @@
     dispatch('finishWorktree', e.detail);
   }
 
+  function handleQuickAction(e: CustomEvent) {
+    dispatch('quickAction', e.detail);
+  }
+
   function handleCancelFinish(e: CustomEvent) {
     dispatch('cancelFinish', e.detail);
   }
@@ -90,6 +94,7 @@
         on:issueAction={handleIssueAction}
         on:commitPush={handleCommitPush}
         on:finishWorktree={handleFinishWorktree}
+        on:quickAction={handleQuickAction}
         on:cancelFinish={handleCancelFinish}
         on:navigateFile={handleNavigateFile}
         on:splitPane={handleSplitPane}

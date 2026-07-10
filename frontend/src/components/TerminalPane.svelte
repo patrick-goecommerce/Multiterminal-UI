@@ -556,6 +556,7 @@
     on:issueAction
     on:commitPush
     on:finishWorktree
+    on:quickAction
     on:cancelFinish
   />
   <QueuePanel sessionId={pane.sessionId} visible={showQueue} />

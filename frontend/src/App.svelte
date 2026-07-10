@@ -41,6 +41,7 @@
   import * as App from '../wailsjs/go/backend/App';
   import { EventsOn, Window } from '../wailsjs/runtime/runtime';
   import { subscribeChatEvents } from './lib/chat-events';
+  import { sendQuickAction } from './lib/quickActionQueue';
 
   const MAX_PANES_PER_TAB = 10;
 
@@ -1055,6 +1056,14 @@
     startFinish(e.detail.sessionId);
   }
 
+  async function handleQuickAction(e: CustomEvent<{ sessionId: number; prompt: string }>) {
+    try {
+      await sendQuickAction(e.detail.sessionId, e.detail.prompt);
+    } catch (err) {
+      console.error('[handleQuickAction] AddToQueue failed:', err);
+    }
+  }
+
   function handleRetryFinish(sessionId: number) {
     startFinish(sessionId);
   }
@@ -1153,6 +1162,7 @@
               on:issueAction={handleIssueAction}
               on:commitPush={handleCommitPush}
               on:finishWorktree={handleFinishWorktree}
+              on:quickAction={handleQuickAction}
               on:cancelFinish={handleCancelFinish}
               on:navigateFile={handleNavigateFile}
               on:splitPane={() => (showLaunchDialog = true)}
