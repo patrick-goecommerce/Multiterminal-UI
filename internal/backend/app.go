@@ -216,6 +216,7 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 	}
 	if mode == "claude" || mode == "claude-auto" || mode == "claude-yolo" {
 		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
+		env = append(env, worktreeEnvVars(dir)...)
 	}
 
 	sess := terminal.NewSession(id, rows, cols)

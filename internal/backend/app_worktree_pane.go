@@ -27,6 +27,33 @@ func mainRepoRoot(dir string) (string, error) {
 	return filepath.FromSlash(entries[0].Path), nil
 }
 
+// worktreeEnvVars returns the MULTITERMINAL_WORKTREE_PATH/MULTITERMINAL_MAIN_REPO_ROOT
+// env var pairs for a Claude pane whose dir is a linked worktree (not the main
+// checkout). Returns nil for the main checkout itself, non-git directories, or
+// any other lookup failure — CreateSession then simply launches without the
+// restriction, exactly like before this feature existed (spec 2026-07-09).
+//
+// Accepted cost: this runs a synchronous `git worktree list` subprocess (via
+// mainRepoRoot) on every Claude-mode CreateSession call — including the
+// orchestrator/schedule-runner call sites, not only interactive pane launches
+// — adding roughly one git-subprocess-spawn's worth of latency (already the
+// same order of magnitude as other one-time git calls CreateSession's callers
+// make elsewhere). Not measured; revisit if session launch latency ever
+// becomes a complaint.
+func worktreeEnvVars(dir string) []string {
+	root, err := mainRepoRoot(dir)
+	if err != nil {
+		return nil
+	}
+	if strings.EqualFold(filepath.Clean(root), filepath.Clean(dir)) {
+		return nil
+	}
+	return []string{
+		"MULTITERMINAL_WORKTREE_PATH=" + dir,
+		"MULTITERMINAL_MAIN_REPO_ROOT=" + root,
+	}
+}
+
 // paneWorktreeBase returns the directory that holds all MTUI-created pane
 // worktrees for a repo: <mainRoot>/.claude/worktrees
 // Same location as Claude Code's own native EnterWorktree tool (spec
