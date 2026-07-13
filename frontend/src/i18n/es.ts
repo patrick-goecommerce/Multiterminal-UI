@@ -19,6 +19,12 @@ const es = {
     detachWindow: 'Abrir en nueva ventana',
     closeTab: 'Cerrar pestaña',
   },
+  closeTabConfirm: {
+    title: '¿Cerrar pestaña?',
+    body: '"{name}" todavía tiene {count} pane(s) activo(s). Al cerrarla se finalizarán todas las sesiones en curso.',
+    cancel: 'Cancelar',
+    confirm: 'Cerrar pestaña',
+  },
   toolbar: {
     noDir: '(sin directorio)',
     changeDirEnabled: 'Cambiar directorio de trabajo: {dir}',

@@ -19,6 +19,12 @@ const en = {
     detachWindow: 'Open in new window',
     closeTab: 'Close tab',
   },
+  closeTabConfirm: {
+    title: 'Close tab?',
+    body: '"{name}" still has {count} active pane(s). Closing it will end all running sessions.',
+    cancel: 'Cancel',
+    confirm: 'Close tab',
+  },
   toolbar: {
     noDir: '(no directory)',
     changeDirEnabled: 'Change working directory: {dir}',

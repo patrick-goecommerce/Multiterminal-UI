@@ -23,6 +23,14 @@ const de = {
     closeTab: 'Tab schließen',
   },
 
+  // CloseTabConfirmDialog
+  closeTabConfirm: {
+    title: 'Tab schließen?',
+    body: '„{name}“ hat noch {count} aktive Pane(s). Beim Schließen werden alle laufenden Sitzungen beendet.',
+    cancel: 'Abbrechen',
+    confirm: 'Tab schließen',
+  },
+
   // Toolbar
   toolbar: {
     noDir: '(kein Verzeichnis)',

@@ -19,6 +19,12 @@ const fr = {
     detachWindow: 'Ouvrir dans une nouvelle fenêtre',
     closeTab: 'Fermer l\'onglet',
   },
+  closeTabConfirm: {
+    title: 'Fermer l\'onglet ?',
+    body: '« {name} » a encore {count} pane(s) actif(s). La fermeture mettra fin à toutes les sessions en cours.',
+    cancel: 'Annuler',
+    confirm: 'Fermer l\'onglet',
+  },
   toolbar: {
     noDir: '(pas de répertoire)',
     changeDirEnabled: 'Changer le répertoire de travail : {dir}',

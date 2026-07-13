@@ -45,7 +45,7 @@
 
   function handleCloseTab(e: MouseEvent, tabId: string) {
     e.stopPropagation();
-    tabStore.closeTab(tabId);
+    dispatch('closeTab', { tabId });
   }
 
   function handleAddTab() {
@@ -207,7 +207,7 @@
       </button>
       <div class="ctx-separator"></div>
       <button class="ctx-item ctx-item-danger"
-              on:click={() => { tabStore.closeTab(_ctxTabId); closeContextMenu(); }}>
+              on:click={() => { dispatch('closeTab', { tabId: _ctxTabId }); closeContextMenu(); }}>
         {$t('tabBar.closeTab')}
       </button>
     </div>

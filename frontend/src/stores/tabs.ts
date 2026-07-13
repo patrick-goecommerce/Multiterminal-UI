@@ -71,6 +71,11 @@ export interface Tab {
   unreadActivity: 'waitingPermission' | 'waitingAnswer' | 'error' | 'active' | 'done' | null;
 }
 
+/** Whether closing this tab should first ask for confirmation (it still has open panes). */
+export function tabNeedsCloseConfirm(tab: Tab): boolean {
+  return tab.panes.length > 0;
+}
+
 export function computeTabActivity(panes: Pane[]): Tab['unreadActivity'] {
   let result: Tab['unreadActivity'] = null;
   for (const pane of panes) {
