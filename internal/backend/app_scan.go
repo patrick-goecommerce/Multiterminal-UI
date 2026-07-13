@@ -119,6 +119,19 @@ func (a *AppService) scanAllSessions() {
 					activity = terminal.ActivityWaitingAnswer
 				}
 			}
+			// Exception: when hook says "active" but the PTY has been quiet well
+			// past the normal detection threshold AND the screen already shows a
+			// completed prompt, the terminating hook event (Stop) was lost or
+			// delayed. Without this, a pane — and any pipeline queue waiting on
+			// it via the "done" transition below — would hang forever, since
+			// hook-driven sessions never fall back to the PTY scan otherwise.
+			if activity == terminal.ActivityActive {
+				if lastOutput := sess.GetLastOutputAt(); !lastOutput.IsZero() && time.Since(lastOutput) > terminal.ActivityStaleThreshold {
+					if screen := sess.ClassifyScreenState(); screen == terminal.ActivityDone || screen == terminal.ActivityWaitingAnswer {
+						activity = screen
+					}
+				}
+			}
 		} else {
 			activity = sess.DetectActivity()
 		}

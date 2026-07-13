@@ -50,3 +50,11 @@ func (s *Session) GetLastOutputAt() time.Time {
 	defer s.mu.Unlock()
 	return s.LastOutputAt
 }
+
+// SetLastOutputAtForTest backdates LastOutputAt so tests outside this package
+// can simulate PTY output having gone stale, without a real Write() + sleep.
+func (s *Session) SetLastOutputAtForTest(t time.Time) {
+	s.mu.Lock()
+	s.LastOutputAt = t
+	s.mu.Unlock()
+}
