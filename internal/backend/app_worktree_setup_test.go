@@ -20,7 +20,7 @@ func TestEnsureProjectWorktreeSetup_CreatesFilesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("memory file not created: %v", err)
 	}
-	for _, want := range []string{"EnterWorktree", "discard_changes", "NIEMALS", "erfordern IMMER vorherige Zustimmung"} {
+	for _, want := range []string{"EnterWorktree", "discard_changes", "NIEMALS", "erfordern IMMER vorherige Zustimmung", "**Worktree:**", "docs/superpowers/specs", "docs/superpowers/plans"} {
 		if !strings.Contains(string(mem), want) {
 			t.Errorf("memory file missing %q", want)
 		}
@@ -94,6 +94,30 @@ func TestEnsureProjectWorktreeSetup_MigratesPriorMtuiVersion(t *testing.T) {
 	a := &AppService{}
 	memPath := filepath.Join(repo, projectWorktreeMemoryFile)
 	stale := projectWorktreeMemoryPriorVersions[0]
+	if err := os.WriteFile(memPath, []byte(stale), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.EnsureProjectWorktreeSetup(repo); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(memPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != projectWorktreeMemoryContent {
+		t.Errorf("stale MTUI-generated memory file was not migrated to the current version:\n%s", got)
+	}
+}
+
+// The prior MTUI-generated text (before the spec/plan worktree-header
+// paragraph was added) must also be migrated, not just the oldest one.
+func TestEnsureProjectWorktreeSetup_MigratesPreviousMtuiVersion(t *testing.T) {
+	repo := initPaneTestRepo(t)
+	a := &AppService{}
+	memPath := filepath.Join(repo, projectWorktreeMemoryFile)
+	stale := projectWorktreeMemoryPriorVersions[len(projectWorktreeMemoryPriorVersions)-1]
 	if err := os.WriteFile(memPath, []byte(stale), 0644); err != nil {
 		t.Fatal(err)
 	}
