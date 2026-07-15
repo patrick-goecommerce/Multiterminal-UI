@@ -205,10 +205,19 @@ func (s *Session) waitLoop() {
 	close(s.done)
 }
 
-// Write sends raw bytes to the PTY (i.e. keyboard input from the user).
-// Large inputs are written in chunks to avoid overflowing the PTY kernel
-// buffer (especially on Windows ConPTY). Partial writes are retried until
-// all bytes have been delivered.
+// Write sends raw bytes to the PTY (i.e. keyboard input or pasted text).
+//
+// Flow control relies on natural pipe backpressure rather than a fixed timed
+// throttle. go-pty's Write forwards to a blocking OS pipe (conPty.inPipe):
+// it delivers every byte and blocks when the pipe buffer is full until the
+// console host drains it. That paces large pastes to the consumer's actual
+// read speed, instead of guessing at a per-chunk sleep that is either too
+// short (risking loss) or needlessly slow.
+//
+// We still bound each write to whole UTF-8 runes: the Windows console host
+// decodes pipe input to UTF-16, and a multi-byte sequence split across a
+// write boundary can be corrupted. utf8SafeChunkLen guarantees no rune
+// straddles a write.
 func (s *Session) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	pty := s.p
@@ -217,13 +226,7 @@ func (s *Session) Write(p []byte) (int, error) {
 		return 0, io.ErrClosedPipe
 	}
 
-	const chunkSize = 512
-	// Use longer delay for large writes (e.g. pastes) to avoid
-	// overwhelming ConPTY's input buffer on Windows.
-	delay := time.Millisecond
-	if len(p) > 4096 {
-		delay = 5 * time.Millisecond
-	}
+	const chunkSize = 4096
 	total := 0
 	for len(p) > 0 {
 		end := utf8SafeChunkLen(p, chunkSize)
@@ -233,10 +236,6 @@ func (s *Session) Write(p []byte) (int, error) {
 			return total, err
 		}
 		p = p[n:]
-		// Yield between chunks so the PTY can drain its buffer.
-		if len(p) > 0 {
-			time.Sleep(delay)
-		}
 	}
 	return total, nil
 }
