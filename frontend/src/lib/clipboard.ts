@@ -5,10 +5,15 @@ import type { Terminal } from '@xterm/xterm';
 
 /** Wrap text in bracketed paste sequences if the terminal has the mode enabled. */
 function bracketForPaste(text: string, terminal: Terminal | null): string {
+  // Neutralize any bracketed-paste markers embedded in the clipboard content.
+  // If the pasted text itself contained ESC[201~ (common in logs, docs, or
+  // ANSI dumps), the receiving app would think the paste ended early and run
+  // the remainder as typed commands.
+  const clean = text.replace(/\x1b\[20[01]~/g, '');
   if (terminal && terminal.modes?.bracketedPasteMode) {
-    return `\x1b[200~${text}\x1b[201~`;
+    return `\x1b[200~${clean}\x1b[201~`;
   }
-  return text;
+  return clean;
 }
 
 /** Write text to the system clipboard, returning whether it ACTUALLY succeeded.

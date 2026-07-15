@@ -237,10 +237,19 @@ func (s *Session) waitLoop() {
 	close(s.done)
 }
 
-// Write sends raw bytes to the PTY (i.e. keyboard input from the user).
-// Large inputs are written in chunks to avoid overflowing the PTY kernel
-// buffer (especially on Windows ConPTY). Partial writes are retried until
-// all bytes have been delivered.
+// Write sends raw bytes to the PTY (i.e. keyboard input or pasted text).
+//
+// Flow control relies on natural pipe backpressure rather than a fixed timed
+// throttle. go-pty's Write forwards to a blocking OS pipe (conPty.inPipe):
+// it delivers every byte and blocks when the pipe buffer is full until the
+// console host drains it. That paces large pastes to the consumer's actual
+// read speed, instead of guessing at a per-chunk sleep that is either too
+// short (risking loss) or needlessly slow.
+//
+// We still bound each write to whole UTF-8 runes: the Windows console host
+// decodes pipe input to UTF-16, and a multi-byte sequence split across a
+// write boundary can be corrupted. utf8SafeChunkLen guarantees no rune
+// straddles a write.
 func (s *Session) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	pty := s.p
@@ -249,31 +258,47 @@ func (s *Session) Write(p []byte) (int, error) {
 		return 0, io.ErrClosedPipe
 	}
 
-	const chunkSize = 512
-	// Use longer delay for large writes (e.g. pastes) to avoid
-	// overwhelming ConPTY's input buffer on Windows.
-	delay := time.Millisecond
-	if len(p) > 4096 {
-		delay = 5 * time.Millisecond
-	}
+	const chunkSize = 4096
 	total := 0
 	for len(p) > 0 {
-		chunk := p
-		if len(chunk) > chunkSize {
-			chunk = p[:chunkSize]
-		}
-		n, err := pty.Write(chunk)
+		end := utf8SafeChunkLen(p, chunkSize)
+		n, err := pty.Write(p[:end])
 		total += n
 		if err != nil {
 			return total, err
 		}
 		p = p[n:]
-		// Yield between chunks so the PTY can drain its buffer.
-		if len(p) > 0 {
-			time.Sleep(delay)
-		}
 	}
 	return total, nil
+}
+
+// utf8SafeChunkLen returns a chunk length (1..=max) that does not split a
+// multi-byte UTF-8 sequence in p. If the byte at index max is a UTF-8
+// continuation byte (10xxxxxx), a rune straddles the boundary, so the length
+// is moved back to the start of that rune, keeping the whole sequence in one
+// write.
+//
+// This matters on Windows ConPTY: it decodes each write independently, so a
+// UTF-8 sequence split across two writes (e.g. box-drawing characters in a
+// pasted table landing on a 512-byte boundary) gets corrupted or dropped.
+// Pure-ASCII input is never affected, which is why plain text always pastes
+// cleanly while text with special characters fails intermittently.
+func utf8SafeChunkLen(p []byte, max int) int {
+	if len(p) <= max {
+		return len(p)
+	}
+	end := max
+	// A continuation byte has the form 10xxxxxx. Walk back until end points at
+	// the lead byte of the straddling rune (or the start of the buffer).
+	for end > 0 && p[end]&0xC0 == 0x80 {
+		end--
+	}
+	// Defensive: never return 0 (would stall the write loop). This only
+	// happens for malformed input lacking a lead byte within a full chunk.
+	if end == 0 {
+		return max
+	}
+	return end
 }
 
 // Resize updates the PTY and Screen dimensions.
