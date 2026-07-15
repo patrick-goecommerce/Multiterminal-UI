@@ -226,11 +226,8 @@ func (s *Session) Write(p []byte) (int, error) {
 	}
 	total := 0
 	for len(p) > 0 {
-		chunk := p
-		if len(chunk) > chunkSize {
-			chunk = p[:chunkSize]
-		}
-		n, err := pty.Write(chunk)
+		end := utf8SafeChunkLen(p, chunkSize)
+		n, err := pty.Write(p[:end])
 		total += n
 		if err != nil {
 			return total, err
@@ -242,6 +239,35 @@ func (s *Session) Write(p []byte) (int, error) {
 		}
 	}
 	return total, nil
+}
+
+// utf8SafeChunkLen returns a chunk length (1..=max) that does not split a
+// multi-byte UTF-8 sequence in p. If the byte at index max is a UTF-8
+// continuation byte (10xxxxxx), a rune straddles the boundary, so the length
+// is moved back to the start of that rune, keeping the whole sequence in one
+// write.
+//
+// This matters on Windows ConPTY: it decodes each write independently, so a
+// UTF-8 sequence split across two writes (e.g. box-drawing characters in a
+// pasted table landing on a 512-byte boundary) gets corrupted or dropped.
+// Pure-ASCII input is never affected, which is why plain text always pastes
+// cleanly while text with special characters fails intermittently.
+func utf8SafeChunkLen(p []byte, max int) int {
+	if len(p) <= max {
+		return len(p)
+	}
+	end := max
+	// A continuation byte has the form 10xxxxxx. Walk back until end points at
+	// the lead byte of the straddling rune (or the start of the buffer).
+	for end > 0 && p[end]&0xC0 == 0x80 {
+		end--
+	}
+	// Defensive: never return 0 (would stall the write loop). This only
+	// happens for malformed input lacking a lead byte within a full chunk.
+	if end == 0 {
+		return max
+	}
+	return end
 }
 
 // Resize updates the PTY and Screen dimensions.
