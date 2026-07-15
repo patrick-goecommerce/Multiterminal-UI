@@ -1,42 +1,114 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { config } from '../stores/config';
+  import { t } from '../stores/i18n';
+  import type { PaneMode } from '../stores/tabs';
 
   export let visible: boolean = false;
   export let issueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
   export let claudeDetected: boolean = true;
+  export let codexDetected: boolean = false;
+  export let geminiDetected: boolean = false;
 
   const dispatch = createEventDispatcher();
 
   let selectedModel = '';
+  let selectedDisplay: 'terminal' | 'chat' = 'terminal';
+  let selectedPermissionMode: 'plan' | 'acceptEdits' | 'bypassPermissions' = 'plan';
   let dialogEl: HTMLDivElement;
+
+  const agentModes: PaneMode[] = ['claude', 'claude-yolo', 'codex', 'codex-auto', 'gemini', 'gemini-yolo'];
+
+  interface LaunchOption {
+    mode: PaneMode;
+    label: string;
+    desc: string;
+    icon: string;
+    cssClass: string;
+  }
+
+  // Build available options based on enabled CLI tools
+  $: options = buildOptions(issueContext, $config, $t);
+
+  function buildOptions(issue: typeof issueContext, cfg: typeof $config, _t: any): LaunchOption[] {
+    const opts: LaunchOption[] = [];
+    if (!issue) {
+      opts.push({ mode: 'shell', label: $t('launch.shell'), desc: $t('launch.shellDesc'), icon: '&#9000;', cssClass: '' });
+    }
+    if (cfg.claude_enabled !== false) {
+      opts.push({ mode: 'claude', label: $t('launch.claude'), desc: $t('launch.claudeDesc'), icon: '&#10024;', cssClass: '' });
+      opts.push({ mode: 'claude-auto', label: $t('launch.claudeAuto'), desc: $t('launch.claudeAutoDesc'), icon: '&#9881;', cssClass: 'claude-auto' });
+      opts.push({ mode: 'claude-yolo', label: $t('launch.claudeYolo'), desc: $t('launch.claudeYoloDesc'), icon: '&#9889;', cssClass: 'yolo' });
+    }
+    if (cfg.codex_enabled) {
+      opts.push({ mode: 'codex', label: $t('launch.codex'), desc: $t('launch.codexDesc'), icon: '&#129302;', cssClass: 'codex' });
+      opts.push({ mode: 'codex-auto', label: $t('launch.codexAuto'), desc: $t('launch.codexAutoDesc'), icon: '&#9889;', cssClass: 'codex-auto' });
+    }
+    if (cfg.gemini_enabled) {
+      opts.push({ mode: 'gemini', label: $t('launch.gemini'), desc: $t('launch.geminiDesc'), icon: '&#9733;', cssClass: 'gemini' });
+      opts.push({ mode: 'gemini-yolo', label: $t('launch.geminiYolo'), desc: $t('launch.geminiYoloDesc'), icon: '&#9889;', cssClass: 'gemini-yolo' });
+    }
+    return opts;
+  }
 
   $: if (visible) {
     requestAnimationFrame(() => dialogEl?.focus());
   }
 
-  function launch(type: 'shell' | 'claude' | 'claude-yolo') {
-    dispatch('launch', { type, model: selectedModel, issue: issueContext });
+  function launch(type: PaneMode) {
+    const isAgent = agentModes.includes(type);
+    const display = isAgent ? selectedDisplay : 'terminal';
+    const permissionMode = display === 'chat' ? selectedPermissionMode : 'plan';
+    dispatch('launch', { type, model: selectedModel, issue: issueContext, display, permissionMode });
     dispatch('close');
     selectedModel = '';
+    selectedDisplay = 'terminal';
+    selectedPermissionMode = 'plan';
   }
 
   function close() {
     dispatch('close');
     selectedModel = '';
+    selectedDisplay = 'terminal';
+    selectedPermissionMode = 'plan';
   }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') close();
-    if (issueContext) {
-      if (e.key === '1') launch('claude');
-      if (e.key === '2') launch('claude-yolo');
-    } else {
-      if (e.key === '1') launch('shell');
-      if (e.key === '2') launch('claude');
-      if (e.key === '3') launch('claude-yolo');
+    const idx = parseInt(e.key) - 1;
+    if (idx >= 0 && idx < options.length) {
+      launch(options[idx].mode);
     }
   }
+
+  // Show separator between tool groups
+  function needsSeparator(i: number): boolean {
+    if (i === 0) return false;
+    const group = (m: PaneMode) => {
+      if (m === 'shell') return 0;
+      if (m === 'claude' || m === 'claude-auto' || m === 'claude-yolo') return 1;
+      if (m === 'codex' || m === 'codex-auto') return 2;
+      return 3;
+    };
+    return group(options[i - 1].mode) !== group(options[i].mode);
+  }
+
+  $: showAgentOptions = options.some(o => agentModes.includes(o.mode));
+  $: showClaudeWarning = ($config.claude_enabled !== false) && !claudeDetected;
+  $: showCodexWarning = $config.codex_enabled && !codexDetected;
+  $: showGeminiWarning = $config.gemini_enabled && !geminiDetected;
+  $: allModels = (() => {
+    const models: Array<{ label: string; id: string }> = [];
+    if ($config.claude_enabled !== false && $config.claude_models?.length) {
+      models.push(...$config.claude_models);
+    } else if ($config.codex_enabled && $config.codex_models?.length) {
+      models.push(...$config.codex_models);
+    } else if ($config.gemini_enabled && $config.gemini_models?.length) {
+      models.push(...$config.gemini_models);
+    }
+    return models;
+  })();
+  $: showModelPicker = allModels.length > 0;
 </script>
 
 {#if visible}
@@ -46,7 +118,7 @@
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="dialog" on:click|stopPropagation bind:this={dialogEl} tabindex="-1" on:keydown={handleKeydown}>
-      <h3>{issueContext ? `Claude für #${issueContext.number}` : 'Neues Terminal'}</h3>
+      <h3>{issueContext ? $t('launch.titleIssue', { number: issueContext.number }) : $t('launch.titleNew')}</h3>
       {#if issueContext}
         <div class="issue-context">
           <span class="issue-ctx-num">#{issueContext.number}</span>
@@ -54,58 +126,102 @@
         </div>
       {/if}
 
-      {#if !claudeDetected}
-        <div class="claude-warning">
+      {#if showClaudeWarning}
+        <div class="cli-warning">
           <span class="warning-icon">&#9888;</span>
-          <span>Claude CLI nicht gefunden.</span>
-          <button class="warning-link" on:click={() => dispatch('openSettings')}>Einstellungen</button>
+          <span>{$t('launch.claudeNotFound')}</span>
+          <button class="warning-link" on:click={() => dispatch('openSettings')}>{$t('launch.settingsLink')}</button>
+        </div>
+      {/if}
+
+      {#if showCodexWarning}
+        <div class="cli-warning">
+          <span class="warning-icon">&#9888;</span>
+          <span>{$t('launch.codexNotFound')} <code>{$t('launch.codexInstall')}</code></span>
+        </div>
+      {/if}
+
+      {#if showGeminiWarning}
+        <div class="cli-warning">
+          <span class="warning-icon">&#9888;</span>
+          <span>{$t('launch.geminiNotFound')} <code>{$t('launch.geminiInstall')}</code></span>
         </div>
       {/if}
 
       <div class="options">
-        {#if !issueContext}
-          <button class="option" on:click={() => launch('shell')}>
-            <span class="option-key">1</span>
-            <span class="option-icon">&#9000;</span>
+        {#each options as opt, i}
+          {#if needsSeparator(i)}
+            <div class="separator"></div>
+          {/if}
+          <button class="option {opt.cssClass}" on:click={() => launch(opt.mode)}>
+            <span class="option-key">{i + 1}</span>
+            <span class="option-icon">{@html opt.icon}</span>
             <div class="option-text">
-              <strong>Shell</strong>
-              <span>Standard-Terminal</span>
+              <strong>{opt.label}</strong>
+              <span>{opt.desc}</span>
             </div>
           </button>
-        {/if}
-
-        <button class="option" on:click={() => launch('claude')}>
-          <span class="option-key">{issueContext ? '1' : '2'}</span>
-          <span class="option-icon">&#10024;</span>
-          <div class="option-text">
-            <strong>Claude Code</strong>
-            <span>Normal-Modus</span>
-          </div>
-        </button>
-
-        <button class="option yolo" on:click={() => launch('claude-yolo')}>
-          <span class="option-key">{issueContext ? '2' : '3'}</span>
-          <span class="option-icon">&#9889;</span>
-          <div class="option-text">
-            <strong>Claude YOLO</strong>
-            <span>Alle Berechtigungen</span>
-          </div>
-        </button>
+        {/each}
       </div>
 
-      {#if $config.claude_models.length > 0}
+      {#if showModelPicker}
         <div class="model-picker">
-          <label>Modell:</label>
+          <label>{$t('launch.modelLabel')}</label>
           <select bind:value={selectedModel}>
-            {#each $config.claude_models as model}
-              <option value={model.id}>{model.label}</option>
-            {/each}
+            {#if $config.claude_enabled !== false}
+              <optgroup label="Claude">
+                {#each ($config.claude_models || []) as model}
+                  <option value={model.id}>{model.label}</option>
+                {/each}
+              </optgroup>
+            {/if}
+            {#if $config.codex_enabled && $config.codex_models?.length}
+              <optgroup label="Codex">
+                {#each $config.codex_models as model}
+                  <option value={model.id}>{model.label}</option>
+                {/each}
+              </optgroup>
+            {/if}
+            {#if $config.gemini_enabled && $config.gemini_models?.length}
+              <optgroup label="Gemini">
+                {#each $config.gemini_models as model}
+                  <option value={model.id}>{model.label}</option>
+                {/each}
+              </optgroup>
+            {/if}
           </select>
         </div>
       {/if}
 
+      {#if showAgentOptions}
+        <div class="display-picker">
+          <label>Anzeige</label>
+          <div class="display-toggle">
+            <button
+              class="toggle-btn {selectedDisplay === 'terminal' ? 'active' : ''}"
+              on:click={() => selectedDisplay = 'terminal'}
+            >Terminal</button>
+            <button
+              class="toggle-btn {selectedDisplay === 'chat' ? 'active' : ''}"
+              on:click={() => selectedDisplay = 'chat'}
+            >Chat</button>
+          </div>
+        </div>
+
+        {#if selectedDisplay === 'chat'}
+          <div class="permission-picker">
+            <label>Berechtigungen</label>
+            <select bind:value={selectedPermissionMode}>
+              <option value="plan">Plan (read-only)</option>
+              <option value="acceptEdits">Edits akzeptieren</option>
+              <option value="bypassPermissions">Alle Berechtigungen</option>
+            </select>
+          </div>
+        {/if}
+      {/if}
+
       <div class="dialog-footer">
-        <button class="cancel-btn" on:click={close}>Abbrechen (Esc)</button>
+        <button class="cancel-btn" on:click={close}>{$t('launch.cancel')}</button>
       </div>
     </div>
   </div>
@@ -154,6 +270,12 @@
     margin-bottom: 16px;
   }
 
+  .separator {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+
   .option {
     display: flex;
     align-items: center;
@@ -173,9 +295,12 @@
     background: var(--bg-tertiary);
   }
 
-  .option.yolo:hover {
-    border-color: var(--error);
-  }
+  .option.yolo:hover { border-color: var(--error); }
+  .option.claude-auto:hover { border-color: #c084fc; }
+  .option.codex:hover { border-color: #10a37f; }
+  .option.codex-auto:hover { border-color: #e87b35; }
+  .option.gemini:hover { border-color: #4285f4; }
+  .option.gemini-yolo:hover { border-color: #ea4335; }
 
   .option-key {
     font-size: 11px;
@@ -186,18 +311,14 @@
     font-family: monospace;
   }
 
-  .option-icon {
-    font-size: 20px;
-  }
+  .option-icon { font-size: 20px; }
 
   .option-text {
     display: flex;
     flex-direction: column;
   }
 
-  .option-text strong {
-    font-size: 14px;
-  }
+  .option-text strong { font-size: 14px; }
 
   .option-text span {
     font-size: 11px;
@@ -241,15 +362,20 @@
     font-size: 12px;
   }
 
-  .cancel-btn:hover {
-    color: var(--fg);
-  }
+  .cancel-btn:hover { color: var(--fg); }
 
-  .claude-warning {
+  .cli-warning {
     display: flex; align-items: center; gap: 8px;
     padding: 8px 12px; margin-bottom: 12px;
     background: rgba(243, 139, 168, 0.1); border: 1px solid rgba(243, 139, 168, 0.4);
     border-radius: 8px; font-size: 12px; color: #f38ba8;
+  }
+
+  .cli-warning code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
   }
 
   .warning-icon { font-size: 16px; }
@@ -260,4 +386,67 @@
     padding: 0;
   }
   .warning-link:hover { opacity: 0.8; }
+
+  .display-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .display-picker label {
+    font-size: 12px;
+    color: var(--fg-muted);
+    white-space: nowrap;
+  }
+
+  .display-toggle {
+    display: flex;
+    gap: 4px;
+  }
+
+  .toggle-btn {
+    padding: 4px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg-muted);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+  }
+
+  .toggle-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .toggle-btn:hover:not(.active) {
+    border-color: var(--accent);
+    color: var(--fg);
+  }
+
+  .permission-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .permission-picker label {
+    font-size: 12px;
+    color: var(--fg-muted);
+    white-space: nowrap;
+  }
+
+  .permission-picker select {
+    flex: 1;
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg);
+    font-size: 12px;
+  }
 </style>

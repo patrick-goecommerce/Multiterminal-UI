@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import type { SearchAddon } from '@xterm/addon-search';
 
   export let searchAddon: SearchAddon | null = null;
@@ -60,16 +61,16 @@
   <input
     class="search-input"
     type="text"
-    placeholder="Suchen... (Enter=weiter, Shift+Enter=zurück)"
+    placeholder={$t('search.placeholder')}
     bind:value={searchQuery}
     bind:this={searchInput}
     on:input={() => doSearch('next')}
     on:keydown={handleKeydown}
     on:click|stopPropagation
   />
-  <button class="search-btn" on:click|stopPropagation={() => doSearch('prev')} title="Vorheriger (Shift+Enter)">&#x25B2;</button>
-  <button class="search-btn" on:click|stopPropagation={() => doSearch('next')} title="Nächster (Enter)">&#x25BC;</button>
-  <button class="search-btn close" on:click|stopPropagation={close} title="Schließen (Esc)">&times;</button>
+  <button class="search-btn" on:click|stopPropagation={() => doSearch('prev')} title={$t('search.previous')}>&#x25B2;</button>
+  <button class="search-btn" on:click|stopPropagation={() => doSearch('next')} title={$t('search.next')}>&#x25BC;</button>
+  <button class="search-btn close" on:click|stopPropagation={close} title={$t('search.close')}>&times;</button>
 </div>
 
 <style>

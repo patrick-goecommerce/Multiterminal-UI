@@ -51,7 +51,6 @@
       placeholder="39ff14"
     />
   </div>
-  <div class="color-preview" style="background: {value}"></div>
 </div>
 
 <div class="preset-row">
@@ -82,12 +81,6 @@
     width: 80px; background: none; border: none; color: var(--fg);
     font-family: monospace; font-size: 14px; outline: none;
     text-transform: uppercase; letter-spacing: 1px;
-  }
-
-  .color-preview {
-    width: 48px; height: 48px; border-radius: 8px;
-    border: 2px solid var(--border); flex-shrink: 0;
-    box-shadow: 0 0 16px currentColor;
   }
 
   .preset-row { display: flex; gap: 8px; flex-wrap: wrap; }

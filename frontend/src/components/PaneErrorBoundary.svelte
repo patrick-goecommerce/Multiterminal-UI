@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import type { Pane } from '../stores/tabs';
 
   export let pane: Pane;
@@ -33,12 +34,12 @@
   <div class="error-boundary">
     <div class="error-content">
       <div class="error-icon">!</div>
-      <h3 class="error-title">Pane-Fehler</h3>
+      <h3 class="error-title">{$t('paneError.title')}</h3>
       <p class="error-name">{pane.name || `Pane ${pane.id}`}</p>
       <p class="error-message">{error}</p>
       <div class="error-actions">
-        <button class="restart-btn" on:click={handleRestart}>Neu starten</button>
-        <button class="close-btn" on:click={handleClose}>Schließen</button>
+        <button class="restart-btn" on:click={handleRestart}>{$t('paneError.restart')}</button>
+        <button class="close-btn" on:click={handleClose}>{$t('paneError.close')}</button>
       </div>
     </div>
   </div>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { audioMuted } from '../lib/audio';
+  import { t } from '../stores/i18n';
 
   const dispatch = createEventDispatcher();
 
@@ -21,15 +21,11 @@
     dispatch('changeDir');
   }
 
-  function openSettings() {
-    dispatch('openSettings');
-  }
-
   function openCommands() {
     dispatch('openCommands');
   }
 
-  $: dirLabel = tabDir ? tabDir.replace(/\\/g, '/').split('/').pop() || tabDir : '(kein Verzeichnis)';
+  $: dirLabel = tabDir ? tabDir.replace(/\\/g, '/').split('/').pop() || tabDir : $t('toolbar.noDir');
   $: atLimit = paneCount >= maxPanes;
 </script>
 
@@ -41,8 +37,8 @@
       on:click={changeDir}
       disabled={!canChangeDir}
       title={canChangeDir
-        ? `Arbeitsverzeichnis ändern: ${tabDir}`
-        : `Alle Terminals schließen um Verzeichnis zu ändern (${tabDir})`}
+        ? $t('toolbar.changeDirEnabled', { dir: tabDir })
+        : $t('toolbar.changeDirDisabled', { dir: tabDir })}
     >
       <span class="dir-icon">&#128194;</span>
       <span class="dir-path" title={tabDir}>{dirLabel}</span>
@@ -52,7 +48,7 @@
         <span class="dir-lock">&#128274;</span>
       {/if}
     </button>
-    <span class="toolbar-info">{paneCount} / {maxPanes} Terminals</span>
+    <span class="toolbar-info">{$t('toolbar.paneCount', { count: paneCount, max: maxPanes })}</span>
   </div>
   <div class="toolbar-right">
     <button
@@ -60,26 +56,15 @@
       class:disabled={atLimit}
       on:click={newTerminal}
       disabled={atLimit}
-      title={atLimit ? `Max. ${maxPanes} Terminals erreicht` : 'Neues Terminal (Ctrl+N)'}
+      title={atLimit ? $t('toolbar.maxReached', { max: maxPanes }) : $t('toolbar.newTerminal')}
     >
-      + New Terminal
+      + {$t('toolbar.newTerminal').replace(/ *\(.*\)/, '')}
     </button>
-    <button class="toolbar-btn" on:click={openCommands} title="Befehlspalette">
-      <span class="icon">&#9889;</span> Befehle
+    <button class="toolbar-btn" on:click={openCommands} title={$t('toolbar.commandPalette')}>
+      <span class="icon">&#9889;</span> {$t('toolbar.commandPalette')}
     </button>
-    <button class="toolbar-btn" on:click={toggleSidebar} title="Dateien (Ctrl+B)">
-      <span class="icon">&#128193;</span> Files
-    </button>
-    <button
-      class="toolbar-btn mute-btn"
-      class:muted={$audioMuted}
-      on:click={() => $audioMuted = !$audioMuted}
-      title={$audioMuted ? 'Audio einschalten' : 'Audio stumm schalten'}
-    >
-      <span class="icon">{$audioMuted ? '🔇' : '🔊'}</span>
-    </button>
-    <button class="toolbar-btn" on:click={openSettings} title="Einstellungen">
-      <span class="icon">&#9881;</span>
+    <button class="toolbar-btn" on:click={toggleSidebar} title={$t('toolbar.files')}>
+      <span class="icon">&#128193;</span> {$t('toolbar.files').replace(/ *\(.*\)/, '')}
     </button>
   </div>
 </div>

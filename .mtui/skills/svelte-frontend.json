@@ -1,0 +1,20 @@
+{
+    "name": "svelte-frontend",
+    "detect": ["svelte.config.js", "svelte.config.ts"],
+    "priority": 10,
+    "stackable": true,
+    "prompt_file": "svelte-frontend.md",
+    "policies": {
+        "preferred_model": "sonnet",
+        "verify": [
+            {"command": "npm run build", "description": "Frontend builds"},
+            {"command": "npm run check", "description": "Svelte check passes"}
+        ],
+        "scope_limits": {
+            "bugfix": {"max_files": 8, "max_lines": 150, "max_deletes": 40},
+            "feature": {"max_files": 20, "max_lines": 400, "max_deletes": 80},
+            "refactor": {"max_files": 30, "max_lines": 600, "max_deletes": 300}
+        },
+        "qa_rules": ["no-reactive-assignment-trap", "german-ui-text"]
+    }
+}

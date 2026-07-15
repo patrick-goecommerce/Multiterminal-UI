@@ -4,7 +4,6 @@ package backend
 import (
 	"fmt"
 	"log"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,7 +24,7 @@ type IssueBranchInfo struct {
 
 // IsOnIssueBranch checks if the current branch in dir is an issue branch.
 // targetIssue allows checking whether it's the same issue in one call.
-func (a *App) IsOnIssueBranch(dir string, targetIssue int) IssueBranchInfo {
+func (a *AppService) IsOnIssueBranch(dir string, targetIssue int) IssueBranchInfo {
 	if dir == "" || !isGitRepo(dir) {
 		return IssueBranchInfo{}
 	}
@@ -86,18 +85,14 @@ func issueBranchName(number int, title string) string {
 
 // isGitRepo checks whether dir is inside a git repository.
 func isGitRepo(dir string) bool {
-	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "rev-parse", "--is-inside-work-tree")
 	out, err := cmd.Output()
 	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
 // hasCleanWorkingTree returns true if there are no uncommitted changes.
 func hasCleanWorkingTree(dir string) bool {
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "status", "--porcelain")
 	out, err := cmd.Output()
 	if err != nil {
 		return false
@@ -107,16 +102,14 @@ func hasCleanWorkingTree(dir string) bool {
 
 // branchExists checks if a git branch with the given name exists locally.
 func branchExists(dir string, branch string) bool {
-	cmd := exec.Command("git", "rev-parse", "--verify", branch)
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "rev-parse", "--verify", branch)
 	return cmd.Run() == nil
 }
 
 // GetOrCreateIssueBranch checks if an issue branch exists, creates it if not,
 // and switches to it. Returns the branch name or an error.
 // If the working tree is dirty, it returns an error rather than risking data loss.
-func (a *App) GetOrCreateIssueBranch(dir string, number int, title string) (string, error) {
+func (a *AppService) GetOrCreateIssueBranch(dir string, number int, title string) (string, error) {
 	if dir == "" || !isGitRepo(dir) {
 		return "", fmt.Errorf("not a git repository")
 	}
@@ -136,18 +129,14 @@ func (a *App) GetOrCreateIssueBranch(dir string, number int, title string) (stri
 
 	if branchExists(dir, branch) {
 		// Switch to existing branch
-		cmd := exec.Command("git", "checkout", branch)
-		cmd.Dir = dir
-		hideConsole(cmd)
+		cmd := gitCmd(dir, "checkout", branch)
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("checkout failed: %w", err)
 		}
 		log.Printf("[GetOrCreateIssueBranch] switched to existing branch %s", branch)
 	} else {
 		// Create and switch to new branch
-		cmd := exec.Command("git", "checkout", "-b", branch)
-		cmd.Dir = dir
-		hideConsole(cmd)
+		cmd := gitCmd(dir, "checkout", "-b", branch)
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("branch create failed: %w", err)
 		}
@@ -158,11 +147,11 @@ func (a *App) GetOrCreateIssueBranch(dir string, number int, title string) (stri
 }
 
 // IsGitRepo checks if the given directory is a git repository (exported for frontend).
-func (a *App) IsGitRepo(dir string) bool {
+func (a *AppService) IsGitRepo(dir string) bool {
 	return isGitRepo(dir)
 }
 
 // HasCleanWorkingTree checks for uncommitted changes (exported for frontend).
-func (a *App) HasCleanWorkingTree(dir string) bool {
+func (a *AppService) HasCleanWorkingTree(dir string) bool {
 	return hasCleanWorkingTree(dir)
 }

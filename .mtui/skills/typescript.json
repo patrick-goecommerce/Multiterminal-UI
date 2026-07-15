@@ -1,0 +1,19 @@
+{
+    "name": "typescript",
+    "detect": ["tsconfig.json"],
+    "priority": 5,
+    "stackable": true,
+    "prompt_file": "typescript.md",
+    "policies": {
+        "preferred_model": "sonnet",
+        "verify": [
+            {"command": "npx tsc --noEmit", "description": "Type check passes"}
+        ],
+        "scope_limits": {
+            "bugfix": {"max_files": 10, "max_lines": 200, "max_deletes": 50},
+            "feature": {"max_files": 30, "max_lines": 600, "max_deletes": 150},
+            "refactor": {"max_files": 50, "max_lines": 1000, "max_deletes": 500}
+        },
+        "qa_rules": ["strict-types", "no-any-abuse"]
+    }
+}

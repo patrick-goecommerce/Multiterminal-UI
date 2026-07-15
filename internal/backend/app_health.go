@@ -2,7 +2,6 @@ package backend
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -22,7 +21,7 @@ type HealthInfo struct {
 }
 
 // CheckHealth returns the current health/logging state for the frontend.
-func (a *App) CheckHealth() HealthInfo {
+func (a *AppService) CheckHealth() HealthInfo {
 	return HealthInfo{
 		CrashDetected:  config.HasRepeatedCrashes(&a.health),
 		LoggingEnabled: a.cfg.LoggingEnabled,
@@ -32,7 +31,7 @@ func (a *App) CheckHealth() HealthInfo {
 
 // EnableLogging activates file logging. If auto is true, it was triggered
 // by crash detection and will auto-disable after 3 clean shutdowns.
-func (a *App) EnableLogging(auto bool) string {
+func (a *AppService) EnableLogging(auto bool) string {
 	logPath := logFilePath()
 	if err := setupFileLogging(logPath); err != nil {
 		log.Printf("[EnableLogging] failed: %v", err)
@@ -52,7 +51,7 @@ func (a *App) EnableLogging(auto bool) string {
 }
 
 // DisableLogging deactivates file logging and resets to stderr.
-func (a *App) DisableLogging() {
+func (a *AppService) DisableLogging() {
 	a.cfg.LoggingEnabled = false
 	_ = config.Save(a.cfg)
 
@@ -65,7 +64,7 @@ func (a *App) DisableLogging() {
 }
 
 // GetLogPath returns the current log file path.
-func (a *App) GetLogPath() string {
+func (a *AppService) GetLogPath() string {
 	return logFilePath()
 }
 
@@ -109,7 +108,7 @@ func logFilePath() string {
 }
 
 // OpenLogDir opens the log directory in the system file explorer.
-func (a *App) OpenLogDir() {
+func (a *AppService) OpenLogDir() {
 	dir := logDir()
 	exec.Command("cmd", "/c", "start", "", dir).Start() //nolint:errcheck
 }
@@ -128,9 +127,12 @@ func setupFileLogging(path string) error {
 		logFile.Close()
 	}
 	logFile = f
-	// Write to both file and stderr for visibility
-	w := io.MultiWriter(os.Stderr, f)
-	log.SetOutput(w)
+	// Redirect the process stderr (fd 2) at the log file so Go runtime panic
+	// traces — which bypass the log package — land in the log instead of being
+	// discarded by the GUI subsystem. After this os.Stderr IS the log file, so
+	// logging straight to f (no MultiWriter) avoids double-writing every line.
+	redirectStderrToFile(f)
+	log.SetOutput(f)
 	return nil
 }
 

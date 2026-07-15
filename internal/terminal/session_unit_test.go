@@ -82,6 +82,47 @@ func TestNewSession_ActivityIdle(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// GetTitle returns the OSC-derived window title, thread-safe
+// ---------------------------------------------------------------------------
+
+func TestGetTitle_ReturnsOSCTitle(t *testing.T) {
+	sess := NewSession(1, 10, 40)
+
+	if got := sess.GetTitle(); got != "" {
+		t.Fatalf("new session GetTitle() = %q, want empty", got)
+	}
+
+	// OSC 2 ; <title> BEL — set window title
+	sess.Screen.Write([]byte("\x1b]2;auth-refactor\x07"))
+
+	if got := sess.GetTitle(); got != "auth-refactor" {
+		t.Fatalf("GetTitle() = %q, want %q", got, "auth-refactor")
+	}
+}
+
+// TestName_ConcurrentWithTitleUpdate guards against the data race where readers
+// (dashboard, ask-user, queue overview) read Session.Title without the lock while
+// readLoop writes it under s.mu. Run with -race. Name() must read under the lock.
+func TestName_ConcurrentWithTitleUpdate(t *testing.T) {
+	sess := NewSession(1, 24, 80)
+	const iterations = 2000
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < iterations; i++ {
+			// Mirror readLoop: Session.Title is written under s.mu.
+			sess.mu.Lock()
+			sess.Title = "session-title"
+			sess.mu.Unlock()
+		}
+		close(done)
+	}()
+	for i := 0; i < iterations; i++ {
+		_ = sess.Name()
+	}
+	<-done
+}
+
+// ---------------------------------------------------------------------------
 // Write without PTY returns error
 // ---------------------------------------------------------------------------
 

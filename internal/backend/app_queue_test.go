@@ -1,16 +1,20 @@
 package backend
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
-func newTestApp() *App {
-	return &App{
+func newTestApp() *AppService {
+	return &AppService{
 		sessions:      make(map[int]*terminal.Session),
 		queues:        make(map[int]*sessionQueue),
 		sessionIssues: make(map[int]*sessionIssue),
+		chatSessions:  make(map[string]*ChatSession),
+		chatBuffers:   make(map[string]*strings.Builder),
+		finishStates:  make(map[int]*finishState),
 	}
 }
 
@@ -180,7 +184,7 @@ func TestTruncateStr(t *testing.T) {
 }
 
 // addToQueueInternal adds to queue without triggering events (for testing).
-func (a *App) addToQueueInternal(sessionId int, prompt string) QueueItem {
+func (a *AppService) addToQueueInternal(sessionId int, prompt string) QueueItem {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	q := a.queues[sessionId]

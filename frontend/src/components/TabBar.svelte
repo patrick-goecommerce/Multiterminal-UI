@@ -1,18 +1,51 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { tabStore, allTabs } from '../stores/tabs';
+  import { t } from '../stores/i18n';
+  import * as App from '../../wailsjs/go/backend/App';
+  import { EventsOn } from '../../wailsjs/runtime/runtime';
+  import { getWindowId, isMainWindow } from '../lib/window';
 
   export let activeTabId: string;
+  export let isDashboard: boolean = false;
 
   const dispatch = createEventDispatcher();
 
-  function handleTabClick(tabId: string) {
+  const _isMain = isMainWindow();
+  const _windowId = getWindowId();
+
+  // Context menu state
+  let contextMenuTabId: string | null = null;
+  let contextMenuX = 0;
+  let contextMenuY = 0;
+
+  // Cross-window drag state
+  let dropIndicator = false; // show drop zone highlight
+  const claimedTabs = new Set<string>(); // tabs claimed by another window's drop
+
+  onMount(() => {
+    // Listen for our tabs being claimed by another window's drop
+    EventsOn('window:tab-claimed', (event: any) => {
+      if (event.data?.windowId !== _windowId) return;
+      const tabId: string = event.data?.tabId;
+      if (tabId) {
+        claimedTabs.add(tabId);
+        tabStore.forceCloseTab(tabId);
+      }
+    });
+  });
+
+  function handleTabClick(e: MouseEvent, tabId: string) {
+    (e.currentTarget as HTMLElement).blur();
     tabStore.setActiveTab(tabId);
+    // Always close the dashboard when a tab is clicked, even if it was
+    // already the active tab (in that case the store doesn't emit a change).
+    if (isDashboard) dispatch('closeDashboard');
   }
 
   function handleCloseTab(e: MouseEvent, tabId: string) {
     e.stopPropagation();
-    tabStore.closeTab(tabId);
+    dispatch('closeTab', { tabId });
   }
 
   function handleAddTab() {
@@ -20,34 +53,166 @@
   }
 
   function handleTabDblClick(tabId: string) {
-    const name = prompt('Tab umbenennen:');
+    const name = prompt($t('tabBar.rename'));
     if (name) tabStore.renameTab(tabId, name);
+  }
+
+  function handleDragStart(e: DragEvent, tabId: string) {
+    e.dataTransfer?.setData('text/plain', tabId);
+    // Tell backend so another window's drop handler can claim it
+    const tab = $allTabs.find(t => t.id === tabId);
+    App.SetDraggingTab(tabId, _windowId, tab ? JSON.stringify(tab) : '');
+  }
+
+  async function handleDragEnd(e: DragEvent, tabId: string) {
+    // dropEffect 'move' = successfully dropped on a valid target (any window)
+    // This is the fast path and avoids a race condition with cross-window events.
+    if (e.dataTransfer?.dropEffect === 'move') {
+      App.ClearDraggingTab();
+      return;
+    }
+    const outside = e.clientX < 0 || e.clientX > window.innerWidth
+                  || e.clientY < 0 || e.clientY > window.innerHeight;
+    if (!outside) {
+      App.ClearDraggingTab();
+      return;
+    }
+    // Outside window: wait briefly for a cross-window claim event to arrive
+    // before deciding to open a new window (IPC round-trip guard).
+    await new Promise(r => setTimeout(r, 150));
+    App.ClearDraggingTab();
+    if (claimedTabs.has(tabId)) {
+      claimedTabs.delete(tabId);
+      return;
+    }
+    await detachTab(tabId);
+  }
+
+  async function detachTab(tabId: string) {
+    try {
+      const tab = $allTabs.find(t => t.id === tabId);
+      const tabStateJSON = tab ? JSON.stringify(tab) : '';
+      await App.DetachTab(tabId, _windowId, tabStateJSON);
+      tabStore.forceCloseTab(tabId); // bypasses single-tab guard
+    } catch (err) {
+      console.error('[DetachTab] failed', err);
+    }
+  }
+
+  // Drop zone: accept tabs dragged from other windows
+  function handleTabBarDragOver(e: DragEvent) {
+    if (e.dataTransfer?.types.includes('text/plain')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      dropIndicator = true;
+    }
+  }
+
+  function handleTabBarDragLeave() {
+    dropIndicator = false;
+  }
+
+  async function handleTabBarDrop(e: DragEvent) {
+    e.preventDefault();
+    dropIndicator = false;
+    const tabId = e.dataTransfer?.getData('text/plain') ?? '';
+    // Skip same-window drops (tab is already in this window)
+    if ($allTabs.some(t => t.id === tabId)) return;
+    const tabStateJSON = await App.ClaimDraggedTab(tabId);
+    if (tabStateJSON) {
+      try {
+        const tab = JSON.parse(tabStateJSON);
+        tabStore.importTab(tab);
+      } catch (err) {
+        console.error('[TabBar drop] parse failed', err);
+      }
+    }
+  }
+
+  function handleContextMenu(e: MouseEvent, tabId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    contextMenuTabId = tabId;
+    contextMenuX = e.clientX;
+    contextMenuY = e.clientY;
+  }
+
+  function closeContextMenu() {
+    contextMenuTabId = null;
   }
 </script>
 
 <div class="tab-bar">
-  <div class="tabs">
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div
+    class="tabs"
+    class:drop-target={dropIndicator}
+    on:dragover={handleTabBarDragOver}
+    on:dragleave={handleTabBarDragLeave}
+    on:drop={handleTabBarDrop}
+  >
+    <button
+      class="tab tab-home"
+      class:active={isDashboard}
+      title="Dashboard (Ctrl+Shift+H)"
+      on:click={() => dispatch('showDashboard')}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+    </button>
     {#each $allTabs as tab (tab.id)}
       <button
         class="tab"
-        class:active={tab.id === activeTabId}
-        on:click={() => handleTabClick(tab.id)}
+        class:active={tab.id === activeTabId && !isDashboard}
+        class:highlight={tab._highlight}
+        draggable="true"
+        on:click={(e) => handleTabClick(e, tab.id)}
         on:dblclick={() => handleTabDblClick(tab.id)}
+        on:dragstart={(e) => handleDragStart(e, tab.id)}
+        on:dragend={(e) => handleDragEnd(e, tab.id)}
+        on:contextmenu={(e) => handleContextMenu(e, tab.id)}
       >
         <span class="tab-name">{tab.name}</span>
         {#if tab.panes.length > 0}
           <span class="tab-count">{tab.panes.length}</span>
         {/if}
-        <button class="tab-close" on:click={(e) => handleCloseTab(e, tab.id)}>
+        {#if tab.unreadActivity}
+          <span class="tab-activity-dot tab-dot-{tab.unreadActivity}"></span>
+        {/if}
+        <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+        <span class="tab-close" role="button" tabindex="-1" on:click={(e) => handleCloseTab(e, tab.id)}>
           &times;
-        </button>
+        </span>
       </button>
     {/each}
   </div>
-  <button class="tab-add" on:click={handleAddTab} title="Neuer Tab (Ctrl+T)">
+  <button class="tab-add" on:click={handleAddTab} title={$t('tabBar.newTab')}>
     +
   </button>
 </div>
+
+{#if contextMenuTabId}
+  {@const _ctxTabId = contextMenuTabId}
+  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+  <div class="ctx-overlay" on:click={closeContextMenu}>
+    <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+    <div class="ctx-menu" style="left:{contextMenuX}px; top:{contextMenuY}px"
+         on:click|stopPropagation>
+      <button class="ctx-item" on:click={() => { dispatch('editSkills', { tabId: _ctxTabId }); closeContextMenu(); }}>
+        {$t('tabBar.editSkills')}
+      </button>
+      <button class="ctx-item" on:click={() => { detachTab(_ctxTabId); closeContextMenu(); }}>
+        {$t('tabBar.detachWindow')}
+      </button>
+      <div class="ctx-separator"></div>
+      <button class="ctx-item ctx-item-danger"
+              on:click={() => { dispatch('closeTab', { tabId: _ctxTabId }); closeContextMenu(); }}>
+        {$t('tabBar.closeTab')}
+      </button>
+    </div>
+  </div>
+{/if}
 
 <style>
   .tab-bar {
@@ -67,6 +232,14 @@
     overflow-x: auto;
     flex: 1;
     -webkit-app-region: no-drag;
+    border-radius: 6px 6px 0 0;
+    transition: background 0.15s, outline 0.15s;
+  }
+
+  .tabs.drop-target {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
   }
 
   .tab {
@@ -85,15 +258,33 @@
     min-width: 100px;
   }
 
+  .tab-home {
+    min-width: unset;
+    padding: 12px 14px;
+  }
+
   .tab:hover {
     background: var(--bg-tertiary);
     color: var(--fg);
   }
 
   .tab.active {
-    background: var(--bg);
+    background: var(--tab-active-bg, var(--bg));
     color: var(--tab-active-fg);
-    border-bottom: 2px solid var(--accent);
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+
+  .tab.active .tab-count {
+    background: var(--status-running-tint, rgba(76,197,106,.16));
+    color: var(--accent);
+  }
+
+  .tab.highlight {
+    animation: tab-arrive 0.5s ease-out;
+  }
+  @keyframes tab-arrive {
+    from { background: var(--accent); color: var(--bg); }
+    to   { background: transparent; }
   }
 
   .tab-name {
@@ -140,5 +331,73 @@
   .tab-add:hover {
     background: var(--bg-tertiary);
     color: var(--fg);
+  }
+
+  .ctx-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+  }
+
+  .ctx-menu {
+    position: fixed;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px;
+    min-width: 180px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    z-index: 1001;
+  }
+
+  .ctx-item {
+    display: block; width: 100%;
+    padding: 7px 12px; text-align: left;
+    background: none; border: none;
+    color: var(--fg); font-size: 13px;
+    border-radius: 4px; cursor: pointer;
+  }
+
+  .ctx-item:hover { background: var(--bg-tertiary); }
+
+  .ctx-item-danger { color: #f87171; }
+
+  .ctx-separator { height: 1px; background: var(--border); margin: 4px 0; }
+
+  .tab-activity-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+
+  .tab-dot-done {
+    background: var(--status-running, #4cc56a);
+    box-shadow: 0 0 6px var(--status-running, #4cc56a);
+  }
+
+  .tab-dot-waitingPermission,
+  .tab-dot-waitingAnswer {
+    background: var(--status-waiting, #d6a85c);
+    box-shadow: 0 0 7px var(--status-waiting, #d6a85c);
+    animation: tab-dot-pulse 1s ease-in-out infinite;
+  }
+
+  .tab-dot-error {
+    background: var(--status-danger, #d65f5f);
+  }
+
+  .tab-dot-active {
+    background: var(--accent);
+    animation: tab-dot-slow-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes tab-dot-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(0.75); }
+  }
+
+  @keyframes tab-dot-slow-pulse {
+    0%, 100% { opacity: 0.8; }
+    50%       { opacity: 0.25; }
   }
 </style>

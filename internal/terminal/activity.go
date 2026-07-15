@@ -18,11 +18,20 @@ type TokenInfo struct {
 type ActivityState int
 
 const (
-	ActivityIdle       ActivityState = iota // no recent output
-	ActivityActive                          // currently producing output
-	ActivityDone                            // just finished (prompt returned)
-	ActivityNeedsInput                      // waiting for user confirmation
+	ActivityIdle              ActivityState = iota // no recent output
+	ActivityActive                                 // currently producing output
+	ActivityDone                                   // just finished (prompt returned)
+	ActivityWaitingPermission                      // tool needs user approval
+	ActivityWaitingAnswer                          // waiting for text input from user
+	ActivityError                                  // tool execution failed
 )
+
+// ActivityStaleThreshold is how long PTY output must have stopped before the
+// screen is classified instead of assuming output is still in flight. Used
+// both by DetectActivity (no hook data) and by the hook-driven scan's
+// stale-"active" fallback (a lost/delayed Stop hook event must not leave a
+// pane — and any pipeline queue waiting on it — stuck forever).
+const ActivityStaleThreshold = 1500 * time.Millisecond
 
 // ScanTokens scans the screen buffer for token/cost patterns and updates
 // the Tokens field. Call this periodically (e.g. from the tick handler).
@@ -44,10 +53,13 @@ func (s *Session) ScanTokens() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Look for cost patterns like $0.12 or $1.50
-	if matches := costPattern.FindStringSubmatch(content); len(matches) >= 2 {
-		if v, err := strconv.ParseFloat(matches[1], 64); err == nil {
-			s.Tokens.TotalCost = v
+	// Look for cost patterns like $0.12 or $1.50 — but never overwrite an
+	// authoritative statusline-sourced cost.
+	if s.costSource != CostSourceStatusline {
+		if matches := costPattern.FindStringSubmatch(content); len(matches) >= 2 {
+			if v, err := strconv.ParseFloat(matches[1], 64); err == nil {
+				s.Tokens.TotalCost = v
+			}
 		}
 	}
 
@@ -66,7 +78,17 @@ func (s *Session) DetectActivity() ActivityState {
 	s.mu.Lock()
 	lastOutput := s.LastOutputAt
 	currentActivity := s.Activity
+	hasHookData := s.hasHookData
 	s.mu.Unlock()
+
+	// Hook events are authoritative once present for this session — a stale or
+	// misrouted PTY-timing read must never clobber them. This guard belongs
+	// here (not just in the scan loop's call site) so no caller, present or
+	// future, can bypass it by calling DetectActivity() directly. See
+	// TestDetectActivity_HookDataPresent_NeverOverridesHookState.
+	if hasHookData {
+		return currentActivity
+	}
 
 	// Need output to have happened at all
 	if lastOutput.IsZero() {
@@ -79,7 +101,7 @@ func (s *Session) DetectActivity() ActivityState {
 	// This is critical for pipeline queue advancement: after processQueue
 	// sends the next prompt, the PTY echo must transition the state from
 	// "done" to "active" so the next "done" is detected as a real change.
-	if elapsed < 1500*time.Millisecond {
+	if elapsed < ActivityStaleThreshold {
 		if currentActivity != ActivityActive {
 			s.mu.Lock()
 			s.Activity = ActivityActive
@@ -96,6 +118,13 @@ func (s *Session) DetectActivity() ActivityState {
 	return newState
 }
 
+// ClassifyScreenState examines the screen buffer and returns ActivityWaitingAnswer
+// if a trailing question is detected above the prompt, otherwise ActivityDone or
+// ActivityIdle. Exported so hook-driven scan logic can cross-check after Stop events.
+func (s *Session) ClassifyScreenState() ActivityState {
+	return s.classifyScreenState()
+}
+
 // classifyScreenState examines the last rows of the screen to determine
 // if Claude is done or waiting for input.
 func (s *Session) classifyScreenState() ActivityState {
@@ -106,6 +135,8 @@ func (s *Session) classifyScreenState() ActivityState {
 		scanFrom = 0
 	}
 	lines := s.Screen.PlainTextRows(scanFrom, rows)
+
+	promptAt := -1
 	// Iterate in reverse (bottom-up) to find the most recent prompt/input
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := lines[i]
@@ -116,15 +147,41 @@ func (s *Session) classifyScreenState() ActivityState {
 
 		// Needs input patterns (check first — takes priority)
 		if needsInputPattern.MatchString(trimmed) {
-			return ActivityNeedsInput
+			return ActivityWaitingAnswer
 		}
 
-		// Prompt returned (Claude/shell is done)
+		// Prompt found — record position, then check above for trailing question
 		if promptPattern.MatchString(trimmed) {
-			return ActivityDone
+			promptAt = i
+			break
 		}
 	}
-	return ActivityIdle
+
+	if promptAt < 0 {
+		return ActivityIdle
+	}
+
+	// Scan up to 8 lines above the prompt for a trailing question.
+	// Claude often ends its last message with "...?" immediately before the
+	// input prompt. Claude Code's TUI also shows a status/hint line (model,
+	// mode, cost) directly above the ❯ prompt, so we must check up to 2
+	// non-empty lines — the first may be the status bar, the second the question.
+	nonEmpty := 0
+	for i := promptAt - 1; i >= 0 && i >= promptAt-8; i-- {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" {
+			continue
+		}
+		nonEmpty++
+		if strings.HasSuffix(trimmed, "?") {
+			return ActivityWaitingAnswer
+		}
+		if nonEmpty >= 2 {
+			break // checked 2 non-empty lines above prompt, give up
+		}
+	}
+
+	return ActivityDone
 }
 
 // ResetActivity sets the activity state back to Idle.
@@ -140,11 +197,14 @@ var (
 	inputTokenPattern  = regexp.MustCompile(`(\d+\.?\d*[kK]?)\s*(?:input|in\b)`)
 	outputTokenPattern = regexp.MustCompile(`(\d+\.?\d*[kK]?)\s*(?:output|out\b)`)
 
-	// Needs user input: permission prompts, Y/n confirmations, etc.
+	// Needs user input: Y/n confirmations and explicit question phrases.
+	// Note: "permission" is intentionally excluded — Claude Code shows
+	// "bypass permissions on" on YOLO startup, which would false-positive.
+	// PermissionRequest hook events handle the real permission-request case.
 	needsInputPattern = regexp.MustCompile(`(?i)` +
 		`\[Y/n\]|\[y/N\]|\(y/n\)|` + // Classic Y/n prompts
 		`(?:proceed|continue|confirm|approve|allow)\s*\?|` + // Question prompts
-		`permission|Do you want to|Would you like to|` + // Permission phrases
+		`Do you want to|Would you like to|` + // Permission phrases
 		`Press Enter to|waiting for|Waiting for`)
 
 	// Prompt returned — Claude or shell is done and waiting for new input.

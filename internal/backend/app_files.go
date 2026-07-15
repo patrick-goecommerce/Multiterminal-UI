@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // FileEntry represents a file or directory in the sidebar.
@@ -18,7 +19,7 @@ type FileEntry struct {
 
 // ListDirectory returns the contents of a directory, sorted dirs-first.
 // If dir is empty, it defaults to the current working directory.
-func (a *App) ListDirectory(dir string) []FileEntry {
+func (a *AppService) ListDirectory(dir string) []FileEntry {
 	if dir == "" {
 		dir, _ = os.Getwd()
 	}
@@ -54,7 +55,7 @@ func (a *App) ListDirectory(dir string) []FileEntry {
 
 // CreateDirectory creates a new directory (including parents) and returns
 // an error string (empty on success).
-func (a *App) CreateDirectory(path string) string {
+func (a *AppService) CreateDirectory(path string) string {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return err.Error()
 	}
@@ -62,7 +63,7 @@ func (a *App) CreateDirectory(path string) string {
 }
 
 // SearchFiles searches for files matching a query string in the given directory.
-func (a *App) SearchFiles(dir string, query string) []FileEntry {
+func (a *AppService) SearchFiles(dir string, query string) []FileEntry {
 	if query == "" || dir == "" {
 		return nil
 	}
@@ -102,17 +103,19 @@ const maxPreviewSize = 1 << 20
 
 // FileContent holds the result of reading a file for preview.
 type FileContent struct {
-	Path    string `json:"path"`
-	Name    string `json:"name"`
-	Content string `json:"content"`
-	Size    int64  `json:"size"`
-	Error   string `json:"error"`
-	Binary  bool   `json:"binary"`
+	Path       string `json:"path"`
+	Name       string `json:"name"`
+	Content    string `json:"content"`
+	Size       int64  `json:"size"`
+	Error      string `json:"error"`
+	Binary     bool   `json:"binary"`
+	CreatedAt  string `json:"created_at"`
+	ModifiedAt string `json:"modified_at"`
 }
 
 // ReadFile reads a file and returns its content for preview.
 // Files larger than 1 MB or detected as binary are rejected.
-func (a *App) ReadFile(path string) FileContent {
+func (a *AppService) ReadFile(path string) FileContent {
 	info, err := os.Stat(path)
 	if err != nil {
 		return FileContent{Path: path, Name: filepath.Base(path), Error: err.Error()}
@@ -148,18 +151,57 @@ func (a *App) ReadFile(path string) FileContent {
 	}
 
 	return FileContent{
-		Path:    path,
-		Name:    info.Name(),
-		Content: string(data),
-		Size:    size,
+		Path:       path,
+		Name:       info.Name(),
+		Content:    string(data),
+		Size:       size,
+		CreatedAt:  fileCreationTime(info).Format(time.RFC3339),
+		ModifiedAt: info.ModTime().Format(time.RFC3339),
 	}
 }
 
+// OpenDirectory opens the parent directory of the given path in the OS file manager.
+func (a *AppService) OpenDirectory(path string) string {
+	dir := filepath.Dir(path)
+	var cmd *exec.Cmd
+	switch {
+	case isWindows():
+		cmd = exec.Command("explorer", dir)
+	default:
+		cmd = exec.Command("xdg-open", dir)
+	}
+	if err := cmd.Start(); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
 // OpenFileInEditor opens the file in the system default editor.
-func (a *App) OpenFileInEditor(path string) string {
+func (a *AppService) OpenFileInEditor(path string) string {
 	cmd := exec.Command("cmd", "/c", "start", "", path)
 	if err := cmd.Start(); err != nil {
 		return err.Error()
 	}
 	return ""
+}
+
+// SelectDirectory opens a native directory picker dialog and returns the
+// selected path, or an empty string if the user cancelled.
+func (a *AppService) SelectDirectory(startDir string) string {
+	if startDir == "" {
+		startDir = a.GetWorkingDir()
+	}
+	if a.app == nil {
+		return ""
+	}
+	result, err := a.app.Dialog.OpenFile().
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		SetTitle("Arbeitsverzeichnis wählen").
+		SetDirectory(startDir).
+		PromptForSingleSelection()
+	if err != nil || result == "" {
+		return ""
+	}
+	return result
 }

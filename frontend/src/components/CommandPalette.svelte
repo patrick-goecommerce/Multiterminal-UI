@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import { config } from '../stores/config';
   import type { CommandEntry } from '../stores/config';
   import * as App from '../../wailsjs/go/backend/App';
@@ -84,7 +85,7 @@
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <div class="palette" on:click|stopPropagation>
       <div class="palette-header">
-        <h3>Befehlspalette</h3>
+        <h3>{$t('commandPalette.title')}</h3>
         <button class="close-btn" on:click={close}>&times;</button>
       </div>
 
@@ -93,10 +94,10 @@
           {#if editingIndex === i}
             <div class="command-edit">
               <input class="edit-input" bind:value={editName} placeholder="Name" on:keydown={handleKeydown} />
-              <textarea class="edit-textarea" bind:value={editText} placeholder="Befehl / Text" rows="2" on:keydown={handleKeydown}></textarea>
+              <textarea class="edit-textarea" bind:value={editText} placeholder={$t('commandPalette.placeholder')} rows="2" on:keydown={handleKeydown}></textarea>
               <div class="edit-actions">
-                <button class="btn-save" on:click={saveEdit}>Speichern</button>
-                <button class="btn-cancel" on:click={cancelEdit}>Abbrechen</button>
+                <button class="btn-save" on:click={saveEdit}>{$t('commandPalette.save')}</button>
+                <button class="btn-cancel" on:click={cancelEdit}>{$t('commandPalette.cancel')}</button>
               </div>
             </div>
           {:else}
@@ -106,8 +107,8 @@
                 <span class="cmd-preview">{cmd.text.length > 60 ? cmd.text.slice(0, 60) + '...' : cmd.text}</span>
               </button>
               <div class="command-actions">
-                <button class="action-btn" on:click={() => startEdit(i)} title="Bearbeiten">&#9998;</button>
-                <button class="action-btn delete" on:click={() => deleteCommand(i)} title="Löschen">&times;</button>
+                <button class="action-btn" on:click={() => startEdit(i)} title={$t('commandPalette.edit')}>&#9998;</button>
+                <button class="action-btn delete" on:click={() => deleteCommand(i)} title={$t('commandPalette.delete')}>&times;</button>
               </div>
             </div>
           {/if}
@@ -115,15 +116,15 @@
 
         {#if adding}
           <div class="command-edit">
-            <input class="edit-input" bind:value={newName} placeholder="Name (z.B. Run Tests)" on:keydown={handleKeydown} />
-            <textarea class="edit-textarea" bind:value={newText} placeholder="Befehl / Text" rows="2" on:keydown={handleKeydown}></textarea>
+            <input class="edit-input" bind:value={newName} placeholder={$t('commandPalette.namePlaceholder')} on:keydown={handleKeydown} />
+            <textarea class="edit-textarea" bind:value={newText} placeholder={$t('commandPalette.placeholder')} rows="2" on:keydown={handleKeydown}></textarea>
             <div class="edit-actions">
-              <button class="btn-save" on:click={saveAdd} disabled={!newName.trim() || !newText.trim()}>Hinzufügen</button>
-              <button class="btn-cancel" on:click={cancelAdd}>Abbrechen</button>
+              <button class="btn-save" on:click={saveAdd} disabled={!newName.trim() || !newText.trim()}>{$t('commandPalette.add')}</button>
+              <button class="btn-cancel" on:click={cancelAdd}>{$t('commandPalette.cancel')}</button>
             </div>
           </div>
         {:else}
-          <button class="add-btn" on:click={startAdd}>+ Neuen Befehl anlegen</button>
+          <button class="add-btn" on:click={startAdd}>{$t('commandPalette.addNew')}</button>
         {/if}
       </div>
     </div>

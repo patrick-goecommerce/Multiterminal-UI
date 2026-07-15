@@ -13,21 +13,49 @@
   import IssueDialog from './components/IssueDialog.svelte';
   import BranchConflictDialog from './components/BranchConflictDialog.svelte';
   import FilePreview from './components/FilePreview.svelte';
-  import { tabStore, activeTab, allTabs } from './stores/tabs';
+  import DashboardView from './components/DashboardView.svelte';
+  import SetupDialog from './components/SetupDialog.svelte';
+  import LeftNav from './components/LeftNav.svelte';
+  import SkillPicker from './components/SkillPicker.svelte';
+  import KanbanBoard from './components/KanbanBoard.svelte';
+  import AskUserDialog from './components/AskUserDialog.svelte';
+  import WorktreeFinishDialog from './components/WorktreeFinishDialog.svelte';
+  import CloseTabConfirmDialog from './components/CloseTabConfirmDialog.svelte';
+  import { get } from 'svelte/store';
+  import { tabStore, activeTab, allTabs, windowTitle, tabNeedsCloseConfirm } from './stores/tabs';
+  import { workspace } from './stores/workspace';
+  import { kanban } from './stores/kanban';
   import { config } from './stores/config';
   import { applyTheme, applyAccentColor } from './stores/theme';
+  import { initI18n, setLanguage, t, type Language } from './stores/i18n';
   import type { PaneMode } from './stores/tabs';
-  import { buildClaudeArgv, getClaudeName, encodeForPty } from './lib/claude';
+  import { buildClaudeArgv, getClaudeName, encodeForPty, genSessionId, modeToPermissionMode } from './lib/claude';
+  import { getWindowId, isMainWindow, getInitialTabs, getInitialView } from './lib/window';
   import { createGlobalKeyHandler } from './lib/shortcuts';
   import { sendNotification } from './lib/notifications';
   import { restoreSession, saveSession } from './lib/session';
+  import { startKeepAliveLoop } from './lib/keepalive';
   import { fetchBranch, fetchCommitAge, fetchConflicts, fetchIssueCount } from './lib/git-polling';
+  import { checkForNewCommit } from './lib/background-agents';
   import { buildIssuePrompt, setupIssueBranch, resolveBranchConflict } from './lib/launch';
   import type { IssueContext } from './lib/launch';
   import * as App from '../wailsjs/go/backend/App';
-  import { EventsOn } from '../wailsjs/runtime/runtime';
+  import { EventsOn, Window } from '../wailsjs/runtime/runtime';
+  import { subscribeChatEvents } from './lib/chat-events';
+  import { sendQuickAction } from './lib/quickActionQueue';
 
   const MAX_PANES_PER_TAB = 10;
+
+  const _windowId = getWindowId();
+  const _isMain = isMainWindow();
+  // TODO: use _initialTabs to populate secondary window tabs (pending implementation)
+  const _initialTabs = getInitialTabs();
+  const _initialView = getInitialView();
+
+  // If opened with ?view=dashboard, switch to that view on load
+  if (_initialView === 'dashboard') {
+    workspace.setView('dashboard');
+  }
 
   let showLaunchDialog = false;
   let showProjectDialog = false;
@@ -35,8 +63,52 @@
   let showCommandPalette = false;
   let showSidebar = false;
   let showCrashDialog = false;
+  let showSetupDialog = false;
   let showIssueDialog = false;
+  let showDashboard = false;
+  let showSkillPicker = false;
+  let skillPickerDir = '';
+  let skillPickerMode: 'init' | 'edit' = 'init';
+  let projectInitialized = false;
+  let pendingCloseTabId = '';
+  let activeSkillCount = 0;
+  let showAskUser = false;
+  let askUserSessionId = 0;
+  let askUserSessionName = '';
+  let askUserQuestion = '';
+  let askUserOptions: string[] = [];
   let previewFilePath = '';
+  let finishDialog: {
+    visible: boolean;
+    sessionId: number;
+    state: 'ready' | 'blocked' | 'staging';
+    worktreePath: string;
+    targetBranch: string;
+    commits: string[];
+    stat: string;
+    untracked: string[];
+    cleanupOnly: boolean;
+    reason: string;
+    files: { path: string; status: string; selected: boolean }[];
+    commitMessage: string;
+    rebaseConflict: boolean;
+    cleanupFailed: boolean;
+  } = {
+    visible: false,
+    sessionId: 0,
+    state: 'ready',
+    worktreePath: '',
+    targetBranch: '',
+    commits: [],
+    stat: '',
+    untracked: [],
+    cleanupOnly: false,
+    reason: '',
+    files: [],
+    commitMessage: '',
+    rebaseConflict: false,
+    cleanupFailed: false,
+  };
   let editIssueData: { number: number; title: string; body: string; labels: string[]; state: string } | null = null;
   let launchIssueContext: { number: number; title: string; body: string; labels: string[] } | null = null;
   let issueCount = 0;
@@ -67,21 +139,28 @@
     name: string;
     argv: string[];
     sessionDir: string;
+    claudeSessionId: string;
   } | null = null;
 
   let resolvedClaudePath = 'claude';
   let claudeDetected = true;
+  let resolvedCodexPath = 'codex';
+  let codexDetected = false;
+  let resolvedGeminiPath = 'gemini';
+  let geminiDetected = false;
 
   let branchInterval: ReturnType<typeof setInterval> | null = null;
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
   let storeUnsubscribe: (() => void) | null = null;
+  let keepAliveCleanup: (() => void) | null = null;
+  let chatEventsCleanup: (() => void) | null = null;
 
   const handleGlobalKeydown = createGlobalKeyHandler({
     onNewPane: () => { showLaunchDialog = true; },
     onNewTab: () => { showProjectDialog = true; },
-    onCloseTab: () => { if ($activeTab) tabStore.closeTab($activeTab.id); },
-    onToggleSidebar: () => { if ($config.sidebar_pinned && showSidebar) return; showSidebar = !showSidebar; },
-    onOpenIssues: () => { showSidebar = true; sidebarView = 'issues'; },
+    onCloseTab: () => { if ($activeTab) requestCloseTab($activeTab.id); },
+    onToggleSidebar: () => workspace.toggleSidebar(),
+    onOpenIssues: () => workspace.openSidebar('issues'),
     onToggleMaximize: () => {
       const tab = $activeTab;
       if (tab?.focusedPaneId) tabStore.toggleMaximize(tab.id, tab.focusedPaneId);
@@ -91,16 +170,56 @@
       if (tab && idx < tab.panes.length) tabStore.focusPane(tab.id, tab.panes[idx].id);
     },
     canAddPane: () => ($activeTab?.panes.length ?? 0) < MAX_PANES_PER_TAB,
+    onToggleDashboard: () => {
+      if ($workspace.activeView === 'dashboard') workspace.setView('terminals');
+      else workspace.setView('dashboard');
+    },
+    onOpenSkills: () => { if (projectInitialized) openSkillEditor(); },
   });
 
   onMount(async () => {
+    // Secondary window: load config (theme), restore detached tab, set up merge-on-close
+    if (!_isMain) {
+      // Apply theme from config
+      try {
+        const cfg = await App.GetConfig();
+        config.set(cfg);
+        applyTheme(cfg.theme || 'konzept');
+        if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
+      } catch { applyTheme('konzept'); }
+
+      // Restore the tab that was detached into this window
+      try {
+        const stateJSON = await App.GetDetachedTabState(_windowId);
+        if (stateJSON) {
+          const tab = JSON.parse(stateJSON);
+          tabStore.importTab(tab);
+        }
+      } catch (e) {
+        console.error('[secondary] GetDetachedTabState failed', e);
+      }
+
+      // Push tab state to backend on every change so WindowClosing hook can
+      // emit window:tabs-merged reliably (no IPC race on close).
+      let saveTabsTimer: ReturnType<typeof setTimeout> | null = null;
+      allTabs.subscribe(tabs => {
+        if (saveTabsTimer) clearTimeout(saveTabsTimer);
+        saveTabsTimer = setTimeout(() => {
+          App.SaveWindowTabs(_windowId, JSON.stringify({ tabs })).catch(() => {});
+        }, 300);
+      });
+      return; // skip rest of onMount for secondary windows
+    }
+
     try {
       const cfg = await App.GetConfig();
       config.set(cfg);
-      applyTheme(cfg.theme || 'dark');
+      applyTheme(cfg.theme || 'konzept');
       if (cfg.terminal_color) applyAccentColor(cfg.terminal_color);
-      if (cfg.sidebar_pinned) showSidebar = true;
-    } catch { applyTheme('dark'); }
+      if (cfg.sidebar_pinned) { workspace.setSidebarPinned(true); workspace.openSidebar('explorer'); }
+      await initI18n((cfg.language || 'de') as Language);
+      if (!cfg.setup_done) showSetupDialog = true;
+    } catch { applyTheme('konzept'); await initI18n('de'); }
 
     try {
       resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude';
@@ -108,6 +227,22 @@
     } catch {
       resolvedClaudePath = 'claude';
       claudeDetected = false;
+    }
+
+    try {
+      resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex';
+      codexDetected = await App.IsCodexDetected();
+    } catch {
+      resolvedCodexPath = 'codex';
+      codexDetected = false;
+    }
+
+    try {
+      resolvedGeminiPath = (await App.GetResolvedGeminiPath()) || 'gemini';
+      geminiDetected = await App.IsGeminiDetected();
+    } catch {
+      resolvedGeminiPath = 'gemini';
+      geminiDetected = false;
     }
 
     try {
@@ -123,31 +258,163 @@
       }
     }).catch(() => {});
 
-    const restored = await restoreSession(resolvedClaudePath);
+    const restored = await restoreSession(resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
     if (!restored) {
       let workDir = '';
       try { workDir = await App.GetWorkingDir(); } catch {}
       tabStore.addTab('Workspace', workDir);
     }
 
-    EventsOn('terminal:activity', (info: any) => {
+    // Reconcile pane-worktree finish markers left over from a previous run.
+    const reconcileDir = $activeTab?.dir || '';
+    if (reconcileDir) App.ReconcileFinishMarkers(reconcileDir).catch(() => {});
+
+    // Start keep-alive loop (auto-start + periodic ping).
+    // NOTE: restoreSession() calls tabStore.addPane() with running=true before
+    // CreateSession resolves, so findFirstClaudePane() in startKeepAliveLoop
+    // correctly sees restored panes immediately.
+    if ($config.keep_alive) {
+      keepAliveCleanup = await startKeepAliveLoop($config.keep_alive, resolvedClaudePath);
+    }
+
+    // Subscribe to backend chat:* streaming events
+    chatEventsCleanup = subscribeChatEvents();
+
+    // Listen for tabs merging back from secondary windows
+    EventsOn('window:tabs-merged', (event: any) => {
+      try {
+        const incoming = JSON.parse(event.data?.tabState ?? '{}');
+        if (Array.isArray(incoming?.tabs)) {
+          for (const tab of incoming.tabs) {
+            tabStore.importTab(tab);
+          }
+        }
+      } catch (e) {
+        console.error('[window:tabs-merged] parse error', e);
+      }
+    });
+
+    // Wails v3: event handlers receive a WailsEvent object; payload is in event.data
+    EventsOn('terminal:activity', (event: any) => {
+      const info = event.data; // ActivityInfo { id, activity, cost, title }
       tabStore.updateActivity(info.id, info.activity, info.cost);
+      if (info.title) tabStore.setAutoName(info.id, info.title, 'osc');
       // Notify when an issue-linked agent finishes (only when window is focused,
       // because TerminalPane already sends a notification when unfocused)
       if (info.activity === 'done' && document.hasFocus()) {
         for (const tab of $allTabs) {
-          const pane = tab.panes.find(p => p.sessionId === info.id);
+          const pane = tab.panes.find((p: any) => p.sessionId === info.id);
           if (pane?.issueNumber) {
-            sendNotification(`Agent fertig – #${pane.issueNumber}`, pane.issueTitle || pane.name);
+            sendNotification($t('app.agentDone', { number: pane.issueNumber }), pane.issueTitle || pane.name);
             break;
           }
         }
       }
     });
-    EventsOn('terminal:exit', (id: number) => tabStore.markExited(id));
-    EventsOn('terminal:error', (id: number, msg: string) => {
+    // Native EnterWorktree detection: Claude decided on its own to isolate
+    // work; MTUI only tracks and displays it (spec 2026-07-03).
+    EventsOn('worktree:detected', (event: any) => {
+      const p = event.data ?? event;
+      if (!ownsSession(p.id)) return;
+      tabStore.setWorktree(p.id, p.worktreePath, p.worktreeBranch, p.targetBranch || '');
+    });
+    EventsOn('worktree:cleared', (event: any) => {
+      const p = event.data ?? event;
+      if (!ownsSession(p.id)) return;
+      tabStore.clearWorktree(p.id);
+    });
+    EventsOn('worktree:path-blocked', (event: any) => {
+      const p = event.data ?? event;
+      if (!ownsSession(p.id)) return;
+      sendNotification($t('app.worktreePathBlocked'), $t('app.worktreePathBlockedBody', { path: p.path }));
+    });
+    // Worktree finish flow: confirm overlay + phase tracking + pane relaunch.
+    // Runs ALONGSIDE the detection listeners above (spec 2026-07-03 rev 2 §11.1):
+    // detected/cleared track "worktree active"; these track "finish in progress".
+    // Payloads are filtered to sessions owned by a pane of THIS window.
+    EventsOn('worktree:finish-ready', (event: any) => {
+      const p = event.data ?? event;
+      if (!ownsSession(p.sessionId)) return;
+      tabStore.setFinishPhase(p.sessionId, 'ready');
+      finishDialog = {
+        visible: true,
+        sessionId: p.sessionId,
+        state: 'ready',
+        worktreePath: '',
+        targetBranch: p.targetBranch || '',
+        commits: p.commits || [],
+        stat: p.stat || '',
+        untracked: p.untracked || [],
+        cleanupOnly: !!p.cleanupOnly,
+        reason: '',
+        files: [],
+        commitMessage: '',
+        rebaseConflict: false,
+        cleanupFailed: false,
+      };
+    });
+    EventsOn('worktree:finish-blocked', (event: any) => {
+      const p = event.data ?? event;
+      if (!ownsSession(p.sessionId)) return;
+      tabStore.setFinishPhase(p.sessionId, p.phase || '');
+      // A real block ('blocked') and a post-merge cleanup failure (phase
+      // 'cleanup' + cleanupFailed) both surface the overlay. 'preparing' is an
+      // informative phase update (prep still running), and '' means cancel/abort
+      // (e.g. CancelWorktreeFinish) — neither should reopen the confirm dialog.
+      if (p.phase === 'blocked' || p.cleanupFailed) {
+        finishDialog = {
+          ...finishDialog,
+          visible: true,
+          sessionId: p.sessionId,
+          state: 'blocked',
+          reason: p.reason || '',
+          rebaseConflict: false,
+          cleanupFailed: !!p.cleanupFailed,
+        };
+      }
+    });
+    EventsOn('worktree:finish-done', async (event: any) => {
+      const p = event.data ?? event;
+      if (!ownsSession(p.sessionId)) return;
+      finishDialog = { ...finishDialog, visible: false };
+      await relaunchPaneAfterFinish(p.sessionId, p.mainRoot, p.mode);
+    });
+    // Auto-generated pane name (LLM summary of the user's prompt)
+    EventsOn('pane:autoname', (event: any) => {
+      const info = event.data; // PaneNameEvent { id, name }
+      if (info?.name) tabStore.setAutoName(info.id, info.name, 'llm');
+    });
+    EventsOn('terminal:exit', (event: any) => {
+      const id: number = event.data.id;
+      tabStore.markExited(id);
+    });
+    EventsOn('terminal:error', (event: any) => {
+      const id: number = event.data.id;
+      const msg: string = event.data.message;
       console.error('[terminal:error]', id, msg);
-      alert(`Terminal-Fehler (Session ${id}): ${msg}`);
+      alert($t('app.terminalError', { id: String(id), msg }));
+    });
+
+    // Ask-User Bridging: show dialog when agent needs input
+    EventsOn('ask_user:question', (event: any) => {
+      const q = event.data || event;
+      askUserSessionId = q.session_id || q.sessionId || 0;
+      askUserSessionName = q.session_name || q.sessionName || '';
+      askUserQuestion = q.question || '';
+      askUserOptions = q.options || [];
+      showAskUser = true;
+    });
+
+    // Board events: reload kanban board when a task transitions
+    EventsOn('board:task-transition', (_payload: any) => {
+      const dir = get(activeTab)?.dir || '';
+      if (dir) {
+        import('../wailsjs/go/backend/App').then(({ GetBoardTasks }) => {
+          GetBoardTasks(dir).then(tasks => {
+            kanban.setTasks(tasks || []);
+          }).catch(() => {});
+        });
+      }
     });
 
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -170,6 +437,8 @@
     if (branchInterval) clearInterval(branchInterval);
     if (commitAgeInterval) clearInterval(commitAgeInterval);
     if (storeUnsubscribe) storeUnsubscribe();
+    if (keepAliveCleanup) keepAliveCleanup();
+    if (chatEventsCleanup) chatEventsCleanup();
     window.removeEventListener('beforeunload', saveSession);
     document.removeEventListener('keydown', handleGlobalKeydown);
   });
@@ -180,12 +449,37 @@
     branch = await fetchBranch(tab.dir || '.');
   }
 
-  $: if ($activeTab) { updateBranch(); updateCommitAge(); updateIssueCount(); updateConflicts(); }
+  // Refresh per-tab git/issue/worktree state only when the ACTIVE TAB actually
+  // changes (id or dir), NOT on every tabStore mutation. The derived $activeTab
+  // re-emits on every scan-driven activity/cost update (many times per second),
+  // and the old inline block re-ran all of these each time — updateIssueCount()
+  // spawns a `gh` process per call, which produced a runaway spawn storm
+  // (hundreds/sec across tabs) that could exhaust the process and crash the app.
+  // Periodic refresh for branch/conflicts/commitAge is already handled by the
+  // interval timers in onMount; this block is purely the on-tab-switch refresh.
+  let lastActiveTabKey = '';
+  $: if ($activeTab) pollActiveTab($activeTab);
+
+  function pollActiveTab(tab: { id: string; dir: string }) {
+    const key = `${tab.id} ${tab.dir}`;
+    if (key === lastActiveTabKey) return;
+    lastActiveTabKey = key;
+    updateBranch();
+    updateCommitAge();
+    updateIssueCount();
+    updateConflicts();
+    checkProjectInit(tab.dir);
+  }
 
   async function updateCommitAge() {
     const tab = $activeTab;
     if (!tab) return;
-    commitAgeMinutes = await fetchCommitAge(tab.dir || '.');
+    const dir = tab.dir || '.';
+    commitAgeMinutes = await fetchCommitAge(dir);
+    const bg = $config.background_agents;
+    if (bg?.review_enabled || bg?.test_enabled) {
+      checkForNewCommit(dir, bg, { claude: resolvedClaudePath, codex: resolvedCodexPath, gemini: resolvedGeminiPath }, tab.id);
+    }
   }
 
   async function updateConflicts() {
@@ -196,8 +490,8 @@
         ? ` (${info.operation.charAt(0).toUpperCase() + info.operation.slice(1)})`
         : '';
       sendNotification(
-        `Merge-Konflikte erkannt${opLabel}`,
-        `${info.count} Datei${info.count > 1 ? 'en' : ''} mit Konflikten`
+        $t('app.mergeConflicts', { op: opLabel }),
+        $t('app.conflictFiles', { count: info.count })
       );
     }
     prevConflictCount = info.count;
@@ -206,30 +500,44 @@
     conflictOperation = info.operation;
   }
 
-  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null }>) {
-    const { type, model, issue } = e.detail;
+  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string }>) {
+    const { type, model, issue, display = 'terminal', permissionMode = 'plan' } = e.detail;
     showLaunchDialog = false;
     const issueCtx = issue || launchIssueContext;
     launchIssueContext = null;
     const tab = $activeTab;
     if (!tab) return;
     if (tab.panes.length >= MAX_PANES_PER_TAB) {
-      alert(`Max. ${MAX_PANES_PER_TAB} Terminals pro Tab erreicht.`);
+      alert($t('app.maxPanes', { max: MAX_PANES_PER_TAB }));
       return;
     }
-    const claudeCmd = resolvedClaudePath;
-    const argv = buildClaudeArgv(type, model, claudeCmd);
+
+    if (display === 'chat') {
+      const provider = type.startsWith('codex') ? 'codex' : type.startsWith('gemini') ? 'gemini' : 'claude';
+      try {
+        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', permissionMode, '');
+        const name = getClaudeName(type, model);
+        tabStore.addPane(tab.id, 0, name, type, model || '', null, '', '', '', '', '', false, 'chat', conv.id);
+        workspace.setView('terminals');
+      } catch (err) { console.error('[handleLaunch] CreateConversation failed:', err); }
+      return;
+    }
+
+    // Pin a session id for claude panes so they can be resumed when toggled to
+    // chat display (and vice versa). Empty for shell/codex/gemini.
+    const claudeSessionId = type.startsWith('claude') ? genSessionId() : '';
+    const argv = buildClaudeArgv(type, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, { sessionId: claudeSessionId });
     const baseName = getClaudeName(type, model);
     const name = issueCtx ? `${baseName} – #${issueCtx.number}` : baseName;
     try {
       let issueBranch = '';
       let worktreePath = '';
+      let targetBranch = '';
       let sessionDir = tab.dir || '';
 
       if (issueCtx) {
         const result = await setupIssueBranch(
           sessionDir, issueCtx,
-          $config.use_worktrees === true,
           $config.auto_branch_on_issue !== false,
         );
         if (result.cancelled) return;
@@ -241,18 +549,36 @@
             targetIssueTitle: issueCtx.title,
             dirtyWorkingTree: result.conflict.dirtyWorkingTree,
           };
-          pendingLaunch = { type, model, issueCtx, name, argv, sessionDir };
+          pendingLaunch = { type, model, issueCtx, name, argv, sessionDir, claudeSessionId };
           showBranchConflict = true;
           return;
         }
         issueBranch = result.issueBranch;
         worktreePath = result.worktreePath;
+        targetBranch = result.targetBranch;
         sessionDir = result.sessionDir;
       }
 
-      const sessionId = await App.CreateSession(argv, sessionDir, 24, 80);
+      // Claude may decide on its own to isolate work via the native EnterWorktree
+      // tool; the project must be prepared for that before the process starts,
+      // since it only reads its memory files once at launch.
+      if (type !== 'shell' && tab.dir) {
+        try {
+          await App.EnsureProjectWorktreeSetup(tab.dir);
+        } catch (err) {
+          console.error('[EnsureProjectWorktreeSetup]', err);
+        }
+      }
+
+      const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, type);
       if (sessionId > 0) {
-        tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx?.number, issueCtx?.title, issueBranch, worktreePath);
+        let paneBranch = issueBranch;
+        if (!paneBranch) {
+          try { paneBranch = await App.GetGitBranch(sessionDir); } catch {}
+        }
+        tabStore.addPane(tab.id, sessionId, name, type, model,
+          issueCtx?.number, issueCtx?.title, issueBranch, worktreePath, paneBranch,
+          targetBranch, false, 'terminal', '', claudeSessionId);
         if (issueCtx) {
           App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
           setTimeout(() => {
@@ -273,15 +599,21 @@
 
     const tab = $activeTab;
     if (!tab) return;
-    const { type, model, issueCtx, name, argv } = launch;
+    const { type, model, issueCtx, name, argv, claudeSessionId } = launch;
 
     try {
       const resolved = await resolveBranchConflict(e.detail.action, launch.sessionDir, issueCtx);
       if (resolved.cancelled) return;
 
-      const sessionId = await App.CreateSession(argv, resolved.sessionDir, 24, 80);
+      const sessionId = await App.CreateSession(argv, resolved.sessionDir, 24, 80, type);
       if (sessionId > 0) {
-        tabStore.addPane(tab.id, sessionId, name, type, model, issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.worktreePath);
+        let paneBranch = resolved.issueBranch;
+        if (!paneBranch) {
+          try { paneBranch = await App.GetGitBranch(resolved.sessionDir); } catch {}
+        }
+        tabStore.addPane(tab.id, sessionId, name, type, model,
+          issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.worktreePath, paneBranch,
+          resolved.targetBranch, false, 'terminal', '', claudeSessionId);
         App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.sessionDir);
         setTimeout(() => {
           const prompt = buildIssuePrompt(issueCtx);
@@ -296,13 +628,84 @@
     showLaunchDialog = true;
   }
 
-  function handleClosePane(e: CustomEvent<{ paneId: string; sessionId: number }>) {
+  function handleDashboardNavigate(e: CustomEvent<{ tabId: string; paneId: string }>) {
+    const { tabId, paneId } = e.detail;
+    showDashboard = false;
+    workspace.setView('terminals');
+    tabStore.setActiveTab(tabId);
+    tabStore.focusPane(tabId, paneId);
+  }
+
+  async function checkProjectInit(dir: string) {
+    if (!dir) return;
+    try {
+      const initialized = await App.IsProjectInitialized(dir);
+      projectInitialized = initialized;
+      if (initialized) {
+        App.GetActiveSkills(dir).then(ids => { activeSkillCount = ids?.length ?? 0; }).catch(() => {});
+      } else {
+        activeSkillCount = 0;
+        skillPickerDir = dir;
+        skillPickerMode = 'init';
+        showSkillPicker = true;
+      }
+    } catch {}
+  }
+
+  async function handleSkillPickerDone(e: CustomEvent<{ skillIds: string[] }>) {
+    showSkillPicker = false;
+    const dir = skillPickerDir;
+    const mode = skillPickerMode;
+    skillPickerDir = '';
+    if (dir) {
+      try {
+        if (mode === 'edit') {
+          await App.UpdateProjectSkills(dir, e.detail.skillIds);
+        } else {
+          await App.InitProject(dir, e.detail.skillIds);
+          projectInitialized = true;
+        }
+        activeSkillCount = e.detail.skillIds.length;
+      } catch (err) { console.error('[SkillPicker]', err); }
+    }
+  }
+
+  function handleSkillPickerSkip() {
+    showSkillPicker = false;
+    const dir = skillPickerDir;
+    skillPickerDir = '';
+    if (dir) {
+      App.InitProject(dir, []).catch(() => {});
+      projectInitialized = true;
+    }
+  }
+
+  function openSkillEditor() {
+    const dir = $activeTab?.dir ?? '';
+    if (!dir) return;
+    skillPickerDir = dir;
+    skillPickerMode = 'edit';
+    showSkillPicker = true;
+  }
+
+  function handleClosePane(e: CustomEvent<{ paneId: string; sessionId?: number }>) {
     const tab = $activeTab;
     if (!tab) return;
     const pane = tab.panes.find((p) => p.id === e.detail.paneId);
-    if (!confirm(`"${pane?.name || 'Terminal'}" wirklich schließen?`)) return;
-    App.CloseSession(e.detail.sessionId);
-    tabStore.closePane(tab.id, e.detail.paneId);
+    if (!pane) return;
+    if (!confirm(`"${pane.name || 'Pane'}" wirklich schließen?`)) return;
+    // A pane with an active worktree is not removed automatically — the worktree
+    // stays on disk and remains reachable via the ⎇ dropdown. Warn so the user
+    // does not silently orphan it (spec 5.6).
+    if (pane.worktreePath && pane.finishPhase === '') {
+      if (!confirm('Dieses Pane hat einen aktiven Worktree. Trotzdem schließen?\n\n(Der Worktree bleibt liegen und ist weiterhin über das ⎇-Dropdown erreichbar. Zum Mergen/Aufräumen den ✓-Button nutzen.)')) return;
+    }
+    if (pane.display === 'chat') {
+      if (pane.conversationId) App.CloseChatSession(pane.conversationId);
+    } else {
+      App.CloseSession(pane.sessionId);
+    }
+    tabStore.closePane(tab.id, pane.id);
   }
 
   function handleMaximizePane(e: CustomEvent<{ paneId: string }>) {
@@ -326,12 +729,61 @@
     const { paneId, sessionId, mode, model, name } = e.detail;
     App.CloseSession(sessionId);
     tabStore.closePane(tab.id, paneId);
-    const claudeCmd = resolvedClaudePath;
-    const argv = buildClaudeArgv(mode, model, claudeCmd);
+    // Restart = fresh session, but still pin an id so it stays toggle-able to chat.
+    const sid = mode.startsWith('claude') ? genSessionId() : '';
+    const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, { sessionId: sid });
     try {
-      const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80);
-      if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model);
+      const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
+      if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model,
+        null, '', '', '', '', '', false, 'terminal', '', sid);
     } catch (err) { console.error('[handleRestartPane] failed:', err); }
+  }
+
+  async function handleToggleDisplay(e: CustomEvent<{ paneId: string }>) {
+    const tab = $activeTab;
+    if (!tab) return;
+    const pane = tab.panes.find((p) => p.id === e.detail.paneId);
+    if (!pane) return;
+    const { name, mode, model } = pane;
+
+    if (pane.display === 'chat') {
+      // Chat → Terminal: resume the same claude session so the conversation is
+      // preserved (claude --resume replays the history into the TUI).
+      let resumeId = '';
+      if (pane.conversationId) {
+        try {
+          const conv = await App.GetConversation(tab.dir || '', pane.conversationId);
+          resumeId = (conv as any)?.session_id || '';
+        } catch {}
+        App.CloseChatSession(pane.conversationId);
+      }
+      tabStore.closePane(tab.id, pane.id);
+      // Keep the pane resumable after the toggle: reuse the resumed id, or pin a
+      // fresh one for claude panes that never got a session id yet.
+      const sid = resumeId || (mode.startsWith('claude') ? genSessionId() : '');
+      const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath,
+        resumeId ? { resumeId } : { sessionId: sid });
+      try {
+        const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
+        if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model,
+          null, '', '', '', '', '', false, 'terminal', '', sid);
+      } catch (err) { console.error('[toggleDisplay→terminal] failed:', err); }
+    } else {
+      // Terminal → Chat: an interactive terminal session id is NOT a resumable
+      // `claude -p` conversation, so passing it as --resume reliably fails with
+      // "No conversation found" and costs a doomed cold start (~11s) before the
+      // self-heal restarts fresh. Start the chat fresh instead — a single cold
+      // start. (We still keep the id on the pane so toggling back to terminal can
+      // resume the interactive session.)
+      const resumeId = pane.claudeSessionId || '';
+      App.CloseSession(pane.sessionId);
+      tabStore.closePane(tab.id, pane.id);
+      const provider = mode.startsWith('codex') ? 'codex' : mode.startsWith('gemini') ? 'gemini' : 'claude';
+      try {
+        const conv = await App.CreateConversation(provider, model || '', tab.dir || '', modeToPermissionMode(mode), '');
+        tabStore.addPane(tab.id, 0, name, mode, model || '', null, '', '', '', '', '', false, 'chat', conv.id, resumeId);
+      } catch (err) { console.error('[toggleDisplay→chat] failed:', err); }
+    }
   }
 
   function handleSendCommand(e: CustomEvent<{ text: string }>) {
@@ -343,21 +795,36 @@
   }
 
   function handleNavigateFile(e: CustomEvent<{ path: string }>) {
-    showSidebar = true;
-    sidebarView = 'explorer';
+    const rel = e.detail.path;
+    const dir = $activeTab?.dir ?? '';
+    // Resolve relative path against working directory
+    const fullPath = rel.match(/^[A-Z]:|^\//) ? rel : (dir ? dir.replace(/\\/g, '/').replace(/\/$/, '') + '/' + rel.replace(/\\/g, '/') : rel);
+    previewFilePath = fullPath;
   }
 
   async function handleTogglePin() {
     const pinned = !$config.sidebar_pinned;
     config.update(c => ({ ...c, sidebar_pinned: pinned }));
+    workspace.setSidebarPinned(pinned);
     try { await App.SaveConfig({ ...$config, sidebar_pinned: pinned }); } catch {}
-    if (!pinned && !showSidebar) return;
-    if (pinned) showSidebar = true;
+    if (pinned) workspace.openSidebar($workspace.sidebarView || 'explorer');
   }
 
   function handleSidebarFile(e: CustomEvent<{ path: string }>) {
     previewFilePath = e.detail.path;
   }
+
+  let _prevActiveTabId = '';
+  $: {
+    const id = $activeTab?.id ?? '';
+    if (id && id !== _prevActiveTabId) {
+      if (_prevActiveTabId !== '' && $workspace.activeView === 'dashboard') workspace.setView('terminals');
+      _prevActiveTabId = id;
+    }
+  }
+
+  // Sync showDashboard with workspace store for backward compatibility
+  $: showDashboard = $workspace.activeView === 'dashboard';
 
   $: totalCost = (() => {
     let sum = 0;
@@ -387,6 +854,18 @@
   $: canChangeDir = currentPanes === 0;
   $: tabInfo = `Tab ${($allTabs.findIndex((t) => t.id === $activeTab?.id) ?? 0) + 1}/${$allTabs.length}  Pane ${currentPanes}/${MAX_PANES_PER_TAB}`;
 
+  // Reflect the focused pane in the native window title (distinguishes multi-window).
+  // Only $activeTab is a reactive dependency; the dedup lives inside the function so
+  // Svelte does not track _lastWindowTitle (see CLAUDE.md $: footgun note).
+  let _lastWindowTitle = '';
+  function syncWindowTitle(tab: typeof $activeTab) {
+    const title = windowTitle(tab);
+    if (title === _lastWindowTitle) return;
+    _lastWindowTitle = title;
+    Window.SetTitle(title).catch(() => {});
+  }
+  $: syncWindowTitle($activeTab);
+
   async function handleChangeDir() {
     const tab = $activeTab;
     if (!tab || tab.panes.length > 0) return;
@@ -400,15 +879,59 @@
     tabStore.addTab(e.detail.name, e.detail.dir);
   }
 
+  async function handleSetupFinish(e: CustomEvent<{ language: Language; claudeEnabled: boolean; codexEnabled: boolean; geminiEnabled: boolean }>) {
+    const { language, claudeEnabled, codexEnabled, geminiEnabled } = e.detail;
+    showSetupDialog = false;
+    await setLanguage(language);
+    const updated = {
+      ...$config,
+      language,
+      setup_done: true,
+      claude_enabled: claudeEnabled,
+      codex_enabled: codexEnabled,
+      gemini_enabled: geminiEnabled,
+    };
+    config.set(updated);
+    try { await App.SaveConfig(updated); } catch {}
+  }
+
+  async function handleSetupLangChange(e: CustomEvent<{ lang: Language }>) {
+    await setLanguage(e.detail.lang);
+  }
+
   function handleCrashEnable() {
     showCrashDialog = false;
     App.EnableLogging(true);
     config.update(c => ({ ...c, logging_enabled: true }));
   }
 
+  function requestCloseTab(tabId: string) {
+    const tab = $allTabs.find((t) => t.id === tabId);
+    if (tab && tabNeedsCloseConfirm(tab)) {
+      pendingCloseTabId = tabId;
+    } else {
+      tabStore.closeTab(tabId);
+    }
+  }
+
+  function confirmCloseTab() {
+    tabStore.closeTab(pendingCloseTabId);
+    pendingCloseTabId = '';
+  }
+
   async function updateIssueCount() {
     const tab = $activeTab;
     issueCount = await fetchIssueCount(tab?.dir || '');
+  }
+
+  function handleAskUserAnswer(e: CustomEvent<{ sessionId: number; answer: string }>) {
+    showAskUser = false;
+    App.AnswerAskUser(e.detail.sessionId, e.detail.answer).catch(err => console.error('[AnswerAskUser]', err));
+  }
+
+  function handleAskUserDismiss(e: CustomEvent<{ sessionId: number }>) {
+    showAskUser = false;
+    App.DismissAskUser(e.detail.sessionId).catch(() => {});
   }
 
   function handleCreateIssue() {
@@ -433,6 +956,162 @@
     updateIssueCount();
   }
 
+  async function handleCommitPush(e: CustomEvent<{ paneId: string; sessionId: number }>) {
+    const { sessionId } = e.detail;
+    const tab = $activeTab;
+    if (!tab) return;
+    const dir = tab.dir || '';
+    try {
+      const suggestion = await App.GenerateCommitSuggestion(dir, []);
+      const type = suggestion.type || 'chore';
+      const scope = suggestion.scope ? `(${suggestion.scope})` : '';
+      const desc = suggestion.description || 'update';
+      const msg = `${type}${scope}: ${desc}`;
+      App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m '${msg.replace(/'/g, "'\\''")}' && git push\n`));
+    } catch (err) {
+      console.error('[handleCommitPush] failed:', err);
+      App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m 'chore: update' && git push\n`));
+    }
+  }
+
+  // --- Worktree finish flow -------------------------------------------------
+
+  /** True when a pane of THIS window owns the given session id. */
+  function ownsSession(sessionId: number): boolean {
+    for (const tab of get(allTabs)) {
+      if (tab.panes.some((p) => p.sessionId === sessionId)) return true;
+    }
+    return false;
+  }
+
+  function findPaneBySession(sessionId: number) {
+    for (const tab of get(allTabs)) {
+      const pane = tab.panes.find((p) => p.sessionId === sessionId);
+      if (pane) return pane;
+    }
+    return null;
+  }
+
+  function findPaneLocation(sessionId: number) {
+    for (const tab of get(allTabs)) {
+      const pane = tab.panes.find((p) => p.sessionId === sessionId);
+      if (pane) return { tab, pane };
+    }
+    return null;
+  }
+
+  function startFinish(sessionId: number) {
+    const pane = findPaneBySession(sessionId);
+    if (!pane?.worktreePath) return;
+    // Detected worktrees carry a target branch (from hook detection); the prompt
+    // is a v1 fallback for legacy worktrees without a stored target.
+    const t = pane.targetBranch || window.prompt('Ziel-Branch für den Merge:', branch || 'alpha-main') || '';
+    if (!t) return;
+    const mode = pane.mode === 'shell' ? 'shell' : 'claude';
+    tabStore.setFinishPhase(sessionId, 'preparing');
+    App.StartWorktreeFinish(sessionId, pane.worktreePath, pane.branch, t, mode);
+    if (mode === 'shell') {
+      // Shell panes have no Claude to prepare the merge — MTUI stages, commits
+      // and rebases itself via the staging dialog (backend set phase 'preparing').
+      openShellStaging(sessionId, pane.worktreePath, t);
+    }
+  }
+
+  // Files matching build artefacts / secrets are deselected by default so a shell
+  // finish never blindly commits them.
+  const stagingDeselect = /\.env|node_modules|dist\/|build\//;
+
+  async function openShellStaging(sessionId: number, wtPath: string, target: string) {
+    let files: { path: string; status: string; selected: boolean }[] = [];
+    try {
+      const changed = await App.GetWorktreeChangedFiles(wtPath);
+      files = (changed || []).map((f: any) => ({
+        path: f.path,
+        status: f.status,
+        selected: !stagingDeselect.test(f.path),
+      }));
+    } catch (err) {
+      console.error('GetWorktreeChangedFiles failed', err);
+    }
+    finishDialog = {
+      ...finishDialog,
+      visible: true,
+      sessionId,
+      state: 'staging',
+      worktreePath: wtPath,
+      targetBranch: target,
+      files,
+      commitMessage: '',
+      rebaseConflict: false,
+      reason: '',
+      cleanupFailed: false,
+    };
+  }
+
+  // Runs the commit (optional) + rebase, then hands back to the shared verify gate.
+  // A rebase conflict flips the dialog into a rebase-specific blocked state.
+  async function runShellStage(sessionId: number, wtPath: string, target: string,
+                               paths: string[], message: string) {
+    try {
+      if (paths.length > 0) {
+        await App.CommitWorktreeFiles(wtPath, paths, message);
+      }
+      await App.RebaseWorktreeOntoTarget(wtPath, target);
+    } catch (err) {
+      console.error('shell stage/rebase failed', err);
+      finishDialog = {
+        ...finishDialog,
+        visible: true,
+        state: 'blocked',
+        rebaseConflict: true,
+        reason: `Rebase auf ${target} fehlgeschlagen — Konflikte im Terminal auflösen oder Rebase abbrechen.`,
+      };
+      return;
+    }
+    // Success: the shared verify gate emits finish-ready/blocked and reopens the
+    // dialog in the matching state.
+    App.CheckWorktreeFinish(sessionId);
+  }
+
+  function handleFinishWorktree(e: CustomEvent<{ paneId: string; sessionId: number }>) {
+    startFinish(e.detail.sessionId);
+  }
+
+  async function handleQuickAction(e: CustomEvent<{ sessionId: number; prompt: string }>) {
+    try {
+      await sendQuickAction(e.detail.sessionId, e.detail.prompt);
+    } catch (err) {
+      console.error('[handleQuickAction] AddToQueue failed:', err);
+    }
+  }
+
+  function handleRetryFinish(sessionId: number) {
+    startFinish(sessionId);
+  }
+
+  function handleCancelFinish(e: CustomEvent<{ sessionId: number }>) {
+    App.CancelWorktreeFinish(e.detail.sessionId);
+    tabStore.setFinishPhase(e.detail.sessionId, '');
+  }
+
+  async function relaunchPaneAfterFinish(sessionId: number, mainRoot: string, mode: string) {
+    const loc = findPaneLocation(sessionId);
+    if (!loc) return;
+    const { tab, pane } = loc;
+    tabStore.closePane(tab.id, pane.id);
+    const sid = mode !== 'shell' ? genSessionId() : '';
+    const argv = mode !== 'shell'
+      ? buildClaudeArgv(pane.mode, pane.model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, { sessionId: sid })
+      : [];
+    try {
+      const newId = await App.CreateSession(argv, mainRoot, 24, 80, pane.mode);
+      if (newId > 0) {
+        tabStore.addPane(tab.id, newId, pane.name, pane.mode, pane.model,
+          null, '', '', '', '', '', false, 'terminal', '', sid);
+      }
+    } catch (err) { console.error('[relaunchPaneAfterFinish] failed:', err); }
+  }
+
   async function handleIssueAction(e: CustomEvent<{ paneId: string; sessionId: number; issueNumber: number; action: string }>) {
     const { sessionId, issueNumber, action } = e.detail;
     const tab = $activeTab;
@@ -440,8 +1119,16 @@
     const dir = tab.dir || '';
 
     if (action === 'commit') {
-      const msg = `Closes #${issueNumber}`;
-      App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m '${msg}' && git push\n`));
+      try {
+        const suggestion = await App.GenerateCommitSuggestion(dir, []);
+        const type = suggestion.type || 'chore';
+        const scope = suggestion.scope ? `(${suggestion.scope})` : '';
+        const desc = suggestion.description || 'update';
+        const msg = `${type}${scope}: ${desc} (#${issueNumber})`;
+        App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m '${msg.replace(/'/g, "'\\''")}' && git push\n`));
+      } catch {
+        App.WriteToSession(sessionId, encodeForPty(`git add -A && git commit -m 'chore: update (#${issueNumber})' && git push\n`));
+      }
     } else if (action === 'pr') {
       App.WriteToSession(sessionId, encodeForPty(`gh pr create --title "Closes #${issueNumber}" --body "Resolves #${issueNumber}" --fill\n`));
     } else if (action === 'closeIssue') {
@@ -454,49 +1141,81 @@
 </script>
 
 <div class="app">
-  <TabBar activeTabId={$activeTab?.id ?? ''} on:addTab={() => (showProjectDialog = true)} />
+  <TabBar
+    activeTabId={$activeTab?.id ?? ''}
+    isDashboard={$workspace.activeView === 'dashboard'}
+    on:addTab={() => (showProjectDialog = true)}
+    on:showDashboard={() => workspace.setView('dashboard')}
+    on:closeDashboard={() => workspace.setView('terminals')}
+    on:editSkills={openSkillEditor}
+    on:closeTab={(e) => requestCloseTab(e.detail.tabId)}
+  />
   <Toolbar
     paneCount={currentPanes}
     maxPanes={MAX_PANES_PER_TAB}
     tabDir={$activeTab?.dir ?? ''}
     {canChangeDir}
     on:newTerminal={() => (showLaunchDialog = true)}
-    on:toggleSidebar={() => { if ($config.sidebar_pinned && showSidebar) return; showSidebar = !showSidebar; }}
+    on:toggleSidebar={() => workspace.toggleSidebar()}
     on:changeDir={handleChangeDir}
-    on:openSettings={() => (showSettingsDialog = true)}
     on:openCommands={() => (showCommandPalette = true)}
   />
 
   <div class="content">
-    <Sidebar visible={showSidebar} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={sidebarView} pinned={$config.sidebar_pinned} on:close={() => { if (!$config.sidebar_pinned) showSidebar = false; }} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
-    <div class="tab-layers">
-      {#each $allTabs as tab (tab.id)}
-        <div class="tab-layer" class:active={tab.id === $activeTab?.id}>
-          <PaneGrid
-            tabId={tab.id}
-            panes={tab.panes}
-            active={tab.id === $activeTab?.id}
-            on:closePane={handleClosePane}
-            on:maximizePane={handleMaximizePane}
-            on:focusPane={handleFocusPane}
-            on:renamePane={handleRenamePane}
-            on:restartPane={handleRestartPane}
-            on:issueAction={handleIssueAction}
-            on:navigateFile={handleNavigateFile}
-            on:splitPane={() => (showLaunchDialog = true)}
-          />
-        </div>
-      {/each}
-    </div>
+    <LeftNav {issueCount} on:openSettings={() => (showSettingsDialog = true)} />
+    <Sidebar visible={$workspace.activeView === 'terminals' && $workspace.sidebarView !== null} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={$workspace.sidebarView || 'explorer'} pinned={$config.sidebar_pinned} on:close={() => workspace.closeSidebar()} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
+    {#if $workspace.activeView === 'dashboard'}
+      <DashboardView on:navigate={handleDashboardNavigate} on:undock={() => App.OpenDashboardWindow()} />
+    {:else if $workspace.activeView === 'terminals'}
+      <div class="tab-layers">
+        {#each $allTabs as tab (tab.id)}
+          <div class="tab-layer" class:active={tab.id === $activeTab?.id}>
+            <PaneGrid
+              tabId={tab.id}
+              panes={tab.panes}
+              active={tab.id === $activeTab?.id}
+              tabDir={tab.dir || ''}
+              on:closePane={handleClosePane}
+              on:maximizePane={handleMaximizePane}
+              on:focusPane={handleFocusPane}
+              on:renamePane={handleRenamePane}
+              on:restartPane={handleRestartPane}
+              on:toggleDisplayPane={handleToggleDisplay}
+              on:issueAction={handleIssueAction}
+              on:commitPush={handleCommitPush}
+              on:finishWorktree={handleFinishWorktree}
+              on:quickAction={handleQuickAction}
+              on:cancelFinish={handleCancelFinish}
+              on:navigateFile={handleNavigateFile}
+              on:splitPane={() => (showLaunchDialog = true)}
+            />
+          </div>
+        {/each}
+        {#if previewFilePath}
+          <FilePreview filePath={previewFilePath} dir={$activeTab?.dir ?? ''} on:close={() => (previewFilePath = '')} />
+        {/if}
+      </div>
+    {:else if $workspace.activeView === 'kanban'}
+      <KanbanBoard dir={$activeTab?.dir ?? ''} />
+    {/if}
   </div>
 
-  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} />
-  <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
+  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} {projectInitialized} skillCount={activeSkillCount} on:editSkills={openSkillEditor} />
+  <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} {codexDetected} {geminiDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
-  <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} }} />
+  <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} try { resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex'; codexDetected = await App.IsCodexDetected(); } catch {} try { resolvedGeminiPath = (await App.GetResolvedGeminiPath()) || 'gemini'; geminiDetected = await App.IsGeminiDetected(); } catch {} }} />
   <CommandPalette visible={showCommandPalette} on:send={handleSendCommand} on:close={() => (showCommandPalette = false)} />
+  <SetupDialog visible={showSetupDialog} {claudeDetected} {codexDetected} {geminiDetected} on:finish={handleSetupFinish} on:langChange={handleSetupLangChange} on:close={() => { showSetupDialog = false; }} />
   <CrashDialog visible={showCrashDialog} on:enable={handleCrashEnable} on:dismiss={() => (showCrashDialog = false)} />
+  <CloseTabConfirmDialog
+    visible={!!pendingCloseTabId}
+    tabName={$allTabs.find((t) => t.id === pendingCloseTabId)?.name ?? ''}
+    paneCount={$allTabs.find((t) => t.id === pendingCloseTabId)?.panes.length ?? 0}
+    on:confirm={confirmCloseTab}
+    on:cancel={() => (pendingCloseTabId = '')}
+  />
   <IssueDialog visible={showIssueDialog} dir={$activeTab?.dir ?? ''} editIssue={editIssueData} on:saved={handleIssueSaved} on:close={() => { showIssueDialog = false; editIssueData = null; }} />
+  <SkillPicker visible={showSkillPicker} dir={skillPickerDir} mode={skillPickerMode} on:done={handleSkillPickerDone} on:skip={handleSkillPickerSkip} on:close={() => { showSkillPicker = false; skillPickerDir = ''; }} />
   <BranchConflictDialog
     visible={showBranchConflict}
     currentBranch={branchConflictData?.currentBranch ?? ''}
@@ -507,13 +1226,33 @@
     on:choose={handleBranchConflictChoice}
     on:close={() => { showBranchConflict = false; pendingLaunch = null; branchConflictData = null; }}
   />
-  <FilePreview visible={!!previewFilePath} filePath={previewFilePath} on:close={() => (previewFilePath = '')} />
+  <AskUserDialog
+    visible={showAskUser}
+    sessionId={askUserSessionId}
+    sessionName={askUserSessionName}
+    question={askUserQuestion}
+    options={askUserOptions}
+    on:answer={handleAskUserAnswer}
+    on:dismiss={handleAskUserDismiss}
+  />
+  <WorktreeFinishDialog
+    {...finishDialog}
+    on:confirm={() => { tabStore.setFinishPhase(finishDialog.sessionId, 'merging'); finishDialog.visible = false; App.FinishWorktree(finishDialog.sessionId); }}
+    on:retry={() => { finishDialog.visible = false; handleRetryFinish(finishDialog.sessionId); }}
+    on:retryCleanup={() => { tabStore.setFinishPhase(finishDialog.sessionId, 'merging'); finishDialog.visible = false; App.FinishWorktree(finishDialog.sessionId); }}
+    on:cancel={() => { finishDialog.visible = false; App.CancelWorktreeFinish(finishDialog.sessionId); tabStore.setFinishPhase(finishDialog.sessionId, ''); }}
+    on:stageCommit={(e) => runShellStage(finishDialog.sessionId, finishDialog.worktreePath, finishDialog.targetBranch, e.detail.files, e.detail.message)}
+    on:rebaseOnly={() => runShellStage(finishDialog.sessionId, finishDialog.worktreePath, finishDialog.targetBranch, [], '')}
+    on:abortRebase={() => { finishDialog.visible = false; App.AbortWorktreeRebase(finishDialog.worktreePath); App.CancelWorktreeFinish(finishDialog.sessionId); tabStore.setFinishPhase(finishDialog.sessionId, ''); }}
+    on:resolveInTerminal={() => (finishDialog.visible = false)}
+    on:close={() => (finishDialog.visible = false)}
+  />
 </div>
 
 <style>
   :global(*) { margin: 0; padding: 0; box-sizing: border-box; }
   :global(body) {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
     background: var(--bg); color: var(--fg); overflow: hidden;
   }
   .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -525,4 +1264,12 @@
     visibility: hidden; pointer-events: none;
   }
   .tab-layer.active { visibility: visible; pointer-events: auto; }
+  .placeholder-view {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: var(--fg-muted, #a6adc8); gap: 0.5rem;
+  }
+  .placeholder-icon { font-size: 3rem; opacity: 0.3; }
+  .placeholder-view h3 { color: var(--fg, #cdd6f4); font-size: 1.2rem; }
+  .placeholder-view p { font-size: 0.85rem; }
 </style>

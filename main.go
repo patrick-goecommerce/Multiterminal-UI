@@ -5,6 +5,8 @@ package main
 
 import (
 	"embed"
+	"flag"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -13,11 +15,7 @@ import (
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/backend"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/logger"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 //go:embed all:frontend/dist
@@ -33,43 +31,113 @@ func main() {
 		}
 	}
 
+	// --- CLI flags ---
+	var (
+		flagListTabs  = flag.Bool("list-tabs", false, "List saved tab names and exit")
+		flagRemoveTab = flag.String("remove-tab", "", "Remove a tab by name and exit")
+		flagClean     = flag.Bool("clean", false, "Delete the session file and exit")
+		flagSafeMode  = flag.Bool("safe-mode", false, "Start without loading sessions; restore session on close")
+		flagDebug     = flag.Bool("debug", false, "Open debug console + enable file logging from startup")
+	)
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: mtui [options]\n\nOptions:\n")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	// CLI-only commands — execute and exit without starting the GUI.
+	if *flagListTabs {
+		runListTabs()
+		return
+	}
+	if *flagRemoveTab != "" {
+		runRemoveTab(*flagRemoveTab)
+		return
+	}
+	if *flagClean {
+		runClean()
+		return
+	}
+
+	// --- GUI start ---
+
+	// Debug mode: open console window + file logging BEFORE anything else.
+	if *flagDebug {
+		backend.InitDebugMode()
+	}
+
 	log.Println("Starting Multiterminal UI...")
 
 	cfg := config.Load()
 	log.Println("Config loaded, theme:", cfg.Theme)
 
-	// Enable file logging if configured (persistent or auto-enabled after crashes)
-	backend.InitLoggingFromConfig(cfg)
+	// Config-based logging (for non-debug mode, when LoggingEnabled is set in YAML).
+	if !*flagDebug {
+		backend.InitLoggingFromConfig(cfg)
+	}
 
-	app := backend.NewApp(cfg)
-	log.Println("App created, starting Wails...")
+	app := application.New(application.Options{
+		Name: "Multiterminal",
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(assets),
+		},
+	})
 
-	err := wails.Run(&options.App{
+	svc := backend.NewAppService(app, cfg, *flagSafeMode)
+	log.Println("AppService created, starting Wails...")
+
+	app.RegisterService(application.NewService(svc))
+
+	mainWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            backend.VersionTitle(),
 		Width:            1400,
 		Height:           900,
 		MinWidth:         800,
 		MinHeight:        600,
-		WindowStartState: options.Maximised,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		OnStartup:  app.Startup,
-		OnShutdown: app.Shutdown,
-		Bind: []interface{}{
-			app,
-		},
-		LogLevel: logger.DEBUG,
-		Windows: &windows.Options{
-			WebviewIsTransparent: false,
-			WindowIsTranslucent:  false,
-		},
+		URL:              "/?windowId=main",
+		BackgroundColour: application.NewRGBA(30, 30, 30, 255),
 	})
-	if err != nil {
+	mainWindow.Center()
+	mainWindow.Maximise()
+
+	svc.SetMainWindow(mainWindow)
+
+	if err := app.Run(); err != nil {
 		log.Println("Wails error:", err)
-		println("Error:", err.Error())
 	}
 	log.Println("Multiterminal UI exited")
+}
+
+// runListTabs prints tab names from the saved session, one per line.
+func runListTabs() {
+	state := config.LoadSession()
+	if state == nil {
+		fmt.Fprintln(os.Stderr, "No session file found.")
+		os.Exit(1)
+	}
+	for _, tab := range state.Tabs {
+		fmt.Println(tab.Name)
+	}
+}
+
+// runRemoveTab removes a single tab by name from the session file.
+func runRemoveTab(name string) {
+	found, err := config.RemoveTab(name)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if !found {
+		fmt.Fprintf(os.Stderr, "Tab %q not found in session.\n", name)
+		os.Exit(1)
+	}
+	fmt.Printf("Tab %q removed.\n", name)
+}
+
+// runClean deletes the session file entirely.
+func runClean() {
+	config.ClearSession()
+	fmt.Println("Session file cleared.")
 }
 
 // signalFocus connects to the running instance's focus listener

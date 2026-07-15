@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
+
   export let branch: string = '';
   export let totalCost: string = '';
   export let tabInfo: string = '';
@@ -8,14 +11,18 @@
   export let updateAvailable: boolean = false;
   export let latestVersion: string = '';
   export let downloadURL: string = '';
+  export let projectInitialized: boolean = false;
+  export let skillCount: number = 0;
+
+  const dispatch = createEventDispatcher();
 
   $: commitLabel = (() => {
     if (commitAgeMinutes < 0) return '';
-    if (commitAgeMinutes < 1) return 'Letzter Commit: gerade eben';
-    if (commitAgeMinutes < 60) return `Letzter Commit: ${commitAgeMinutes}m`;
+    if (commitAgeMinutes < 1) return $t('footer.commitJustNow');
+    if (commitAgeMinutes < 60) return $t('footer.commitMinutes', { min: commitAgeMinutes });
     const h = Math.floor(commitAgeMinutes / 60);
     const m = commitAgeMinutes % 60;
-    return `Letzter Commit: ${h}h ${m}m`;
+    return $t('footer.commitHours', { h, m });
   })();
 
   $: conflictLabel = (() => {
@@ -23,7 +30,7 @@
     const op = conflictOperation
       ? ` (${conflictOperation === 'cherry-pick' ? 'Cherry-Pick' : conflictOperation.charAt(0).toUpperCase() + conflictOperation.slice(1)})`
       : '';
-    return `\u26A0 ${conflictCount} Konflikt${conflictCount > 1 ? 'e' : ''}${op}`;
+    return $t('footer.conflicts', { count: conflictCount, op });
   })();
 
   $: commitClass = (() => {
@@ -50,6 +57,15 @@
         <span class="label">total:</span> {totalCost}
       </span>
     {/if}
+    {#if projectInitialized}
+      <button class="footer-btn skills-btn" title={skillCount > 0 ? `${$t('footer.editSkills')} (${skillCount})` : $t('footer.editSkills')} on:click={() => dispatch('editSkills')}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Skills
+        {#if skillCount > 0}
+          <span class="skill-count">{skillCount}</span>
+        {/if}
+      </button>
+    {/if}
   </div>
   <div class="footer-center">
     {#if commitLabel}
@@ -59,17 +75,18 @@
   <div class="footer-update">
     {#if updateAvailable && downloadURL}
       <a class="update-link" href={downloadURL} target="_blank" rel="noopener">
-        Update v{latestVersion} verfügbar
+        {$t('footer.updateAvailable', { version: latestVersion })}
       </a>
     {/if}
   </div>
   <div class="footer-right">
-    <span class="shortcut">Ctrl+N:new</span>
-    <span class="shortcut">Ctrl+1-9:pane</span>
-    <span class="shortcut">Ctrl+F:search</span>
-    <span class="shortcut">Ctrl+Z:zoom</span>
-    <span class="shortcut">Ctrl+B:files</span>
-    <span class="shortcut">Ctrl+I:issues</span>
+    <span class="shortcut">{$t('footerShortcuts.new')}</span>
+    <span class="shortcut">{$t('footerShortcuts.pane')}</span>
+    <span class="shortcut">{$t('footerShortcuts.search')}</span>
+    <span class="shortcut">{$t('footerShortcuts.zoom')}</span>
+    <span class="shortcut">{$t('footerShortcuts.files')}</span>
+    <span class="shortcut">{$t('footerShortcuts.issues')}</span>
+    <span class="shortcut">{$t('footerShortcuts.skills')}</span>
   </div>
 </div>
 
@@ -120,15 +137,15 @@
   }
 
   .commit-green {
-    color: #22c55e;
+    color: var(--status-running, #22c55e);
   }
 
   .commit-yellow {
-    color: #eab308;
+    color: var(--status-waiting, #eab308);
   }
 
   .commit-red {
-    color: #ef4444;
+    color: var(--status-danger, #ef4444);
     animation: commit-pulse 2s ease-in-out infinite;
   }
 
@@ -169,5 +186,42 @@
     color: var(--fg-muted);
     font-family: monospace;
     font-size: 12px;
+  }
+
+  .footer-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--fg-muted);
+    cursor: pointer;
+    padding: 1px 6px;
+    font-size: 11px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s;
+  }
+
+  .footer-btn:hover {
+    color: var(--fg);
+    border-color: var(--border);
+    background: var(--bg-tertiary);
+  }
+
+  .skills-btn {
+    color: var(--accent);
+  }
+
+  .skill-count {
+    background: var(--accent, #39ff14);
+    color: #000;
+    font-size: 9px;
+    font-weight: 700;
+    min-width: 14px;
+    height: 14px;
+    line-height: 14px;
+    text-align: center;
+    border-radius: 7px;
+    padding: 0 3px;
   }
 </style>

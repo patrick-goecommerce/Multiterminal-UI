@@ -7,7 +7,7 @@ import (
 )
 
 // GetFavorites returns the list of favorite paths for the given directory.
-func (a *App) GetFavorites(dir string) []string {
+func (a *AppService) GetFavorites(dir string) []string {
 	if dir == "" {
 		return nil
 	}
@@ -24,7 +24,7 @@ func (a *App) GetFavorites(dir string) []string {
 
 // AddFavorite adds a path to the favorites for the given directory
 // and persists the config to disk.
-func (a *App) AddFavorite(dir string, path string) error {
+func (a *AppService) AddFavorite(dir string, path string) error {
 	if dir == "" || path == "" {
 		return nil
 	}
@@ -49,7 +49,7 @@ func (a *App) AddFavorite(dir string, path string) error {
 
 // RemoveFavorite removes a path from the favorites for the given directory
 // and persists the config to disk.
-func (a *App) RemoveFavorite(dir string, path string) error {
+func (a *AppService) RemoveFavorite(dir string, path string) error {
 	if dir == "" || path == "" {
 		return nil
 	}

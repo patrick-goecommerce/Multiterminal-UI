@@ -1,12 +1,16 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import * as App from '../../wailsjs/go/backend/App';
 
   export let visible: boolean = false;
 
   const dispatch = createEventDispatcher();
+  let busy = false;
 
   async function openExisting() {
+    if (busy) return;
+    busy = true;
     try {
       const dir = await App.SelectDirectory('');
       if (dir) {
@@ -16,14 +20,18 @@
       }
     } catch (err) {
       console.error('[ProjectDialog] SelectDirectory failed:', err);
+    } finally {
+      busy = false;
     }
   }
 
   async function createNew() {
+    if (busy) return;
+    busy = true;
     try {
       const parentDir = await App.SelectDirectory('');
       if (!parentDir) return;
-      const name = prompt('Projektname:');
+      const name = prompt($t('project.namePrompt'));
       if (!name) return;
       // Create directory via backend
       const sep = parentDir.includes('/') ? '/' : '\\';
@@ -33,6 +41,8 @@
       dispatch('close');
     } catch (err) {
       console.error('[ProjectDialog] CreateNew failed:', err);
+    } finally {
+      busy = false;
     }
   }
 
@@ -54,8 +64,8 @@
     <div class="dialog" on:click|stopPropagation>
       <div class="dialog-header">
         <div>
-          <h3>Projekt hinzufügen</h3>
-          <p class="subtitle">Wähle wie du ein Projekt öffnen möchtest</p>
+          <h3>{$t('project.title')}</h3>
+          <p class="subtitle">{$t('project.subtitle')}</p>
         </div>
         <button class="close-btn" on:click={close}>&times;</button>
       </div>
@@ -65,8 +75,8 @@
           <span class="option-key">1</span>
           <span class="option-icon">&#128194;</span>
           <div class="option-text">
-            <strong>Vorhandenen Ordner öffnen</strong>
-            <span>Ein bestehendes Projekt auf diesem Computer öffnen</span>
+            <strong>{$t('project.openFolder')}</strong>
+            <span>{$t('project.openFolderDesc')}</span>
           </div>
           <span class="option-arrow">&#8250;</span>
         </button>
@@ -75,8 +85,8 @@
           <span class="option-key">2</span>
           <span class="option-icon">&#128230;</span>
           <div class="option-text">
-            <strong>Neues Projekt erstellen</strong>
-            <span>Einen neuen Projektordner anlegen</span>
+            <strong>{$t('project.createNew')}</strong>
+            <span>{$t('project.createNewDesc')}</span>
           </div>
           <span class="option-arrow">&#8250;</span>
         </button>

@@ -1,24 +1,75 @@
 import { tabStore } from '../stores/tabs';
-import { INDEX_TO_MODE, MODE_TO_INDEX, buildClaudeArgv } from './claude';
+import { INDEX_TO_MODE, MODE_TO_INDEX, buildClaudeArgv, genSessionId } from './claude';
 import * as App from '../../wailsjs/go/backend/App';
 
 /** Restore saved tabs/panes from the backend session file. */
-export async function restoreSession(claudePath: string): Promise<boolean> {
+export async function restoreSession(claudePath: string, codexPath?: string, geminiPath?: string): Promise<boolean> {
   try {
     const saved = await App.LoadTabs();
     if (!saved || !saved.tabs || saved.tabs.length === 0) return false;
 
     for (const savedTab of saved.tabs) {
-      const tabId = tabStore.addTab(savedTab.name, savedTab.dir);
+      // setActive=false: avoid triggering xterm.js creation for each tab during
+      // restore. Only the final setActiveTab() call below mounts the active tab.
+      const tabId = tabStore.addTab(savedTab.name, savedTab.dir, false);
+
+      // Mirror the launch-time setup call (App.svelte handleLaunch): restored
+      // sessions read their memory files on process start too, so a project
+      // whose CLAUDE.local.md/settings.local.json setup never ran (or is
+      // stale) must be re-checked here, not just on the next fresh launch.
+      const hasNonShellPane = savedTab.panes.some((p) => (INDEX_TO_MODE[p.mode] || 'shell') !== 'shell');
+      if (hasNonShellPane && savedTab.dir) {
+        try {
+          await App.EnsureProjectWorktreeSetup(savedTab.dir);
+        } catch (err) {
+          console.error('[EnsureProjectWorktreeSetup]', err);
+        }
+      }
+
       for (const savedPane of savedTab.panes) {
         const mode = INDEX_TO_MODE[savedPane.mode] || 'shell';
-        const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath);
+        const display = (savedPane as any).display || 'terminal';
+        const conversationId = (savedPane as any).conversation_id || '';
+
+        if (display === 'chat') {
+          // Chat panes have no PTY; the backend chat process restarts lazily on next message (with --resume).
+          const chatPaneId = tabStore.addPane(tabId, 0, savedPane.name, mode, savedPane.model || '', null, '', '', '', '', '', false, 'chat', conversationId);
+          if ((savedPane as any).user_renamed) tabStore.renamePane(tabId, chatPaneId, savedPane.name);
+          continue;
+        }
+
+        // Resume the pinned claude session so restored terminal panes keep their
+        // context (and stay toggle-able to chat). Pin a fresh id if none saved.
+        let claudeSessionId = (savedPane as any).claude_session_id || '';
+        if (mode.startsWith('claude') && !claudeSessionId) claudeSessionId = genSessionId();
+        const sessOpts = mode.startsWith('claude')
+          ? ((savedPane as any).claude_session_id ? { resumeId: claudeSessionId } : { sessionId: claudeSessionId })
+          : undefined;
+        const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath, codexPath || 'codex', geminiPath || 'gemini', sessOpts);
+
+        // Worktree panes MUST restore into their worktree, not the tab dir
+        // (spec 4.2 — otherwise badge/finish point at the worktree while the
+        // session runs in the main repo).
+        let sessionDir = savedTab.dir || '';
+        const wtPath = (savedPane as any).worktree_path || '';
+        let wtBranch = (savedPane as any).worktree_branch || '';
+        let wtTarget = (savedPane as any).target_branch || '';
+        if (wtPath) {
+          const exists = await App.WorktreeDirExists(wtPath).catch(() => false);
+          if (exists) {
+            sessionDir = wtPath;
+          } else {
+            console.warn('[restoreSession] worktree missing, falling back to main repo:', wtPath);
+            wtBranch = ''; wtTarget = '';
+          }
+        }
         try {
-          const sessionId = await App.CreateSession(argv, savedTab.dir || '', 24, 80);
+          const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, mode);
           if (sessionId > 0) {
             const issueNum = (savedPane as any).issue_number || 0;
             const issueBranch = (savedPane as any).issue_branch || '';
-            const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch);
+            const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch, wtPath && sessionDir === wtPath ? wtPath : '', wtBranch, wtTarget, false, 'terminal', '', claudeSessionId);
+            if ((savedPane as any).user_renamed) tabStore.renamePane(tabId, paneId, savedPane.name);
             const zd = (savedPane as any).zoom_delta || 0;
             if (zd !== 0) {
               tabStore.setZoomDelta(tabId, paneId, zd);
@@ -50,6 +101,25 @@ export async function restoreSession(claudePath: string): Promise<boolean> {
   }
 }
 
+/** Pure mapping Pane → SavedPane shape (testbar, eine Quelle der Wahrheit). */
+export function paneToSaved(pane: any) {
+  return {
+    name: pane.name,
+    mode: MODE_TO_INDEX[pane.mode] ?? 0,
+    model: pane.model || '',
+    issue_number: pane.issueNumber || 0,
+    issue_branch: pane.issueBranch || '',
+    zoom_delta: pane.zoomDelta || 0,
+    display: pane.display || 'terminal',
+    conversation_id: pane.conversationId || '',
+    claude_session_id: pane.claudeSessionId || '',
+    user_renamed: pane.userRenamed || false,
+    worktree_path: pane.worktreePath || '',
+    worktree_branch: pane.branch || '',
+    target_branch: pane.targetBranch || '',
+  };
+}
+
 /** Persist current tab/pane layout to the backend session file. */
 export function saveSession(): void {
   const state = tabStore.getState();
@@ -59,14 +129,7 @@ export function saveSession(): void {
     name: tab.name,
     dir: tab.dir,
     focus_idx: tab.panes.findIndex((p) => p.focused),
-    panes: tab.panes.map((pane) => ({
-      name: pane.name,
-      mode: MODE_TO_INDEX[pane.mode] ?? 0,
-      model: pane.model || '',
-      issue_number: pane.issueNumber || 0,
-      issue_branch: pane.issueBranch || '',
-      zoom_delta: pane.zoomDelta || 0,
-    })),
+    panes: tab.panes.map(paneToSaved),
   }));
   App.SaveTabs({ active_tab: Math.max(activeIdx, 0), tabs } as any);
 }

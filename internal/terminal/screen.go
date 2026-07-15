@@ -44,6 +44,7 @@ const (
 	stateESC                // received ESC (\x1b)
 	stateCSI                // received ESC [
 	stateOSC                // received ESC ]
+	stateOSCEsc             // received ESC while inside an OSC (possible ST: ESC \)
 )
 
 // Screen is a VT100-compatible virtual terminal screen buffer.

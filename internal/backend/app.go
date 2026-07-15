@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // sessionIssue tracks which GitHub issue a session is working on.
@@ -23,56 +24,121 @@ type sessionIssue struct {
 	Dir    string // working directory (for gh CLI calls)
 }
 
-// App is the main Wails application struct. All exported methods are
+// AppService is the main Wails application struct. All exported methods are
 // automatically available to the frontend via generated TypeScript bindings.
-type App struct {
-	ctx           context.Context
-	cfg           config.Config
-	health        config.HealthState
-	sessions      map[int]*terminal.Session
-	queues        map[int]*sessionQueue
-	sessionIssues map[int]*sessionIssue // issue linked to each session
-	mu                sync.Mutex
-	nextID            int
-	cancelAll         context.CancelFunc
+type AppService struct {
+	app                *application.App           // Wails v3 application instance
+	mainWindow         *application.WebviewWindow // main window reference for dialogs
+	serviceCtx         context.Context            // context from ServiceStartup
+	cfg                config.Config
+	health             config.HealthState
+	sessions           map[int]*terminal.Session
+	queues             map[int]*sessionQueue
+	finishStates       map[int]*finishState  // active worktree-finish flows, keyed by session ID
+	sessionIssues      map[int]*sessionIssue // issue linked to each session
+	mu                 sync.Mutex
+	finishMu           sync.Mutex // serializes merge+cleanup globally (index.lock, TOCTOU)
+	nextID             int
+	cancelAll          context.CancelFunc
+	batcher            *outputBatcher
+	batcherOnce        sync.Once
 	resolvedClaudePath string
 	claudeDetected     bool
+	winMgr             *windowManager // tracks all open windows for multi-window support
+	detachCount        int            // monotonic counter for detached window IDs
+	safeMode           bool
+	sessionBackup      *config.SessionState // populated in safe-mode; restored on shutdown
+	hookMgr            *HookManager
+	resolvedCodexPath  string
+	codexDetected      bool
+	resolvedGeminiPath string
+	geminiDetected     bool
+	tmuxAPIPort        int                         // port for the tmux shim HTTP API
+	chatSessions       map[string]*ChatSession     // active chat sessions keyed by conversation ID
+	chatBuffers        map[string]*strings.Builder // buffered assistant text per conversation
+	worktreeStateMu    sync.Mutex
+	worktreeState      map[int]worktreeState
+	// emitWorktreeEvent is a seam for testing; production wiring assigns it to
+	// a.app.Event.Emit in setupHooks. Never nil-checked directly — callers use
+	// the emitWorktreeEventSafe helper below.
+	emitWorktreeEvent func(name string, payload any)
 }
 
-// NewApp creates a new App instance with the given configuration.
-func NewApp(cfg config.Config) *App {
-	return &App{
+// NewAppService creates a new AppService instance for Wails v3 service pattern.
+func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppService {
+	svc := &AppService{
+		app:           app,
 		cfg:           cfg,
 		sessions:      make(map[int]*terminal.Session),
 		queues:        make(map[int]*sessionQueue),
+		finishStates:  make(map[int]*finishState),
 		sessionIssues: make(map[int]*sessionIssue),
+		chatSessions:  make(map[string]*ChatSession),
+		chatBuffers:   make(map[string]*strings.Builder),
+		worktreeState: make(map[int]worktreeState),
+		winMgr:        newWindowManager(app),
+		safeMode:      safeMode,
 	}
+	if safeMode {
+		svc.sessionBackup = config.LoadSession() // may be nil — that's fine
+		log.Println("[SafeMode] active: sessions will not be loaded or saved")
+	}
+	return svc
 }
 
-// Startup is called when the Wails app starts. It receives the app context.
-func (a *App) Startup(ctx context.Context) {
-	a.ctx = ctx
+// SetMainWindow stores the main window reference for dialog and focus operations.
+func (a *AppService) SetMainWindow(w *application.WebviewWindow) {
+	a.mainWindow = w
+	a.winMgr.register("main", w, nil)
+}
+
+// ServiceStartup implements the Wails v3 Service interface.
+func (a *AppService) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
+	a.serviceCtx = ctx
 
 	// Load health state and mark this session as started (dirty)
 	a.health = config.LoadHealth()
 	config.MarkStarting(&a.health)
 	_ = config.SaveHealth(a.health)
 
-	// Resolve Claude CLI path before anything else needs it
+	// Resolve CLI paths before anything else needs them
 	a.resolveClaudeOnStartup()
+	a.resolveCodexOnStartup()
+	a.resolveGeminiOnStartup()
+
+	// Setup Claude Code hook integration
+	go a.setupHooks(ctx)
+
+	// Auto-setup statusline in ~/.claude/settings.json if not already configured
+	go a.setupStatusLine()
+
+	// Enable Claude voice dictation by default (settings.json only — no CLI flag exists)
+	go a.setupVoice()
 
 	// Start periodic scanner for activity and token detection
 	scanCtx, cancel := context.WithCancel(ctx)
 	a.cancelAll = cancel
+	a.outputBatch() // ensure the batcher is initialized before batchLoop starts
 	go a.scanLoop(scanCtx)
+	go a.batchLoop(scanCtx)
+	go a.scheduleLoop(scanCtx)
 
 	// Start focus listener and register custom protocol for notification clicks
 	a.startFocusListener()
 	registerProtocol()
+
+	// Start tmux shim API server
+	if port, err := a.startTmuxAPI(); err != nil {
+		log.Printf("[tmux-api] failed to start: %v", err)
+	} else {
+		a.tmuxAPIPort = port
+	}
+
+	return nil
 }
 
-// Shutdown is called when the Wails app is closing. Clean up all sessions.
-func (a *App) Shutdown(ctx context.Context) {
+// ServiceShutdown implements the Wails v3 Service interface.
+func (a *AppService) ServiceShutdown() error {
 	if a.cancelAll != nil {
 		a.cancelAll()
 	}
@@ -86,7 +152,6 @@ func (a *App) Shutdown(ctx context.Context) {
 	for _, s := range sessions {
 		s.Close()
 	}
-
 	// Mark clean shutdown and auto-disable logging if stable
 	config.MarkCleanShutdown(&a.health)
 	if config.ShouldAutoDisableLogging(&a.health) {
@@ -97,6 +162,17 @@ func (a *App) Shutdown(ctx context.Context) {
 	}
 	_ = config.SaveHealth(a.health)
 	log.Println("[Shutdown] Clean shutdown recorded")
+
+	if a.safeMode {
+		if a.sessionBackup != nil {
+			if err := config.SaveSession(*a.sessionBackup); err != nil {
+				log.Printf("[SafeMode] failed to restore session backup: %v", err)
+			}
+		} else {
+			config.ClearSession()
+		}
+	}
+	return nil
 }
 
 // SessionInfo is the JSON-serialisable session metadata sent to the frontend.
@@ -109,7 +185,8 @@ type SessionInfo struct {
 
 // CreateSession spawns a new PTY session and starts streaming its output
 // to the frontend. Returns the session ID.
-func (a *App) CreateSession(argv []string, dir string, rows int, cols int) int {
+// mode must be "shell", "claude", "claude-auto", or "claude-yolo"; it controls env injection.
+func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int, mode string) int {
 	a.mu.Lock()
 	a.nextID++
 	id := a.nextID
@@ -125,18 +202,28 @@ func (a *App) CreateSession(argv []string, dir string, rows int, cols int) int {
 		cols = 80
 	}
 
-	log.Printf("[CreateSession] id=%d argv=%v dir=%q rows=%d cols=%d", id, argv, dir, rows, cols)
+	log.Printf("[CreateSession] id=%d argv=%v dir=%q rows=%d cols=%d mode=%q", id, argv, dir, rows, cols, mode)
 
 	// Use configured default shell when no command specified
 	if len(argv) == 0 && a.cfg.DefaultShell != "" {
 		argv = []string{a.cfg.DefaultShell}
 	}
 
+	// Inject env vars for all sessions
+	var env []string
+	if a.tmuxAPIPort > 0 {
+		env = append(env, fmt.Sprintf("MTUI_PORT=%d", a.tmuxAPIPort))
+	}
+	if mode == "claude" || mode == "claude-auto" || mode == "claude-yolo" {
+		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
+		env = append(env, worktreeEnvVars(dir)...)
+	}
+
 	sess := terminal.NewSession(id, rows, cols)
-	if err := sess.Start(argv, dir, nil); err != nil {
+	if err := sess.Start(argv, dir, env); err != nil {
 		errMsg := fmt.Sprintf("Session start failed: %v", err)
 		log.Printf("[CreateSession] ERROR: %s", errMsg)
-		runtime.EventsEmit(a.ctx, "terminal:error", id, errMsg)
+		a.app.Event.Emit("terminal:error", TerminalErrorEvent{ID: id, Message: errMsg})
 		return -1
 	}
 	log.Printf("[CreateSession] session %d started successfully", id)
@@ -145,8 +232,14 @@ func (a *App) CreateSession(argv []string, dir string, rows int, cols int) int {
 	a.sessions[id] = sess
 	a.mu.Unlock()
 
-	// Stream PTY output to frontend
-	go a.streamOutput(id, sess)
+	// Stream PTY output to frontend. serviceCtx is nil if CreateSession
+	// runs before ServiceStartup (e.g. scheduled tasks in tests); fall
+	// back to a non-nil context so collectOutput's select never panics.
+	streamCtx := a.serviceCtx
+	if streamCtx == nil {
+		streamCtx = context.Background()
+	}
+	go a.collectOutput(id, sess, streamCtx)
 
 	// Watch for process exit
 	go a.watchExit(id, sess)
@@ -155,7 +248,7 @@ func (a *App) CreateSession(argv []string, dir string, rows int, cols int) int {
 }
 
 // WriteToSession sends raw input data (base64-encoded) to a session's PTY.
-func (a *App) WriteToSession(id int, b64data string) {
+func (a *AppService) WriteToSession(id int, b64data string) {
 	a.mu.Lock()
 	sess := a.sessions[id]
 	a.mu.Unlock()
@@ -170,7 +263,7 @@ func (a *App) WriteToSession(id int, b64data string) {
 }
 
 // ResizeSession updates the PTY and screen buffer dimensions.
-func (a *App) ResizeSession(id int, rows int, cols int) {
+func (a *AppService) ResizeSession(id int, rows int, cols int) {
 	a.mu.Lock()
 	sess := a.sessions[id]
 	a.mu.Unlock()
@@ -184,7 +277,7 @@ func (a *App) ResizeSession(id int, rows int, cols int) {
 // The session is closed asynchronously but removed from the map only
 // after Close() completes, ensuring streamOutput drains all buffered
 // data before the session is gone.
-func (a *App) CloseSession(id int) {
+func (a *AppService) CloseSession(id int) {
 	a.mu.Lock()
 	sess := a.sessions[id]
 	a.mu.Unlock()
@@ -199,34 +292,25 @@ func (a *App) CloseSession(id int) {
 		a.mu.Lock()
 		delete(a.sessions, id)
 		delete(a.queues, id)
+		delete(a.finishStates, id)
 		delete(a.sessionIssues, id)
 		a.mu.Unlock()
+		a.worktreeStateMu.Lock()
+		delete(a.worktreeState, id)
+		a.worktreeStateMu.Unlock()
 		// Clean up per-session activity tracking to prevent memory leak
 		cleanupActivityTracking(id)
+		cleanupNameTracking(id)
 	}()
-}
-
-// GetConfig returns the current application configuration.
-func (a *App) GetConfig() config.Config {
-	return a.cfg
-}
-
-// SaveConfig saves the given config to disk and updates the in-memory copy.
-func (a *App) SaveConfig(cfg config.Config) error {
-	log.Printf("[SaveConfig] theme=%q terminal_color=%q", cfg.Theme, cfg.TerminalColor)
-	a.cfg = cfg
-	if err := config.Save(cfg); err != nil {
-		log.Printf("[SaveConfig] error: %v", err)
-		return fmt.Errorf("config save failed: %w", err)
-	}
-	// Re-detect Claude path in case claude_command changed
-	a.resolveClaudeOnStartup()
-	return nil
 }
 
 // SaveTabs persists the current tab/pane layout to disk so it can be
 // restored on next startup.
-func (a *App) SaveTabs(state config.SessionState) {
+func (a *AppService) SaveTabs(state config.SessionState) {
+	if a.safeMode {
+		log.Println("[SaveTabs] skipped (safe-mode)")
+		return
+	}
 	log.Printf("[SaveTabs] saving %d tabs", len(state.Tabs))
 	if err := config.SaveSession(state); err != nil {
 		log.Printf("[SaveTabs] error: %v", err)
@@ -234,7 +318,11 @@ func (a *App) SaveTabs(state config.SessionState) {
 }
 
 // LoadTabs returns the previously saved tab/pane layout, or nil.
-func (a *App) LoadTabs() *config.SessionState {
+func (a *AppService) LoadTabs() *config.SessionState {
+	if a.safeMode {
+		log.Println("[LoadTabs] skipped (safe-mode)")
+		return nil
+	}
 	if !a.cfg.ShouldRestoreSession() {
 		log.Printf("[LoadTabs] restore_session disabled")
 		return nil
@@ -247,29 +335,3 @@ func (a *App) LoadTabs() *config.SessionState {
 	}
 	return state
 }
-
-// GetWorkingDir returns the effective working directory (from config or cwd).
-func (a *App) GetWorkingDir() string {
-	if a.cfg.DefaultDir != "" {
-		return a.cfg.DefaultDir
-	}
-	dir, _ := os.Getwd()
-	return dir
-}
-
-// SelectDirectory opens a native directory picker dialog and returns the
-// selected path, or an empty string if the user cancelled.
-func (a *App) SelectDirectory(startDir string) string {
-	if startDir == "" {
-		startDir = a.GetWorkingDir()
-	}
-	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title:            "Arbeitsverzeichnis wählen",
-		DefaultDirectory: startDir,
-	})
-	if err != nil {
-		return ""
-	}
-	return dir
-}
-

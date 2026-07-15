@@ -1,7 +1,9 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { createWebLinksAddon, registerFileLinkProvider, type LinkHandler } from './links';
+import { registerOsc52Handler } from './clipboard';
 
 /** Curated list of monospace fonts. Order = priority for fallback chain. */
 export const MONOSPACE_FONTS = [
@@ -48,14 +50,41 @@ export interface TerminalInstance {
 }
 
 const baseOptions: Partial<import('@xterm/xterm').ITerminalOptions> = {
-  cursorBlink: true,
-  cursorStyle: 'block',
+  cursorBlink: false,
+  cursorStyle: 'bar',
+  cursorInactiveStyle: 'none',
   scrollback: 10000,
   allowProposedApi: true,
 };
 
 // Terminal themes matching the app themes
 const terminalThemes: Record<string, import('@xterm/xterm').ITheme> = {
+  // Matches the "konzept" app palette so the terminal background is identical to
+  // the pane background (--pane-bg #0e1210) — no seam where the grid doesn't yet
+  // fill the pane, and the semantic green/violet accents carry through.
+  konzept: {
+    background: '#0e1210',
+    foreground: '#dadfd2',
+    cursor: '#4cc56a',
+    cursorAccent: '#0e1210',
+    selectionBackground: '#4cc56a40',
+    black: '#222a20',
+    red: '#d65f5f',
+    green: '#4cc56a',
+    yellow: '#d6a85c',
+    blue: '#6f9fd8',
+    magenta: '#a184f4',
+    cyan: '#5bbf8c',
+    white: '#dadfd2',
+    brightBlack: '#5a6457',
+    brightRed: '#e07a7a',
+    brightGreen: '#6fd989',
+    brightYellow: '#e3bd76',
+    brightBlue: '#8fb6e6',
+    brightMagenta: '#b89ff7',
+    brightCyan: '#7fcfa6',
+    brightWhite: '#f0f3ea',
+  },
   dark: {
     background: '#11111b',
     foreground: '#cdd6f4',
@@ -193,11 +222,14 @@ export function createTerminal(
     fileLinkDisposable = registerFileLinkProvider(terminal, linkHandler);
   }
 
+  const osc52Disposable = registerOsc52Handler(terminal);
+
   return {
     terminal,
     fitAddon,
     searchAddon,
     dispose: () => {
+      osc52Disposable.dispose();
       fileLinkDisposable?.dispose();
       searchAddon.dispose();
       fitAddon.dispose();
@@ -208,4 +240,55 @@ export function createTerminal(
 
 export function getTerminalTheme(theme: string): import('@xterm/xterm').ITheme {
   return terminalThemes[theme] || terminalThemes.dark;
+}
+
+// Track active WebGL contexts to stay below the browser/WebView2 limit.
+// Most browsers allow ~16 simultaneous WebGL contexts; beyond that, the oldest
+// contexts are lost, causing panes to crash or go blank.
+const MAX_WEBGL_CONTEXTS = 8; // conservative limit — leaves headroom for other WebGL users
+let activeWebglCount = 0;
+
+/**
+ * Load the WebGL renderer onto an already-opened terminal.
+ * Must be called AFTER terminal.open(element).
+ * Falls back to DOM renderer silently if WebGL is unavailable or context limit reached.
+ */
+export function attachWebglRenderer(terminal: Terminal): void {
+  if (activeWebglCount >= MAX_WEBGL_CONTEXTS) {
+    // DOM renderer stays active — avoids evicting older contexts.
+    return;
+  }
+  try {
+    const webgl = new WebglAddon();
+    activeWebglCount++;
+    webgl.onContextLoss(() => {
+      webgl.dispose(); // reverts to DOM renderer, decrements activeWebglCount
+      // A lost GL context leaves the canvas frozen on its last, half-erased
+      // frame. The DOM renderer does not repaint the existing buffer on its
+      // own, so an idle pane (e.g. Claude waiting at the prompt) stays garbled
+      // until new output arrives. Force a full repaint. This fires on display
+      // power cycles and output-device switches (monitor → laptop → monitor).
+      try {
+        terminal.refresh(0, terminal.rows - 1);
+      } catch {
+        // terminal already disposed — nothing to repaint.
+      }
+      // The GPU is typically back after such an event, so restore the WebGL
+      // renderer rather than leaving the pane on the slower DOM renderer.
+      setTimeout(() => attachWebglRenderer(terminal), 100);
+    });
+    // Decrement counter when the terminal or addon is disposed normally.
+    const origDispose = webgl.dispose.bind(webgl);
+    let disposed = false;
+    webgl.dispose = () => {
+      if (!disposed) {
+        disposed = true;
+        activeWebglCount = Math.max(0, activeWebglCount - 1);
+      }
+      origDispose();
+    };
+    terminal.loadAddon(webgl);
+  } catch {
+    // WebGL unavailable (e.g. software rendering) — DOM renderer stays active.
+  }
 }

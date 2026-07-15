@@ -1,0 +1,21 @@
+{
+    "name": "go-backend",
+    "detect": ["go.mod"],
+    "priority": 10,
+    "stackable": true,
+    "prompt_file": "go-backend.md",
+    "policies": {
+        "preferred_model": "sonnet",
+        "verify": [
+            {"command": "go build ./...", "description": "Build succeeds"},
+            {"command": "go test ./...", "description": "Tests pass"},
+            {"command": "go vet ./...", "description": "Vet clean"}
+        ],
+        "scope_limits": {
+            "bugfix": {"max_files": 10, "max_lines": 200, "max_deletes": 50},
+            "feature": {"max_files": 25, "max_lines": 500, "max_deletes": 100},
+            "refactor": {"max_files": 40, "max_lines": 800, "max_deletes": 400}
+        },
+        "qa_rules": ["error-wrapping", "no-global-state"]
+    }
+}

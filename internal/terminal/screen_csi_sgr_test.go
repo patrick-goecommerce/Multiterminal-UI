@@ -298,6 +298,22 @@ func TestOSC_IgnoredTypes(t *testing.T) {
 	}
 }
 
+// TestOSC_TitleTerminatedByST verifies that an OSC sequence terminated by the
+// String Terminator (ST = ESC \) is fully consumed. Many programs use ST instead
+// of BEL; the trailing backslash must not leak onto the screen.
+func TestOSC_TitleTerminatedByST(t *testing.T) {
+	s := NewScreen(3, 30)
+	// OSC 2 ; <title> ST  followed by visible text
+	s.Write([]byte("\x1b]2;ST Title\x1b\\hello"))
+
+	if s.Title != "ST Title" {
+		t.Fatalf("expected title 'ST Title', got %q", s.Title)
+	}
+	if got := s.PlainTextRow(0); got != "hello" {
+		t.Fatalf("ST terminator leaked onto screen: row = %q, want %q", got, "hello")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // DEC Save/Restore cursor (ESC 7 / ESC 8)
 // ---------------------------------------------------------------------------

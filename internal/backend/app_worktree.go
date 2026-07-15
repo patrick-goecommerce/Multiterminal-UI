@@ -1,13 +1,12 @@
-// Package backend provides git worktree management for parallel issue work.
-// Each issue gets its own worktree directory with an isolated branch,
-// allowing multiple Claude agents to work on different issues simultaneously.
+// Package backend provides git worktree listing, categorization and
+// general-purpose (non-issue) worktree creation. Issue and pane worktrees
+// are created via app_worktree_pane.go (CreateIssueWorktree/CreatePaneWorktree).
 package backend
 
 import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -15,23 +14,18 @@ import (
 
 const worktreeDir = ".mt-worktrees"
 
-// WorktreeInfo describes an active git worktree for an issue.
+// WorktreeInfo describes an active git worktree.
 type WorktreeInfo struct {
-	Path   string `json:"path"`
-	Branch string `json:"branch"`
-	Issue  int    `json:"issue"`
-}
-
-// worktreePath returns the directory for an issue worktree.
-func worktreePath(repoDir string, issueNumber int) string {
-	return filepath.Join(repoDir, worktreeDir, fmt.Sprintf("issue-%d", issueNumber))
+	Path     string `json:"path" yaml:"path"`
+	Branch   string `json:"branch" yaml:"branch"`
+	Issue    int    `json:"issue" yaml:"issue"`
+	Category string `json:"category" yaml:"category"`
+	Name     string `json:"name" yaml:"name"`
 }
 
 // repoRoot returns the git toplevel for a directory.
 func repoRoot(dir string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "rev-parse", "--show-toplevel")
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("not a git repo: %w", err)
@@ -39,99 +33,15 @@ func repoRoot(dir string) (string, error) {
 	return filepath.FromSlash(strings.TrimSpace(string(out))), nil
 }
 
-// CreateWorktree creates a git worktree for an issue with its own branch.
-// Returns the worktree path and branch name.
-func (a *App) CreateWorktree(dir string, issueNumber int, title string) (*WorktreeInfo, error) {
-	root, err := repoRoot(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	branch := issueBranchName(issueNumber, title)
-	wtPath := worktreePath(root, issueNumber)
-
-	// Check if worktree already exists
-	if info, err := os.Stat(wtPath); err == nil && info.IsDir() {
-		log.Printf("[CreateWorktree] worktree already exists at %s", wtPath)
-		return &WorktreeInfo{Path: wtPath, Branch: branch, Issue: issueNumber}, nil
-	}
-
-	// Ensure parent directory exists
-	parentDir := filepath.Dir(wtPath)
-	if err := os.MkdirAll(parentDir, 0755); err != nil {
-		return nil, fmt.Errorf("mkdir failed: %w", err)
-	}
-
-	// Create worktree with new branch (or existing branch)
-	var cmd *exec.Cmd
-	if branchExists(root, branch) {
-		cmd = exec.Command("git", "worktree", "add", wtPath, branch)
-	} else {
-		cmd = exec.Command("git", "worktree", "add", "-b", branch, wtPath)
-	}
-	cmd.Dir = root
-	hideConsole(cmd)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("worktree add failed: %s – %w", strings.TrimSpace(string(out)), err)
-	}
-
-	log.Printf("[CreateWorktree] created worktree at %s on branch %s", wtPath, branch)
-	return &WorktreeInfo{Path: wtPath, Branch: branch, Issue: issueNumber}, nil
-}
-
-// RemoveWorktree removes a worktree for an issue and optionally its branch.
-func (a *App) RemoveWorktree(dir string, issueNumber int) error {
-	root, err := repoRoot(dir)
-	if err != nil {
-		return err
-	}
-
-	wtPath := worktreePath(root, issueNumber)
-	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
-		return nil // already gone
-	}
-
-	cmd := exec.Command("git", "worktree", "remove", "--force", wtPath)
-	cmd.Dir = root
-	hideConsole(cmd)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("worktree remove failed: %w", err)
-	}
-
-	log.Printf("[RemoveWorktree] removed worktree at %s", wtPath)
-	return nil
-}
-
-// ListWorktrees returns all active worktrees that belong to Multiterminal.
-func (a *App) ListWorktrees(dir string) []WorktreeInfo {
-	root, err := repoRoot(dir)
-	if err != nil {
-		return nil
-	}
-
-	cmd := exec.Command("git", "worktree", "list", "--porcelain")
-	cmd.Dir = root
-	hideConsole(cmd)
-	out, err := cmd.Output()
-	if err != nil {
-		log.Printf("[ListWorktrees] error: %v", err)
-		return nil
-	}
-
-	return parseWorktreeList(string(out), root)
-}
-
-// parseWorktreeList extracts Multiterminal worktrees from git worktree list output.
-func parseWorktreeList(output string, root string) []WorktreeInfo {
+// parseWorktreePorcelain returns raw WorktreeInfo entries from git --porcelain output.
+// Only Path and Branch are populated.
+func parseWorktreePorcelain(output string) []WorktreeInfo {
 	var result []WorktreeInfo
 	var current WorktreeInfo
-	wtPrefix := filepath.Join(root, worktreeDir, "issue-")
-
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
-			if current.Path != "" && strings.HasPrefix(current.Path, wtPrefix) {
+			if current.Path != "" {
 				result = append(result, current)
 			}
 			current = WorktreeInfo{}
@@ -143,20 +53,142 @@ func parseWorktreeList(output string, root string) []WorktreeInfo {
 		if strings.HasPrefix(line, "branch refs/heads/") {
 			current.Branch = strings.TrimPrefix(line, "branch refs/heads/")
 		}
-	}
-	// Don't forget last entry
-	if current.Path != "" && strings.HasPrefix(current.Path, wtPrefix) {
-		result = append(result, current)
-	}
-
-	// Extract issue numbers from paths
-	for i := range result {
-		base := filepath.Base(result[i].Path)
-		if strings.HasPrefix(base, "issue-") {
-			num, _ := strconv.Atoi(strings.TrimPrefix(base, "issue-"))
-			result[i].Issue = num
+		if line == "detached" {
+			current.Branch = "(detached)"
 		}
 	}
-
+	if current.Path != "" {
+		result = append(result, current)
+	}
 	return result
+}
+
+// ListAllWorktrees returns ALL git worktrees categorized as "main", "terminal", or "issue".
+func (a *AppService) ListAllWorktrees(dir string) []WorktreeInfo {
+	root, err := repoRoot(dir)
+	if err != nil {
+		return nil
+	}
+	cmd := gitCmd(root, "worktree", "list", "--porcelain")
+	out, err := cmd.Output()
+	if err != nil {
+		log.Printf("[ListAllWorktrees] error: %v", err)
+		return nil
+	}
+	return parseAllWorktreeList(string(out), root)
+}
+
+// parseAllWorktreeList parses ALL worktrees without filtering.
+// root is expected in OS-native path format (as returned by repoRoot).
+func parseAllWorktreeList(output string, root string) []WorktreeInfo {
+	root = filepath.FromSlash(root)
+	mtPrefix := filepath.Join(root, worktreeDir) + string(filepath.Separator)
+	entries := parseWorktreePorcelain(output)
+	result := make([]WorktreeInfo, 0, len(entries))
+	for i := range entries {
+		categorizeWorktree(&entries[i], root, mtPrefix)
+		result = append(result, entries[i])
+	}
+	return result
+}
+
+// categorizeWorktree fills Category, Name, Issue based on path.
+// Uses case-insensitive path comparison for Windows compatibility.
+func categorizeWorktree(wt *WorktreeInfo, root, mtPrefix string) {
+	// Normalize for case-insensitive comparison on Windows
+	wtPathNorm := strings.ToLower(filepath.Clean(wt.Path))
+	rootNorm := strings.ToLower(filepath.Clean(root))
+	mtPrefixNorm := strings.ToLower(mtPrefix)
+
+	if wtPathNorm == rootNorm {
+		wt.Category = "main"
+		wt.Name = "main"
+		return
+	}
+	if strings.HasPrefix(wtPathNorm, mtPrefixNorm) {
+		base := filepath.Base(wt.Path)
+		if strings.HasPrefix(base, "issue-") {
+			wt.Category = "issue"
+			num, _ := strconv.Atoi(strings.TrimPrefix(base, "issue-"))
+			wt.Issue = num
+			wt.Name = base
+		} else {
+			wt.Category = "terminal"
+			wt.Name = base
+		}
+		return
+	}
+	claudeWtPrefix := strings.ToLower(filepath.Join(root, ".claude", "worktrees")) + string(filepath.Separator)
+	if strings.HasPrefix(wtPathNorm, claudeWtPrefix) {
+		rel, err := filepath.Rel(filepath.Join(root, ".claude", "worktrees"), wt.Path)
+		if err != nil {
+			rel = filepath.Base(wt.Path)
+		}
+		wt.Category = "claude"
+		wt.Name = filepath.ToSlash(rel)
+		return
+	}
+	wt.Category = "terminal"
+	wt.Name = filepath.Base(wt.Path)
+}
+
+// sanitizeWorktreeName converts a display name to a safe directory/branch segment.
+func sanitizeWorktreeName(name string) string {
+	s := strings.ToLower(name)
+	s = strings.NewReplacer(" ", "-", "/", "-", "\\", "-").Replace(s)
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	s = b.String()
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	s = strings.Trim(s, "-")
+	if s == "" {
+		s = "worktree"
+	}
+	return s
+}
+
+// CreateNamedWorktree creates a general-purpose worktree not tied to an issue.
+// name is a display name, baseBranch is the branch to fork from.
+// Creates at .mt-worktrees/<sanitized-name>/ with branch "terminal/<sanitized-name>".
+func (a *AppService) CreateNamedWorktree(dir, name, baseBranch string) (*WorktreeInfo, error) {
+	root, err := repoRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	safeName := sanitizeWorktreeName(name)
+	branch := "terminal/" + safeName
+	wtPath := filepath.Join(root, worktreeDir, safeName)
+
+	if info, err := os.Stat(wtPath); err == nil && info.IsDir() {
+		log.Printf("[CreateNamedWorktree] worktree already exists at %s", wtPath)
+		return &WorktreeInfo{Path: wtPath, Branch: branch, Category: "terminal", Name: safeName}, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(wtPath), 0755); err != nil {
+		return nil, fmt.Errorf("mkdir failed: %w", err)
+	}
+
+	var namedArgs []string
+	if branchExists(root, branch) {
+		namedArgs = []string{"worktree", "add", wtPath, branch}
+	} else if baseBranch != "" && baseBranch != "HEAD" {
+		namedArgs = []string{"worktree", "add", "-b", branch, wtPath, baseBranch}
+	} else {
+		namedArgs = []string{"worktree", "add", "-b", branch, wtPath}
+	}
+	cmd := gitCmd(root, namedArgs...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("worktree add failed: %s – %w", strings.TrimSpace(string(out)), err)
+	}
+
+	log.Printf("[CreateNamedWorktree] created %s on branch %s", wtPath, branch)
+	return &WorktreeInfo{Path: wtPath, Branch: branch, Category: "terminal", Name: safeName}, nil
 }

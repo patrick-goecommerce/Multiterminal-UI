@@ -8,14 +8,16 @@ import (
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ActivityInfo is sent to the frontend when a session's activity state changes.
 type ActivityInfo struct {
-	ID       int    `json:"id"`
-	Activity string `json:"activity"` // "idle", "active", "done", "needsInput"
-	Cost     string `json:"cost"`
+	ID         int    `json:"id"`
+	Activity   string `json:"activity"` // "idle", "active", "done", "waitingPermission", "waitingAnswer", "error"
+	Cost       string `json:"cost"`
+	Title      string `json:"title"`      // OSC-derived window title (fallback pane name)
+	ContextPct int    `json:"contextPct"` // % of context window used (statusline); 0 if unknown
+	Model      string `json:"model"`      // model display name (statusline); "" if unknown
 }
 
 // prevActivity tracks the last emitted state per session to avoid spamming.
@@ -23,11 +25,12 @@ var (
 	prevActivityMu sync.Mutex
 	prevActivity   = make(map[int]string)
 	prevCost       = make(map[int]string)
+	prevTitle      = make(map[int]string)
 )
 
 // scanInterval returns the scan tick duration based on the number of active sessions.
 // More sessions → slower ticks to reduce overhead.
-func (a *App) scanInterval() time.Duration {
+func (a *AppService) scanInterval() time.Duration {
 	a.mu.Lock()
 	n := len(a.sessions)
 	a.mu.Unlock()
@@ -43,7 +46,7 @@ func (a *App) scanInterval() time.Duration {
 
 // scanLoop periodically scans all sessions for activity changes and token info.
 // The interval adapts to the number of active sessions.
-func (a *App) scanLoop(ctx context.Context) {
+func (a *AppService) scanLoop(ctx context.Context) {
 	interval := a.scanInterval()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -69,8 +72,12 @@ func activityString(a terminal.ActivityState) string {
 		return "active"
 	case terminal.ActivityDone:
 		return "done"
-	case terminal.ActivityNeedsInput:
-		return "needsInput"
+	case terminal.ActivityWaitingPermission:
+		return "waitingPermission"
+	case terminal.ActivityWaitingAnswer:
+		return "waitingAnswer"
+	case terminal.ActivityError:
+		return "error"
 	default:
 		return "idle"
 	}
@@ -81,11 +88,12 @@ func cleanupActivityTracking(id int) {
 	prevActivityMu.Lock()
 	delete(prevActivity, id)
 	delete(prevCost, id)
+	delete(prevTitle, id)
 	prevActivityMu.Unlock()
 }
 
 // scanAllSessions checks each session for activity and token updates.
-func (a *App) scanAllSessions() {
+func (a *AppService) scanAllSessions() {
 	a.mu.Lock()
 	ids := make([]int, 0, len(a.sessions))
 	sessions := make([]*terminal.Session, 0, len(a.sessions))
@@ -97,8 +105,36 @@ func (a *App) scanAllSessions() {
 
 	for i, sess := range sessions {
 		id := ids[i]
-		sess.ScanTokens()
-		activity := sess.DetectActivity()
+		sess.ScanTokens() // always scan for token/cost data
+
+		var activity terminal.ActivityState
+		if sess.HasHookData() {
+			// Hook events drive activity state for Claude panes — skip PTY regex scan
+			activity = sess.GetActivity()
+			// Exception: when hook says "done", cross-check screen for a trailing
+			// question (e.g. Claude ended with "Was liegt an?"). The Stop hook fires
+			// before the PTY scanner can see the question, so we do it here.
+			if activity == terminal.ActivityDone {
+				if screen := sess.ClassifyScreenState(); screen == terminal.ActivityWaitingAnswer {
+					activity = terminal.ActivityWaitingAnswer
+				}
+			}
+			// Exception: when hook says "active" but the PTY has been quiet well
+			// past the normal detection threshold AND the screen already shows a
+			// completed prompt, the terminating hook event (Stop) was lost or
+			// delayed. Without this, a pane — and any pipeline queue waiting on
+			// it via the "done" transition below — would hang forever, since
+			// hook-driven sessions never fall back to the PTY scan otherwise.
+			if activity == terminal.ActivityActive {
+				if lastOutput := sess.GetLastOutputAt(); !lastOutput.IsZero() && time.Since(lastOutput) > terminal.ActivityStaleThreshold {
+					if screen := sess.ClassifyScreenState(); screen == terminal.ActivityDone || screen == terminal.ActivityWaitingAnswer {
+						activity = screen
+					}
+				}
+			}
+		} else {
+			activity = sess.DetectActivity()
+		}
 		actStr := activityString(activity)
 
 		tokens := sess.GetTokens()
@@ -107,33 +143,60 @@ func (a *App) scanAllSessions() {
 			costStr = fmt.Sprintf("$%.2f", tokens.TotalCost)
 		}
 
-		// Only emit when state or cost actually changed
+		ctxPct, model, _ := sess.StatuslineInfo()
+
+		title := sess.GetTitle()
+
+		// Only emit when state, cost, or title actually changed
 		prevActivityMu.Lock()
 		activityChanged := prevActivity[id] != actStr
 		costChanged := prevCost[id] != costStr
-		changed := activityChanged || costChanged
+		titleChanged := prevTitle[id] != title
+		changed := activityChanged || costChanged || titleChanged
 		if changed {
 			prevActivity[id] = actStr
 			prevCost[id] = costStr
+			prevTitle[id] = title
 		}
 		prevActivityMu.Unlock()
 
-		if changed {
-			log.Printf("[scan] session %d: activity=%s cost=%s", id, actStr, costStr)
-			runtime.EventsEmit(a.ctx, "terminal:activity", ActivityInfo{
-				ID:       id,
-				Activity: actStr,
-				Cost:     costStr,
+		if changed && a.app != nil {
+			log.Printf("[scan] session %d: activity=%s cost=%s title=%q", id, actStr, costStr, title)
+			a.app.Event.Emit("terminal:activity", ActivityInfo{
+				ID:         id,
+				Activity:   actStr,
+				Cost:       costStr,
+				Title:      title,
+				ContextPct: ctxPct,
+				Model:      model,
 			})
 		}
 
 		// Trigger pipeline queue on fresh "done" transition
-		if activityChanged && actStr == "done" {
+		if activityChanged && actStr == "done" && a.app != nil {
 			a.processQueue(id)
+			// Notify orchestrator that this agent finished
+			a.notifyOrchestratorDone(id)
+		}
+
+		// A settled-"idle" pane (output stopped, no recognizable prompt) with an
+		// active finish prep must still advance the queue: the "done" trigger
+		// above never fires when Claude finishes without a visible ❯ prompt, which
+		// would otherwise strand the finish prep as "pending" forever. Scoped to a
+		// preparing finish flow so general pipeline timing is unaffected.
+		if activityChanged && actStr == "idle" && a.app != nil {
+			if st := a.getFinishState(id); st != nil && st.Phase == "preparing" {
+				a.processQueue(id)
+			}
+		}
+
+		// Surface waiting states to an active finish flow (spec 5.1/2)
+		if activityChanged && a.app != nil {
+			a.notifyFinishOnActivity(id, actStr)
 		}
 
 		// Report issue progress on activity transitions
-		if activityChanged {
+		if activityChanged && a.app != nil {
 			a.onActivityChangeForIssue(id, actStr, costStr)
 		}
 	}
@@ -141,7 +204,7 @@ func (a *App) scanAllSessions() {
 
 // onActivityChangeForIssue triggers issue progress reports when
 // a session linked to an issue changes activity state.
-func (a *App) onActivityChangeForIssue(sessionID int, newActivity string, cost string) {
+func (a *AppService) onActivityChangeForIssue(sessionID int, newActivity string, cost string) {
 	if newActivity == "done" {
 		a.reportIssueProgress(sessionID, progressDone, cost)
 	}

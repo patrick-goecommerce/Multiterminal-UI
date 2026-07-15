@@ -8,6 +8,7 @@ package terminal
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ type Session struct {
 	Screen *Screen       // VT100 virtual screen buffer
 	Status SessionStatus // current lifecycle status
 	Title  string        // derived from OSC or user-set
+	Dir    string        // working directory the session was started in
 
 	p   gopty.Pty  // cross-platform PTY (Unix PTY or Windows ConPTY)
 	cmd *gopty.Cmd // the spawned child process
@@ -58,6 +60,17 @@ type Session struct {
 
 	// Tokens holds parsed token usage / cost information.
 	Tokens TokenInfo
+
+	// Statusline-sourced telemetry (Claude's statusLine JSON via the forwarder shim).
+	// When costSource == CostSourceStatusline, the screen scrape must not overwrite cost.
+	contextPct int
+	model      string
+	costSource CostSource
+
+	// hookSessionID / hasHookData: set by Claude Code hook events.
+	// hasHookData=true means the scan loop skips DetectActivity() for this session.
+	hookSessionID string
+	hasHookData   bool
 }
 
 // NewSession creates a Session with the given screen dimensions but does not
@@ -80,6 +93,8 @@ func NewSession(id, rows, cols int) *Session {
 func (s *Session) Start(argv []string, dir string, env []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	s.Dir = dir
 
 	if len(argv) == 0 {
 		argv = defaultShell()
@@ -108,6 +123,23 @@ func (s *Session) Start(argv []string, dir string, env []string) error {
 	}
 	fullEnv = append(fullEnv, "TERM=xterm-256color", "COLORTERM=truecolor")
 	fullEnv = append(fullEnv, env...)
+
+	// Prepend executable directory to PATH so the tmux shim is found first.
+	// On Windows the env var is often "Path" not "PATH", so check case-insensitively.
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		found := false
+		for i, e := range fullEnv {
+			if len(e) > 5 && strings.EqualFold(e[:5], "PATH=") {
+				fullEnv[i] = e[:5] + exeDir + string(os.PathListSeparator) + e[5:]
+				found = true
+				break
+			}
+		}
+		if !found {
+			fullEnv = append(fullEnv, "PATH="+exeDir)
+		}
+	}
 
 	rows := s.Screen.Rows()
 	cols := s.Screen.Cols()
@@ -320,3 +352,30 @@ func (s *Session) GetTokens() TokenInfo {
 	return s.Tokens
 }
 
+// GetTitle returns the current OSC-derived window title, read thread-safe
+// straight from the screen buffer (the source of truth for OSC 0/2 titles).
+func (s *Session) GetTitle() string {
+	return s.Screen.GetTitle()
+}
+
+// Name returns the session's display title (the sticky last-non-empty OSC title
+// cached on the session). Read thread-safe under s.mu — readLoop writes Title
+// under the same lock.
+func (s *Session) Name() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Title
+}
+
+// Pid returns the wrapper process id (cmd.exe on Windows), or 0 before Start.
+// The finish flow needs it to kill the whole process tree BEFORE Close():
+// after Process.Kill() the grandchildren are orphaned and taskkill /T cannot
+// find them anymore.
+func (s *Session) Pid() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cmd != nil && s.cmd.Process != nil {
+		return s.cmd.Process.Pid
+	}
+	return 0
+}

@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import { ClipboardSetText } from '../../wailsjs/runtime/runtime';
+  import { createEventDispatcher, onDestroy } from 'svelte';
+  import { t } from '../stores/i18n';
+  import { writeClipboard } from '../lib/clipboard';
+  import { AddToGitignore } from '../../wailsjs/go/backend/App';
 
   export let dir: string = '';
   export let gitStatuses: Record<string, string> = {};
@@ -12,14 +14,16 @@
   interface ScEntry { path: string; name: string; relPath: string; status: string; }
   interface ScGroup { label: string; code: string; entries: ScEntry[]; }
 
-  const statusGroups = [
-    { label: 'Konflikte', code: 'U' },
-    { label: 'Modified', code: 'M' },
-    { label: 'Added', code: 'A' },
-    { label: 'Untracked', code: '?' },
-    { label: 'Deleted', code: 'D' },
-    { label: 'Renamed', code: 'R' },
+  const statusGroupCodes = [
+    { key: 'sourceControl.conflicts', code: 'U' },
+    { key: 'sourceControl.modified', code: 'M' },
+    { key: 'sourceControl.added', code: 'A' },
+    { key: 'sourceControl.untracked', code: '?' },
+    { key: 'sourceControl.deleted', code: 'D' },
+    { key: 'sourceControl.renamed', code: 'R' },
   ];
+
+  $: statusGroups = statusGroupCodes.map(g => ({ label: $t(g.key), code: g.code }));
 
   let copiedPath = '';
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
@@ -28,6 +32,50 @@
     copiedPath = path;
     if (copiedTimer) clearTimeout(copiedTimer);
     copiedTimer = setTimeout(() => { copiedPath = ''; }, 1500);
+  }
+
+  let addedPath = '';
+  let addedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function setAdded(path: string) {
+    addedPath = path;
+    if (addedTimer) clearTimeout(addedTimer);
+    addedTimer = setTimeout(() => { addedPath = ''; }, 1500);
+  }
+
+  let contextMenu: { x: number; y: number; entry: ScEntry } | null = null;
+
+  function openContextMenu(e: MouseEvent, entry: ScEntry) {
+    e.preventDefault();
+    const menuW = 200;
+    const menuH = 36;
+    const x = Math.min(e.clientX, window.innerWidth - menuW);
+    const y = Math.min(e.clientY, window.innerHeight - menuH);
+    contextMenu = { x, y, entry };
+    window.addEventListener('keydown', onMenuKeydown);
+  }
+
+  function closeContextMenu() {
+    contextMenu = null;
+    window.removeEventListener('keydown', onMenuKeydown);
+  }
+
+  onDestroy(() => { closeContextMenu(); });
+
+  function onMenuKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') closeContextMenu();
+  }
+
+  async function handleAddToGitignore() {
+    if (!contextMenu) return;
+    const entry = contextMenu.entry;
+    closeContextMenu();
+    try {
+      await AddToGitignore(dir, entry.relPath);
+      setAdded(entry.path);
+    } catch (err) {
+      console.error('AddToGitignore failed:', err);
+    }
   }
 
   // Filter out directory entries injected by markParentDirs — only show actual files
@@ -73,10 +121,10 @@
     dispatch('selectFile', { path });
   }
 
-  function handleScCopy(e: MouseEvent, path: string) {
+  async function handleScCopy(e: MouseEvent, path: string) {
     e.stopPropagation();
-    ClipboardSetText(path);
-    setCopied(path);
+    // Show the "kopiert!" badge only after the write really succeeded.
+    if (await writeClipboard(path)) setCopied(path);
   }
 
   $: groupedChanges = getGroupedChanges(gitStatuses);
@@ -85,13 +133,11 @@
 <div class="file-list">
   {#if conflictFiles.length > 0 && conflictOperation}
     <div class="sc-operation-banner">
-      {conflictOperation === 'merge' ? 'Merge' :
-       conflictOperation === 'rebase' ? 'Rebase' : 'Cherry-Pick'}
-      in Bearbeitung
+      {$t('sourceControl.mergeInProgress', { op: conflictOperation === 'merge' ? 'Merge' : conflictOperation === 'rebase' ? 'Rebase' : 'Cherry-Pick' })}
     </div>
   {/if}
   {#if groupedChanges.length === 0}
-    <div class="no-results">Keine Änderungen</div>
+    <div class="no-results">{$t('sourceControl.noChanges')}</div>
   {:else}
     {#each groupedChanges as group}
       <div class="sc-group-header">{group.label}</div>
@@ -99,6 +145,7 @@
         <div
           class="sc-entry {getStatusClass(entry.status)}"
           on:click={() => handleScClick(entry.path)}
+          on:contextmenu={(e) => openContextMenu(e, entry)}
           on:keydown
           role="button"
           tabindex="-1"
@@ -107,11 +154,13 @@
           <span class="sc-name">{entry.name}</span>
           <span class="sc-relpath">{entry.relPath}</span>
           {#if copiedPath === entry.path}
-            <span class="copied-badge">kopiert!</span>
+            <span class="copied-badge">{$t('sourceControl.copied')}</span>
+          {:else if addedPath === entry.path}
+            <span class="copied-badge">{$t('sourceControl.addedBadge')}</span>
           {:else}
             <span class="sc-badge {getStatusClass(entry.status)}">{entry.status === '?' ? 'N' : entry.status === 'U' ? 'C' : entry.status}</span>
           {/if}
-          <button class="copy-btn" on:click={(e) => handleScCopy(e, entry.path)} title="Pfad kopieren">
+          <button class="copy-btn" on:click={(e) => handleScCopy(e, entry.path)} title={$t('sourceControl.copyPath')}>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
               <path d="M4 4v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2v2a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2zm2-2v2h2a2 2 0 0 1 2 2v2h2V2H6zM2 6v6h6V6H2z"/>
             </svg>
@@ -119,6 +168,16 @@
         </div>
       {/each}
     {/each}
+  {/if}
+  {#if contextMenu}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="ctx-backdrop" on:click={closeContextMenu} on:contextmenu|preventDefault></div>
+    <div class="ctx-menu" style="left:{contextMenu.x}px; top:{contextMenu.y}px">
+      <button class="ctx-item" on:click={handleAddToGitignore}>
+        {$t('sourceControl.addToGitignore')}
+      </button>
+    </div>
   {/if}
 </div>
 
@@ -191,4 +250,24 @@
     from { opacity: 0; transform: scale(0.8); }
     to { opacity: 1; transform: scale(1); }
   }
+
+  .ctx-backdrop {
+    position: fixed; inset: 0; z-index: 100;
+  }
+
+  .ctx-menu {
+    position: fixed; z-index: 101;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 0;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    min-width: 180px;
+  }
+
+  .ctx-item {
+    display: block; width: 100%;
+    padding: 6px 14px; text-align: left;
+    background: none; border: none;
+    color: var(--fg); font-size: 12px; cursor: pointer;
+  }
+  .ctx-item:hover { background: var(--bg-tertiary); }
 </style>

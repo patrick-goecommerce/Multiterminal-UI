@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
 
   interface IssueDetail {
@@ -42,18 +43,18 @@
       class:open={issue.state === 'OPEN'}
       class:closed={issue.state !== 'OPEN'}
       on:click={() => dispatch('toggleState')}
-      title="Status ändern"
+      title={$t('issueDetail.toggleState')}
     >
       {issue.state === 'OPEN' ? 'Open' : 'Closed'}
     </button>
     {#if issue.url}
-      <button class="edit-btn" on:click={() => BrowserOpenURL(issue.url)} title="Im Browser öffnen">
+      <button class="edit-btn" on:click={() => BrowserOpenURL(issue.url)} title={$t('issues.openInBrowser')}>
         <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
           <path d="M3.75 2h3.5a.75.75 0 010 1.5h-3.5a.25.25 0 00-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 00.25-.25v-3.5a.75.75 0 011.5 0v3.5A1.75 1.75 0 0112.25 14h-8.5A1.75 1.75 0 012 12.25v-8.5C2 2.784 2.784 2 3.75 2zm6.854-.22a.75.75 0 01.22.53v4.25a.75.75 0 01-1.5 0V3.56L6.22 6.72a.75.75 0 01-1.06-1.06l3.1-3.1H5.31a.75.75 0 010-1.5h4.25a.75.75 0 01.53.22z"/>
         </svg>
       </button>
     {/if}
-    <button class="edit-btn" on:click={() => dispatch('editIssue', issue)} title="Bearbeiten">
+    <button class="edit-btn" on:click={() => dispatch('editIssue', issue)} title={$t('issueDetail.edit')}>
       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
         <path d="M11.013 1.427a1.75 1.75 0 012.474 0l1.086 1.086a1.75 1.75 0 010 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 01-.927-.928l.929-3.25a1.75 1.75 0 01.445-.758l8.61-8.61zm1.414 1.06a.25.25 0 00-.354 0L3.463 11.1a.25.25 0 00-.064.108l-.631 2.208 2.208-.63a.25.25 0 00.108-.064l8.61-8.61a.25.25 0 000-.354l-1.086-1.086z"/>
       </svg>
@@ -96,7 +97,7 @@
   {/if}
 
   {#if issue.comments && issue.comments.length > 0}
-    <div class="comments-header">Kommentare ({issue.comments.length})</div>
+    <div class="comments-header">{$t('issueDetail.comments', { count: issue.comments.length })}</div>
     {#each issue.comments as comment}
       <div class="comment">
         <div class="comment-meta">
@@ -111,12 +112,12 @@
   <div class="comment-form">
     <textarea
       bind:value={commentText}
-      placeholder="Kommentar schreiben..."
+      placeholder={$t('issueDetail.commentPlaceholder')}
       rows="3"
       on:keydown={(e) => { if (e.key === 'Enter' && e.ctrlKey) submitComment(); }}
     ></textarea>
     <button class="send-btn" on:click={submitComment} disabled={!commentText.trim() || submitting}>
-      {submitting ? 'Sende...' : 'Senden'}
+      {submitting ? $t('issueDetail.sending') : $t('issueDetail.send')}
     </button>
   </div>
 </div>

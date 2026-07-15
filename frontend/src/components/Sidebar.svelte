@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import * as App from '../../wailsjs/go/backend/App';
   import FileTreeItem from './FileTreeItem.svelte';
   import FavoritesSection from './FavoritesSection.svelte';
@@ -148,7 +149,7 @@
   <div class="sidebar" style="width: {width}px">
     <div class="sidebar-header">
       <span class="sidebar-title">Files</span>
-      <button class="sidebar-pin" class:active={pinned} title={pinned ? 'Sidebar lösen' : 'Sidebar anpinnen'} on:click={() => dispatch('togglePin')}>
+      <button class="sidebar-pin" class:active={pinned} title={pinned ? $t('sidebar.unpin') : $t('sidebar.pin')} on:click={() => dispatch('togglePin')}>
         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
           {#if pinned}
             <path d="M10 1.5l4.5 4.5-1 1-1-.5L10 9l-.5 3.5L8 14l-1.5-3L3 14.5 1.5 13 5 9.5 2 8l1.5-1.5L7 6l2.5-2.5-.5-1z"/>
@@ -198,7 +199,7 @@
       <div class="search-box">
         <input
           type="text"
-          placeholder="Suchen..."
+          placeholder={$t('sidebar.search')}
           bind:value={searchQuery}
           on:input={search}
         />
@@ -221,7 +222,7 @@
             />
           {/each}
         {:else if searching && searchQuery}
-          <div class="no-results">Keine Ergebnisse</div>
+          <div class="no-results">{$t('sidebar.noResults')}</div>
         {:else}
           {#each entries as entry (entry.path)}
             <FileTreeItem

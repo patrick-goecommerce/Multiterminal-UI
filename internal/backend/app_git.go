@@ -1,18 +1,16 @@
 package backend
 
 import (
+	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 )
 
 // GetGitBranch returns the current git branch for the given directory.
-func (a *App) GetGitBranch(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = dir
-	hideConsole(cmd)
+func (a *AppService) GetGitBranch(dir string) string {
+	cmd := gitCmd(dir, "rev-parse", "--abbrev-ref", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -21,10 +19,8 @@ func (a *App) GetGitBranch(dir string) string {
 }
 
 // GetLastCommitTime returns the Unix timestamp (seconds) of the last git commit.
-func (a *App) GetLastCommitTime(dir string) int64 {
-	cmd := exec.Command("git", "log", "-1", "--format=%ct")
-	cmd.Dir = dir
-	hideConsole(cmd)
+func (a *AppService) GetLastCommitTime(dir string) int64 {
+	cmd := gitCmd(dir, "log", "-1", "--format=%ct")
 	out, err := cmd.Output()
 	if err != nil {
 		return 0
@@ -34,6 +30,27 @@ func (a *App) GetLastCommitTime(dir string) int64 {
 		return 0
 	}
 	return ts
+}
+
+// GetLastCommitHash returns the full SHA of the last commit.
+func (a *AppService) GetLastCommitHash(dir string) string {
+	cmd := gitCmd(dir, "log", "-1", "--format=%H")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// GetLastCommitDiff returns the diff of the last commit (max 8000 chars).
+func (a *AppService) GetLastCommitDiff(dir string) string {
+	cmd := gitCmd(dir, "diff", "HEAD~1", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	if s := string(out); len(s) > 8000 { return s[:8000] }
+	return string(out)
 }
 
 // GitFileStatus represents the git status of a single file.
@@ -46,16 +63,14 @@ type GitFileStatus struct {
 
 // GetGitFileStatuses returns a map of relative file paths to their git status
 // for the given directory. Uses `git status --porcelain` for parsing.
-func (a *App) GetGitFileStatuses(dir string) map[string]string {
+func (a *AppService) GetGitFileStatuses(dir string) map[string]string {
 	result := make(map[string]string)
 	if dir == "" {
 		return result
 	}
 
 	// Get git repo root to compute relative paths correctly
-	rootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	rootCmd.Dir = dir
-	hideConsole(rootCmd)
+	rootCmd := gitCmd(dir, "rev-parse", "--show-toplevel")
 	rootOut, err := rootCmd.Output()
 	if err != nil {
 		return result
@@ -65,9 +80,7 @@ func (a *App) GetGitFileStatuses(dir string) map[string]string {
 		repoRoot = resolved
 	}
 
-	cmd := exec.Command("git", "status", "--porcelain", "-uall")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "status", "--porcelain", "-uall")
 	out, err := cmd.Output()
 	if err != nil {
 		return result
@@ -130,15 +143,13 @@ type MergeConflictInfo struct {
 }
 
 // GetMergeConflicts returns conflict information for the given directory.
-func (a *App) GetMergeConflicts(dir string) MergeConflictInfo {
+func (a *AppService) GetMergeConflicts(dir string) MergeConflictInfo {
 	info := MergeConflictInfo{Files: []string{}}
 	if dir == "" {
 		return info
 	}
 
-	cmd := exec.Command("git", "diff", "--name-only", "--diff-filter=U")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "diff", "--name-only", "--diff-filter=U")
 	out, err := cmd.Output()
 	if err != nil {
 		return info
@@ -160,9 +171,7 @@ func (a *App) GetMergeConflicts(dir string) MergeConflictInfo {
 // detectMergeOperation checks git sentinel files to determine the active operation.
 func detectMergeOperation(dir string) string {
 	// Find .git directory
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
-	cmd.Dir = dir
-	hideConsole(cmd)
+	cmd := gitCmd(dir, "rev-parse", "--git-dir")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -204,4 +213,65 @@ func markParentDirs(statuses map[string]string, filePath string, rootDir string)
 		}
 		dir = filepath.Dir(dir)
 	}
+}
+
+// GetLocalBranches returns local branch names for the repo containing dir.
+func (a *AppService) GetLocalBranches(dir string) []string {
+	cmd := gitCmd(dir, "branch", "--format=%(refname:short)")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	var branches []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches
+}
+
+// AddToGitignore appends relPath to the .gitignore at the repo root of dir.
+// Creates .gitignore if it does not exist. No-ops if the entry is already present.
+// relPath must be relative to the repo root (forward slashes preferred; backslashes are normalized).
+func (a *AppService) AddToGitignore(dir, relPath string) error {
+	// Normalize path separator for .gitignore (always forward slashes)
+	entry := strings.ReplaceAll(relPath, `\`, "/")
+
+	// Find repo root
+	cmd := gitCmd(dir, "rev-parse", "--show-toplevel")
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("not a git repository: %w", err)
+	}
+	repoRoot := strings.TrimSpace(string(out))
+	gitignorePath := filepath.Join(filepath.FromSlash(repoRoot), ".gitignore")
+
+	// Check for existing entry (retain data for newline check below)
+	var existingData []byte
+	if d, err := os.ReadFile(gitignorePath); err == nil {
+		existingData = d
+		for _, line := range strings.Split(string(d), "\n") {
+			if strings.TrimSpace(line) == entry {
+				return nil // already present
+			}
+		}
+	}
+
+	// Append entry (create file if missing)
+	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("open .gitignore: %w", err)
+	}
+	defer f.Close()
+
+	// Ensure new entry starts on its own line
+	if len(existingData) > 0 && existingData[len(existingData)-1] != '\n' {
+		if _, err := f.WriteString("\n"); err != nil {
+			return fmt.Errorf("write newline to .gitignore: %w", err)
+		}
+	}
+
+	_, err = fmt.Fprintf(f, "%s\n", entry)
+	return err
 }

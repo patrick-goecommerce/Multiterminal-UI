@@ -1,5 +1,168 @@
+export namespace board {
+
+	// TaskState enum values
+	export type TaskState = "backlog" | "triage" | "planning" | "review" | "executing" | "stuck" | "qa" | "merging" | "human_review" | "done";
+
+	// CardType enum values
+	export type CardType = "bugfix" | "feature" | "refactor" | "docs";
+
+	// Complexity enum values
+	export type Complexity = "trivial" | "medium" | "complex";
+
+	// Event enum values
+	export type Event = "start_triage" | "complexity_trivial" | "complexity_non_trivial" | "plan_ready" | "approved" | "rejected" | "step_stuck" | "model_escalated" | "replan_completed" | "scope_expansion_required" | "max_escalations" | "all_steps_done" | "qa_passed" | "qa_failed" | "merge_success" | "merge_conflict" | "user_resolved_executing" | "user_resolved_done" | "user_resolved_backlog";
+
+	export class TaskCard {
+	    id: string;
+	    title: string;
+	    description: string;
+	    state: TaskState;
+	    card_type: CardType;
+	    complexity: Complexity;
+	    created_at: string;
+	    updated_at: string;
+	    execution_mode: string;
+	    review_reason: string;
+	    qa_attempts: number;
+	    esc_attempts: number;
+	    cost_usd: number;
+
+	    static createFrom(source: any = {}) {
+	        return new TaskCard(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.state = source["state"];
+	        this.card_type = source["card_type"];
+	        this.complexity = source["complexity"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	        this.execution_mode = source["execution_mode"];
+	        this.review_reason = source["review_reason"];
+	        this.qa_attempts = source["qa_attempts"];
+	        this.esc_attempts = source["esc_attempts"];
+	        this.cost_usd = source["cost_usd"];
+	    }
+	}
+	export class PlanStep {
+	    id: string;
+	    title: string;
+	    wave: number;
+	    depends_on: string[];
+	    parallel_ok: boolean;
+	    model: string;
+	    files_modify: string[];
+	    files_create: string[];
+	    status: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PlanStep(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.wave = source["wave"];
+	        this.depends_on = source["depends_on"];
+	        this.parallel_ok = source["parallel_ok"];
+	        this.model = source["model"];
+	        this.files_modify = source["files_modify"];
+	        this.files_create = source["files_create"];
+	        this.status = source["status"];
+	    }
+	}
+	export class Plan {
+	    card_id: string;
+	    complexity: Complexity;
+	    steps: PlanStep[];
+
+	    static createFrom(source: any = {}) {
+	        return new Plan(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.card_id = source["card_id"];
+	        this.complexity = source["complexity"];
+	        this.steps = this.convertValues(source["steps"], PlanStep);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TransitionResult {
+	    old_state: TaskState;
+	    new_state: TaskState;
+	    event: Event;
+
+	    static createFrom(source: any = {}) {
+	        return new TransitionResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.old_state = source["old_state"];
+	        this.new_state = source["new_state"];
+	        this.event = source["event"];
+	    }
+	}
+	export class LockInfo {
+	    agent_name: string;
+	    locked_at: string;
+
+	    static createFrom(source: any = {}) {
+	        return new LockInfo(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.agent_name = source["agent_name"];
+	        this.locked_at = source["locked_at"];
+	    }
+	}
+
+}
+
 export namespace backend {
-	
+
+	export class BoardTransitionEvent {
+	    card_id: string;
+	    old_state: board.TaskState;
+	    new_state: board.TaskState;
+	    event: board.Event;
+
+	    static createFrom(source: any = {}) {
+	        return new BoardTransitionEvent(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.card_id = source["card_id"];
+	        this.old_state = source["old_state"];
+	        this.new_state = source["new_state"];
+	        this.event = source["event"];
+	    }
+	}
 	export class ClaudeDetectResult {
 	    path: string;
 	    source: string;
@@ -248,20 +411,310 @@ export namespace backend {
 	        this.downloadURL = source["downloadURL"];
 	    }
 	}
+	export class KanbanCard {
+	    id: string;
+	    issue_number: number;
+	    title: string;
+	    labels: string[];
+	    dir: string;
+	    session_id: number;
+	    priority: number;
+	    dependencies: number[];
+	    plan_id: string;
+	    schedule_id: string;
+	    created_at: string;
+	    parent_issue: number;
+	    prompt: string;
+	    auto_merge: boolean;
+	    auto_start: boolean;
+	    worktree_path: string;
+	    worktree_branch: string;
+	    agent_session_id: number;
+	    review_result: string;
+	    pr_number: number;
+	    retry_count: number;
+	    max_retries: number;
+
+	    static createFrom(source: any = {}) {
+	        return new KanbanCard(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.issue_number = source["issue_number"];
+	        this.title = source["title"];
+	        this.labels = source["labels"];
+	        this.dir = source["dir"];
+	        this.session_id = source["session_id"];
+	        this.priority = source["priority"];
+	        this.dependencies = source["dependencies"];
+	        this.plan_id = source["plan_id"];
+	        this.schedule_id = source["schedule_id"];
+	        this.created_at = source["created_at"];
+	        this.parent_issue = source["parent_issue"];
+	        this.prompt = source["prompt"];
+	        this.auto_merge = source["auto_merge"];
+	        this.auto_start = source["auto_start"];
+	        this.worktree_path = source["worktree_path"];
+	        this.worktree_branch = source["worktree_branch"];
+	        this.agent_session_id = source["agent_session_id"];
+	        this.review_result = source["review_result"];
+	        this.pr_number = source["pr_number"];
+	        this.retry_count = source["retry_count"];
+	        this.max_retries = source["max_retries"];
+	    }
+	}
+	export class KanbanState {
+	    columns: Record<string, KanbanCard[]>;
+	    plans: Plan[];
+	    schedules: ScheduledTask[];
+
+	    static createFrom(source: any = {}) {
+	        return new KanbanState(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.columns = source["columns"];
+	        this.plans = this.convertValues(source["plans"], Plan);
+	        this.schedules = this.convertValues(source["schedules"], ScheduledTask);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class OrchestrationStatus {
+	    active: boolean;
+	    running_agents: number;
+	    max_agents: number;
+	    pending_tickets: number;
+	    review_tickets: number;
+	    done_tickets: number;
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.active = source["active"];
+	        this.running_agents = source["running_agents"];
+	        this.max_agents = source["max_agents"];
+	        this.pending_tickets = source["pending_tickets"];
+	        this.review_tickets = source["review_tickets"];
+	        this.done_tickets = source["done_tickets"];
+	    }
+	    static createFrom(source: any = {}) { return new OrchestrationStatus(source); }
+	}
+	export class Plan {
+	    id: string;
+	    dir: string;
+	    created_at: string;
+	    steps: PlanStep[];
+	    status: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Plan(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.dir = source["dir"];
+	        this.created_at = source["created_at"];
+	        this.steps = this.convertValues(source["steps"], PlanStep);
+	        this.status = source["status"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class PlanStep {
+	    issue_number: number;
+	    card_id: string;
+	    title: string;
+	    order: number;
+	    parallel: boolean;
+	    session_id: number;
+	    status: string;
+	    prompt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PlanStep(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.issue_number = source["issue_number"];
+	        this.card_id = source["card_id"];
+	        this.title = source["title"];
+	        this.order = source["order"];
+	        this.parallel = source["parallel"];
+	        this.session_id = source["session_id"];
+	        this.status = source["status"];
+	        this.prompt = source["prompt"];
+	    }
+	}
+	export class ScheduledTask {
+	    id: string;
+	    name: string;
+	    dir: string;
+	    prompt: string;
+	    schedule: string;
+	    mode: string;
+	    model: string;
+	    enabled: boolean;
+	    last_run: string;
+	    next_run: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ScheduledTask(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.dir = source["dir"];
+	        this.prompt = source["prompt"];
+	        this.schedule = source["schedule"];
+	        this.mode = source["mode"];
+	        this.model = source["model"];
+	        this.enabled = source["enabled"];
+	        this.last_run = source["last_run"];
+	        this.next_run = source["next_run"];
+	    }
+	}
 	export class WorktreeInfo {
 	    path: string;
 	    branch: string;
 	    issue: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new WorktreeInfo(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
 	        this.branch = source["branch"];
 	        this.issue = source["issue"];
+	    }
+	}
+	export class WorktreeFileChange {
+	    path: string;
+	    status: string;
+
+	    static createFrom(source: any = {}) {
+	        return new WorktreeFileChange(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.status = source["status"];
+	    }
+	}
+	export class PaneWorktreeInfo {
+	    path: string;
+	    branch: string;
+	    target_branch: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PaneWorktreeInfo(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.branch = source["branch"];
+	        this.target_branch = source["target_branch"];
+	    }
+	}
+	export class PaneWorktreeDefaults {
+	    name: string;
+	    target_branch: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PaneWorktreeDefaults(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.target_branch = source["target_branch"];
+	    }
+	}
+	export class WorktreeFinishStatus {
+	    state: string;
+	    reason: string;
+	    commits: string[];
+	    stat: string;
+	    untracked: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new WorktreeFinishStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.reason = source["reason"];
+	        this.commits = source["commits"];
+	        this.stat = source["stat"];
+	        this.untracked = source["untracked"];
+	    }
+	}
+
+	export class SttEngineStatus {
+	    provider: string;
+	    dir: string;
+	    bin_path: string;
+	    model_path: string;
+	    bin_found: boolean;
+	    model_found: boolean;
+	    installed: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new SttEngineStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.dir = source["dir"];
+	        this.bin_path = source["bin_path"];
+	        this.model_path = source["model_path"];
+	        this.bin_found = source["bin_found"];
+	        this.model_found = source["model_found"];
+	        this.installed = source["installed"];
 	    }
 	}
 
@@ -291,18 +744,65 @@ export namespace config {
 	        this.error_sound = source["error_sound"];
 	    }
 	}
+	export class STTCloudSettings {
+	    base_url: string;
+	    model: string;
+	    api_key: string;
+	    static createFrom(source: any = {}) { return new STTCloudSettings(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.base_url = source["base_url"];
+	        this.model = source["model"];
+	        this.api_key = source["api_key"];
+	    }
+	}
+	export class STTSettings {
+	    provider: string;
+	    language: string;
+	    cloud: STTCloudSettings;
+	    static createFrom(source: any = {}) { return new STTSettings(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.language = source["language"];
+	        this.cloud = this.convertValues(source["cloud"], STTCloudSettings);
+	    }
+	    convertValues(a: any, classs: any, asMap: boolean = false): any {
+	        if (!a) return a;
+	        if (a.slice && a.map) return (a as any[]).map(elem => this.convertValues(elem, classs));
+	        else if ("object" === typeof a) {
+	            if (asMap) { for (const key of Object.keys(a)) a[key] = new classs(a[key]); return a; }
+	            return new classs(a);
+	        }
+	        return a;
+	    }
+	}
 	export class CommandEntry {
 	    name: string;
 	    text: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new CommandEntry(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.text = source["text"];
+	    }
+	}
+	export class QuickAction {
+	    label: string;
+	    prompt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new QuickAction(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.prompt = source["prompt"];
 	    }
 	}
 	export class IssueTracking {
@@ -339,6 +839,20 @@ export namespace config {
 	        this.id = source["id"];
 	    }
 	}
+	export class AutoNamingSettings {
+	    enabled?: boolean;
+	    model: string;
+
+	    static createFrom(source: any = {}) {
+	        return new AutoNamingSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.model = source["model"];
+	    }
+	}
 	export class Config {
 	    default_shell: string;
 	    default_dir: string;
@@ -355,13 +869,18 @@ export namespace config {
 	    use_worktrees?: boolean;
 	    issue_tracking: IssueTracking;
 	    commands: CommandEntry[];
+	    finish_prep_prompt: string;
+	    quick_actions: QuickAction[];
 	    audio: AudioSettings;
 	    localhost_auto_open: string;
 	    sidebar_pinned: boolean;
 	    favorites?: Record<string, Array<string>>;
 	    font_family: string;
 	    font_size: number;
-	
+	    chat_style: string;
+	    stt: STTSettings;
+	    auto_naming: AutoNamingSettings;
+
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }
@@ -383,14 +902,19 @@ export namespace config {
 	        this.use_worktrees = source["use_worktrees"];
 	        this.issue_tracking = this.convertValues(source["issue_tracking"], IssueTracking);
 	        this.commands = this.convertValues(source["commands"], CommandEntry);
+	        this.finish_prep_prompt = source["finish_prep_prompt"];
+	        this.quick_actions = this.convertValues(source["quick_actions"], QuickAction);
 	        this.audio = this.convertValues(source["audio"], AudioSettings);
 	        this.localhost_auto_open = source["localhost_auto_open"];
 	        this.sidebar_pinned = source["sidebar_pinned"];
 	        this.favorites = source["favorites"];
 	        this.font_family = source["font_family"];
 	        this.font_size = source["font_size"];
+	        this.chat_style = source["chat_style"];
+	        this.stt = this.convertValues(source["stt"], STTSettings);
+	        this.auto_naming = this.convertValues(source["auto_naming"], AutoNamingSettings);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -417,12 +941,15 @@ export namespace config {
 	    model: string;
 	    issue_number?: number;
 	    issue_branch?: string;
+	    worktree_path?: string;
+	    worktree_branch?: string;
+	    target_branch?: string;
 	    zoom_delta?: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new SavedPane(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -430,6 +957,9 @@ export namespace config {
 	        this.model = source["model"];
 	        this.issue_number = source["issue_number"];
 	        this.issue_branch = source["issue_branch"];
+	        this.worktree_path = source["worktree_path"];
+	        this.worktree_branch = source["worktree_branch"];
+	        this.target_branch = source["target_branch"];
 	        this.zoom_delta = source["zoom_delta"];
 	    }
 	}

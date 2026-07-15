@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import { config } from '../stores/config';
   import { applyAccentColor, applyTheme } from '../stores/theme';
   import type { ThemeName } from '../stores/theme';
@@ -7,12 +7,14 @@
   import ColorPicker from './ColorPicker.svelte';
   import { playBell } from '../lib/audio';
   import { MONOSPACE_FONTS, isFontAvailable } from '../lib/terminal';
+  import { EventsOn } from '../../wailsjs/runtime/runtime';
 
   export let visible: boolean = false;
 
   const dispatch = createEventDispatcher();
 
   const availableThemes: { value: ThemeName; label: string }[] = [
+    { value: 'konzept', label: 'Konzept (MTUI)' },
     { value: 'dark', label: 'Dark (Catppuccin Mocha)' },
     { value: 'light', label: 'Light' },
     { value: 'dracula', label: 'Dracula' },
@@ -21,8 +23,14 @@
   ];
 
   let colorValue = $config.terminal_color || '#39ff14';
-  let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'dark';
+  let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'konzept';
   let savedTheme: ThemeName = selectedTheme;
+  let chatStyle: string = ($config as any).chat_style || 'claude-code';
+  let sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
+  let sttLanguage = ($config as any).stt?.language || 'de';
+  let sttBaseUrl = ($config as any).stt?.cloud?.base_url || '';
+  let sttModel = ($config as any).stt?.cloud?.model || 'whisper-1';
+  let sttApiKey = ($config as any).stt?.cloud?.api_key || '';
   let loggingEnabled = $config.logging_enabled || false;
   let useWorktrees = $config.use_worktrees || false;
   let logPath = '';
@@ -40,17 +48,63 @@
   let audioInputSound = $config.audio?.input_sound || '';
   let audioErrorSound = $config.audio?.error_sound || '';
 
+  let autoNamingEnabled = $config.auto_naming?.enabled ?? true;
+  let autoNamingModel = $config.auto_naming?.model || 'claude-haiku-4-5';
+
   let fontFamily = $config.font_family || '';
   let fontSize = $config.font_size || 10;
   let savedFontFamily = fontFamily;
   let savedFontSize = fontSize;
   let availableFonts: { name: string; available: boolean }[] = [];
 
-  $: if (visible) {
+  let orchMaxParallel = $config.orchestrator?.max_parallel_agents ?? 3;
+  let orchAutoMerge = $config.orchestrator?.default_auto_merge ?? false;
+  let orchAutoStart = $config.orchestrator?.default_auto_start ?? false;
+  let orchMaxRetries = $config.orchestrator?.max_retries ?? 1;
+  let orchReviewCommand = $config.orchestrator?.review_command || '';
+  let orchSyncSubtasks = $config.orchestrator?.sync_subtasks_to_github ?? false;
+
+  let finishPrepPrompt = $config.finish_prep_prompt || '';
+  let quickActions: { label: string; prompt: string }[] = [];
+
+  // STT engine install status
+  let sttStatus: { installed: boolean; bin_found: boolean; model_found: boolean; dir: string; bin_path: string; model_path: string } | null = null;
+  let sttInstalling = false;
+  let sttInstallError = '';
+  let sttProgress: { phase: 'binary' | 'model'; pct: number } | null = null;
+  let sttDownloadUnsubscribe: (() => void) | null = null;
+
+  onMount(() => {
+    sttDownloadUnsubscribe = EventsOn('stt:download', (payload: any) => {
+      if (!payload || typeof payload !== 'object') return;
+      sttProgress = {
+        phase: (payload.phase === 'model' ? 'model' : 'binary'),
+        pct: typeof payload.pct === 'number' ? payload.pct : 0,
+      };
+    });
+  });
+
+  onDestroy(() => {
+    if (sttDownloadUnsubscribe) sttDownloadUnsubscribe();
+  });
+
+  // IMPORTANT: only `visible` may be referenced in this reactive statement.
+  // The body is a function so Svelte does NOT track the dozens of variables it
+  // assigns/reads — otherwise editing any field (e.g. font size) re-runs the
+  // block and resets every control to the config defaults (recurring bug).
+  $: if (visible) initDialog();
+
+  function initDialog() {
     requestAnimationFrame(() => dialogEl?.focus());
     colorValue = $config.terminal_color || '#39ff14';
-    selectedTheme = ($config.theme as ThemeName) || 'dark';
+    selectedTheme = ($config.theme as ThemeName) || 'konzept';
     savedTheme = selectedTheme;
+    chatStyle = ($config as any).chat_style || 'claude-code';
+    sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
+    sttLanguage = ($config as any).stt?.language || 'de';
+    sttBaseUrl = ($config as any).stt?.cloud?.base_url || '';
+    sttModel = ($config as any).stt?.cloud?.model || 'whisper-1';
+    sttApiKey = ($config as any).stt?.cloud?.api_key || '';
     loggingEnabled = $config.logging_enabled || false;
     useWorktrees = $config.use_worktrees || false;
     claudeCommand = $config.claude_command || '';
@@ -60,6 +114,8 @@
     audioDoneSound = $config.audio?.done_sound || '';
     audioInputSound = $config.audio?.input_sound || '';
     audioErrorSound = $config.audio?.error_sound || '';
+    autoNamingEnabled = $config.auto_naming?.enabled ?? true;
+    autoNamingModel = $config.auto_naming?.model || 'claude-haiku-4-5';
     fontFamily = $config.font_family || '';
     fontSize = $config.font_size || 10;
     savedFontFamily = fontFamily;
@@ -68,9 +124,31 @@
       name,
       available: isFontAvailable(name),
     }));
+    orchMaxParallel = $config.orchestrator?.max_parallel_agents ?? 3;
+    orchAutoMerge = $config.orchestrator?.default_auto_merge ?? false;
+    orchAutoStart = $config.orchestrator?.default_auto_start ?? false;
+    orchMaxRetries = $config.orchestrator?.max_retries ?? 1;
+    orchReviewCommand = $config.orchestrator?.review_command || '';
+    orchSyncSubtasks = $config.orchestrator?.sync_subtasks_to_github ?? false;
+    finishPrepPrompt = $config.finish_prep_prompt || '';
+    quickActions = ($config.quick_actions || []).map((qa) => ({ ...qa }));
     App.GetLogPath().then(p => logPath = p).catch(() => {});
     detectClaude();
   }
+
+  function addQuickAction() {
+    if (quickActions.length >= 5) return;
+    quickActions = [...quickActions, { label: '⭐', prompt: '' }];
+  }
+
+  function removeQuickAction(index: number) {
+    quickActions = quickActions.filter((_, i) => i !== index);
+  }
+
+  // Isolated reactive: re-runs when `visible` or `sttProvider` change. Writes
+  // sttStatus/sttInstallError (not read by the main block above), so re-firing
+  // does NOT cascade into a reset of the main block's fields.
+  $: if (visible && sttProvider !== 'cloud-whisper') refreshSttStatus(sttProvider);
 
   function handleColorChange(e: CustomEvent<{ value: string }>) {
     colorValue = e.detail.value;
@@ -124,6 +202,37 @@
     } catch {}
   }
 
+  async function refreshSttStatus(provider: string) {
+    sttStatus = null;
+    sttInstallError = '';
+    if (provider === 'cloud-whisper') {
+      sttStatus = { installed: true, bin_found: true, model_found: true, dir: '', bin_path: '', model_path: '' };
+      return;
+    }
+    try {
+      sttStatus = await App.CheckSttEngine(provider);
+    } catch (e) {
+      sttStatus = null;
+      sttInstallError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function installStt() {
+    if (sttInstalling) return;
+    sttInstallError = '';
+    sttInstalling = true;
+    sttProgress = { phase: 'binary', pct: 0 };
+    try {
+      await App.InstallSttEngine(sttProvider);
+      await refreshSttStatus(sttProvider);
+    } catch (e) {
+      sttInstallError = e instanceof Error ? e.message : String(e);
+    } finally {
+      sttInstalling = false;
+      sttProgress = null;
+    }
+  }
+
   async function browseAudioFile(target: 'done' | 'input' | 'error') {
     try {
       const path = await App.BrowseForAudioFile();
@@ -144,8 +253,11 @@
       ...$config,
       terminal_color: colorValue,
       theme: selectedTheme,
+      chat_style: chatStyle,
       logging_enabled: loggingEnabled,
       use_worktrees: useWorktrees,
+      finish_prep_prompt: finishPrepPrompt,
+      quick_actions: quickActions,
       claude_command: claudeCommand,
       font_family: fontFamily,
       font_size: fontSize,
@@ -156,6 +268,23 @@
         done_sound: audioDoneSound,
         input_sound: audioInputSound,
         error_sound: audioErrorSound,
+      },
+      orchestrator: {
+        max_parallel_agents: orchMaxParallel,
+        default_auto_merge: orchAutoMerge,
+        default_auto_start: orchAutoStart,
+        max_retries: orchMaxRetries,
+        review_command: orchReviewCommand,
+        sync_subtasks_to_github: orchSyncSubtasks,
+      },
+      stt: {
+        provider: sttProvider,
+        language: sttLanguage,
+        cloud: { base_url: sttBaseUrl, model: sttModel, api_key: sttApiKey },
+      },
+      auto_naming: {
+        enabled: autoNamingEnabled,
+        model: autoNamingModel,
       },
     };
     config.set(updated);
@@ -173,6 +302,7 @@
   function resetDefault() {
     colorValue = '#39ff14';
     selectedTheme = 'dark';
+    chatStyle = 'claude-code';
     applyTheme('dark', '#39ff14');
     fontFamily = '';
     fontSize = 10;
@@ -183,6 +313,19 @@
     audioDoneSound = '';
     audioInputSound = '';
     audioErrorSound = '';
+    autoNamingEnabled = true;
+    autoNamingModel = 'claude-haiku-4-5';
+    orchMaxParallel = 3;
+    orchAutoMerge = false;
+    orchAutoStart = false;
+    orchMaxRetries = 1;
+    orchReviewCommand = '';
+    orchSyncSubtasks = false;
+    sttProvider = 'cloud-whisper';
+    sttLanguage = 'de';
+    sttBaseUrl = '';
+    sttModel = 'whisper-1';
+    sttApiKey = '';
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -208,6 +351,78 @@
             <option value={t.value} selected={t.value === selectedTheme}>{t.label}</option>
           {/each}
         </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="chat-style-select">Chat-Stil</label>
+        <p class="setting-desc">Aussehen der Chat-Blasen im Chat-Modus.</p>
+        <select id="chat-style-select" class="theme-select" bind:value={chatStyle}>
+          <option value="claude-code">Claude Code</option>
+          <option value="telegram">Telegram</option>
+        </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="stt-provider">Spracheingabe (STT)</label>
+        <p class="setting-desc">Engine für das Mikrofon-Diktat im Chat.</p>
+        <select id="stt-provider" class="theme-select" bind:value={sttProvider} on:change={() => refreshSttStatus(sttProvider)}>
+          <option value="cloud-whisper">Cloud (Whisper-API)</option>
+          <option value="whisper-cpp">Lokal: whisper.cpp</option>
+          <option value="parakeet">Lokal: Parakeet (sherpa-onnx)</option>
+        </select>
+        <label class="setting-label" for="stt-lang" style="margin-top: 12px;">Sprache</label>
+        <select id="stt-lang" class="theme-select" bind:value={sttLanguage}>
+          <option value="de">Deutsch</option>
+          <option value="en">Englisch</option>
+          <option value="auto">Automatisch</option>
+        </select>
+        {#if sttProvider !== 'cloud-whisper'}
+          {#if sttStatus}
+            {#if sttStatus.installed}
+              <p class="stt-status installed">&#x2705; Installiert ({sttStatus.bin_path})</p>
+            {:else}
+              <p class="stt-status missing">
+                &#x26A0;&#xFE0F; Nicht installiert
+                {#if !sttStatus.bin_found && !sttStatus.model_found}
+                  (Binary + Modell fehlen)
+                {:else if !sttStatus.bin_found}
+                  (Binary fehlt)
+                {:else}
+                  (Modell fehlt)
+                {/if}
+              </p>
+              <button class="install-btn" on:click={installStt} disabled={sttInstalling}>
+                {#if sttInstalling}Installation läuft…{:else}Jetzt installieren{/if}
+              </button>
+            {/if}
+          {/if}
+          {#if sttInstalling && sttProgress}
+            <div class="install-progress">
+              <div class="install-progress-label">
+                {sttProgress.phase === 'binary' ? 'Binary' : 'Modell'} – {sttProgress.pct}%
+              </div>
+              <div class="install-progress-bar"><div class="install-progress-fill" style="width: {sttProgress.pct}%"></div></div>
+            </div>
+          {/if}
+          {#if sttInstallError}
+            <p class="stt-install-error">{sttInstallError}</p>
+            {#if !sttStatus || !sttStatus.installed}
+              <button class="install-btn" on:click={installStt} disabled={sttInstalling}>
+                {#if sttInstalling}Installation läuft…{:else}Erneut versuchen{/if}
+              </button>
+            {/if}
+          {/if}
+        {/if}
+        {#if sttProvider === 'cloud-whisper'}
+          <label class="setting-label" for="stt-key" style="margin-top: 12px;">API-Key (leer = $OPENAI_API_KEY)</label>
+          <input id="stt-key" type="password" class="claude-input" bind:value={sttApiKey} placeholder="sk-…" />
+          <label class="setting-label" for="stt-url" style="margin-top: 8px;">Base-URL (leer = OpenAI)</label>
+          <input id="stt-url" type="text" class="claude-input" bind:value={sttBaseUrl} placeholder="https://api.openai.com/v1" />
+          <label class="setting-label" for="stt-model" style="margin-top: 8px;">Modell</label>
+          <input id="stt-model" type="text" class="claude-input" bind:value={sttModel} placeholder="whisper-1" />
+        {:else}
+          <p class="setting-desc" style="margin-top: 12px;">Lokale Engine lädt Binary + Modell beim ersten Gebrauch nach <code>~/.multiterminal/stt/</code>. Benötigt <code>ffmpeg</code> im PATH.</p>
+        {/if}
       </div>
 
       <div class="setting-group">
@@ -293,6 +508,60 @@
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Agent-Orchestrierung</label>
+        <p class="setting-desc">Einstellungen für die parallele Ausführung von Claude-Agenten.</p>
+
+        <div class="orch-field">
+          <label class="orch-label" for="orch-max-parallel">Max. parallele Agenten</label>
+          <input id="orch-max-parallel" type="number" class="orch-number" min="1" max="8" bind:value={orchMaxParallel} />
+        </div>
+
+        <div class="orch-field">
+          <label class="orch-label" for="orch-max-retries">Max. Wiederholungen</label>
+          <input id="orch-max-retries" type="number" class="orch-number" min="0" max="5" bind:value={orchMaxRetries} />
+        </div>
+
+        <div class="toggle-row" style="margin-bottom: 10px;">
+          <button class="toggle-btn" class:toggle-on={orchAutoMerge} on:click={() => orchAutoMerge = !orchAutoMerge}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">Standard: Auto-Merge</span>
+        </div>
+
+        <div class="toggle-row" style="margin-bottom: 10px;">
+          <button class="toggle-btn" class:toggle-on={orchAutoStart} on:click={() => orchAutoStart = !orchAutoStart}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">Standard: Auto-Start</span>
+        </div>
+
+        <div class="toggle-row" style="margin-bottom: 10px;">
+          <button class="toggle-btn" class:toggle-on={orchSyncSubtasks} on:click={() => orchSyncSubtasks = !orchSyncSubtasks}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">Sub-Tickets nach GitHub synchronisieren</span>
+        </div>
+
+        <div class="orch-field">
+          <label class="orch-label" for="orch-review-cmd">Review-Befehl</label>
+          <input id="orch-review-cmd" type="text" class="claude-input" bind:value={orchReviewCommand} placeholder="go test ./... && go vet ./..." />
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Automatische Pane-Benennung</label>
+        <p class="setting-desc">Benennt Claude-Panes automatisch anhand des ersten Prompts (per {autoNamingModel}). Manuell vergebene Namen bleiben erhalten.</p>
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <button class="toggle-btn" class:toggle-on={autoNamingEnabled} on:click={() => autoNamingEnabled = !autoNamingEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{autoNamingEnabled ? 'Aktiv' : 'Inaktiv'}</span>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
         <label class="setting-label">Audio</label>
         <p class="setting-desc">Akustische Benachrichtigungen wenn Claude fertig ist oder Eingabe braucht.</p>
         <div class="toggle-row" style="margin-bottom: 12px;">
@@ -345,6 +614,37 @@
             </div>
           </div>
         {/if}
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Quick Actions</label>
+        <p class="setting-desc">
+          Platzhalter: <code>{'{{branch}}'}</code>, <code>{'{{targetBranch}}'}</code>,
+          <code>{'{{worktreePath}}'}</code> (leer, wenn kein Worktree aktiv ist).
+        </p>
+
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label" style="margin-top: 12px;">Fertigstellen-Prompt (✓-Button)</label>
+        <textarea
+          class="finish-prompt-input"
+          rows="4"
+          placeholder="Leer lassen für das Standardverhalten (lokal mergen &amp; aufräumen)"
+          bind:value={finishPrepPrompt}
+        ></textarea>
+
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label" style="margin-top: 12px;">Eigene Quick-Actions ({quickActions.length}/5)</label>
+        {#each quickActions as qa, i (i)}
+          <div class="quick-action-row">
+            <input class="quick-action-label" maxlength="2" bind:value={qa.label} placeholder="🔁" />
+            <input class="quick-action-prompt" bind:value={qa.prompt} placeholder="Prompt-Text..." />
+            <button class="quick-action-remove" on:click={() => removeQuickAction(i)}>✕</button>
+          </div>
+        {/each}
+        <button class="add-quick-action" on:click={addQuickAction} disabled={quickActions.length >= 5}>
+          + Quick Action
+        </button>
       </div>
 
       <div class="dialog-footer">
@@ -483,4 +783,65 @@
   .sound-label {
     font-size: 12px; color: var(--fg-muted); display: block; margin-bottom: 4px;
   }
+
+  .orch-field {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  }
+
+  .orch-label {
+    font-size: 12px; color: var(--fg-muted); min-width: 160px;
+  }
+
+  .orch-number {
+    width: 70px; padding: 6px 8px; background: var(--bg-secondary);
+    color: var(--fg); border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12px; outline: none; text-align: center;
+  }
+  .orch-number:focus { border-color: var(--accent); }
+
+  .stt-status {
+    font-size: 12px; margin: 8px 0; padding: 6px 8px;
+    border-radius: 4px; font-family: monospace; word-break: break-all;
+  }
+  .stt-status.installed { color: #a6e3a1; background: rgba(166, 227, 161, 0.08); }
+  .stt-status.missing { color: #f9e2af; background: rgba(249, 226, 175, 0.08); }
+  .install-btn {
+    padding: 6px 14px; background: var(--accent); color: #000; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+  .install-btn:hover { opacity: 0.9; }
+  .install-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .install-progress { margin-top: 8px; }
+  .install-progress-label { font-size: 11px; color: var(--fg-muted); margin-bottom: 4px; }
+  .install-progress-bar {
+    height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;
+  }
+  .install-progress-fill {
+    height: 100%; background: var(--accent); transition: width 0.2s;
+  }
+  .stt-install-error {
+    font-size: 11px; color: #f38ba8; margin-top: 8px; word-break: break-word;
+  }
+
+  .finish-prompt-input {
+    width: 100%; box-sizing: border-box; font-family: inherit; font-size: 12px;
+    background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--fg); padding: 8px; resize: vertical;
+  }
+  .quick-action-row { display: flex; gap: 6px; margin: 4px 0; align-items: center; }
+  .quick-action-label { width: 40px; text-align: center; }
+  .quick-action-prompt { flex: 1; }
+  .quick-action-row input {
+    background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px;
+    color: var(--fg); padding: 5px 8px; font-size: 12px;
+  }
+  .quick-action-remove {
+    background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 13px;
+  }
+  .quick-action-remove:hover { color: var(--error); }
+  .add-quick-action {
+    margin-top: 6px; padding: 6px 12px; background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--fg); cursor: pointer; font-size: 12px;
+  }
+  .add-quick-action:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

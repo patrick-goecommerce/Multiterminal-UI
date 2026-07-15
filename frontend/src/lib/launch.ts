@@ -28,46 +28,32 @@ export interface BranchConflict {
 export interface BranchSetupResult {
   issueBranch: string;
   worktreePath: string;
+  targetBranch: string;
   sessionDir: string;
   conflict?: BranchConflict;
   cancelled?: boolean;
 }
 
 /**
- * Set up branch/worktree for an issue before launching a session.
- * Returns conflict info if a branch conflict dialog is needed.
+ * Set up isolation for an issue before launching a session. Every issue pane
+ * gets its own deterministic worktree (App.CreateIssueWorktree) — the main
+ * repo's own checked-out branch is never touched by this default path.
+ * GetOrCreateIssueBranch/BranchConflictDialog remain only as a fallback for
+ * the rare case where the main repo is already manually sitting on a
+ * DIFFERENT issue's branch (state MTUI itself no longer creates).
  */
 export async function setupIssueBranch(
   sessionDir: string,
   issue: IssueContext,
-  useWorktrees: boolean,
   autoBranch: boolean,
 ): Promise<BranchSetupResult> {
-  const result: BranchSetupResult = { issueBranch: '', worktreePath: '', sessionDir };
-
-  if (useWorktrees) {
-    try {
-      const wt = await App.CreateWorktree(sessionDir, issue.number, issue.title);
-      if (wt) {
-        result.sessionDir = wt.path;
-        result.issueBranch = wt.branch;
-        result.worktreePath = wt.path;
-      }
-    } catch (err: any) {
-      const msg = err?.message || String(err);
-      if (!confirm(`Worktree-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne Worktree starten?`)) {
-        result.cancelled = true;
-      }
-    }
-    return result;
-  }
+  const result: BranchSetupResult = { issueBranch: '', worktreePath: '', targetBranch: '', sessionDir };
 
   if (!autoBranch) return result;
 
   const branchInfo = await App.IsOnIssueBranch(sessionDir, issue.number);
-  const isDefaultBranch = ['main', 'master', 'develop'].includes(branchInfo.branch_name);
 
-  if (!isDefaultBranch && !branchInfo.is_same_issue) {
+  if (branchInfo.on_issue_branch && !branchInfo.is_same_issue) {
     const dirty = !(await App.HasCleanWorkingTree(sessionDir));
     result.conflict = {
       currentBranch: branchInfo.branch_name,
@@ -78,15 +64,22 @@ export async function setupIssueBranch(
   }
 
   if (branchInfo.is_same_issue) {
+    // Legacy/manual state: main repo already checked out on this exact issue
+    // branch (predates worktree isolation, or done manually outside MTUI).
     result.issueBranch = branchInfo.branch_name;
-  } else {
-    try {
-      result.issueBranch = await App.GetOrCreateIssueBranch(sessionDir, issue.number, issue.title);
-    } catch (err: any) {
-      const msg = err?.message || String(err);
-      if (!confirm(`Branch-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem ohne eigenen Branch starten?`)) {
-        result.cancelled = true;
-      }
+    return result;
+  }
+
+  try {
+    const wt = await App.CreateIssueWorktree(sessionDir, issue.number, issue.title);
+    result.sessionDir = wt.path;
+    result.issueBranch = wt.branch;
+    result.worktreePath = wt.path;
+    result.targetBranch = wt.target_branch;
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    if (!confirm(`Worktree-Erstellung fehlgeschlagen:\n${msg}\n\nTrotzdem im Hauptrepo-Verzeichnis starten?`)) {
+      result.cancelled = true;
     }
   }
 
@@ -100,8 +93,8 @@ export async function resolveBranchConflict(
   action: 'switch' | 'stay' | 'worktree',
   sessionDir: string,
   issue: IssueContext,
-): Promise<{ issueBranch: string; worktreePath: string; sessionDir: string; cancelled?: boolean }> {
-  const result = { issueBranch: '', worktreePath: '', sessionDir, cancelled: false };
+): Promise<{ issueBranch: string; worktreePath: string; targetBranch: string; sessionDir: string; cancelled?: boolean }> {
+  const result = { issueBranch: '', worktreePath: '', targetBranch: '', sessionDir, cancelled: false };
 
   if (action === 'switch') {
     try {
@@ -114,11 +107,12 @@ export async function resolveBranchConflict(
     }
   } else if (action === 'worktree') {
     try {
-      const wt = await App.CreateWorktree(sessionDir, issue.number, issue.title);
+      const wt = await App.CreateIssueWorktree(sessionDir, issue.number, issue.title);
       if (wt) {
         result.sessionDir = wt.path;
         result.issueBranch = wt.branch;
         result.worktreePath = wt.path;
+        result.targetBranch = wt.target_branch;
       }
     } catch (err: any) {
       const msg = err?.message || String(err);

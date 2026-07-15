@@ -3,8 +3,6 @@ package backend
 import (
 	"log"
 	"time"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // QueueItem represents a single prompt in a session's pipeline queue.
@@ -38,8 +36,15 @@ func truncateStr(s string, max int) string {
 
 // AddToQueue adds a prompt to a session's pipeline queue.
 // If the session is idle/done and nothing is in-flight, it triggers immediately.
-func (a *App) AddToQueue(sessionId int, prompt string) QueueItem {
+func (a *AppService) AddToQueue(sessionId int, prompt string) QueueItem {
 	a.mu.Lock()
+	// Queue is locked for new items while a finish flow is active. The prep
+	// item itself is enqueued BEFORE the state is created (task 7 ordering).
+	if st := a.finishStates[sessionId]; st != nil {
+		a.mu.Unlock()
+		log.Printf("[queue] session %d: rejected item during finish phase %q", sessionId, st.Phase)
+		return QueueItem{}
+	}
 	q := a.queues[sessionId]
 	if q == nil {
 		q = &sessionQueue{}
@@ -61,7 +66,7 @@ func (a *App) AddToQueue(sessionId int, prompt string) QueueItem {
 }
 
 // GetQueue returns the current pipeline queue for a session.
-func (a *App) GetQueue(sessionId int) []QueueItem {
+func (a *AppService) GetQueue(sessionId int) []QueueItem {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	q := a.queues[sessionId]
@@ -75,24 +80,35 @@ func (a *App) GetQueue(sessionId int) []QueueItem {
 
 // RemoveFromQueue removes a single item by ID.
 // Items with status "sent" (currently executing) cannot be removed.
-func (a *App) RemoveFromQueue(sessionId int, itemId int) {
+func (a *AppService) RemoveFromQueue(sessionId int, itemId int) {
 	a.mu.Lock()
 	q := a.queues[sessionId]
+	removed := false
 	if q != nil {
 		for i, item := range q.items {
 			if item.ID == itemId && item.Status != "sent" {
 				q.items = append(q.items[:i], q.items[i+1:]...)
 				log.Printf("[queue] session %d: removed item %d", sessionId, itemId)
+				removed = true
 				break
 			}
 		}
 	}
 	a.mu.Unlock()
 	a.emitQueueUpdate(sessionId)
+
+	if removed {
+		if st := a.getFinishState(sessionId); st != nil && st.PrepItemID == itemId {
+			a.mu.Lock()
+			delete(a.finishStates, sessionId)
+			a.mu.Unlock()
+			a.emitFinishBlocked(sessionId, "", "Fertigstellen abgebrochen (Prep-Prompt entfernt)")
+		}
+	}
 }
 
 // ClearDoneFromQueue removes all completed items from the queue.
-func (a *App) ClearDoneFromQueue(sessionId int) {
+func (a *AppService) ClearDoneFromQueue(sessionId int) {
 	a.mu.Lock()
 	q := a.queues[sessionId]
 	if q != nil {
@@ -109,15 +125,22 @@ func (a *App) ClearDoneFromQueue(sessionId int) {
 }
 
 // ClearQueue removes all items from a session's queue.
-func (a *App) ClearQueue(sessionId int) {
+func (a *AppService) ClearQueue(sessionId int) {
 	a.mu.Lock()
 	delete(a.queues, sessionId)
 	a.mu.Unlock()
 	a.emitQueueUpdate(sessionId)
+
+	if st := a.getFinishState(sessionId); st != nil && st.Phase == "preparing" {
+		a.mu.Lock()
+		delete(a.finishStates, sessionId)
+		a.mu.Unlock()
+		a.emitFinishBlocked(sessionId, "", "Fertigstellen abgebrochen (Queue geleert)")
+	}
 }
 
 // tryProcessQueue sends the next pending item if the session is ready.
-func (a *App) tryProcessQueue(sessionId int) {
+func (a *AppService) tryProcessQueue(sessionId int) {
 	prevActivityMu.Lock()
 	act := prevActivity[sessionId]
 	prevActivityMu.Unlock()
@@ -129,7 +152,7 @@ func (a *App) tryProcessQueue(sessionId int) {
 
 // processQueue advances the queue: marks "sent" as "done", sends next "pending".
 // Called on activity→done transitions and when new items are added to idle sessions.
-func (a *App) processQueue(sessionId int) {
+func (a *AppService) processQueue(sessionId int) {
 	a.mu.Lock()
 	q := a.queues[sessionId]
 	if q == nil || len(q.items) == 0 {
@@ -138,9 +161,11 @@ func (a *App) processQueue(sessionId int) {
 	}
 
 	// Mark current "sent" item as "done"
+	doneItemID := 0
 	for i := range q.items {
 		if q.items[i].Status == "sent" {
 			q.items[i].Status = "done"
+			doneItemID = q.items[i].ID
 			break
 		}
 	}
@@ -159,6 +184,10 @@ func (a *App) processQueue(sessionId int) {
 
 	sess := a.sessions[sessionId]
 	a.mu.Unlock()
+
+	if doneItemID != 0 {
+		a.onQueueItemDone(sessionId, doneItemID)
+	}
 
 	if hasNext && sess != nil {
 		// Write prompt text first, then Enter separately with a small delay.
@@ -190,9 +219,9 @@ func (a *App) processQueue(sessionId int) {
 }
 
 // emitQueueUpdate notifies the frontend that a session's queue changed.
-func (a *App) emitQueueUpdate(sessionId int) {
-	if a.ctx == nil {
+func (a *AppService) emitQueueUpdate(sessionId int) {
+	if a.app == nil {
 		return
 	}
-	runtime.EventsEmit(a.ctx, "queue:update", sessionId)
+	a.app.Event.Emit("queue:update", sessionId)
 }

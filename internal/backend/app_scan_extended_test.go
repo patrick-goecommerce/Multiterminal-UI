@@ -62,9 +62,21 @@ func TestActivityString_Done(t *testing.T) {
 	}
 }
 
-func TestActivityString_NeedsInput(t *testing.T) {
-	if s := activityString(terminal.ActivityNeedsInput); s != "needsInput" {
-		t.Fatalf("expected 'needsInput', got %q", s)
+func TestActivityString_WaitingAnswer(t *testing.T) {
+	if s := activityString(terminal.ActivityWaitingAnswer); s != "waitingAnswer" {
+		t.Fatalf("expected 'waitingAnswer', got %q", s)
+	}
+}
+
+func TestActivityString_WaitingPermission(t *testing.T) {
+	if s := activityString(terminal.ActivityWaitingPermission); s != "waitingPermission" {
+		t.Fatalf("expected 'waitingPermission', got %q", s)
+	}
+}
+
+func TestActivityString_Error(t *testing.T) {
+	if s := activityString(terminal.ActivityError); s != "error" {
+		t.Fatalf("expected 'error', got %q", s)
 	}
 }
 

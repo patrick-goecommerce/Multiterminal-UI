@@ -1,0 +1,1683 @@
+# Kanban Agent Orchestration v2 — Phase 1: Quiz-Flow + Plan Generation
+
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** When a user clicks "Plan erstellen" on a Kanban card, Claude Code CLI runs headless (`claude -p --output-format json`) to generate clarifying questions, the user answers them in a quiz UI, then Claude generates a structured implementation plan — all without terminal interaction or screen scraping.
+
+**Architecture:** Go backend spawns `claude -p` as a subprocess (stdin for prompts, JSON stdout for responses). Frontend shows a quiz flow (one question at a time) and a plan review view. New fields on `KanbanCard` store complexity, quiz answers, and the generated plan. Existing `Plan`/`PlanStep` structs are reused where possible.
+
+**Tech Stack:** Go 1.21+ (backend), Svelte 4 (frontend), Claude Code CLI (`claude -p --output-format json`), Wails v3 events
+
+**Spec:** `docs/superpowers/specs/2026-03-15-kanban-agent-orchestration-v2-design.md`
+
+---
+
+## File Structure
+
+### New Files (Backend)
+- `internal/backend/app_headless.go` — `RunHeadless` subprocess management (stdin piping, COMSPEC, cancellation, JSON validation)
+- `internal/backend/app_headless_test.go` — Tests for RunHeadless (mock claude binary)
+- `internal/backend/app_orchestrate_plan.go` — Quiz + plan generation logic (complexity assessment, question gen, plan gen, correction)
+- `internal/backend/app_orchestrate_plan_test.go` — Tests for plan generation prompts and JSON parsing
+
+### New Files (Frontend)
+- `frontend/src/components/KanbanQuizFlow.svelte` — Interactive quiz component (one question at a time, flashcard-style)
+- `frontend/src/components/KanbanPlanReview.svelte` — Plan display with steps checklist, correction field, start/terminal buttons
+
+### Modified Files (Backend)
+- `internal/backend/app_kanban.go` — Add new fields to `KanbanCard` struct only (stays under 300 lines)
+- `internal/backend/app_kanban_types.go` — New file for `CardPlan`, `CardPlanStep`, `QuizQuestion` structs (extracted to stay within 300-line limit)
+
+### Modified Files (Frontend)
+- `frontend/wailsjs/go/models.ts` — Add new fields to `KanbanCard` class, add `QuizQuestion` and `CardPlan`/`CardPlanStep` classes
+- `frontend/src/stores/kanban.ts` — Add new fields to `KanbanCard` interface, add `QuizQuestion`/`CardPlan`/`CardPlanStep` interfaces
+- `frontend/src/components/KanbanCardDetail.svelte` — Integrate quiz flow + plan review as tabs/sections
+- `frontend/wailsjs/go/backend/App.js` — Add new binding stubs for `StartQuiz`, `GenerateCardPlan`, `RefineCardPlan`
+- `frontend/wailsjs/go/backend/App.d.ts` — Add TypeScript declarations for new bindings
+
+---
+
+## Chunk 1: Backend — RunHeadless + Data Model
+
+### Task 1: Extend KanbanCard struct and extract new types
+
+**Files:**
+- Modify: `internal/backend/app_kanban.go:22-45`
+- Create: `internal/backend/app_kanban_types.go`
+
+**Note:** `app_kanban.go` is currently at exactly 300 lines (the CLAUDE.md limit). New structs go into a separate `app_kanban_types.go` file. Only the field additions go into `app_kanban.go`.
+
+- [ ] **Step 1: Add new fields to KanbanCard struct in app_kanban.go**
+
+Add after line 44 (`MaxRetries`), before the closing `}`:
+
+```go
+	// Orchestration v2 fields
+	ParentCardID string            `json:"parent_card_id,omitempty" yaml:"parent_card_id,omitempty"`
+	CardStatus   string            `json:"card_status,omitempty" yaml:"card_status,omitempty"`       // pending|in_progress|finished|fail
+	Complexity   string            `json:"complexity,omitempty" yaml:"complexity,omitempty"`          // trivial|medium|complex
+	QuizAnswers  map[string]string `json:"quiz_answers,omitempty" yaml:"quiz_answers,omitempty"`
+	CardPlan     *CardPlan         `json:"card_plan,omitempty" yaml:"card_plan,omitempty"`
+	SubCards     []string          `json:"sub_cards,omitempty" yaml:"sub_cards,omitempty"`
+	Cost         float64           `json:"cost,omitempty" yaml:"cost,omitempty"`
+```
+
+- [ ] **Step 2: Create app_kanban_types.go with new structs**
+
+Create `internal/backend/app_kanban_types.go`:
+
+```go
+// Package backend provides Kanban orchestration types.
+package backend
+
+// CardPlan holds the AI-generated implementation plan for a card.
+type CardPlan struct {
+	Summary string         `json:"summary" yaml:"summary"`
+	Steps   []CardPlanStep `json:"steps" yaml:"steps"`
+}
+
+// CardPlanStep is a single step in a CardPlan.
+type CardPlanStep struct {
+	ID         string   `json:"id" yaml:"id"`
+	Title      string   `json:"title" yaml:"title"`
+	Desc       string   `json:"description" yaml:"description"`
+	ParallelOK bool     `json:"parallel_ok" yaml:"parallel_ok"`
+	DependsOn  []string `json:"depends_on" yaml:"depends_on"`
+	Files      []string `json:"files" yaml:"files"`
+}
+
+// QuizQuestion is a clarifying question generated by the AI.
+type QuizQuestion struct {
+	ID      string   `json:"id" yaml:"id"`
+	Text    string   `json:"text" yaml:"text"`
+	Type    string   `json:"type" yaml:"type"` // "choice" or "text"
+	Options []string `json:"options,omitempty" yaml:"options,omitempty"`
+}
+```
+
+- [ ] **Step 3: Verify both files compile and app_kanban.go stays under 300 lines**
+
+Run: `cd D:/repos/Multiterminal && go vet ./internal/backend/...`
+Expected: No errors
+
+Run: `wc -l internal/backend/app_kanban.go`
+Expected: ~307 lines (under limit after accounting for only 7 added lines)
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add internal/backend/app_kanban.go internal/backend/app_kanban_types.go
+git commit -m "feat(kanban): add orchestration v2 fields to KanbanCard, extract plan types"
+```
+
+---
+
+### Task 2: Sync models.ts with new Go structs
+
+**Files:**
+- Modify: `frontend/wailsjs/go/models.ts:251-304`
+
+- [ ] **Step 1: Add QuizQuestion class before KanbanCard**
+
+Insert before the `KanbanCard` class (before line 251):
+
+```typescript
+export class QuizQuestion {
+    id: string;
+    text: string;
+    type: string;
+    options: string[];
+
+    static createFrom(source: any = {}) {
+        return new QuizQuestion(source);
+    }
+
+    constructor(source: any = {}) {
+        if ('string' === typeof source) source = JSON.parse(source);
+        this.id = source["id"];
+        this.text = source["text"];
+        this.type = source["type"];
+        this.options = source["options"];
+    }
+}
+export class CardPlanStep {
+    id: string;
+    title: string;
+    description: string;
+    parallel_ok: boolean;
+    depends_on: string[];
+    files: string[];
+
+    static createFrom(source: any = {}) {
+        return new CardPlanStep(source);
+    }
+
+    constructor(source: any = {}) {
+        if ('string' === typeof source) source = JSON.parse(source);
+        this.id = source["id"];
+        this.title = source["title"];
+        this.description = source["description"];
+        this.parallel_ok = source["parallel_ok"];
+        this.depends_on = source["depends_on"];
+        this.files = source["files"];
+    }
+}
+export class CardPlan {
+    summary: string;
+    steps: CardPlanStep[];
+
+    static createFrom(source: any = {}) {
+        return new CardPlan(source);
+    }
+
+    constructor(source: any = {}) {
+        if ('string' === typeof source) source = JSON.parse(source);
+        this.summary = source["summary"];
+        this.steps = this.convertValues(source["steps"], CardPlanStep);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+        if (!a) { return a; }
+        if (a.slice && a.map) {
+            return (a as any[]).map(elem => this.convertValues(elem, classs));
+        } else if ("object" === typeof a) {
+            if (asMap) {
+                for (const key of Object.keys(a)) { a[key] = new classs(a[key]); }
+                return a;
+            }
+            return new classs(a);
+        }
+        return a;
+    }
+}
+```
+
+- [ ] **Step 2: Add new fields to KanbanCard class**
+
+Add after `max_retries` field (line 273) and in constructor (after line 302):
+
+Fields:
+```typescript
+    parent_card_id: string;
+    card_status: string;
+    complexity: string;
+    quiz_answers: Record<string, string>;
+    card_plan: CardPlan;
+    sub_cards: string[];
+    cost: number;
+```
+
+Constructor additions:
+```typescript
+        this.parent_card_id = source["parent_card_id"];
+        this.card_status = source["card_status"];
+        this.complexity = source["complexity"];
+        this.quiz_answers = source["quiz_answers"];
+        this.card_plan = source["card_plan"] ? new CardPlan(source["card_plan"]) : source["card_plan"];
+        this.sub_cards = source["sub_cards"];
+        this.cost = source["cost"];
+```
+
+- [ ] **Step 3: Verify frontend compiles**
+
+Run: `cd D:/repos/Multiterminal/frontend && npx tsc --noEmit 2>&1 | head -20`
+Expected: No new errors related to models.ts
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add frontend/wailsjs/go/models.ts
+git commit -m "feat(models): sync TypeScript models with new KanbanCard orchestration fields"
+```
+
+---
+
+### Task 3: Update kanban store TypeScript interfaces
+
+**Files:**
+- Modify: `frontend/src/stores/kanban.ts:32-56`
+
+- [ ] **Step 1: Add QuizQuestion, CardPlanStep, CardPlan interfaces**
+
+Insert before the `KanbanCard` interface (before line 32):
+
+```typescript
+export interface QuizQuestion {
+  id: string;
+  text: string;
+  type: 'choice' | 'text';
+  options?: string[];
+}
+
+export interface CardPlanStep {
+  id: string;
+  title: string;
+  description: string;
+  parallel_ok: boolean;
+  depends_on: string[];
+  files: string[];
+}
+
+export interface CardPlan {
+  summary: string;
+  steps: CardPlanStep[];
+}
+```
+
+- [ ] **Step 2: Add new fields to KanbanCard interface**
+
+Add after `max_retries: number;` (line 55):
+
+```typescript
+  // Orchestration v2 fields
+  parent_card_id?: string;
+  card_status?: string;    // pending|in_progress|finished|fail
+  complexity?: string;     // trivial|medium|complex
+  quiz_answers?: Record<string, string>;
+  card_plan?: CardPlan;
+  sub_cards?: string[];
+  cost?: number;
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add frontend/src/stores/kanban.ts
+git commit -m "feat(store): add quiz and plan interfaces to kanban store"
+```
+
+---
+
+### Task 4: Implement RunHeadless subprocess manager
+
+**Files:**
+- Create: `internal/backend/app_headless.go`
+
+- [ ] **Step 1: Write test for RunHeadless**
+
+Create `internal/backend/app_headless_test.go`:
+
+```go
+package backend
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+	"time"
+)
+
+func TestRunHeadless_ParsesJSON(t *testing.T) {
+	// Test that valid JSON output is correctly parsed
+	raw := json.RawMessage(`{"complexity":"medium","reason":"multi-file change"}`)
+	var result struct {
+		Complexity string `json:"complexity"`
+		Reason     string `json:"reason"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if result.Complexity != "medium" {
+		t.Errorf("got %q, want medium", result.Complexity)
+	}
+}
+
+func TestRunHeadless_ContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	<-ctx.Done()
+	if ctx.Err() != context.DeadlineExceeded {
+		t.Errorf("expected DeadlineExceeded, got %v", ctx.Err())
+	}
+}
+
+func TestBuildHeadlessArgs(t *testing.T) {
+	args := buildHeadlessArgs("claude", "", 0)
+	if len(args) < 3 {
+		t.Fatalf("expected at least 3 args, got %d", len(args))
+	}
+	// Should contain: /c claude -p --output-format json
+	found := false
+	for _, a := range args {
+		if a == "--output-format" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("missing --output-format in args: %v", args)
+	}
+}
+
+func TestBuildHeadlessArgs_WithBudget(t *testing.T) {
+	args := buildHeadlessArgs("claude", "", 5.0)
+	foundBudget := false
+	for _, a := range args {
+		if a == "--max-budget-usd" {
+			foundBudget = true
+		}
+	}
+	if !foundBudget {
+		t.Errorf("missing --max-budget-usd in args: %v", args)
+	}
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd D:/repos/Multiterminal && go test ./internal/backend/ -run TestBuildHeadless -v`
+Expected: FAIL (buildHeadlessArgs not defined)
+
+- [ ] **Step 3: Implement app_headless.go**
+
+Create `internal/backend/app_headless.go`:
+
+```go
+// Package backend provides headless Claude Code CLI execution.
+package backend
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"strings"
+)
+
+// HeadlessResult wraps the JSON response and cost metadata from a claude -p call.
+type HeadlessResult struct {
+	Data json.RawMessage `json:"data"`
+	Cost float64         `json:"cost"`
+}
+
+// buildHeadlessArgs constructs the argument list for claude -p via COMSPEC.
+// systemPrompt and budgetUSD are optional (zero-value = skip).
+func buildHeadlessArgs(claudePath, systemPrompt string, budgetUSD float64) []string {
+	args := []string{"/c", claudePath, "-p", "--output-format", "json"}
+	if systemPrompt != "" {
+		args = append(args, "--system-prompt", systemPrompt)
+	}
+	if budgetUSD > 0 {
+		args = append(args, "--max-budget-usd", fmt.Sprintf("%.2f", budgetUSD))
+	}
+	return args
+}
+
+// stripClaudeEnv removes CLAUDECODE= entries from env so nested Claude starts.
+func stripClaudeEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, e := range env {
+		if strings.HasPrefix(e, "CLAUDECODE=") {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// RunHeadless executes a single claude -p call with the prompt piped via stdin.
+// Returns the raw JSON output. The call is cancellable via ctx.
+func (a *AppService) RunHeadless(ctx context.Context, prompt, systemPrompt, workDir string, budgetUSD float64) (*HeadlessResult, error) {
+	claudePath := a.resolvedClaudePath
+	if claudePath == "" {
+		claudePath = "claude"
+	}
+
+	comspec := os.Getenv("COMSPEC")
+	if comspec == "" {
+		comspec = `C:\Windows\System32\cmd.exe`
+	}
+
+	args := buildHeadlessArgs(claudePath, systemPrompt, budgetUSD)
+	cmd := exec.CommandContext(ctx, comspec, args...)
+	cmd.Dir = workDir
+	cmd.Stdin = strings.NewReader(prompt)
+	cmd.Env = stripClaudeEnv(os.Environ())
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	log.Printf("[headless] running claude -p in %s (budget=%.2f)", workDir, budgetUSD)
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("cancelled: %w", ctx.Err())
+		}
+		return nil, fmt.Errorf("claude -p failed (exit=%v): %s", err, stderr.String())
+	}
+
+	raw := bytes.TrimSpace(stdout.Bytes())
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("claude -p returned empty output")
+	}
+
+	// Validate it's valid JSON
+	if !json.Valid(raw) {
+		return nil, fmt.Errorf("claude -p returned invalid JSON: %.200s", raw)
+	}
+
+	return &HeadlessResult{Data: json.RawMessage(raw)}, nil
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd D:/repos/Multiterminal && go test ./internal/backend/ -run TestBuildHeadless -v`
+Expected: PASS
+
+Run: `cd D:/repos/Multiterminal && go vet ./internal/backend/...`
+Expected: No errors
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add internal/backend/app_headless.go internal/backend/app_headless_test.go
+git commit -m "feat(backend): add RunHeadless for claude -p subprocess management"
+```
+
+---
+
+### Task 5: Implement Quiz + Plan generation logic
+
+**Files:**
+- Create: `internal/backend/app_orchestrate_plan.go`
+- Create: `internal/backend/app_orchestrate_plan_test.go`
+
+- [ ] **Step 1: Write tests for prompt builders and JSON parsing**
+
+Create `internal/backend/app_orchestrate_plan_test.go`:
+
+```go
+package backend
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestParseComplexityResponse(t *testing.T) {
+	raw := json.RawMessage(`{"complexity":"medium","reason":"touches 3 files"}`)
+	c, reason, err := parseComplexityResponse(raw)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if c != "medium" {
+		t.Errorf("complexity=%q, want medium", c)
+	}
+	if reason == "" {
+		t.Error("reason should not be empty")
+	}
+}
+
+func TestParseComplexityResponse_InvalidComplexity(t *testing.T) {
+	raw := json.RawMessage(`{"complexity":"huge","reason":"test"}`)
+	_, _, err := parseComplexityResponse(raw)
+	if err == nil {
+		t.Error("expected error for invalid complexity")
+	}
+}
+
+func TestParseQuestionsResponse(t *testing.T) {
+	raw := json.RawMessage(`{"questions":[
+		{"id":"1","text":"Which provider?","type":"choice","options":["Google","GitHub"]},
+		{"id":"2","text":"Details?","type":"text"}
+	]}`)
+	qs, err := parseQuestionsResponse(raw)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if len(qs) != 2 {
+		t.Fatalf("got %d questions, want 2", len(qs))
+	}
+	if qs[0].Type != "choice" || len(qs[0].Options) != 2 {
+		t.Errorf("question 0: type=%s, options=%v", qs[0].Type, qs[0].Options)
+	}
+}
+
+func TestParsePlanResponse(t *testing.T) {
+	raw := json.RawMessage(`{"plan":{
+		"summary":"Add OAuth login",
+		"steps":[
+			{"id":"1","title":"Backend endpoint","description":"Create /auth","parallel_ok":true,"depends_on":[],"files":["auth.go"]},
+			{"id":"2","title":"Frontend button","description":"Add login btn","parallel_ok":true,"depends_on":[],"files":["Login.svelte"]},
+			{"id":"3","title":"Integration test","description":"E2E test","parallel_ok":false,"depends_on":["1","2"],"files":["auth_test.go"]}
+		]
+	}}`)
+	plan, err := parsePlanResponse(raw)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if plan.Summary == "" {
+		t.Error("summary should not be empty")
+	}
+	if len(plan.Steps) != 3 {
+		t.Fatalf("got %d steps, want 3", len(plan.Steps))
+	}
+	if plan.Steps[2].ParallelOK {
+		t.Error("step 3 should not be parallel_ok")
+	}
+}
+
+func TestParseComplexityResponse_MissingField(t *testing.T) {
+	raw := json.RawMessage(`{"reason":"test"}`)
+	_, _, err := parseComplexityResponse(raw)
+	if err == nil {
+		t.Error("expected error for missing complexity field")
+	}
+}
+
+func TestParseQuestionsResponse_MalformedJSON(t *testing.T) {
+	raw := json.RawMessage(`not json at all`)
+	_, err := parseQuestionsResponse(raw)
+	if err == nil {
+		t.Error("expected error for malformed JSON")
+	}
+}
+
+func TestParseQuestionsResponse_EmptyList(t *testing.T) {
+	raw := json.RawMessage(`{"questions":[]}`)
+	_, err := parseQuestionsResponse(raw)
+	if err == nil {
+		t.Error("expected error for empty questions list")
+	}
+}
+
+func TestParsePlanResponse_MissingSummary(t *testing.T) {
+	raw := json.RawMessage(`{"plan":{"summary":"","steps":[{"id":"1","title":"x","description":"y","parallel_ok":false,"depends_on":[],"files":[]}]}}`)
+	_, err := parsePlanResponse(raw)
+	if err == nil {
+		t.Error("expected error for empty summary")
+	}
+}
+
+func TestParsePlanResponse_EmptySteps(t *testing.T) {
+	raw := json.RawMessage(`{"plan":{"summary":"test","steps":[]}}`)
+	_, err := parsePlanResponse(raw)
+	if err == nil {
+		t.Error("expected error for empty steps")
+	}
+}
+
+func TestBuildComplexityPrompt(t *testing.T) {
+	p := buildComplexityPrompt("Fix login bug", "The login button doesn't work on mobile")
+	if p == "" {
+		t.Error("prompt should not be empty")
+	}
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd D:/repos/Multiterminal && go test ./internal/backend/ -run "TestParse|TestBuild" -v`
+Expected: FAIL (functions not defined)
+
+- [ ] **Step 3: Implement app_orchestrate_plan.go**
+
+Create `internal/backend/app_orchestrate_plan.go`:
+
+```go
+// Package backend provides AI-driven plan generation for Kanban cards.
+package backend
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+// --- Prompt builders ---
+
+func buildComplexityPrompt(title, body string) string {
+	return fmt.Sprintf(`Classify this issue by implementation complexity.
+
+Issue title: %s
+Issue body: %s
+
+Respond ONLY with JSON (no markdown, no explanation):
+{"complexity": "trivial|medium|complex", "reason": "one sentence why"}
+
+Rules:
+- trivial: single-file fix, typo, config change, <10 lines
+- medium: 1-3 files, straightforward feature or bugfix
+- complex: 4+ files, new subsystem, architectural change, multi-step`, title, body)
+}
+
+func buildQuestionsPrompt(title, body, memoryContext string) string {
+	mem := ""
+	if memoryContext != "" {
+		mem = fmt.Sprintf("\nProject memory:\n%s\n", memoryContext)
+	}
+	return fmt.Sprintf(`Analyze this issue and the codebase. Generate 3-6 clarifying questions to create a good implementation plan.
+%s
+Issue title: %s
+Issue body: %s
+
+Respond ONLY with JSON (no markdown, no explanation):
+{"questions": [{"id": "1", "text": "question text", "type": "choice", "options": ["A", "B", "C"]}, {"id": "2", "text": "open question", "type": "text"}]}
+
+Rules:
+- Prefer "choice" type with 2-4 options when possible
+- Use "text" type only for open-ended questions
+- Focus on: scope decisions, technical approach, testing requirements
+- Keep questions short and specific`, mem, title, body)
+}
+
+func buildPlanPrompt(title, body string, answers map[string]string, memoryCtx, correction string) string {
+	answersJSON, _ := json.Marshal(answers)
+	corr := ""
+	if correction != "" {
+		corr = fmt.Sprintf("\nUser correction to previous plan: %s\n", correction)
+	}
+	mem := ""
+	if memoryCtx != "" {
+		mem = fmt.Sprintf("\nProject memory:\n%s\n", memoryCtx)
+	}
+	return fmt.Sprintf(`Create a detailed implementation plan for this issue.
+%s%s
+Issue title: %s
+Issue body: %s
+User answers to clarifying questions: %s
+
+Respond ONLY with JSON (no markdown, no explanation):
+{"plan": {"summary": "1-2 sentence summary", "steps": [{"id": "1", "title": "short title", "description": "what to do", "parallel_ok": true, "depends_on": [], "files": ["path/to/file"]}]}}
+
+Rules:
+- Each step should be independently completable (2-15 min of work)
+- Set parallel_ok=true for steps with no shared dependencies
+- depends_on references step IDs that must complete first
+- List all files that will be created or modified
+- 3-10 steps total`, mem, corr, title, body, answersJSON)
+}
+
+// --- Response parsers ---
+
+func parseComplexityResponse(raw json.RawMessage) (string, string, error) {
+	var resp struct {
+		Complexity string `json:"complexity"`
+		Reason     string `json:"reason"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return "", "", fmt.Errorf("parse complexity: %w", err)
+	}
+	switch resp.Complexity {
+	case "trivial", "medium", "complex":
+		return resp.Complexity, resp.Reason, nil
+	default:
+		return "", "", fmt.Errorf("invalid complexity %q (expected trivial/medium/complex)", resp.Complexity)
+	}
+}
+
+func parseQuestionsResponse(raw json.RawMessage) ([]QuizQuestion, error) {
+	var resp struct {
+		Questions []QuizQuestion `json:"questions"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("parse questions: %w", err)
+	}
+	if len(resp.Questions) == 0 {
+		return nil, fmt.Errorf("no questions returned")
+	}
+	return resp.Questions, nil
+}
+
+func parsePlanResponse(raw json.RawMessage) (*CardPlan, error) {
+	var resp struct {
+		Plan CardPlan `json:"plan"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("parse plan: %w", err)
+	}
+	if resp.Plan.Summary == "" {
+		return nil, fmt.Errorf("plan has no summary")
+	}
+	if len(resp.Plan.Steps) == 0 {
+		return nil, fmt.Errorf("plan has no steps")
+	}
+	return &resp.Plan, nil
+}
+
+// --- Wails-bound methods ---
+
+// AssessComplexity runs a headless Claude call to classify card complexity.
+// Returns the updated card with Complexity field set.
+func (a *AppService) AssessComplexity(dir string, cardID string) (KanbanCard, error) {
+	state, err := loadKanbanState(dir)
+	if err != nil {
+		return KanbanCard{}, err
+	}
+	card, col := findCard(state, cardID)
+	if card == nil {
+		return KanbanCard{}, fmt.Errorf("card %q not found", cardID)
+	}
+	_ = col // not needed here
+
+	prompt := buildComplexityPrompt(card.Title, card.Prompt)
+	ctx, cancel := context.WithTimeout(a.serviceCtx, headlessTimeout)
+	defer cancel()
+
+	result, err := a.RunHeadless(ctx, prompt, "", dir, 0)
+	if err != nil {
+		return *card, fmt.Errorf("complexity assessment: %w", err)
+	}
+
+	complexity, reason, err := parseComplexityResponse(result.Data)
+	if err != nil {
+		return *card, fmt.Errorf("parse complexity: %w", err)
+	}
+
+	log.Printf("[orchestrate] card %s complexity=%s (%s)", cardID, complexity, reason)
+	card.Complexity = complexity
+	if err := saveCardUpdate(dir, state, card); err != nil {
+		return *card, err
+	}
+
+	a.app.Event.Emit("kanban:complexity-assessed", map[string]any{
+		"card_id":    cardID,
+		"complexity": complexity,
+		"reason":     reason,
+	})
+	return *card, nil
+}
+
+// GenerateQuiz runs a headless Claude call to create clarifying questions for a card.
+func (a *AppService) GenerateQuiz(dir string, cardID string) ([]QuizQuestion, error) {
+	state, err := loadKanbanState(dir)
+	if err != nil {
+		return nil, err
+	}
+	card, _ := findCard(state, cardID)
+	if card == nil {
+		return nil, fmt.Errorf("card %q not found", cardID)
+	}
+
+	memCtx := loadMemoryContext(dir)
+	prompt := buildQuestionsPrompt(card.Title, card.Prompt, memCtx)
+	ctx, cancel := context.WithTimeout(a.serviceCtx, headlessTimeout)
+	defer cancel()
+
+	result, err := a.RunHeadless(ctx, prompt, "", dir, 0)
+	if err != nil {
+		// Retry once with simpler prompt
+		log.Printf("[orchestrate] quiz generation failed, retrying: %v", err)
+		result, err = a.RunHeadless(ctx, prompt+"\n\nIMPORTANT: Respond ONLY with valid JSON.", "", dir, 0)
+		if err != nil {
+			return nil, fmt.Errorf("quiz generation: %w", err)
+		}
+	}
+
+	questions, err := parseQuestionsResponse(result.Data)
+	if err != nil {
+		return nil, fmt.Errorf("parse questions: %w", err)
+	}
+
+	a.app.Event.Emit("kanban:quiz-ready", map[string]any{
+		"card_id":   cardID,
+		"questions": questions,
+	})
+	return questions, nil
+}
+
+// GenerateCardPlan runs a headless Claude call to create an implementation plan.
+// If correction is non-empty, the previous plan is refined with user feedback.
+func (a *AppService) GenerateCardPlan(dir, cardID string, answers map[string]string, correction string) (CardPlan, error) {
+	state, err := loadKanbanState(dir)
+	if err != nil {
+		return CardPlan{}, err
+	}
+	card, _ := findCard(state, cardID)
+	if card == nil {
+		return CardPlan{}, fmt.Errorf("card %q not found", cardID)
+	}
+
+	memCtx := loadMemoryContext(dir)
+	prompt := buildPlanPrompt(card.Title, card.Prompt, answers, memCtx, correction)
+	ctx, cancel := context.WithTimeout(a.serviceCtx, headlessTimeout)
+	defer cancel()
+
+	result, err := a.RunHeadless(ctx, prompt, "", dir, 0)
+	if err != nil {
+		return CardPlan{}, fmt.Errorf("plan generation: %w", err)
+	}
+
+	plan, err := parsePlanResponse(result.Data)
+	if err != nil {
+		return CardPlan{}, fmt.Errorf("parse plan: %w", err)
+	}
+
+	// Save plan on card
+	card.CardPlan = plan
+	card.QuizAnswers = answers
+	if err := saveCardUpdate(dir, state, card); err != nil {
+		return *plan, err
+	}
+
+	a.app.Event.Emit("kanban:plan-ready", map[string]any{
+		"card_id": cardID,
+		"plan":    plan,
+	})
+	return *plan, nil
+}
+
+// --- Helpers ---
+
+const headlessTimeout = 120 * time.Second
+
+// findCard locates a card by ID across all columns. Returns pointer + column ID.
+func findCard(state KanbanState, cardID string) (*KanbanCard, string) {
+	for col, cards := range state.Columns {
+		for i := range cards {
+			if cards[i].ID == cardID {
+				return &cards[i], col
+			}
+		}
+	}
+	return nil, ""
+}
+
+// saveCardUpdate persists a modified card back to state.
+func saveCardUpdate(dir string, state KanbanState, card *KanbanCard) error {
+	for col, cards := range state.Columns {
+		for i := range cards {
+			if cards[i].ID == card.ID {
+				state.Columns[col][i] = *card
+				return saveKanbanState(dir, state)
+			}
+		}
+	}
+	return fmt.Errorf("card %q not found in state", card.ID)
+}
+
+// loadMemoryContext reads docs/mtui/README.md if it exists, for prompt enrichment.
+func loadMemoryContext(dir string) string {
+	data, err := os.ReadFile(filepath.Join(dir, "docs", "mtui", "README.md"))
+	if err != nil {
+		return ""
+	}
+	// Truncate to avoid oversized prompts
+	s := string(data)
+	if len(s) > 4000 {
+		s = s[:4000] + "\n... (truncated)"
+	}
+	return s
+}
+```
+
+**Note:** `stripClaudeEnv` duplicates logic from `session.go` line 116. Consider extracting a shared helper in a future cleanup, but for now keep it self-contained in `app_headless.go`.
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd D:/repos/Multiterminal && go test ./internal/backend/ -run "TestParse|TestBuild" -v`
+Expected: All PASS
+
+Run: `cd D:/repos/Multiterminal && go vet ./internal/backend/...`
+Expected: No errors
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add internal/backend/app_orchestrate_plan.go internal/backend/app_orchestrate_plan_test.go
+git commit -m "feat(backend): add quiz generation and plan creation via claude -p"
+```
+
+---
+
+## Chunk 2: Frontend — Quiz Flow + Plan Review
+
+### Task 6: Create KanbanQuizFlow.svelte
+
+**Files:**
+- Create: `frontend/src/components/KanbanQuizFlow.svelte`
+
+- [ ] **Step 1: Create the quiz flow component**
+
+```svelte
+<script lang="ts">
+  import { createEventDispatcher } from 'svelte';
+  import type { QuizQuestion } from '../stores/kanban';
+
+  export let questions: QuizQuestion[] = [];
+  export let visible = false;
+  export let loading = false;
+
+  const dispatch = createEventDispatcher<{
+    answered: Record<string, string>;
+    cancel: void;
+  }>();
+
+  let currentIndex = 0;
+  let answers: Record<string, string> = {};
+
+  // Re-init when visible becomes true OR when questions arrive while visible
+  $: if (visible && questions.length) initQuiz();
+
+  function initQuiz() {
+    currentIndex = 0;
+    answers = {};
+    for (const q of questions) {
+      answers[q.id] = '';
+    }
+  }
+
+  function selectOption(questionId: string, option: string) {
+    answers[questionId] = option;
+    next();
+  }
+
+  function next() {
+    if (currentIndex < questions.length - 1) {
+      currentIndex++;
+    } else {
+      dispatch('answered', { ...answers });
+    }
+  }
+
+  function back() {
+    if (currentIndex > 0) currentIndex--;
+  }
+
+  $: current = questions[currentIndex];
+  $: progress = questions.length > 0 ? (currentIndex + 1) / questions.length : 0;
+</script>
+
+{#if visible}
+  <div class="quiz-overlay">
+    <div class="quiz-dialog">
+      {#if loading || questions.length === 0}
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Fragen werden generiert...</p>
+        </div>
+      {:else if current}
+        <div class="quiz-header">
+          <span class="quiz-step">Frage {currentIndex + 1} von {questions.length}</span>
+          <button class="quiz-close" on:click={() => dispatch('cancel')}>✕</button>
+        </div>
+
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: {progress * 100}%"></div>
+        </div>
+
+        <div class="quiz-body">
+          <p class="question-text">{current.text}</p>
+
+          {#if current.type === 'choice' && current.options}
+            <div class="options">
+              {#each current.options as option}
+                <button
+                  class="option-btn"
+                  class:selected={answers[current.id] === option}
+                  on:click={() => selectOption(current.id, option)}
+                >{option}</button>
+              {/each}
+            </div>
+          {:else}
+            <input
+              type="text"
+              class="text-input"
+              bind:value={answers[current.id]}
+              placeholder="Deine Antwort..."
+              on:keydown={(e) => { if (e.key === 'Enter' && answers[current.id]) next(); }}
+            />
+          {/if}
+        </div>
+
+        <div class="quiz-footer">
+          {#if currentIndex > 0}
+            <button class="btn-back" on:click={back}>Zurück</button>
+          {:else}
+            <div></div>
+          {/if}
+          {#if current.type === 'text'}
+            <button
+              class="btn-next"
+              disabled={!answers[current.id]}
+              on:click={next}
+            >{currentIndex === questions.length - 1 ? 'Fertig' : 'Weiter'}</button>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+<style>
+  .quiz-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+  }
+  .quiz-dialog {
+    background: var(--bg-secondary, #1e1e2e);
+    border: 1px solid var(--border, #45475a);
+    border-radius: 12px;
+    padding: 28px;
+    min-width: 460px;
+    max-width: 560px;
+    animation: fadeIn 0.15s ease-out;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } }
+  .quiz-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+  }
+  .quiz-step { font-size: 12px; color: var(--text-muted, #6c7086); text-transform: uppercase; letter-spacing: 0.05em; }
+  .quiz-close { background: none; border: none; color: var(--text-muted, #6c7086); cursor: pointer; font-size: 16px; padding: 4px; }
+  .progress-bar {
+    height: 3px; background: var(--bg-primary, #181825); border-radius: 2px; margin-bottom: 24px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: var(--accent, #89b4fa); border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+  .quiz-body { min-height: 120px; }
+  .question-text {
+    font-size: 16px; color: var(--text-primary, #cdd6f4);
+    margin: 0 0 20px; line-height: 1.5;
+  }
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .option-btn {
+    background: var(--bg-primary, #181825);
+    border: 1px solid var(--border, #45475a);
+    border-radius: 8px; color: var(--text-primary, #cdd6f4);
+    padding: 12px 16px; font-size: 14px; cursor: pointer;
+    text-align: left; transition: all 0.15s;
+  }
+  .option-btn:hover { border-color: var(--accent, #89b4fa); background: rgba(137,180,250,0.08); }
+  .option-btn.selected { border-color: var(--accent, #89b4fa); background: rgba(137,180,250,0.15); }
+  .text-input {
+    width: 100%; background: var(--bg-primary, #181825);
+    border: 1px solid var(--border, #45475a);
+    border-radius: 8px; color: var(--text-primary, #cdd6f4);
+    padding: 12px 16px; font-size: 14px;
+  }
+  .text-input:focus { outline: none; border-color: var(--accent, #89b4fa); }
+  .quiz-footer {
+    display: flex; justify-content: space-between; margin-top: 20px;
+  }
+  .btn-back {
+    background: none; border: 1px solid var(--border, #45475a);
+    border-radius: 6px; color: var(--text-secondary, #a6adc8);
+    padding: 8px 16px; cursor: pointer; font-size: 13px;
+  }
+  .btn-next {
+    background: var(--accent, #89b4fa); color: var(--bg-primary, #181825);
+    border: none; border-radius: 6px; padding: 8px 20px;
+    font-weight: 600; cursor: pointer; font-size: 13px;
+  }
+  .btn-next:disabled { opacity: 0.5; cursor: not-allowed; }
+  .loading { text-align: center; padding: 40px 0; }
+  .loading p { color: var(--text-muted, #6c7086); margin-top: 16px; font-size: 13px; }
+  .spinner {
+    width: 32px; height: 32px; margin: 0 auto;
+    border: 3px solid var(--border, #45475a);
+    border-top-color: var(--accent, #89b4fa);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add frontend/src/components/KanbanQuizFlow.svelte
+git commit -m "feat(frontend): add KanbanQuizFlow component for interactive question flow"
+```
+
+---
+
+### Task 7: Create KanbanPlanReview.svelte
+
+**Files:**
+- Create: `frontend/src/components/KanbanPlanReview.svelte`
+
+- [ ] **Step 1: Create the plan review component**
+
+```svelte
+<script lang="ts">
+  import { createEventDispatcher } from 'svelte';
+  import type { CardPlan } from '../stores/kanban';
+
+  export let plan: CardPlan | null = null;
+  export let visible = false;
+  export let loading = false;
+
+  const dispatch = createEventDispatcher<{
+    start: void;
+    correct: string;
+    terminal: void;
+    close: void;
+  }>();
+
+  let correction = '';
+
+  function submitCorrection() {
+    if (!correction.trim()) return;
+    dispatch('correct', correction.trim());
+    correction = '';
+  }
+</script>
+
+{#if visible && plan}
+  <div class="plan-section">
+    <div class="plan-header">
+      <h4>Implementierungsplan</h4>
+      <span class="step-count">{plan.steps.length} Schritte</span>
+    </div>
+
+    <p class="plan-summary">{plan.summary}</p>
+
+    <div class="steps-list">
+      {#each plan.steps as step, i}
+        <div class="step-item">
+          <div class="step-num">{i + 1}</div>
+          <div class="step-content">
+            <div class="step-title">
+              {step.title}
+              {#if step.parallel_ok}
+                <span class="badge parallel" title="Kann parallel ausgeführt werden">parallel</span>
+              {/if}
+              {#if step.depends_on?.length > 0}
+                <span class="badge depends" title="Hängt ab von Schritt {step.depends_on.join(', ')}">
+                  nach {step.depends_on.join(', ')}
+                </span>
+              {/if}
+            </div>
+            <p class="step-desc">{step.description}</p>
+            {#if step.files?.length > 0}
+              <div class="step-files">
+                {#each step.files as f}
+                  <code>{f}</code>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </div>
+      {/each}
+    </div>
+
+    <div class="correction-section">
+      <input
+        type="text"
+        class="correction-input"
+        bind:value={correction}
+        placeholder="Korrektur eingeben..."
+        on:keydown={(e) => { if (e.key === 'Enter') submitCorrection(); }}
+      />
+      {#if correction.trim()}
+        <button class="btn-correct" on:click={submitCorrection} disabled={loading}>
+          {loading ? 'Wird überarbeitet...' : 'Anwenden'}
+        </button>
+      {/if}
+    </div>
+
+    <div class="plan-actions">
+      <button class="btn-secondary" on:click={() => dispatch('terminal')}>
+        Im Terminal verfeinern
+      </button>
+      <button class="btn-primary" on:click={() => dispatch('start')} disabled={loading}>
+        Starten
+      </button>
+    </div>
+  </div>
+{:else if visible && loading}
+  <div class="plan-section">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Plan wird erstellt...</p>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .plan-section {
+    border: 1px solid var(--border, #45475a);
+    border-radius: 8px; padding: 16px; margin-top: 12px;
+    background: var(--bg-primary, #181825);
+  }
+  .plan-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  h4 { margin: 0; font-size: 14px; color: var(--text-primary, #cdd6f4); }
+  .step-count { font-size: 12px; color: var(--text-muted, #6c7086); }
+  .plan-summary { font-size: 13px; color: var(--text-secondary, #a6adc8); margin: 0 0 16px; line-height: 1.4; }
+  .steps-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .step-item { display: flex; gap: 10px; }
+  .step-num {
+    width: 24px; height: 24px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg-secondary, #1e1e2e);
+    border-radius: 50%; font-size: 11px; font-weight: 600;
+    color: var(--text-muted, #6c7086);
+  }
+  .step-content { flex: 1; min-width: 0; }
+  .step-title { font-size: 13px; font-weight: 500; color: var(--text-primary, #cdd6f4); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .step-desc { font-size: 12px; color: var(--text-muted, #6c7086); margin: 2px 0 4px; }
+  .step-files { display: flex; flex-wrap: wrap; gap: 4px; }
+  .step-files code {
+    font-size: 11px; background: var(--bg-secondary, #1e1e2e);
+    padding: 1px 6px; border-radius: 3px; color: var(--accent, #89b4fa);
+  }
+  .badge {
+    font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 500;
+  }
+  .badge.parallel { background: rgba(34,197,94,0.15); color: #22c55e; }
+  .badge.depends { background: rgba(249,115,22,0.15); color: #f97316; }
+  .correction-section { display: flex; gap: 8px; margin-bottom: 12px; }
+  .correction-input {
+    flex: 1; background: var(--bg-secondary, #1e1e2e);
+    border: 1px solid var(--border, #45475a);
+    border-radius: 6px; color: var(--text-primary, #cdd6f4);
+    padding: 8px 12px; font-size: 13px;
+  }
+  .correction-input:focus { outline: none; border-color: var(--accent, #89b4fa); }
+  .btn-correct {
+    background: var(--accent, #89b4fa); color: var(--bg-primary, #181825);
+    border: none; border-radius: 6px; padding: 8px 14px;
+    font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .plan-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .btn-secondary {
+    background: none; border: 1px solid var(--border, #45475a);
+    border-radius: 6px; color: var(--text-secondary, #a6adc8);
+    padding: 8px 16px; cursor: pointer; font-size: 13px;
+  }
+  .btn-primary {
+    background: var(--accent, #89b4fa); color: var(--bg-primary, #181825);
+    border: none; border-radius: 6px; padding: 8px 20px;
+    font-weight: 600; cursor: pointer; font-size: 13px;
+  }
+  .btn-primary:disabled, .btn-correct:disabled { opacity: 0.5; cursor: not-allowed; }
+  .loading { text-align: center; padding: 32px 0; }
+  .loading p { color: var(--text-muted, #6c7086); margin-top: 12px; font-size: 13px; }
+  .spinner {
+    width: 28px; height: 28px; margin: 0 auto;
+    border: 3px solid var(--border, #45475a);
+    border-top-color: var(--accent, #89b4fa);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add frontend/src/components/KanbanPlanReview.svelte
+git commit -m "feat(frontend): add KanbanPlanReview component for plan display and correction"
+```
+
+---
+
+### Task 8: Add Wails binding stubs for new backend methods
+
+**Files:**
+- Modify: `frontend/wailsjs/go/backend/App.js`
+- Modify: `frontend/wailsjs/go/backend/App.d.ts`
+
+- [ ] **Step 1: Add JS binding stubs**
+
+Append to `App.js` (follow the existing `$Call.ByID` pattern — actual IDs are generated by Wails v3, use temporary numeric IDs that will be replaced on next `wails dev`):
+
+```javascript
+export function AssessComplexity(arg1, arg2) {
+    return $Call.ByName("backend.AppService.AssessComplexity", arg1, arg2);
+}
+
+export function GenerateQuiz(arg1, arg2) {
+    return $Call.ByName("backend.AppService.GenerateQuiz", arg1, arg2);
+}
+
+export function GenerateCardPlan(arg1, arg2, arg3, arg4) {
+    return $Call.ByName("backend.AppService.GenerateCardPlan", arg1, arg2, arg3, arg4);
+}
+```
+
+- [ ] **Step 2: Add TypeScript declarations**
+
+Append to `App.d.ts`:
+
+```typescript
+export function AssessComplexity(arg1:string,arg2:string):Promise<backend.KanbanCard>;
+export function GenerateQuiz(arg1:string,arg2:string):Promise<Array<backend.QuizQuestion>>;
+export function GenerateCardPlan(arg1:string,arg2:string,arg3:Record<string,string>,arg4:string):Promise<backend.CardPlan>;
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add frontend/wailsjs/go/backend/App.js frontend/wailsjs/go/backend/App.d.ts
+git commit -m "feat(bindings): add Wails stubs for AssessComplexity, GenerateQuiz, GenerateCardPlan"
+```
+
+---
+
+## Chunk 3: Integration — Wire Quiz + Plan into Card Detail
+
+### Task 9: Integrate quiz flow and plan review into KanbanCardDetail
+
+**Files:**
+- Modify: `frontend/src/components/KanbanCardDetail.svelte`
+
+- [ ] **Step 1: Add imports and state for quiz + plan**
+
+At the top of the `<script>` block, add imports:
+
+```typescript
+import KanbanQuizFlow from './KanbanQuizFlow.svelte';
+import KanbanPlanReview from './KanbanPlanReview.svelte';
+import type { QuizQuestion, CardPlan } from '../stores/kanban';
+```
+
+Add state variables after the existing declarations:
+
+```typescript
+// Quiz + Plan state
+let quizQuestions: QuizQuestion[] = [];
+let showQuiz = false;
+let quizLoading = false;
+let planLoading = false;
+let quizAnswers: Record<string, string> = {};
+```
+
+- [ ] **Step 2: Add orchestration methods**
+
+Add these functions to the `<script>` block:
+
+```typescript
+async function handlePlanErstellen() {
+    if (!card || !dir) return;
+    quizLoading = true;
+    showQuiz = true;
+    try {
+        // Step 1: Assess complexity
+        const updated = await App.AssessComplexity(dir, card.id);
+        card = { ...card, complexity: updated.complexity };
+        dispatch('updated', { card });
+
+        if (updated.complexity === 'trivial') {
+            // Skip quiz for trivial cards — go straight to plan
+            showQuiz = false;
+            planLoading = true;
+            const plan = await App.GenerateCardPlan(dir, card.id, {}, '');
+            card = { ...card, card_plan: plan };
+            dispatch('updated', { card });
+            planLoading = false;
+            return;
+        }
+
+        // Step 2: Generate questions
+        quizQuestions = await App.GenerateQuiz(dir, card.id);
+        quizLoading = false;
+    } catch (e) {
+        console.error('Plan erstellen failed:', e);
+        quizLoading = false;
+        showQuiz = false;
+    }
+}
+
+async function handleQuizAnswered(event: CustomEvent<Record<string, string>>) {
+    showQuiz = false;
+    quizAnswers = event.detail;
+    planLoading = true;
+    try {
+        const plan = await App.GenerateCardPlan(dir, card!.id, quizAnswers, '');
+        card = { ...card!, card_plan: plan, quiz_answers: quizAnswers };
+        dispatch('updated', { card });
+    } catch (e) {
+        console.error('Plan generation failed:', e);
+    }
+    planLoading = false;
+}
+
+async function handlePlanCorrection(event: CustomEvent<string>) {
+    if (!card) return;
+    planLoading = true;
+    try {
+        const plan = await App.GenerateCardPlan(dir, card.id, quizAnswers, event.detail);
+        card = { ...card, card_plan: plan };
+        dispatch('updated', { card });
+    } catch (e) {
+        console.error('Plan correction failed:', e);
+    }
+    planLoading = false;
+}
+
+function handlePlanStart() {
+    // Phase 2: will trigger execution
+    console.log('Plan start — Phase 2 not yet implemented');
+}
+
+function handleTerminalSwitch() {
+    // Phase 2: open terminal with card context
+    console.log('Terminal switch — Phase 2 not yet implemented');
+}
+```
+
+- [ ] **Step 3: Add UI elements to the template**
+
+In the template, after the existing editable fields section and before the "Status" section, add:
+
+```svelte
+<!-- Orchestration: Plan erstellen button -->
+{#if card && !card.card_plan && !showQuiz && !planLoading}
+  <div class="section">
+    <button class="btn-plan" on:click={handlePlanErstellen}>
+      Plan erstellen
+    </button>
+    {#if card.complexity}
+      <span class="complexity-badge complexity-{card.complexity}">
+        {card.complexity}
+      </span>
+    {/if}
+  </div>
+{/if}
+
+<!-- Quiz Flow (overlay) -->
+<KanbanQuizFlow
+  visible={showQuiz}
+  loading={quizLoading}
+  questions={quizQuestions}
+  on:answered={handleQuizAnswered}
+  on:cancel={() => { showQuiz = false; quizLoading = false; }}
+/>
+
+<!-- Plan Review (inline in card detail) -->
+<KanbanPlanReview
+  visible={!!card?.card_plan || planLoading}
+  plan={card?.card_plan ?? null}
+  loading={planLoading}
+  on:start={handlePlanStart}
+  on:correct={handlePlanCorrection}
+  on:terminal={handleTerminalSwitch}
+/>
+```
+
+- [ ] **Step 4: Add styles for the new elements**
+
+Add to the `<style>` block:
+
+```css
+.btn-plan {
+    background: var(--accent, #89b4fa);
+    color: var(--bg-primary, #181825);
+    border: none; border-radius: 6px;
+    padding: 10px 20px; font-weight: 600;
+    cursor: pointer; font-size: 13px;
+    width: 100%;
+}
+.btn-plan:hover { filter: brightness(1.1); }
+.complexity-badge {
+    display: inline-block; font-size: 11px;
+    padding: 2px 8px; border-radius: 4px;
+    margin-left: 8px; font-weight: 500;
+}
+.complexity-trivial { background: rgba(34,197,94,0.15); color: #22c55e; }
+.complexity-medium { background: rgba(249,115,22,0.15); color: #f97316; }
+.complexity-complex { background: rgba(239,68,68,0.15); color: #ef4444; }
+.section { margin-bottom: 16px; display: flex; align-items: center; }
+```
+
+- [ ] **Step 5: Verify the integration compiles**
+
+Run: `cd D:/repos/Multiterminal/frontend && npx tsc --noEmit 2>&1 | head -20`
+Expected: No errors from the new components
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add frontend/src/components/KanbanCardDetail.svelte
+git commit -m "feat(frontend): integrate quiz flow and plan review into card detail view"
+```
+
+---
+
+### Task 10: Initialize docs/mtui structure
+
+**Files:**
+- Create: `docs/mtui/README.md`
+- Create: `docs/mtui/agents/lead.md`
+- Create: `docs/mtui/agents/coder.md`
+- Create: `docs/mtui/agents/reviewer.md`
+
+- [ ] **Step 1: Create docs/mtui/README.md**
+
+```markdown
+# Multiterminal AI Workspace
+
+Dieses Verzeichnis wird automatisch von Multiterminal-Agenten gepflegt.
+
+## Struktur
+
+- `agents/` — Agent-Rollendefinitionen (als System-Prompt injiziert)
+- `board/` — Per-Card Kontext (wird automatisch erstellt)
+
+## Agents
+
+- [lead.md](agents/lead.md) — Koordination und Planung
+- [coder.md](agents/coder.md) — Implementation
+- [reviewer.md](agents/reviewer.md) — Code-Review und QA
+```
+
+- [ ] **Step 2: Create agent role definitions**
+
+`docs/mtui/agents/lead.md`:
+```markdown
+# Lead Agent
+
+You are the lead developer coordinating an implementation plan.
+
+## Responsibilities
+- Break down the plan into actionable steps
+- Coordinate worker agents (assign tasks, review results)
+- Make architectural decisions when workers are blocked
+- Verify completed work matches the original requirements
+
+## Rules
+- Always refer back to the original issue/card requirements
+- Check for drift after every 2 completed steps
+- Escalate to user when blocked on a decision that needs human judgement
+- Write learnings to docs/mtui/board/<card-id>.md after completion
+```
+
+`docs/mtui/agents/coder.md`:
+```markdown
+# Coder Agent
+
+You are an implementation agent executing a specific plan step.
+
+## Responsibilities
+- Implement the assigned step exactly as described
+- Write tests for new code
+- Follow existing code patterns and conventions
+- Report completion status with a summary of changes
+
+## Rules
+- Stay focused on the assigned step — do not implement ahead
+- If the step description is ambiguous, ask the lead agent
+- Run tests before reporting completion
+- List all files changed in your completion report
+```
+
+`docs/mtui/agents/reviewer.md`:
+```markdown
+# Reviewer Agent
+
+You are a code review agent validating completed work.
+
+## Responsibilities
+- Review diffs against the original step requirements
+- Check for: correctness, test coverage, code quality, security
+- Provide specific, actionable feedback if issues found
+
+## Rules
+- Approve or reject with clear reasoning
+- Do not rewrite code — describe what needs to change
+- Focus on functional correctness over style preferences
+- Flag any security concerns immediately
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docs/mtui/
+git commit -m "feat(docs): initialize docs/mtui with agent role definitions"
+```
+
+---
+
+### Task 11: End-to-end smoke test
+
+- [ ] **Step 1: Verify Go backend compiles**
+
+Run: `cd D:/repos/Multiterminal && go vet ./internal/backend/...`
+Expected: No errors
+
+- [ ] **Step 2: Run all backend tests**
+
+Run: `cd D:/repos/Multiterminal && go test ./internal/backend/ -v -run "TestParse|TestBuild|TestRunHeadless" 2>&1 | tail -20`
+Expected: All tests PASS
+
+- [ ] **Step 3: Verify frontend compiles**
+
+Run: `cd D:/repos/Multiterminal/frontend && npx tsc --noEmit 2>&1 | head -20`
+Expected: No errors
+
+- [ ] **Step 4: Check file sizes (300-line limit)**
+
+Run: `wc -l internal/backend/app_headless.go internal/backend/app_orchestrate_plan.go`
+Expected: Both under 300 lines
+
+- [ ] **Step 5: Final commit with all remaining changes**
+
+```bash
+git status
+# If any unstaged changes remain, stage and commit
+git add -A
+git commit -m "chore: Phase 1 smoke test verification"
+```
+
+---
+
+## Summary
+
+| Task | Files | What |
+|------|-------|------|
+| 1 | `app_kanban.go` | Extend KanbanCard struct |
+| 2 | `models.ts` | Sync TS models |
+| 3 | `kanban.ts` | Update store interfaces |
+| 4 | `app_headless.go` + test | RunHeadless subprocess manager |
+| 5 | `app_orchestrate_plan.go` + test | Quiz + plan generation |
+| 6 | `KanbanQuizFlow.svelte` | Quiz UI component |
+| 7 | `KanbanPlanReview.svelte` | Plan review component |
+| 8 | `App.js` + `App.d.ts` | Wails binding stubs |
+| 9 | `KanbanCardDetail.svelte` | Wire everything together |
+| 10 | `docs/mtui/` | Agent definitions + memory structure |
+| 11 | — | Smoke test |
+
+**After Phase 1:** User can open a Kanban card → click "Plan erstellen" → answer quiz questions → review generated plan → request corrections. The foundation for Phase 2 (execution) is in place.

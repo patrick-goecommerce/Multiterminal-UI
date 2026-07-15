@@ -1,11 +1,14 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { t } from '../stores/i18n';
   import TerminalPane from './TerminalPane.svelte';
+  import ChatPane from './ChatPane.svelte';
   import type { Pane } from '../stores/tabs';
 
   export let panes: Pane[] = [];
   export let active: boolean = true;
   export let tabId: string = '';
+  export let tabDir: string = '';
 
   const dispatch = createEventDispatcher();
 
@@ -33,12 +36,32 @@
     dispatch('issueAction', e.detail);
   }
 
+  function handleCommitPush(e: CustomEvent) {
+    dispatch('commitPush', e.detail);
+  }
+
+  function handleFinishWorktree(e: CustomEvent) {
+    dispatch('finishWorktree', e.detail);
+  }
+
+  function handleQuickAction(e: CustomEvent) {
+    dispatch('quickAction', e.detail);
+  }
+
+  function handleCancelFinish(e: CustomEvent) {
+    dispatch('cancelFinish', e.detail);
+  }
+
   function handleNavigateFile(e: CustomEvent) {
     dispatch('navigateFile', e.detail);
   }
 
   function handleSplitPane() {
     dispatch('splitPane');
+  }
+
+  function handleToggleDisplay(e: CustomEvent) {
+    dispatch('toggleDisplayPane', e.detail);
   }
 
   $: maximizedPane = panes.find((p) => p.maximized);
@@ -51,26 +74,38 @@
   style="grid-template-columns: repeat({gridCols}, 1fr);"
 >
   {#each visiblePanes as pane (pane.id)}
-    <TerminalPane
-      {pane}
-      {active}
-      {tabId}
-      paneIndex={panes.indexOf(pane) + 1}
-      on:close={handleClose}
-      on:maximize={handleMaximize}
-      on:focus={handleFocus}
-      on:rename={handleRename}
-      on:restart={handleRestart}
-      on:issueAction={handleIssueAction}
-      on:navigateFile={handleNavigateFile}
-      on:splitPane={handleSplitPane}
-    />
+    {#if pane.display === 'chat'}
+      <div class="pane-chat-wrapper">
+        <ChatPane conversationId={pane.conversationId} dir={tabDir} paneId={pane.id} on:toggleDisplay={handleToggleDisplay} on:close={e => dispatch('closePane', e.detail)} />
+      </div>
+    {:else}
+      <TerminalPane
+        {pane}
+        {active}
+        {tabId}
+        {tabDir}
+        paneIndex={panes.indexOf(pane) + 1}
+        on:close={handleClose}
+        on:maximize={handleMaximize}
+        on:focus={handleFocus}
+        on:rename={handleRename}
+        on:restart={handleRestart}
+        on:toggleDisplay={handleToggleDisplay}
+        on:issueAction={handleIssueAction}
+        on:commitPush={handleCommitPush}
+        on:finishWorktree={handleFinishWorktree}
+        on:quickAction={handleQuickAction}
+        on:cancelFinish={handleCancelFinish}
+        on:navigateFile={handleNavigateFile}
+        on:splitPane={handleSplitPane}
+      />
+    {/if}
   {/each}
 
   {#if panes.length === 0}
     <div class="empty-state">
-      <p>Kein Terminal offen.</p>
-      <p class="hint">Drücke <kbd>Ctrl+N</kbd> oder klicke <strong>+ New Terminal</strong> (max. 10 pro Tab)</p>
+      <p>{$t('paneGrid.empty')}</p>
+      <p class="hint">{$t('paneGrid.emptyHint', { max: 10 })}</p>
     </div>
   {/if}
 </div>
@@ -101,6 +136,16 @@
 
   .hint {
     font-size: 12px;
+  }
+
+  /* Chat replaces a pane — same frame, but violet top edge = AI mode */
+  .pane-chat-wrapper {
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--pane-border, #45475a);
+    border-top: 2px solid var(--status-ai, #a184f4);
+    border-radius: 9px;
   }
 
   kbd {

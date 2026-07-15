@@ -16,6 +16,8 @@ func (s *Screen) processByte(b byte) {
 		s.processCSI(b)
 	case stateOSC:
 		s.processOSC(b)
+	case stateOSCEsc:
+		s.processOSCEsc(b)
 	}
 }
 
@@ -134,13 +136,26 @@ func (s *Screen) processOSC(b byte) {
 		return
 	}
 	if b == 0x1b {
-		// Possible ST (ESC \)
-		// For simplicity, just terminate the OSC here
-		s.handleOSC()
-		s.state = stateNormal
+		// ESC inside OSC — may be the String Terminator (ESC \). Defer the
+		// decision to the next byte so the ST backslash is not rendered.
+		s.state = stateOSCEsc
 		return
 	}
 	s.oscBuf = append(s.oscBuf, b)
+}
+
+// processOSCEsc handles the byte following an ESC seen inside an OSC sequence.
+// ESC \ is the String Terminator (ST): the trailing backslash is swallowed.
+// Any other byte means the ESC began a fresh escape sequence, so the OSC is
+// terminated and the byte is reprocessed as the byte after ESC.
+func (s *Screen) processOSCEsc(b byte) {
+	s.handleOSC()
+	if b == '\\' { // ST — swallow the backslash
+		s.state = stateNormal
+		return
+	}
+	s.state = stateESC
+	s.processESC(b)
 }
 
 // handleOSC processes the completed OSC payload.

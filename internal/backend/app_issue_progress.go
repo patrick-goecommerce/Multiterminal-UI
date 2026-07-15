@@ -19,7 +19,7 @@ const (
 
 // reportIssueProgress posts a status comment on the linked GitHub issue.
 // Called internally when activity changes on an issue-linked session.
-func (a *App) reportIssueProgress(sessionID int, event issueProgressEvent, cost string) {
+func (a *AppService) reportIssueProgress(sessionID int, event issueProgressEvent, cost string) {
 	a.mu.Lock()
 	si := a.sessionIssues[sessionID]
 	cfg := a.cfg

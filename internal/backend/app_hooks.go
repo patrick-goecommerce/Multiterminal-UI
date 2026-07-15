@@ -1,0 +1,252 @@
+package backend
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
+)
+
+// rawHookEvent is the JSONL structure written by mtui-hook.
+type rawHookEvent struct {
+	Ts             int64  `json:"ts"`
+	Event          string `json:"event"`
+	SessionID      string `json:"session_id"`
+	MtID           int    `json:"mt_id"`
+	Tool           string `json:"tool"`
+	Message        string `json:"message"`
+	Cwd            string `json:"cwd"`
+	WorktreePath   string `json:"worktree_path"`
+	WorktreeBranch string `json:"worktree_branch"`
+	BlockedPath    string `json:"blocked_path"`
+	BlockReason    string `json:"block_reason"`
+}
+
+// hookEventToActivity maps a Claude Code event name to an ActivityState.
+// For Notification events the message content is inspected: if it contains
+// a question mark the user needs to respond, otherwise it is informational.
+func hookEventToActivity(event, message string) terminal.ActivityState {
+	switch event {
+	case "PreToolUse", "PostToolUse", "UserPromptSubmit":
+		return terminal.ActivityActive
+	case "PostToolUseFailure":
+		return terminal.ActivityError
+	case "PermissionRequest":
+		return terminal.ActivityWaitingPermission
+	case "Notification":
+		if strings.Contains(message, "?") {
+			return terminal.ActivityWaitingAnswer
+		}
+		return terminal.ActivityDone
+	case "Stop":
+		return terminal.ActivityDone
+	default:
+		return terminal.ActivityIdle
+	}
+}
+
+// HookManager polls the hooks directory and dispatches events to sessions.
+type HookManager struct {
+	dir        string
+	lookupFn   func(mtID int) *terminal.Session
+	onActivity func(sessionID int, activity string, cost string)
+	// onPrompt, if set, is called with the user's prompt text on every
+	// UserPromptSubmit event (used to auto-generate a pane name). Optional.
+	onPrompt func(mtID int, prompt string)
+	// onWorktreeChange, if set, is called on EVERY hook event with the
+	// session's current cwd, plus worktreePath/worktreeBranch when the event
+	// is a PostToolUse:EnterWorktree detection (empty strings otherwise — the
+	// caller uses cwd to notice when a session has left a previously known
+	// worktree, spec 2026-07-03 section 4).
+	onWorktreeChange func(mtID int, worktreePath, worktreeBranch, cwd string)
+	// onPathBlocked, if set, is called when mtui-hook's PreToolUse path
+	// firewall blocked a write attempt outside the active worktree
+	// (spec 2026-07-09-worktree-path-firewall-design.md).
+	onPathBlocked func(mtID int, path, reason string)
+
+	mu      sync.Mutex
+	offsets map[string]int64 // filename → bytes already read
+}
+
+func newHookManager(
+	dir string,
+	lookupFn func(mtID int) *terminal.Session,
+	onActivity func(sessionID int, activity string, cost string),
+) *HookManager {
+	return &HookManager{
+		dir:        dir,
+		lookupFn:   lookupFn,
+		onActivity: onActivity,
+		offsets:    make(map[string]int64),
+	}
+}
+
+// Start begins polling the hooks directory every 100ms.
+// Existing files are seeked to their current end so that events from previous
+// app sessions are not replayed (session IDs reset on each start, so old
+// events would otherwise match new sessions and cause spurious state jumps).
+func (hm *HookManager) Start(ctx context.Context) {
+	if err := os.MkdirAll(hm.dir, 0755); err != nil {
+		log.Printf("[hooks] could not create hooks dir: %v — hook integration disabled", err)
+		return
+	}
+	hm.skipExistingFiles()
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				hm.processDirectory()
+			}
+		}
+	}()
+}
+
+// skipExistingFiles records the current end-of-file offset for each JSONL
+// file already present so that stale events from previous sessions are ignored.
+func (hm *HookManager) skipExistingFiles() {
+	entries, err := os.ReadDir(hm.dir)
+	if err != nil {
+		return
+	}
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		hm.offsets[entry.Name()] = info.Size()
+	}
+}
+
+// processDirectory scans the hooks directory for new JSONL events.
+func (hm *HookManager) processDirectory() {
+	entries, err := os.ReadDir(hm.dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+		hm.processFile(filepath.Join(hm.dir, entry.Name()), entry.Name())
+	}
+}
+
+// processFile reads new lines from a JSONL file since the last read offset.
+// Events are collected while the file is open, then dispatched after closing
+// so that handleEvent (which may delete the file on Windows) never races with
+// an open file handle.
+func (hm *HookManager) processFile(path, name string) {
+	hm.mu.Lock()
+	offset := hm.offsets[name]
+	hm.mu.Unlock()
+
+	events, newOffset := hm.readEvents(path, offset)
+
+	hm.mu.Lock()
+	hm.offsets[name] = newOffset
+	hm.mu.Unlock()
+
+	for _, ev := range events {
+		hm.handleEvent(ev)
+	}
+}
+
+// readEvents opens the file, seeks to offset, and collects all new events.
+// Returns the parsed events and the new file offset. The file is closed before
+// returning so callers can safely delete it on Windows.
+func (hm *HookManager) readEvents(path string, offset int64) ([]rawHookEvent, int64) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, offset
+	}
+	defer f.Close()
+
+	if offset > 0 {
+		if _, err := f.Seek(offset, 0); err != nil {
+			return nil, offset
+		}
+	}
+
+	var events []rawHookEvent
+	scanner := bufio.NewScanner(f)
+	newOffset := offset
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		newOffset += int64(len(scanner.Bytes())) + 1 // +1 for newline
+		if line == "" {
+			continue
+		}
+		var ev rawHookEvent
+		if err := json.Unmarshal([]byte(line), &ev); err == nil {
+			events = append(events, ev)
+		}
+	}
+	return events, newOffset
+}
+
+// handleEvent applies a hook event to the appropriate session.
+func (hm *HookManager) handleEvent(ev rawHookEvent) {
+	if ev.MtID == 0 {
+		return
+	}
+	sess := hm.lookupFn(ev.MtID)
+	if sess == nil {
+		return
+	}
+
+	// Record Claude's session UUID on first event
+	if ev.SessionID != "" && sess.HookSessionID() == "" {
+		sess.SetHookSessionID(ev.SessionID)
+	}
+
+	if ev.Event == "SessionEnd" {
+		sess.ClearHookData()
+		hm.cleanupFile(ev.SessionID + ".jsonl")
+		return
+	}
+
+	// UserPromptSubmit carries the user's prompt text (see cmd/mtui-hook).
+	// Forward it so the host can derive an automatic pane name.
+	if ev.Event == "UserPromptSubmit" && ev.Message != "" && hm.onPrompt != nil {
+		hm.onPrompt(ev.MtID, ev.Message)
+	}
+
+	if hm.onWorktreeChange != nil {
+		hm.onWorktreeChange(ev.MtID, ev.WorktreePath, ev.WorktreeBranch, ev.Cwd)
+	}
+
+	if ev.BlockedPath != "" && hm.onPathBlocked != nil {
+		hm.onPathBlocked(ev.MtID, ev.BlockedPath, ev.BlockReason)
+	}
+
+	newState := hookEventToActivity(ev.Event, ev.Message)
+	sess.SetHookActivity(newState)
+
+	if hm.onActivity != nil {
+		hm.onActivity(ev.MtID, activityString(newState), "")
+	}
+}
+
+// cleanupFile removes a finished session's JSONL file and its offset entry.
+func (hm *HookManager) cleanupFile(name string) {
+	hm.mu.Lock()
+	delete(hm.offsets, name)
+	hm.mu.Unlock()
+	_ = os.Remove(filepath.Join(hm.dir, name))
+}

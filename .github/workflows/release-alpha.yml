@@ -1,0 +1,136 @@
+name: Release Alpha
+
+on:
+  push:
+    tags:
+      - "v*-alpha*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Wails v3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Stamp version into Windows resources
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cat > build/windows/info.json << EOF
+          {
+            "fixed": {
+              "file_version": "$VERSION"
+            },
+            "info": {
+              "0000": {
+                "ProductVersion": "$VERSION",
+                "CompanyName": "go eCommerce GmbH",
+                "FileDescription": "Multiterminal UI",
+                "LegalCopyright": "Copyright 2025-2026 go eCommerce GmbH",
+                "ProductName": "Multiterminal UI",
+                "Comments": "A terminal multiplexer for Claude Code power users"
+              }
+            }
+          }
+          EOF
+
+      - name: Generate Windows resources (.syso)
+        shell: bash
+        run: |
+          wails3 generate syso \
+            -arch amd64 \
+            -icon build/windows/icon.ico \
+            -manifest build/windows/wails.exe.manifest \
+            -info build/windows/info.json \
+            -out wails_windows_amd64.syso
+
+      - name: Build embedded helper binaries (GUI subsystem, no console flash)
+        shell: bash
+        run: |
+          go build -ldflags "-H windowsgui" -o internal/backend/mtui-hook.exe ./cmd/mtui-hook
+          go build -ldflags "-H windowsgui" -o internal/backend/mtui-statusline.exe ./cmd/mtui-statusline
+
+      - name: Assert helper binaries are GUI subsystem (no console flash)
+        shell: bash
+        run: |
+          for exe in internal/backend/mtui-statusline.exe internal/backend/mtui-hook.exe; do
+            sub=$(python -c "import struct,sys;d=open(sys.argv[1],'rb').read();pe=struct.unpack_from('<I',d,0x3c)[0];print(struct.unpack_from('<H',d,pe+0x5c)[0])" "$exe")
+            echo "$exe subsystem=$sub"; [ "$sub" = "2" ] || { echo "ERROR: $exe is not GUI subsystem (2)"; exit 1; }
+          done
+
+      - name: Build Go binary
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          go build \
+            -tags desktop,production \
+            -ldflags "-s -w -H windowsgui -X github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.Version=$VERSION" \
+            -o build/bin/mtui-portable.exe \
+            .
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Inno Setup installer
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          iscc "installer.iss" //DMyAppVersion="$VERSION"
+
+      - name: Stage portable artifact
+        shell: bash
+        run: |
+          mv build/bin/mtui-portable.exe "mtui-portable-${{ steps.version.outputs.version }}.exe"
+
+      - name: Stage installer artifact
+        shell: bash
+        run: |
+          mv "installer-output/mtui-setup-${{ steps.version.outputs.version }}.exe" \
+             "mtui-setup-${{ steps.version.outputs.version }}.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mtui-windows-alpha
+          path: |
+            mtui-portable-*.exe
+            mtui-setup-*.exe
+
+  release:
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create Pre-Release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            artifacts/mtui-portable-*.exe
+            artifacts/mtui-setup-*.exe
