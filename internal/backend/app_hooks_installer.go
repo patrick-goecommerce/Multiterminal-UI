@@ -49,7 +49,12 @@ func (h *hookInstaller) Install() error {
 		}
 	}
 
-	if h.isInstalled(settings) {
+	// Migration: drop stale registrations (obsolete .ps1 handler, or our own
+	// marker pointing at a moved binary). Runs before the early return — an
+	// install whose markers are all present would otherwise keep them forever.
+	removed := h.removeStaleHooks(settings)
+
+	if h.isInstalled(settings) && !removed {
 		return nil
 	}
 
@@ -115,6 +120,80 @@ func markerInEvent(settings map[string]any, event string) bool {
 		}
 	}
 	return false
+}
+
+// isLegacyPS1Command reports whether a hook command invokes Multiterminal's
+// obsolete PowerShell handler. Both markers must match so a foreign tool that
+// happens to ship its own hook_handler.ps1 is left untouched.
+func isLegacyPS1Command(cmd string) bool {
+	lower := strings.ToLower(cmd)
+	return strings.Contains(lower, "hook_handler.ps1") &&
+		strings.Contains(lower, "multiterminal")
+}
+
+// isStaleCommand reports whether a hook command is one of ours that no longer
+// works: the obsolete PowerShell handler, or a marker entry whose command does
+// not match the binary we are installing (MTUI moved — common for the portable
+// build). Foreign commands never match and are always preserved.
+func (h *hookInstaller) isStaleCommand(cmd string) bool {
+	if isLegacyPS1Command(cmd) {
+		return true
+	}
+	return strings.Contains(cmd, hookMarker) && !strings.HasPrefix(cmd, h.command+" ")
+}
+
+// removeStaleHooks strips every hook command matching isStaleCommand from
+// settings, pruning entries and event keys that become empty. It reports
+// whether anything was removed. All events are scanned, not just hookEvents —
+// older builds registered events we no longer use.
+func (h *hookInstaller) removeStaleHooks(settings map[string]any) bool {
+	hooks, ok := settings["hooks"].(map[string]any)
+	if !ok {
+		return false
+	}
+
+	removed := false
+	for event, raw := range hooks {
+		entries, ok := raw.([]any)
+		if !ok {
+			continue
+		}
+		kept := make([]any, 0, len(entries))
+		for _, entry := range entries {
+			e, ok := entry.(map[string]any)
+			if !ok {
+				kept = append(kept, entry)
+				continue
+			}
+			innerHooks, ok := e["hooks"].([]any)
+			if !ok {
+				kept = append(kept, entry)
+				continue
+			}
+			keptInner := make([]any, 0, len(innerHooks))
+			for _, ih := range innerHooks {
+				inner, ok := ih.(map[string]any)
+				if ok {
+					if cmd, _ := inner["command"].(string); h.isStaleCommand(cmd) {
+						removed = true
+						continue
+					}
+				}
+				keptInner = append(keptInner, ih)
+			}
+			if len(keptInner) == 0 {
+				continue // whole entry was legacy — drop it
+			}
+			e["hooks"] = keptInner
+			kept = append(kept, e)
+		}
+		if len(kept) == 0 {
+			delete(hooks, event)
+			continue
+		}
+		hooks[event] = kept
+	}
+	return removed
 }
 
 // mergeHooks prepends a Multiterminal hook entry for every event that does not
