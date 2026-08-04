@@ -2,6 +2,13 @@ module github.com/patrick-goecommerce/Multiterminal-UI
 
 go 1.25.0
 
+// Pins the build toolchain, not the language level: go 1.26.0 ships 15 known
+// stdlib vulnerabilities that 1.26.5 closes (crypto/x509, crypto/tls, net/http,
+// archive/tar). CI resolves go-version "1.26" to the latest patch anyway, so
+// this only matters for local builds — which is where the release binary comes
+// from. Raise it when a newer patch release lands.
+toolchain go1.26.5
+
 require (
 	github.com/aymanbagabas/go-pty v0.2.3
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4
