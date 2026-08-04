@@ -315,6 +315,10 @@ export function ResizeSession(arg1, arg2, arg3) {
   return $Call.ByID(3357609161, arg1, arg2, arg3);
 }
 
+export function ResyncSession(arg1) {
+  return $Call.ByID(3517924751, arg1);
+}
+
 export function SaveConfig(arg1) {
   return $Call.ByID(2393674620, arg1);
 }
