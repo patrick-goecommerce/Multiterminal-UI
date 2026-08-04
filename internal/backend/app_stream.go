@@ -62,6 +62,23 @@ func (b *outputBatcher) add(id int, data []byte) {
 	b.mu.Unlock()
 }
 
+// replaceWith discards the bytes still queued for a session and queues the
+// result of build in their place. Used by ResyncSession: those bytes belong to a
+// backlog the frontend has already thrown away, so forwarding them would only
+// prepend noise to the repaint.
+//
+// build runs while the lock is held, on purpose. It renders the session's screen,
+// and a chunk that slipped in between rendering and replacing would be dropped
+// without being part of the snapshot — exactly the stream hole this whole path
+// exists to prevent. Holding the lock instead means such a chunk arrives after
+// the repaint and is merely applied twice. build must not call back into the
+// batcher.
+func (b *outputBatcher) replaceWith(id int, build func() []byte) {
+	b.mu.Lock()
+	b.pending[id] = build()
+	b.mu.Unlock()
+}
+
 // swap atomically replaces the pending map with an empty one and
 // returns the old map for emission.
 func (b *outputBatcher) swap() map[int][]byte {

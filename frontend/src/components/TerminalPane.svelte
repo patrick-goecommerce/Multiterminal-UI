@@ -4,6 +4,7 @@
   import { createTerminal, getTerminalTheme, buildFontFamily, attachWebglRenderer } from '../lib/terminal';
   import { pasteToSession, copySelection, writeTextToSession } from '../lib/clipboard';
   import { encodeForPty } from '../lib/claude';
+  import { PendingOutput } from '../lib/output-buffer';
   import { sendNotification } from '../lib/notifications';
   import { playBell, audioMuted } from '../lib/audio';
   import { tabStore, type Pane } from '../stores/tabs';
@@ -118,8 +119,12 @@
 
   onMount(() => {
     // Buffer + flush state — declared first so mountTerminal() and EventsOn can share them.
-    let pendingChunks: Uint8Array[] = [];
-    let pendingBytes = 0; // total bytes in pendingChunks — kept in sync to avoid O(n) sum
+    // Hard cap: keep at most 2 MB buffered per pane. A pane in a background tab
+    // does not drain at all, so a misbehaving session (e.g. burst output from a
+    // broken repo) would otherwise accumulate hundreds of MB and block the JS
+    // thread the moment its tab is opened.
+    const MAX_PENDING_BYTES = 2 * 1024 * 1024; // 2 MB
+    const pending = new PendingOutput(MAX_PENDING_BYTES);
     let flushScheduled = false;
     let isReady = false;
     let appCursorVisible = true; // track DECTCEM state across batches
@@ -150,29 +155,18 @@
     const FLUSH_DELAY_UNFOCUSED = 200; // ms
 
     function flushOutput() {
-      if (!termInstance || !isReady || pendingChunks.length === 0) {
+      if (!termInstance || !isReady || pending.isEmpty) {
         flushScheduled = false;
         return;
       }
 
       // Drain up to MAX_BYTES_PER_FLUSH bytes to bound parse time per cycle.
-      // Always take at least one chunk so we make progress even if a single chunk exceeds the cap.
-      let total = 0;
-      let i = 0;
-      while (i < pendingChunks.length) {
-        if (i > 0 && total + pendingChunks[i].length > MAX_BYTES_PER_FLUSH) break;
-        total += pendingChunks[i].length;
-        i++;
+      const merged = pending.drain(MAX_BYTES_PER_FLUSH);
+      if (!merged) {
+        flushScheduled = false;
+        return;
       }
-      const chunks = pendingChunks.splice(0, i);
-      pendingBytes -= total;
-
-      const merged = new Uint8Array(total);
-      let offset = 0;
-      for (const chunk of chunks) {
-        merged.set(chunk, offset);
-        offset += chunk.length;
-      }
+      const total = merged.length;
       // Update persistent cursor state if this batch contains a DECTCEM sequence.
       const batchState = lastCursorVisible(merged);
       if (batchState !== null) appCursorVisible = batchState;
@@ -195,13 +189,26 @@
         }
       });
 
-      if (pendingChunks.length > 0) {
+      if (!pending.isEmpty) {
         // Keep draining — unfocused panes at reduced rate to yield JS thread.
         flushTimer = setTimeout(flushOutput, pane.focused ? FLUSH_DELAY : FLUSH_DELAY_UNFOCUSED);
       } else {
         flushScheduled = false;
         flushTimer = null;
       }
+    }
+
+    // Ask the backend to repaint this pane from its VT100 mirror. Sustained
+    // output that outruns the drain rate overflows repeatedly, so only one
+    // request is in flight at a time — each repaint replaces the previous one in
+    // the backend's queue anyway.
+    let resyncInFlight = false;
+    function requestResync() {
+      if (resyncInFlight) return;
+      resyncInFlight = true;
+      App.ResyncSession(pane.sessionId).finally(() => {
+        resyncInFlight = false;
+      });
     }
 
     function scheduleFlush() {
@@ -212,7 +219,7 @@
 
     // When the tab is activated, cancel any pending timer and flush immediately.
     triggerFlushOnActivate = () => {
-      if (!isReady || pendingChunks.length === 0) return;
+      if (!isReady || pending.isEmpty) return;
       if (flushTimer !== null) {
         clearTimeout(flushTimer);
         flushTimer = null;
@@ -274,14 +281,14 @@
           }
         }
 
-        pendingChunks.push(bytes);
-        pendingBytes += bytes.length;
-        // Hard cap: keep at most 2 MB buffered per pane.
-        // A misbehaving session (e.g. burst output from a broken repo) can otherwise
-        // accumulate hundreds of MB, blocking the JS thread when the tab is opened.
-        const MAX_PENDING_BYTES = 2 * 1024 * 1024; // 2 MB
-        while (pendingBytes > MAX_PENDING_BYTES && pendingChunks.length > 1) {
-          pendingBytes -= pendingChunks.shift()!.length;
+        if (pending.push(bytes)) {
+          // Backlog overflowed and was dropped. Resuming with the bytes that
+          // arrived after it would splice a hole into the VT100 stream, which
+          // xterm.js can never parse back into a correct screen — the pane would
+          // stay garbled for good (#157). Ask the backend to repaint from its
+          // own VT100 mirror instead; the repaint is queued into the same output
+          // stream, so it lands after anything still in flight.
+          requestResync();
         }
         gotData = true;
       }
@@ -344,7 +351,7 @@
     });
 
     // Lazy xterm.js creation: only mount the terminal when this pane's tab is active.
-    // Inactive panes buffer PTY data in pendingChunks until their tab is first opened.
+    // Inactive panes buffer PTY data in `pending` until their tab is first opened.
     // This reduces simultaneous xterm.js instances from N-tabs to 1-2, freeing the
     // JS thread from N concurrent rAF loops, ResizeObservers and VT100 parse jobs.
     function mountTerminal() {
@@ -363,7 +370,7 @@
         // This prevents cursor-hopping from the initial 24x80 → real size transition.
         setTimeout(() => {
           isReady = true;
-          if (pendingChunks.length > 0) {
+          if (!pending.isEmpty) {
             scheduleFlush();
           }
         }, 50);

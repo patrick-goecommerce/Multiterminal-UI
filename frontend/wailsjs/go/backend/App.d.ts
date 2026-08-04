@@ -157,6 +157,8 @@ export function RemoveWorktree(arg1:string,arg2:number):Promise<void>;
 
 export function ResizeSession(arg1:number,arg2:number,arg3:number):Promise<void>;
 
+export function ResyncSession(arg1:number):Promise<void>;
+
 export function SaveConfig(arg1:config.Config):Promise<void>;
 
 export function SaveTabs(arg1:config.SessionState):Promise<void>;
