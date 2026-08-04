@@ -119,11 +119,16 @@
 
   onMount(() => {
     // Buffer + flush state — declared first so mountTerminal() and EventsOn can share them.
-    // Hard cap: keep at most 2 MB buffered per pane. A pane in a background tab
-    // does not drain at all, so a misbehaving session (e.g. burst output from a
-    // broken repo) would otherwise accumulate hundreds of MB and block the JS
-    // thread the moment its tab is opened.
-    const MAX_PENDING_BYTES = 2 * 1024 * 1024; // 2 MB
+    // Hard cap per pane. A pane in a background tab does not drain at all, so a
+    // misbehaving session (e.g. burst output from a broken repo) would otherwise
+    // accumulate hundreds of MB and block the JS thread the moment its tab is
+    // opened.
+    //
+    // Crossing the cap costs the pane its buffered scrollback (see the resync
+    // path below), so it is set generously rather than tightly: 5 MB is nothing
+    // next to WebView2's own footprint, and the only real price is that a pane
+    // returning from the background needs ~1.6 s of 64 KB flushes to catch up.
+    const MAX_PENDING_BYTES = 5 * 1024 * 1024; // 5 MB
     const pending = new PendingOutput(MAX_PENDING_BYTES);
     let flushScheduled = false;
     let isReady = false;
