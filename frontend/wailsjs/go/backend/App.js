@@ -187,6 +187,10 @@ export function GetLogPath() {
   return $Call.ByID(1817158190);
 }
 
+export function GetMCPServerPort() {
+  return $Call.ByID(580772223);
+}
+
 export function GetMergeConflicts(arg1) {
   return $Call.ByID(3682275398, arg1);
 }

@@ -384,6 +384,22 @@
       const info = event.data; // PaneNameEvent { id, name }
       if (info?.name) tabStore.setAutoName(info.id, info.name, 'llm');
     });
+    // An agent (e.g. Claude Code in a pane) delegated a task via the local
+    // MCP server (SpawnAgentSession) — attach the already-running session as
+    // a visible pane so the delegation is visible in MTUI.
+    EventsOn('mtui:session-spawned', (event: any) => {
+      const info = event.data; // AgentSessionSpawnedEvent { id, tool, model, dir, name }
+      if (!info?.id) return;
+      let tab = get(activeTab);
+      if (!tab) {
+        const dirName = String(info.dir || '').replace(/\\/g, '/').split('/').pop() || 'Agent';
+        tabStore.addTab(dirName, info.dir);
+        tab = get(activeTab);
+      }
+      if (!tab) return;
+      tabStore.addPane(tab.id, info.id, info.name || info.tool, info.tool, info.model || '',
+        null, '', '', '', '', '', false, 'terminal', '', '');
+    });
     EventsOn('terminal:exit', (event: any) => {
       const id: number = event.data.id;
       tabStore.markExited(id);

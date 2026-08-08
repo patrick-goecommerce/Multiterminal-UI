@@ -63,6 +63,16 @@ type Config struct {
 	ChatStyle             string         `yaml:"chat_style" json:"chat_style"`
 	STT                   STTSettings    `yaml:"stt" json:"stt"`
 	AutoNaming            AutoNamingSettings `yaml:"auto_naming" json:"auto_naming"`
+	MCPServer             MCPServerSettings `yaml:"mcp_server" json:"mcp_server"`
+}
+
+// MCPServerSettings configures the local MCP server that lets an AI agent
+// running inside an MTUI pane delegate work by opening, feeding, and closing
+// other MTUI sessions (e.g. handing a task to Codex or Gemini). It listens on
+// 127.0.0.1 only; there is no auth layer, since this is a single-user desktop app.
+type MCPServerSettings struct {
+	Enabled *bool `yaml:"enabled" json:"enabled"`
+	Port    int   `yaml:"port" json:"port"`
 }
 
 // AutoNamingSettings controls automatic pane naming for Claude panes. When
@@ -270,6 +280,10 @@ func DefaultConfig() Config {
 			Enabled: boolPtr(true),
 			Model:   "claude-haiku-4-5",
 		},
+		MCPServer: MCPServerSettings{
+			Enabled: boolPtr(true),
+			Port:    51533,
+		},
 	}
 }
 
@@ -304,6 +318,15 @@ func (c Config) ShouldKeepAlive() bool {
 		return true
 	}
 	return *c.KeepAlive.Enabled
+}
+
+// ShouldRunMCPServer returns whether the local agent-control MCP server
+// should be started.
+func (c Config) ShouldRunMCPServer() bool {
+	if c.MCPServer.Enabled == nil {
+		return true
+	}
+	return *c.MCPServer.Enabled
 }
 
 // configPath returns the path to ~/.multiterminal.yaml.
@@ -440,6 +463,13 @@ func Load() Config {
 	}
 	if cfg.AutoNaming.Model == "" {
 		cfg.AutoNaming.Model = "claude-haiku-4-5"
+	}
+
+	if cfg.MCPServer.Enabled == nil {
+		cfg.MCPServer.Enabled = boolPtr(true)
+	}
+	if cfg.MCPServer.Port <= 0 || cfg.MCPServer.Port > 65535 {
+		cfg.MCPServer.Port = 51533
 	}
 
 	return cfg

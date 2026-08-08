@@ -54,6 +54,8 @@ type AppService struct {
 	resolvedGeminiPath string
 	geminiDetected     bool
 	tmuxAPIPort        int                         // port for the tmux shim HTTP API
+	mcpServerPort      int                         // port for the agent-control MCP server
+	agentSessions      map[int]AgentSessionInfo    // sessions spawned via SpawnAgentSession (agent-control)
 	chatSessions       map[string]*ChatSession     // active chat sessions keyed by conversation ID
 	chatBuffers        map[string]*strings.Builder // buffered assistant text per conversation
 	worktreeStateMu    sync.Mutex
@@ -73,6 +75,7 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		queues:        make(map[int]*sessionQueue),
 		finishStates:  make(map[int]*finishState),
 		sessionIssues: make(map[int]*sessionIssue),
+		agentSessions: make(map[int]AgentSessionInfo),
 		chatSessions:  make(map[string]*ChatSession),
 		chatBuffers:   make(map[string]*strings.Builder),
 		worktreeState: make(map[int]worktreeState),
@@ -132,6 +135,16 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 		log.Printf("[tmux-api] failed to start: %v", err)
 	} else {
 		a.tmuxAPIPort = port
+	}
+
+	// Start the local MCP server (lets an agent in a pane delegate tasks by
+	// opening/feeding/closing other MTUI sessions), unless disabled.
+	if a.cfg.ShouldRunMCPServer() {
+		if port, err := a.startMCPServer(a.cfg.MCPServer.Port); err != nil {
+			log.Printf("[mcp-server] failed to start: %v", err)
+		} else {
+			a.mcpServerPort = port
+		}
 	}
 
 	return nil

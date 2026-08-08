@@ -6,6 +6,7 @@ import { config } from '../stores/config';
 vi.mock('../../wailsjs/go/backend/App', () => ({
   SaveConfig: vi.fn().mockResolvedValue(undefined),
   GetLogPath: vi.fn().mockResolvedValue(''),
+  GetMCPServerPort: vi.fn().mockResolvedValue(0),
 }));
 vi.mock('../../wailsjs/runtime/runtime', () => ({ EventsOn: vi.fn(() => () => {}) }));
 
