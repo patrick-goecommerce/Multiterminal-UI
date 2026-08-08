@@ -5,6 +5,7 @@
   import { t } from '../stores/i18n';
 
   export let issueCount = 0;
+  export let appVersion = '';
 
   const dispatch = createEventDispatcher<{
     openSettings: void;
@@ -104,6 +105,10 @@
       {/if}
     </button>
   </div>
+
+  {#if appVersion && !$workspace.leftNavCollapsed}
+    <div class="nav-version" title={`Version ${appVersion}`}>v{appVersion}</div>
+  {/if}
 
   <button
     class="nav-item collapse-toggle"
@@ -227,6 +232,15 @@
     justify-content: center;
     font-weight: 700;
     flex-shrink: 0;
+  }
+
+  .nav-version {
+    text-align: center;
+    font-size: 10px;
+    font-family: monospace;
+    color: var(--fg-muted);
+    padding: 2px 0 4px;
+    user-select: none;
   }
 
   .collapse-toggle {
