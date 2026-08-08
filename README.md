@@ -81,6 +81,7 @@ So siehst du auf einen Blick, welches Pane deine Aufmerksamkeit braucht. Ein opt
 - **Quellcodeverwaltung** — Dateiänderungen gruppiert nach Status
 - **Branch-Anzeige** — Aktueller Branch in der Fußzeile
 - **Worktree-Unterstützung** — Isolierte Arbeitsverzeichnisse pro Issue/Karte, inkl. geführtem "Fertigstellen"-Ablauf (Review, Commit, PR, Cleanup)
+- **Worktree-Pflicht** (optional) — Claude-Panes dürfen Code dann nur noch in einem Worktree ändern, nie direkt im Projektverzeichnis; Dokumentation und Planung bleiben ausgenommen. Global oder pro Projekt einstellbar
 - **Konflikterkennung** — Visuelle Warnung bei Merge-/Rebase-Konflikten
 
 ### GitHub Issues & Pull Requests
@@ -223,6 +224,7 @@ See at a glance which pane needs your attention. An optional session keep-alive 
 - **Source control view** — File changes grouped by status
 - **Branch display** — Current branch shown in footer
 - **Worktree support** — Isolated working directories per issue/card, with a guided "finish" flow (review, commit, PR, cleanup)
+- **Mandatory worktrees** (optional) — Claude panes may then only change code inside a worktree, never directly in the project directory; documentation and planning stay exempt. Configurable globally or per project
 - **Conflict detection** — Visual warning on merge/rebase conflicts
 
 ### GitHub Issues & Pull Requests

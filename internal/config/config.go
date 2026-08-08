@@ -41,6 +41,15 @@ type Config struct {
 	// it in the main repo's working directory. false disables automatic
 	// branch/worktree handling entirely — the user manages branches manually.
 	AutoBranchOnIssue     *bool          `yaml:"auto_branch_on_issue" json:"auto_branch_on_issue"`
+	// ForceWorktrees: when true, Claude panes may only modify code inside a
+	// worktree — the mtui-hook PreToolUse firewall denies Edit/Write/NotebookEdit
+	// targeting the main checkout while no worktree is active, so the model has
+	// to call EnterWorktree first (see cmd/mtui-hook/firewall.go). Documentation
+	// and planning paths (.md, docs/, .mtui/, .claude/) stay exempt. Opt-in:
+	// nil/false keeps the pre-existing advisory-only behaviour. A per-project
+	// override lives in .mtui/config.json — resolve both via
+	// AppService.EffectiveForceWorktrees, never this field alone.
+	ForceWorktrees        *bool          `yaml:"force_worktrees" json:"force_worktrees"`
 	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
 	Commands              []CommandEntry `yaml:"commands" json:"commands"`
 	// FinishPrepPrompt overrides the built-in worktree-finish prep prompt
@@ -232,6 +241,7 @@ func DefaultConfig() Config {
 		CommitReminderMinutes: 30,
 		RestoreSession:        boolPtr(true),
 		AutoBranchOnIssue:     boolPtr(true),
+		ForceWorktrees:        boolPtr(false),
 		IssueTracking: IssueTracking{
 			AutoCommentOnStart:  true,
 			AutoCommentOnDone:   true,
@@ -322,6 +332,20 @@ func (c Config) ShouldAutoBranch() bool {
 		return true
 	}
 	return *c.AutoBranchOnIssue
+}
+
+// ShouldForceWorktrees returns the GLOBAL worktree-mandatory setting (see
+// ForceWorktrees). The nil check lives here rather than only in Load because
+// SaveConfig assigns AppService.cfg directly and bypasses Load entirely, so
+// the field can legitimately be nil at runtime.
+//
+// Callers in the backend should prefer AppService.EffectiveForceWorktrees,
+// which layers the per-project override on top of this.
+func (c Config) ShouldForceWorktrees() bool {
+	if c.ForceWorktrees == nil {
+		return false
+	}
+	return *c.ForceWorktrees
 }
 
 // ShouldAutoName returns whether automatic pane naming is enabled.
@@ -425,6 +449,10 @@ func Load() Config {
 
 	if cfg.RestoreSession == nil {
 		cfg.RestoreSession = boolPtr(true)
+	}
+
+	if cfg.ForceWorktrees == nil {
+		cfg.ForceWorktrees = boolPtr(false)
 	}
 
 	// Validate localhost_auto_open

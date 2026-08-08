@@ -53,6 +53,20 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **`App.mu`** — sessions map, queues map, nextID.
 - **Never allocate under lock** — use pre-allocated templates (e.g. `blankLine` in scroll ops).
 
+## Worktrees
+- **Two separate worktree roots exist** — easy to conflate, so check which one a code path means:
+  - `<mainRoot>/.claude/worktrees/<name>` — pane and issue worktrees (`CreatePaneWorktree`,
+    `CreateIssueWorktree`), same location Claude Code's own native `EnterWorktree` uses.
+  - `<mainRoot>/.mt-worktrees/<name>` — `CreateNamedWorktree`, used by the Kanban orchestrator.
+- **Worktree-mandatory policy** (`force_worktrees`, opt-in): enforced by the `PreToolUse` firewall
+  in `cmd/mtui-hook/firewall.go`, NOT by the generated `CLAUDE.local.md`. The memory text only
+  tells the model what to do up front — prompt text has twice failed as enforcement here (see the
+  comment on `worktreeDenyRules`). Policy is resolved once per pane at launch and passed to the
+  hook via `MULTITERMINAL_FORCE_WORKTREE_ROOT`.
+- **The generated `CLAUDE.local.md` is recognized by its marker line**, not by whole-body
+  comparison — a byte-exact check breaks on CRLF round-trips through git on Windows and would
+  silently freeze the file forever.
+
 ## Issue & Commit Discipline
 - **Issues schließen nur mit Commit-Referenz.** Nutze `Closes #123` oder `Fixes #123` im Commit-Message-Body. So ist für jeden nachvollziehbar, welcher Commit welches Issue löst.
 - **Ein Issue ist erst "done" wenn:** (1) Code implementiert, (2) Tests geschrieben UND grün, (3) E2E-getestet oder als `needs-e2e-testing` getaggt, (4) Commit mit `Closes #N` referenziert das Issue.
@@ -101,6 +115,8 @@ internal/
     app_session_issue.go         Session ↔ issue linking
     app_issue_progress.go        Issue progress reporting
     app_worktree.go              Git worktree management
+    app_worktree_policy.go       Worktree-mandatory policy (global + per-project resolution)
+    app_worktree_setup_memory.go Generated CLAUDE.local.md variants + ownership detection
     app_claude_detect.go         Claude CLI path resolution
     app_notify.go                Desktop notifications
     app_health.go                Crash detection & health tracking

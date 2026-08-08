@@ -232,6 +232,12 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 	if mode == "claude" || mode == "claude-auto" || mode == "claude-yolo" {
 		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
 		env = append(env, worktreeEnvVars(dir)...)
+		// Worktree-mandatory policy, resolved once here (global setting +
+		// per-project override) so mtui-hook only has to read one env var.
+		// Empty when the policy is off or dir is not a git repo.
+		if root := a.forceWorktreeRoot(dir); root != "" {
+			env = append(env, "MULTITERMINAL_FORCE_WORKTREE_ROOT="+root)
+		}
 	}
 
 	sess := terminal.NewSession(id, rows, cols)

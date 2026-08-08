@@ -58,6 +58,66 @@ func TestDefaultConfig_ModelEntries(t *testing.T) {
 // ShouldRestoreSession
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// ShouldForceWorktrees
+// ---------------------------------------------------------------------------
+
+func TestDefaultConfig_ForceWorktreesOptIn(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.ForceWorktrees == nil {
+		t.Fatal("ForceWorktrees should be set explicitly in DefaultConfig")
+	}
+	if *cfg.ForceWorktrees {
+		t.Error("ForceWorktrees must default to false (opt-in) so updates change no behaviour")
+	}
+}
+
+// The nil check lives in the helper, not only in Load: SaveConfig assigns
+// AppService.cfg directly and never round-trips through Load.
+func TestShouldForceWorktrees_NilIsOff(t *testing.T) {
+	cfg := Config{ForceWorktrees: nil}
+	if cfg.ShouldForceWorktrees() {
+		t.Error("ShouldForceWorktrees with nil must return false")
+	}
+}
+
+func TestShouldForceWorktrees_True(t *testing.T) {
+	cfg := Config{ForceWorktrees: boolPtr(true)}
+	if !cfg.ShouldForceWorktrees() {
+		t.Error("ShouldForceWorktrees(true) should return true")
+	}
+}
+
+func TestShouldForceWorktrees_False(t *testing.T) {
+	cfg := Config{ForceWorktrees: boolPtr(false)}
+	if cfg.ShouldForceWorktrees() {
+		t.Error("ShouldForceWorktrees(false) should return false")
+	}
+}
+
+func TestConfig_ForceWorktreesYAMLRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test-config.yaml")
+
+	original := DefaultConfig()
+	original.ForceWorktrees = boolPtr(true)
+	if err := writeDefaults(path, original); err != nil {
+		t.Fatalf("writeDefaults failed: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	var loaded Config
+	if err := yaml.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if !loaded.ShouldForceWorktrees() {
+		t.Error("force_worktrees did not survive the YAML round-trip")
+	}
+}
+
 func TestShouldRestoreSession_NilDefault(t *testing.T) {
 	cfg := Config{RestoreSession: nil}
 	if !cfg.ShouldRestoreSession() {

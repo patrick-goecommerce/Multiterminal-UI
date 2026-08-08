@@ -65,6 +65,7 @@ restore_session: true                    # Restore tabs/panes on next launch
 # Git
 commit_reminder_minutes: 30              # Footer commit-age warning threshold
 auto_branch_on_issue: true               # Isolate every issue-launched pane in its own git worktree
+force_worktrees: false                   # Worktree-mandatory policy — see "Worktree policy" below
 finish_prep_prompt: ""                   # Override the built-in worktree-finish prep prompt
 
 # AI tools
@@ -157,6 +158,40 @@ quick_actions: []                        # pane-titlebar quick-action buttons
 favorites: {}                            # per-project file bookmarks
 setup_done: false                        # set once the first-run setup wizard completes
 ```
+
+## Worktree policy (`force_worktrees`)
+
+When enabled, Claude panes may only modify **code** inside a git worktree. Enforcement is a
+`PreToolUse` hook (`cmd/mtui-hook/firewall.go`): `Edit`/`Write`/`NotebookEdit` targeting the main
+checkout are denied, and the denial reason is fed back to the model, which can then call
+`EnterWorktree` and retry the write inside the worktree.
+
+The policy is resolved once per pane at launch (global setting + per-project override) and handed
+to the hook as `MULTITERMINAL_FORCE_WORKTREE_ROOT` — so **toggling it only affects newly started
+panes**.
+
+**Per-project override** lives in `.mtui/config.json` as `force_worktrees`: omitted inherits the
+global setting, `true` forces, `false` exempts the project. Note this file is committed (only
+`.mtui/` *subdirectories* are gitignored), so the override applies to everyone using the repo.
+
+### What the policy does NOT cover
+
+- **Shell writes.** Only `Edit`/`Write`/`NotebookEdit` pass through the hook. A `sed -i`, `tee`,
+  or output redirection from Bash bypasses it entirely — a `PreToolUse` hook cannot know which
+  files an arbitrary command will touch. Deliberately not closed: pattern-denying Bash would
+  never be airtight and would block legitimate shell work.
+- **Codex and Gemini.** `mtui-hook` is registered in Claude Code's settings and `CLAUDE.local.md`
+  is only read by Claude. Panes running the other two CLIs get no isolation from this setting.
+- **Documentation and planning paths**, by design: `*.md` anywhere, plus everything under `docs/`,
+  `.mtui/` and `.claude/` stays writable in the main checkout.
+- **Whether the model actually reacts** to a denial by creating a worktree. The write itself is
+  reliably blocked, so the failure mode is "the change doesn't happen", never "the change silently
+  lands in the main checkout".
+
+MTUI also writes a `CLAUDE.local.md` (advisory or mandatory wording, matching the policy) and
+`.claude/settings.local.json` (`worktree.baseRef`, `git checkout`/`git switch` denies) into every
+project — **independently of this setting**. A `CLAUDE.local.md` the user has edited is never
+overwritten, which doubles as a per-project escape hatch from the generated instructions.
 
 ## Project Structure
 

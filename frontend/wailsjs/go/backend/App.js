@@ -211,6 +211,14 @@ export function GetOrCreateIssueBranch(arg1, arg2, arg3) {
   return $Call.ByID(3998065247, arg1, arg2, arg3);
 }
 
+export function GetProjectForceWorktrees(arg1) {
+  return $Call.ByID(455323949, arg1);
+}
+
+export function SetProjectForceWorktrees(arg1, arg2) {
+  return $Call.ByID(3782727065, arg1, arg2);
+}
+
 export function GetQueue(arg1) {
   return $Call.ByID(2075083900, arg1);
 }
