@@ -64,6 +64,15 @@ type Config struct {
 	STT                   STTSettings    `yaml:"stt" json:"stt"`
 	AutoNaming            AutoNamingSettings `yaml:"auto_naming" json:"auto_naming"`
 	MCPServer             MCPServerSettings `yaml:"mcp_server" json:"mcp_server"`
+	// UpdateChannel selects which GitHub release track CheckForUpdates/ApplyUpdate
+	// pull from: "stable" (release.yml, non-prerelease) or "alpha" (release-alpha.yml,
+	// prerelease). Defaults to "stable" regardless of the running build variant.
+	UpdateChannel         string         `yaml:"update_channel" json:"update_channel"`
+	// AutoUpdateCheckMinutes: 0 (default) disables background update checks
+	// entirely (fully opt-in, no automatic network calls). >0 enables a
+	// periodic check every N minutes. Manual checks (Settings button) always
+	// work regardless of this value.
+	AutoUpdateCheckMinutes int           `yaml:"auto_update_check_minutes" json:"auto_update_check_minutes"`
 }
 
 // MCPServerSettings configures the local MCP server that lets an AI agent
@@ -227,11 +236,16 @@ func DefaultConfig() Config {
 			AutoCloseIssue:      false,
 			IncludeCostInReport: true,
 		},
+		// "opus"/"sonnet"/"fable"/"haiku" are the claude CLI's own aliases and
+		// always resolve to the latest model in that tier (per `claude --help`
+		// and confirmed in practice for haiku too), so this list never needs
+		// updating as Anthropic ships new versions.
 		ClaudeModels: []ModelEntry{
 			{Label: "Default", ID: ""},
-			{Label: "Opus 4.6", ID: "claude-opus-4-6"},
-			{Label: "Sonnet 4.5", ID: "claude-sonnet-4-5-20250929"},
-			{Label: "Haiku 4.5", ID: "claude-haiku-4-5-20251001"},
+			{Label: "Opus (latest)", ID: "opus"},
+			{Label: "Sonnet (latest)", ID: "sonnet"},
+			{Label: "Fable (latest)", ID: "fable"},
+			{Label: "Haiku (latest)", ID: "haiku"},
 		},
 		Commands: []CommandEntry{
 			{Name: "Commit & Push", Text: "git add -A && git commit -m 'update' && git push"},
@@ -284,6 +298,8 @@ func DefaultConfig() Config {
 			Enabled: boolPtr(true),
 			Port:    51533,
 		},
+		UpdateChannel:          "stable",
+		AutoUpdateCheckMinutes: 0,
 	}
 }
 
@@ -470,6 +486,15 @@ func Load() Config {
 	}
 	if cfg.MCPServer.Port <= 0 || cfg.MCPServer.Port > 65535 {
 		cfg.MCPServer.Port = 51533
+	}
+
+	// Validate update_channel
+	validUpdateChannels := map[string]bool{"stable": true, "alpha": true}
+	if !validUpdateChannels[cfg.UpdateChannel] {
+		cfg.UpdateChannel = "stable"
+	}
+	if cfg.AutoUpdateCheckMinutes < 0 {
+		cfg.AutoUpdateCheckMinutes = 0
 	}
 
 	return cfg

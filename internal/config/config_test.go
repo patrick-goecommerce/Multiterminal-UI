@@ -34,8 +34,8 @@ func TestDefaultConfig_Values(t *testing.T) {
 	if cfg.RestoreSession == nil || !*cfg.RestoreSession {
 		t.Error("RestoreSession should default to true")
 	}
-	if len(cfg.ClaudeModels) != 4 {
-		t.Errorf("ClaudeModels count = %d, want 4", len(cfg.ClaudeModels))
+	if len(cfg.ClaudeModels) != 5 {
+		t.Errorf("ClaudeModels count = %d, want 5", len(cfg.ClaudeModels))
 	}
 }
 
@@ -48,8 +48,8 @@ func TestDefaultConfig_ModelEntries(t *testing.T) {
 	if cfg.ClaudeModels[0].ID != "" {
 		t.Errorf("Model 0 ID = %q, want empty", cfg.ClaudeModels[0].ID)
 	}
-	if cfg.ClaudeModels[1].ID != "claude-opus-4-6" {
-		t.Errorf("Model 1 ID = %q, want 'claude-opus-4-6'", cfg.ClaudeModels[1].ID)
+	if cfg.ClaudeModels[1].ID != "opus" {
+		t.Errorf("Model 1 ID = %q, want 'opus'", cfg.ClaudeModels[1].ID)
 	}
 }
 
