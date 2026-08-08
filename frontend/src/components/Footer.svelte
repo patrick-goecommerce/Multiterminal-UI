@@ -12,6 +12,10 @@
   export let updateAvailable: boolean = false;
   export let latestVersion: string = '';
   export let downloadURL: string = '';
+  export let canApplyUpdate: boolean = false;
+  export let updateStatus: 'idle' | 'updating' | 'restarting' | 'error' = 'idle';
+  export let updateError: string = '';
+  export let appVersion: string = '';
   export let projectInitialized: boolean = false;
   export let skillCount: number = 0;
 
@@ -78,13 +82,29 @@
     {/if}
   </div>
   <div class="footer-update">
-    {#if updateAvailable && downloadURL}
+    {#if updateAvailable && canApplyUpdate}
+      {#if updateStatus === 'updating'}
+        <span class="update-status">{$t('footer.updating')}</span>
+      {:else if updateStatus === 'restarting'}
+        <span class="update-status">{$t('footer.restarting')}</span>
+      {:else}
+        <button class="update-link update-btn" on:click={() => dispatch('applyUpdate')}>
+          {$t('footer.updateApply', { version: latestVersion })}
+        </button>
+        {#if updateStatus === 'error'}
+          <span class="update-error" title={updateError}>{$t('footer.updateFailed')}</span>
+        {/if}
+      {/if}
+    {:else if updateAvailable && downloadURL}
       <a class="update-link" href={downloadURL} target="_blank" rel="noopener">
         {$t('footer.updateAvailable', { version: latestVersion })}
       </a>
     {/if}
   </div>
   <div class="footer-right">
+    {#if appVersion}
+      <span class="footer-item version" title={appVersion}>v{appVersion}</span>
+    {/if}
     <span class="shortcut">{$t('footerShortcuts.new')}</span>
     <span class="shortcut">{$t('footerShortcuts.pane')}</span>
     <span class="shortcut">{$t('footerShortcuts.search')}</span>
@@ -174,6 +194,32 @@
 
   .update-link:hover {
     text-decoration: underline;
+  }
+
+  .update-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+  }
+
+  .update-status {
+    color: var(--fg-muted);
+    font-size: 12px;
+  }
+
+  .update-error {
+    color: var(--error, #ef4444);
+    font-size: 12px;
+    margin-left: 6px;
+    cursor: help;
+  }
+
+  .version {
+    color: var(--fg-muted);
+    font-size: 11px;
+    font-family: monospace;
   }
 
   @keyframes update-pulse {

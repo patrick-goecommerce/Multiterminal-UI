@@ -119,6 +119,10 @@
   let updateAvailable = false;
   let latestVersion = '';
   let downloadURL = '';
+  let canApplyUpdate = false;
+  let updateStatus: 'idle' | 'updating' | 'restarting' | 'error' = 'idle';
+  let updateError = '';
+  let appVersion = '';
 
   let conflictCount = 0;
   let conflictFiles: string[] = [];
@@ -152,6 +156,7 @@
 
   let branchInterval: ReturnType<typeof setInterval> | null = null;
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
+  let updateCheckInterval: ReturnType<typeof setInterval> | null = null;
   let storeUnsubscribe: (() => void) | null = null;
   let keepAliveCleanup: (() => void) | null = null;
   let chatEventsCleanup: (() => void) | null = null;
@@ -251,13 +256,14 @@
       if (health.crash_detected && !health.logging_enabled) showCrashDialog = true;
     } catch {}
 
-    App.CheckForUpdates().then((info) => {
-      if (info.updateAvailable) {
-        updateAvailable = true;
-        latestVersion = info.latestVersion;
-        downloadURL = info.downloadURL;
-      }
-    }).catch(() => {});
+    try { appVersion = await App.GetAppVersion(); } catch { appVersion = ''; }
+
+    // Fully opt-in: no automatic update check/network call unless the user
+    // has enabled it in Settings (auto_update_check_minutes > 0).
+    if (($config.auto_update_check_minutes ?? 0) > 0) {
+      checkForUpdates();
+      updateCheckInterval = setInterval(checkForUpdates, $config.auto_update_check_minutes * 60000);
+    }
 
     const restored = await restoreSession(resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath);
     if (!restored) {
@@ -454,6 +460,7 @@
   onDestroy(() => {
     if (branchInterval) clearInterval(branchInterval);
     if (commitAgeInterval) clearInterval(commitAgeInterval);
+    if (updateCheckInterval) clearInterval(updateCheckInterval);
     if (storeUnsubscribe) storeUnsubscribe();
     if (keepAliveCleanup) keepAliveCleanup();
     if (chatEventsCleanup) chatEventsCleanup();
@@ -522,6 +529,32 @@
     conflictCount = info.count;
     conflictFiles = info.files;
     conflictOperation = info.operation;
+  }
+
+  async function checkForUpdates() {
+    try {
+      const info = await App.CheckForUpdates();
+      updateAvailable = info.updateAvailable;
+      latestVersion = info.latestVersion;
+      downloadURL = info.downloadURL;
+      canApplyUpdate = !!(info.assetURL && info.checksumURL);
+      if (updateAvailable) updateStatus = 'idle';
+    } catch {
+      // best-effort background check — ignore errors (network, rate-limit, etc.)
+    }
+  }
+
+  async function applyUpdate() {
+    updateStatus = 'updating';
+    updateError = '';
+    try {
+      await App.ApplyUpdate();
+      // Success: the backend is about to exit and relaunch itself.
+      updateStatus = 'restarting';
+    } catch (err) {
+      updateStatus = 'error';
+      updateError = err instanceof Error ? err.message : String(err);
+    }
   }
 
   async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string }>) {
@@ -1228,7 +1261,7 @@
     {/if}
   </div>
 
-  <Footer {branch} {repoURL} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} {projectInitialized} skillCount={activeSkillCount} on:editSkills={openSkillEditor} />
+  <Footer {branch} {repoURL} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} {canApplyUpdate} {updateStatus} {updateError} {appVersion} {projectInitialized} skillCount={activeSkillCount} on:editSkills={openSkillEditor} on:applyUpdate={applyUpdate} />
   <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} {codexDetected} {geminiDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
   <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} try { resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex'; codexDetected = await App.IsCodexDetected(); } catch {} try { resolvedGeminiPath = (await App.GetResolvedGeminiPath()) || 'gemini'; geminiDetected = await App.IsGeminiDetected(); } catch {} }} />

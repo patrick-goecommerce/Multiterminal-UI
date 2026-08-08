@@ -127,6 +127,10 @@ export function GetAppVersion() {
   return $Call.ByID(1351953244);
 }
 
+export function ApplyUpdate() {
+  return $Call.ByID(1806133832);
+}
+
 export function GetConfig() {
   return $Call.ByID(741379475);
 }

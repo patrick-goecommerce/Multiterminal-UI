@@ -398,17 +398,23 @@ export namespace backend {
 	    latestVersion: string;
 	    updateAvailable: boolean;
 	    downloadURL: string;
-	
+	    assetName: string;
+	    assetURL: string;
+	    checksumURL: string;
+
 	    static createFrom(source: any = {}) {
 	        return new UpdateInfo(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.currentVersion = source["currentVersion"];
 	        this.latestVersion = source["latestVersion"];
 	        this.updateAvailable = source["updateAvailable"];
 	        this.downloadURL = source["downloadURL"];
+	        this.assetName = source["assetName"];
+	        this.assetURL = source["assetURL"];
+	        this.checksumURL = source["checksumURL"];
 	    }
 	}
 	export class KanbanCard {
@@ -880,6 +886,8 @@ export namespace config {
 	    chat_style: string;
 	    stt: STTSettings;
 	    auto_naming: AutoNamingSettings;
+	    update_channel: string;
+	    auto_update_check_minutes: number;
 
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -913,6 +921,8 @@ export namespace config {
 	        this.chat_style = source["chat_style"];
 	        this.stt = this.convertValues(source["stt"], STTSettings);
 	        this.auto_naming = this.convertValues(source["auto_naming"], AutoNamingSettings);
+	        this.update_channel = source["update_channel"];
+	        this.auto_update_check_minutes = source["auto_update_check_minutes"];
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

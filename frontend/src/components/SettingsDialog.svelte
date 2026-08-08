@@ -26,6 +26,10 @@
   let selectedTheme: ThemeName = ($config.theme as ThemeName) || 'konzept';
   let savedTheme: ThemeName = selectedTheme;
   let chatStyle: string = ($config as any).chat_style || 'claude-code';
+  let updateChannel: string = ($config as any).update_channel || 'stable';
+  let autoUpdateMinutes: number = ($config as any).auto_update_check_minutes ?? 0;
+  let manualCheckStatus: 'idle' | 'checking' | 'done' | 'error' = 'idle';
+  let manualCheckMessage = '';
   let sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
   let sttLanguage = ($config as any).stt?.language || 'de';
   let sttBaseUrl = ($config as any).stt?.cloud?.base_url || '';
@@ -105,6 +109,10 @@
     selectedTheme = ($config.theme as ThemeName) || 'konzept';
     savedTheme = selectedTheme;
     chatStyle = ($config as any).chat_style || 'claude-code';
+    updateChannel = ($config as any).update_channel || 'stable';
+    autoUpdateMinutes = ($config as any).auto_update_check_minutes ?? 0;
+    manualCheckStatus = 'idle';
+    manualCheckMessage = '';
     sttProvider = ($config as any).stt?.provider || 'cloud-whisper';
     sttLanguage = ($config as any).stt?.language || 'de';
     sttBaseUrl = ($config as any).stt?.cloud?.base_url || '';
@@ -256,6 +264,21 @@
     playBell('done', audioVolume, audioDoneSound || undefined);
   }
 
+  async function checkForUpdatesNow() {
+    manualCheckStatus = 'checking';
+    manualCheckMessage = '';
+    try {
+      const info = await App.CheckForUpdates();
+      manualCheckStatus = 'done';
+      manualCheckMessage = info.updateAvailable
+        ? `Update v${info.latestVersion} verfügbar`
+        : 'Du hast bereits die aktuelle Version.';
+    } catch (e) {
+      manualCheckStatus = 'error';
+      manualCheckMessage = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   function copyMcpConfig() {
     const port = mcpLivePort || mcpPort;
     const cmd = `claude mcp add --transport http mtui http://127.0.0.1:${port}/mcp`;
@@ -271,6 +294,8 @@
       terminal_color: colorValue,
       theme: selectedTheme,
       chat_style: chatStyle,
+      update_channel: updateChannel,
+      auto_update_check_minutes: autoUpdateMinutes,
       logging_enabled: loggingEnabled,
       use_worktrees: useWorktrees,
       finish_prep_prompt: finishPrepPrompt,
@@ -324,6 +349,8 @@
     colorValue = '#39ff14';
     selectedTheme = 'dark';
     chatStyle = 'claude-code';
+    updateChannel = 'stable';
+    autoUpdateMinutes = 0;
     applyTheme('dark', '#39ff14');
     fontFamily = '';
     fontSize = 10;
@@ -383,6 +410,23 @@
           <option value="claude-code">Claude Code</option>
           <option value="telegram">Telegram</option>
         </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="update-channel-select">Updates</label>
+        <p class="setting-desc">Release-Kanal und automatische Prüfung auf neue Versionen.</p>
+        <select id="update-channel-select" class="theme-select" bind:value={updateChannel}>
+          <option value="stable">Stable</option>
+          <option value="alpha">Alpha</option>
+        </select>
+        <label class="setting-label" for="update-interval" style="margin-top: 12px;">Automatisch prüfen (Minuten, 0 = deaktiviert)</label>
+        <input id="update-interval" type="number" class="orch-number" min="0" bind:value={autoUpdateMinutes} />
+        <button class="install-btn" style="margin-top: 8px;" on:click={checkForUpdatesNow} disabled={manualCheckStatus === 'checking'}>
+          {#if manualCheckStatus === 'checking'}Suche läuft…{:else}Jetzt nach Updates suchen{/if}
+        </button>
+        {#if manualCheckMessage}
+          <p class="stt-status {manualCheckStatus === 'error' ? 'missing' : 'installed'}">{manualCheckMessage}</p>
+        {/if}
       </div>
 
       <div class="setting-group">
