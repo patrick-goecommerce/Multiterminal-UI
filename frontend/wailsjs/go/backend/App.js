@@ -143,6 +143,10 @@ export function GetFavorites(arg1) {
   return $Call.ByID(508786262, arg1);
 }
 
+export function GetFirstClaudeSessionID() {
+  return $Call.ByID(1421257492);
+}
+
 export function GetFileDiff(arg1, arg2) {
   return $Call.ByID(1856212252, arg1, arg2);
 }

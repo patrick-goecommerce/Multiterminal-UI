@@ -260,7 +260,7 @@ func DefaultConfig() Config {
 		},
 		KeepAlive: KeepAliveSettings{
 			Enabled:         boolPtr(true),
-			IntervalMinutes: 300,
+			IntervalMinutes: 60,
 			Message:         "Hi!",
 		},
 		StatusLine: StatusLineSettings{
@@ -417,7 +417,7 @@ func Load() Config {
 		cfg.KeepAlive.Enabled = boolPtr(true)
 	}
 	if cfg.KeepAlive.IntervalMinutes <= 0 {
-		cfg.KeepAlive.IntervalMinutes = 300
+		cfg.KeepAlive.IntervalMinutes = 60
 	}
 	if cfg.KeepAlive.Message == "" {
 		cfg.KeepAlive.Message = "Hi!"

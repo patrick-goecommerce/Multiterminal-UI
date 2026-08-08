@@ -56,6 +56,7 @@ type AppService struct {
 	tmuxAPIPort        int                         // port for the tmux shim HTTP API
 	mcpServerPort      int                         // port for the agent-control MCP server
 	agentSessions      map[int]AgentSessionInfo    // sessions spawned via SpawnAgentSession (agent-control)
+	sessionMode        map[int]string              // mode ("claude"/"shell"/...) each session was created with, across all windows
 	chatSessions       map[string]*ChatSession     // active chat sessions keyed by conversation ID
 	chatBuffers        map[string]*strings.Builder // buffered assistant text per conversation
 	worktreeStateMu    sync.Mutex
@@ -76,6 +77,7 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		finishStates:  make(map[int]*finishState),
 		sessionIssues: make(map[int]*sessionIssue),
 		agentSessions: make(map[int]AgentSessionInfo),
+		sessionMode:   make(map[int]string),
 		chatSessions:  make(map[string]*ChatSession),
 		chatBuffers:   make(map[string]*strings.Builder),
 		worktreeState: make(map[int]worktreeState),
@@ -243,6 +245,7 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 
 	a.mu.Lock()
 	a.sessions[id] = sess
+	a.sessionMode[id] = mode
 	a.mu.Unlock()
 
 	// Stream PTY output to frontend. serviceCtx is nil if CreateSession
@@ -307,6 +310,7 @@ func (a *AppService) CloseSession(id int) {
 		delete(a.queues, id)
 		delete(a.finishStates, id)
 		delete(a.sessionIssues, id)
+		delete(a.sessionMode, id)
 		a.mu.Unlock()
 		a.worktreeStateMu.Lock()
 		delete(a.worktreeState, id)
