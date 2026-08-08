@@ -131,10 +131,14 @@ function renderInline(text: string): string {
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
   html = html.replace(/(?<!\w)_(.+?)_(?!\w)/g, '<em>$1</em>');
 
-  // Links: [text](url)
+  // Links: [text](url) — only linkify http(s)/mailto to prevent javascript:/data: URI execution
+  // via {@html}-rendered chat content (e.g. from prompt-injected assistant output).
   html = html.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" class="md-link" target="_blank" rel="noopener">$1</a>'
+    (match, label, url) => {
+      if (!/^(https?:|mailto:)/i.test(url)) return label;
+      return `<a href="${url}" class="md-link" target="_blank" rel="noopener">${label}</a>`;
+    }
   );
 
   return html;
