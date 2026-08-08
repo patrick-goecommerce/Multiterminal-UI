@@ -463,8 +463,8 @@ func TestKeepAlive_DefaultValues(t *testing.T) {
 	if cfg.KeepAlive.Enabled == nil || !*cfg.KeepAlive.Enabled {
 		t.Error("KeepAlive.Enabled should default to true")
 	}
-	if cfg.KeepAlive.IntervalMinutes != 300 {
-		t.Errorf("KeepAlive.IntervalMinutes = %d, want 300", cfg.KeepAlive.IntervalMinutes)
+	if cfg.KeepAlive.IntervalMinutes != 60 {
+		t.Errorf("KeepAlive.IntervalMinutes = %d, want 60", cfg.KeepAlive.IntervalMinutes)
 	}
 	if cfg.KeepAlive.Message != "Hi!" {
 		t.Errorf("KeepAlive.Message = %q, want 'Hi!'", cfg.KeepAlive.Message)

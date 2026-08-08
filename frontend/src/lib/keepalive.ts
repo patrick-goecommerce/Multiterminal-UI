@@ -9,27 +9,22 @@ export interface KeepAliveConfig {
   message: string;
 }
 
-/** Find the first running Claude (any mode) pane across all tabs. */
-function findFirstClaudePane(): { sessionId: number; tabId: string } | null {
-  const state = tabStore.getState();
-  for (const tab of state.tabs) {
-    for (const pane of tab.panes) {
-      if ((pane.mode === 'claude' || pane.mode === 'claude-auto' || pane.mode === 'claude-yolo') && pane.running) {
-        return { sessionId: pane.sessionId, tabId: tab.id };
-      }
-    }
-  }
-  return null;
-}
+// How often we poll for idle time, independent of the configured threshold —
+// keeps the actual ping within ~1 minute of crossing the threshold instead of
+// only being checked once per (potentially multi-hour) interval.
+const POLL_MS = 60_000;
 
 /**
  * Start the keep-alive loop after session restore.
  * Returns a cleanup function to stop the loop (call in onDestroy).
  *
  * Behaviour:
- * 1. If no Claude pane exists after restore → create one in the first tab.
- * 2. Every `interval_minutes` minutes: if no activity in any session for that
- *    interval, write the keep-alive message to the first Claude pane found.
+ * 1. If no Claude session exists anywhere (any window) after restore →
+ *    create one in the first tab of the main window.
+ * 2. Every minute: if no activity in any session for `interval_minutes`,
+ *    write the keep-alive message to the oldest running Claude session,
+ *    wherever it lives (main window or a detached one) — the target is
+ *    resolved via the backend, which tracks all sessions process-wide.
  */
 export async function startKeepAliveLoop(
   cfg: KeepAliveConfig,
@@ -38,8 +33,9 @@ export async function startKeepAliveLoop(
   if (!isMainWindow()) return () => {};
   if (!cfg.enabled || cfg.interval_minutes <= 0) return () => {};
 
-  // Auto-start: create a Claude pane if none exists
-  if (!findFirstClaudePane()) {
+  // Auto-start: create a Claude session if none exists in ANY window.
+  const existing = await App.GetFirstClaudeSessionID().catch(() => -1);
+  if (existing < 0) {
     const state = tabStore.getState();
     if (state.tabs.length > 0) {
       const firstTab = state.tabs[0];
@@ -55,28 +51,31 @@ export async function startKeepAliveLoop(
     }
   }
 
-  const intervalMs = cfg.interval_minutes * 60 * 1000;
-  const intervalSec = cfg.interval_minutes * 60;
+  const thresholdSec = cfg.interval_minutes * 60;
+  let lastPingAtSec = 0;
 
-  async function sendPing() {
-    const pane = findFirstClaudePane();
-    if (!pane) return;
+  async function sendPing(sessionId: number) {
     // Send message text and Enter as separate writes (mimics real typing)
-    await App.WriteToSession(pane.sessionId, encodeForPty(cfg.message));
+    await App.WriteToSession(sessionId, encodeForPty(cfg.message));
     await new Promise(r => setTimeout(r, 100));
-    await App.WriteToSession(pane.sessionId, encodeForPty('\r'));
+    await App.WriteToSession(sessionId, encodeForPty('\r'));
+    lastPingAtSec = Math.floor(Date.now() / 1000);
   }
 
-  async function ping() {
+  async function tick() {
     try {
-      const lastActivity = await App.GetGlobalLastActivityUnix();
+      const sessionId = await App.GetFirstClaudeSessionID();
+      if (sessionId < 0) return;
+
       const nowSec = Math.floor(Date.now() / 1000);
-      if (lastActivity > 0 && nowSec - lastActivity < intervalSec) {
-        return; // activity within window
-      }
-      await sendPing();
+      if (nowSec - lastPingAtSec < thresholdSec) return; // already pinged recently
+
+      const lastActivity = await App.GetGlobalLastActivityUnix();
+      if (lastActivity > 0 && nowSec - lastActivity < thresholdSec) return; // still active
+
+      await sendPing(sessionId);
     } catch (err) {
-      console.error('[keepalive] ping failed:', err);
+      console.error('[keepalive] tick failed:', err);
     }
   }
 
@@ -97,15 +96,16 @@ export async function startKeepAliveLoop(
         lastSeen = cur;
         lastChangeAt = Date.now();
       } else if (Date.now() - lastChangeAt >= idleMs) {
-        await sendPing();
+        const sessionId = await App.GetFirstClaudeSessionID();
+        if (sessionId >= 0) await sendPing(sessionId);
         return;
       }
     }
   }
   startupPing().catch(err => console.error('[keepalive] startup ping failed:', err));
 
-  // Then repeat every interval.
-  const timer = setInterval(ping, intervalMs);
+  // Poll frequently; tick() itself gates on the configured threshold.
+  const timer = setInterval(tick, POLL_MS);
 
   return () => clearInterval(timer);
 }

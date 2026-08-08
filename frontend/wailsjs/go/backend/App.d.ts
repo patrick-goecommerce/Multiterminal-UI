@@ -71,6 +71,8 @@ export function GetDiffStats(arg1:string):Promise<Array<backend.DiffFileStat>>;
 
 export function GetFavorites(arg1:string):Promise<Array<string>>;
 
+export function GetFirstClaudeSessionID():Promise<number>;
+
 export function GetFileDiff(arg1:string,arg2:string):Promise<string>;
 
 export function GetGitBranch(arg1:string):Promise<string>;

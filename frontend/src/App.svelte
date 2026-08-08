@@ -277,9 +277,10 @@
     if (reconcileDir) App.ReconcileFinishMarkers(reconcileDir).catch(() => {});
 
     // Start keep-alive loop (auto-start + periodic ping).
-    // NOTE: restoreSession() calls tabStore.addPane() with running=true before
-    // CreateSession resolves, so findFirstClaudePane() in startKeepAliveLoop
-    // correctly sees restored panes immediately.
+    // NOTE: restoreSession() awaits every App.CreateSession() call before
+    // returning, so the backend's session-mode tracking (used by
+    // GetFirstClaudeSessionID in startKeepAliveLoop) already reflects all
+    // restored panes by the time this runs.
     if ($config.keep_alive) {
       keepAliveCleanup = await startKeepAliveLoop($config.keep_alive, resolvedClaudePath);
     }

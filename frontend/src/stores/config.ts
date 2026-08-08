@@ -133,7 +133,7 @@ export const config = writable<AppConfig>({
   quick_actions: [],
   keep_alive: {
     enabled: true,
-    interval_minutes: 300,
+    interval_minutes: 60,
     message: 'Hi!',
   },
   audio: {
