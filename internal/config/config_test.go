@@ -48,8 +48,8 @@ func TestDefaultConfig_ModelEntries(t *testing.T) {
 	if cfg.ClaudeModels[0].ID != "" {
 		t.Errorf("Model 0 ID = %q, want empty", cfg.ClaudeModels[0].ID)
 	}
-	if cfg.ClaudeModels[1].ID != "claude-opus-5" {
-		t.Errorf("Model 1 ID = %q, want 'claude-opus-5'", cfg.ClaudeModels[1].ID)
+	if cfg.ClaudeModels[1].ID != "opus" {
+		t.Errorf("Model 1 ID = %q, want 'opus'", cfg.ClaudeModels[1].ID)
 	}
 }
 

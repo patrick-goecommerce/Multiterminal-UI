@@ -236,11 +236,16 @@ func DefaultConfig() Config {
 			AutoCloseIssue:      false,
 			IncludeCostInReport: true,
 		},
+		// "opus"/"sonnet"/"fable" are the claude CLI's own aliases and always
+		// resolve to the latest model in that tier (per `claude --help`), so
+		// these never need updating as Anthropic ships new versions. Haiku
+		// has no such alias yet (still on the pre-"5" naming scheme), so it's
+		// pinned to a concrete model ID that must be bumped by hand.
 		ClaudeModels: []ModelEntry{
 			{Label: "Default", ID: ""},
-			{Label: "Opus 5", ID: "claude-opus-5"},
-			{Label: "Sonnet 5", ID: "claude-sonnet-5"},
-			{Label: "Fable 5", ID: "claude-fable-5"},
+			{Label: "Opus (latest)", ID: "opus"},
+			{Label: "Sonnet (latest)", ID: "sonnet"},
+			{Label: "Fable (latest)", ID: "fable"},
 			{Label: "Haiku 4.5", ID: "claude-haiku-4-5-20251001"},
 		},
 		Commands: []CommandEntry{
