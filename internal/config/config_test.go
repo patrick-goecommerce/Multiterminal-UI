@@ -548,6 +548,44 @@ func TestAutoNaming_LoadFillsNilDefaults(t *testing.T) {
 	}
 }
 
+func TestLoad_SelfHealsEmptyModelLists(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+
+	// A config file with explicit empty model lists (e.g. from a config
+	// predating these fields, or a past save that round-tripped an empty
+	// array) — yaml.Unmarshal would otherwise leave these empty forever,
+	// since the keys ARE present, just empty.
+	yaml := "claude_models: []\ncodex_models: []\ngemini_models: []\n"
+	os.WriteFile(filepath.Join(dir, ".multiterminal.yaml"), []byte(yaml), 0644)
+
+	cfg := Load()
+	if len(cfg.ClaudeModels) == 0 {
+		t.Error("ClaudeModels should self-heal to the built-in defaults when empty in YAML")
+	}
+	if len(cfg.CodexModels) == 0 {
+		t.Error("CodexModels should self-heal to the built-in defaults when empty in YAML")
+	}
+	if len(cfg.GeminiModels) == 0 {
+		t.Error("GeminiModels should self-heal to the built-in defaults when empty in YAML")
+	}
+}
+
+func TestLoad_PreservesNonEmptyModelLists(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+
+	yaml := "claude_models:\n  - label: Custom\n    id: my-custom-model\n"
+	os.WriteFile(filepath.Join(dir, ".multiterminal.yaml"), []byte(yaml), 0644)
+
+	cfg := Load()
+	if len(cfg.ClaudeModels) != 1 || cfg.ClaudeModels[0].ID != "my-custom-model" {
+		t.Errorf("ClaudeModels = %+v, want the user's custom list preserved, not overwritten by defaults", cfg.ClaudeModels)
+	}
+}
+
 func TestShouldAutoName_False(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.AutoNaming.Enabled = boolPtr(false)
