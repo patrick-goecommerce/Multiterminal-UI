@@ -4,10 +4,10 @@
 
 **[Deutsch](#deutsch) | [English](#english)**
 
-![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)
-![Wails](https://img.shields.io/badge/Wails-v2-red?logo=wails)
-![Svelte](https://img.shields.io/badge/Svelte-4-FF3E00?logo=svelte&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)
+
+> Technische Doku (Build, Konfiguration, Architektur) → [README_TECH.md](README_TECH.md)
+> Technical docs (build, configuration, architecture) → [README_TECH.md](README_TECH.md)
 
 ---
 
@@ -20,10 +20,12 @@ Multiterminal UI ist eine native Desktop-Anwendung, die mehrere KI-Coding-Assist
 ## Funktionen
 
 ### Terminals & Tabs
-- **Multi-Pane-Layout** — Bis zu 12 Terminal-Sessions pro Tab in einem Kachelraster
+- **Multi-Pane-Layout** — Mehrere Terminal-Sessions pro Tab in einem Kachelraster
 - **Projekt-Tabs** — Jeder Tab hat sein eigenes Arbeitsverzeichnis; Projekte über Ordnerauswahl hinzufügen
+- **Zuletzt geöffneter Ordner** — MTUI merkt sich, wo du zuletzt gearbeitet hast, und startet dort wieder
 - **Session-Wiederherstellung** — Alle Tabs, Panes und Layouts werden automatisch gespeichert und beim Neustart wiederhergestellt
-- **Pane umbenennen** — Doppelklick auf den Pane-Namen zum Umbenennen
+- **Mehrere Fenster** — Tabs per Drag & Drop in ein eigenes Fenster abdocken
+- **Pane umbenennen** — Doppelklick auf den Pane-Namen zum Umbenennen; optional automatische Benennung anhand des ersten Prompts
 - **Zoom** — Ctrl+Z zum Maximieren/Wiederherstellen eines Panes, Ctrl+Mausrad für Schriftgröße pro Terminal
 
 ### KI-Assistenten
@@ -32,34 +34,40 @@ Drei KI-CLI-Tools werden unterstützt — beim Öffnen eines neuen Terminals (Ct
 
 | Tool | Modi | Beschreibung |
 |------|------|--------------|
-| **Claude Code** (Anthropic) | Normal / YOLO | KI-Coding-Assistent mit optionaler Modellauswahl |
+| **Claude Code** (Anthropic) | Normal / Auto / YOLO | KI-Coding-Assistent mit optionaler Modellauswahl |
 | **Codex** (OpenAI) | Standard / Auto | OpenAI Codex CLI |
 | **Gemini** (Google) | Standard / Sandbox | Google Gemini CLI |
+
+Zusätzlich lässt sich per Sprachsteuerung diktieren, und Panes können statt als reines Terminal auch im Chat-Ansicht dargestellt werden.
+
+### Agent-Delegation
+
+Ein Agent, der in einem Pane läuft (z.B. Claude Code), kann selbstständig eine neue Session mit einem der drei Tools öffnen, ihr eine Aufgabe schicken und sie später wieder schließen — praktisch, um eine Teilaufgabe an ein anderes Modell zu delegieren. Die delegierte Session erscheint automatisch sichtbar als neues Pane.
+
+### Multi-Agent-Orchestrierung (Kanban)
+
+Ein Kanban-Board pro Projekt (Spalten von "Entwurf" bis "Fertig") kann Karten automatisch als eigene Agent-Sessions in isolierten Git-Worktrees starten, deren Fortschritt verfolgen und nach erfolgreichem Review/Test automatisch einen Pull Request erstellen.
 
 ### Token- & Kostenübersicht
 - **Pro Pane** — Jedes Claude-Pane zeigt seine Kosten in der Titelleiste (z.B. `$0.12`)
 - **Gesamtkosten** — Die globale Fußzeile zeigt die Kosten aller Claude-Panes zusammen
 - **Automatische Erkennung** — Kosten werden in Echtzeit aus der Claude-Code-Ausgabe geparst
+- **Claude Statusline** — Optionale Statuszeile in Claude-Code-Panes (Modell, Kontext-%, Kosten, Branch)
 
 ### Aktivitätserkennung
 
-Die Pane-Rahmen zeigen den Status von Claude visuell an:
+Die Pane-Rahmen zeigen den Status visuell an:
 
 | Anzeige | Bedeutung |
 |---------|-----------|
-| **Grünes Leuchten** | Claude ist fertig (Prompt zurückgekehrt) |
-| **Rot/Gelbes Blinken** | Claude wartet auf Eingabe (Bestätigung, J/N, etc.) |
-| **Pulsierender Punkt** | Claude arbeitet gerade aktiv |
+| **Grünes Leuchten** | Agent ist fertig (Prompt zurückgekehrt) |
+| **Gelbes Pulsieren** | Agent wartet auf Eingabe (Bestätigung, J/N, etc.) |
 
-So siehst du auf einen Blick, welches Pane deine Aufmerksamkeit braucht.
+So siehst du auf einen Blick, welches Pane deine Aufmerksamkeit braucht. Ein optionales Session-Keep-Alive verhindert, dass eine inaktive Claude-Session durch Zeitüberschreitung verloren geht.
 
-### Pipeline-Warteschlange
-Reihe mehrere Prompts für ein Claude-Pane aneinander. Sie werden nacheinander ausgeführt:
-1. Klicke den **▶**-Button in der Titelleiste eines Panes
-2. Gib einen Prompt ein und drücke **Enter**
-3. Wenn Claude fertig ist, wird automatisch der nächste Prompt gesendet
-
-Perfekt zum Planen von Aufgabenserien — einrichten und weggehen. Das Badge zeigt die Anzahl wartender Einträge.
+### Pipeline-Warteschlange & Quick Actions
+- Reihe mehrere Prompts für ein Pane aneinander — sie werden nacheinander gesendet, sobald der Agent bereit ist
+- Eigene "Quick Action"-Buttons in der Pane-Titelleiste für wiederkehrende, vorformulierte Prompts
 
 ### Dateibrowser (Seitenleiste)
 - **Ctrl+B** zum Ein-/Ausblenden
@@ -69,30 +77,34 @@ Perfekt zum Planen von Aufgabenserien — einrichten und weggehen. Das Badge zei
 - Git-Status-Anzeige pro Datei (geändert, neu, unverfolgt, etc.)
 
 ### Git-Integration
-- **Commit-Erinnerung** — Die Fußzeile zeigt die Zeit seit dem letzten Commit:
-  - Grün (unter 15 Min.), Gelb (15–30 Min.), Rot pulsierend (30+ Min.)
-- **Quellcodeverwaltung** — Dateiänderungen gruppiert nach Status (Konflikte, Geändert, Hinzugefügt, Gelöscht, Umbenannt)
+- **Commit-Erinnerung** — Die Fußzeile zeigt die Zeit seit dem letzten Commit (grün/gelb/rot)
+- **Quellcodeverwaltung** — Dateiänderungen gruppiert nach Status
 - **Branch-Anzeige** — Aktueller Branch in der Fußzeile
-- **Worktree-Unterstützung** — Optionale isolierte Arbeitsverzeichnisse pro Issue
+- **Worktree-Unterstützung** — Isolierte Arbeitsverzeichnisse pro Issue/Karte, inkl. geführtem "Fertigstellen"-Ablauf (Review, Commit, PR, Cleanup)
 - **Konflikterkennung** — Visuelle Warnung bei Merge-/Rebase-Konflikten
 
-### GitHub Issues
-- **Issue-Seitenleiste** — Alle GitHub Issues des aktuellen Projekts anzeigen
-- **Issue-Details** — Titel, Beschreibung, Labels und Kommentare ansehen
-- **Issues erstellen/bearbeiten** — Dialog zum Erstellen und Bearbeiten
-- **Claude für Issue starten** — Klick auf ▶ bei einem Issue startet eine Claude-Session mit dem Issue-Kontext
-- **Issue-Verknüpfung** — Panes können mit GitHub Issues verknüpft werden (z.B. "Claude – #42")
+### GitHub Issues & Pull Requests
+- **Issue-Seitenleiste** — Alle GitHub Issues des aktuellen Projekts anzeigen, erstellen und bearbeiten
+- **Agent für Issue starten** — Klick auf ▶ bei einem Issue startet eine Session mit dem Issue-Kontext
+- **Automatischer Fortschrittsbericht** — Optionale Kommentare im Issue bei Start/Fertig/Schließen
+- **Schnellzugriff** — Links zu den GitHub-Issues- und Pull-Requests-Seiten des Projekts direkt in der Fußzeile
 - Benötigt [GitHub CLI](https://cli.github.com/) (`gh`)
 
+### Dashboard
+Ein Übersichtsfenster über alle offenen Panes und Tabs mit Live-Status — praktisch, wenn viele Sessions gleichzeitig laufen.
+
+### Skills-System
+Projektspezifische "Skills" (z.B. Backend, DevOps, Technical Writing) lassen sich einem Projekt zuordnen; sie werden automatisch in die `CLAUDE.md` des Projekts eingebunden.
+
+### Hintergrund-Agents
+Optionale automatische Review- und Test-Läufe nach jedem Commit, per frei wählbarem KI-Tool und Prompt.
+
 ### Befehlspalette
-- **Ctrl+Shift+P** zum Öffnen
-- Eigene Befehle/Skripte speichern und per Name ausführen
+- Eigene Befehle/Skripte speichern und per Toolbar ausführen
 - Befehle bearbeiten, löschen und organisieren
 
 ### Audio-Benachrichtigungen
-- **Fertig-Sound** — Spielt ab, wenn Claude fertig ist
-- **Eingabe-Sound** — Spielt ab, wenn Claude auf Eingabe wartet
-- **Fehler-Sound** — Spielt bei Fehlern ab
+- **Fertig-/Eingabe-/Fehler-Sound** — je nach Agent-Status
 - Lautstärkeregelung und Option "Stumm wenn Fenster fokussiert"
 - Eigene Audiodateien möglich
 
@@ -106,9 +118,8 @@ Perfekt zum Planen von Aufgabenserien — einrichten und weggehen. Das Badge zei
 | `nord` | Nord-Farbschema |
 | `solarized` | Solarized Dark |
 
-- **Eigene Akzentfarbe** — Farbwähler, Hex-Eingabe oder 8 Presets
-- **Schriftart** — Aus installierten Monospace-Schriften wählen
-- **Schriftgröße** — 8–20px in 2px-Schritten
+- **Eigene Akzentfarbe** — Farbwähler, Hex-Eingabe oder Presets
+- **Schriftart & -größe** — Aus installierten Monospace-Schriften wählen, 8–20px
 
 ### Sprachen
 
@@ -122,11 +133,12 @@ Die Oberfläche ist verfügbar in: **Deutsch**, Englisch, Italienisch, Spanisch,
 | **Ctrl+W** | Tab schließen |
 | **Ctrl+N** | Neues Terminal-Pane (Startdialog) |
 | **Ctrl+Z** | Pane maximieren / wiederherstellen |
-| **Ctrl+1-9** | Pane nach Index fokussieren |
+| **Ctrl+1–9** | Pane nach Index fokussieren |
 | **Ctrl+B** | Dateibrowser-Seitenleiste ein-/ausblenden |
 | **Ctrl+F** | Terminal-Suche |
 | **Ctrl+I** | GitHub Issues anzeigen |
-| **Ctrl+Shift+P** | Befehlspalette |
+| **Ctrl+Shift+H** | Dashboard ein-/ausblenden |
+| **Ctrl+Shift+S** | Skills-Editor öffnen |
 | **Ctrl+V** | Einfügen |
 | **Ctrl+C** | Kopieren (bei Auswahl) |
 | **Ctrl+Scroll** | Schriftgröße pro Terminal |
@@ -134,82 +146,10 @@ Die Oberfläche ist verfügbar in: **Deutsch**, Englisch, Italienisch, Spanisch,
 
 ## Voraussetzungen
 
-**Zum Ausführen:**
 - Mindestens eines der KI-CLI-Tools: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), oder [Gemini CLI](https://github.com/google-gemini/gemini-cli)
-- [GitHub CLI](https://cli.github.com/) (`gh`) — für die GitHub Issues-Integration
+- [GitHub CLI](https://cli.github.com/) (`gh`) — für Issues, Pull Requests und die Agent-Orchestrierung
 
-**Zum Bauen aus Quellcode:**
-- [Go 1.21+](https://go.dev/dl/)
-- [Node.js 18+](https://nodejs.org/)
-- [Wails CLI](https://wails.io/docs/gettingstarted/installation): `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-
-## Installation & Start
-
-```bash
-# Entwicklungsmodus (Hot-Reload)
-wails dev
-
-# Produktions-Build
-wails build
-
-# Debug-Build (mit DevTools)
-wails build -debug
-```
-
-Die Binärdatei wird erstellt unter `build/bin/mtui.exe` (Windows) bzw. `build/bin/mtui` (Linux/macOS).
-
-## Konfiguration
-
-Eine Konfigurationsdatei wird beim ersten Start automatisch unter `~/.multiterminal.yaml` erstellt.
-
-```yaml
-# Darstellung
-theme: dark                              # dark, light, dracula, nord, solarized
-terminal_color: "#39ff14"                # Akzentfarbe (Hex)
-font_family: ""                          # Monospace-Schriftart
-font_size: 10                            # Schriftgröße (px)
-language: de                             # Sprache (de/en/it/es/fr)
-
-# Terminal
-default_shell: ""                        # Standard-Shell (automatisch erkannt)
-default_dir: ""                          # Standard-Arbeitsverzeichnis
-max_panes_per_tab: 12                    # Max. Terminals pro Tab
-sidebar_width: 30                        # Seitenleisten-Breite (Zeichen)
-
-# Git
-commit_reminder_minutes: 30              # Commit-Erinnerung ab (Minuten)
-use_worktrees: false                     # Git-Worktrees pro Issue erstellen
-
-# KI-Tools
-claude_enabled: true                     # Claude Code aktivieren
-claude_command: ""                       # Claude CLI-Pfad (automatisch erkannt)
-claude_models:                           # Verfügbare Claude-Modelle
-  - label: "Default"
-    id: ""
-  - label: "Opus 4.6"
-    id: "claude-opus-4-6"
-  - label: "Sonnet 4.5"
-    id: "claude-sonnet-4-5-20250929"
-  - label: "Haiku 4.5"
-    id: "claude-haiku-4-5-20251001"
-codex_enabled: false                     # Codex (OpenAI) aktivieren
-codex_command: ""                        # Codex CLI-Pfad
-gemini_enabled: false                    # Gemini (Google) aktivieren
-gemini_command: ""                       # Gemini CLI-Pfad
-
-# Audio
-audio:
-  enabled: true                          # Audio-Benachrichtigungen
-  volume: 50                             # Lautstärke (0-100)
-  when_focused: true                     # Sound auch bei fokussiertem Fenster
-  done_sound: ""                         # Eigene Sounddatei (Fertig)
-  input_sound: ""                        # Eigene Sounddatei (Eingabe)
-  error_sound: ""                        # Eigene Sounddatei (Fehler)
-
-# Sonstiges
-logging_enabled: false                   # Debug-Logging aktivieren
-commands: []                             # Gespeicherte Befehle (Befehlspalette)
-```
+Alle Einstellungen sind über den Einstellungsdialog in der App erreichbar; für Details zur Konfigurationsdatei siehe [README_TECH.md](README_TECH.md).
 
 ---
 
@@ -222,10 +162,12 @@ Multiterminal UI is a native desktop application that brings multiple AI coding 
 ## Features
 
 ### Terminals & Tabs
-- **Multi-pane layout** — Up to 12 terminal sessions per tab in a tiled grid
+- **Multi-pane layout** — Multiple terminal sessions per tab in a tiled grid
 - **Project tabs** — Each tab has its own working directory; add projects via folder picker
+- **Remembers your last folder** — MTUI remembers where you last worked and starts there again
 - **Session restore** — All tabs, panes, and layouts are automatically saved and restored on restart
-- **Pane renaming** — Double-click any pane name to rename it
+- **Multiple windows** — Drag a tab out to detach it into its own window
+- **Pane renaming** — Double-click any pane name to rename it; optional automatic naming from the first prompt
 - **Zoom** — Ctrl+Z to maximize/restore a pane, Ctrl+Mouse Wheel for font size per terminal
 
 ### AI Assistants
@@ -234,34 +176,40 @@ Three AI CLI tools are supported — select one when opening a new terminal (Ctr
 
 | Tool | Modes | Description |
 |------|-------|-------------|
-| **Claude Code** (Anthropic) | Normal / YOLO | AI coding assistant with optional model selection |
+| **Claude Code** (Anthropic) | Normal / Auto / YOLO | AI coding assistant with optional model selection |
 | **Codex** (OpenAI) | Standard / Auto | OpenAI Codex CLI |
 | **Gemini** (Google) | Standard / Sandbox | Google Gemini CLI |
+
+Voice dictation is also supported, and any pane can be switched from a raw terminal to a chat-style view.
+
+### Agent Delegation
+
+An agent running in a pane (e.g. Claude Code) can autonomously open a new session with any of the three tools, hand it a task, and close it again later — handy for delegating a subtask to another model. The delegated session automatically shows up as a visible pane.
+
+### Multi-Agent Orchestration (Kanban)
+
+A per-project Kanban board (columns from "draft" to "done") can automatically launch cards as their own agent sessions in isolated git worktrees, track their progress, and open a pull request once review/tests pass.
 
 ### Token & Cost Tracking
 - **Per pane** — Each Claude pane shows its cost in the title bar (e.g. `$0.12`)
 - **Total cost** — The global footer shows combined cost across all Claude panes
 - **Automatic detection** — Costs are parsed in real-time from Claude Code output
+- **Claude statusline** — Optional status line inside Claude Code panes (model, context %, cost, branch)
 
 ### Activity Detection
 
-Pane borders visually indicate Claude's state:
+Pane borders visually indicate an agent's state:
 
 | Indicator | Meaning |
 |-----------|---------|
-| **Green glow** | Claude finished generating (prompt returned) |
-| **Red/yellow blink** | Claude needs user input (confirmation, Y/N, etc.) |
-| **Pulsing dot** | Claude is actively working |
+| **Green glow** | Agent finished generating (prompt returned) |
+| **Yellow pulse** | Agent needs user input (confirmation, Y/N, etc.) |
 
-See at a glance which pane needs your attention.
+See at a glance which pane needs your attention. An optional session keep-alive prevents an idle Claude session from timing out.
 
-### Pipeline Queue
-Queue up multiple prompts for a Claude pane. They execute sequentially:
-1. Click the **▶** button in any pane's title bar
-2. Type a prompt and press **Enter**
-3. When Claude finishes, the next prompt is automatically sent
-
-Perfect for batching tasks — set it up and walk away. The badge shows pending item count.
+### Pipeline Queue & Quick Actions
+- Queue up multiple prompts for a pane — they're sent one after another once the agent is ready
+- Custom "quick action" buttons in a pane's title bar for recurring, pre-written prompts
 
 ### File Browser (Sidebar)
 - **Ctrl+B** to toggle
@@ -271,30 +219,34 @@ Perfect for batching tasks — set it up and walk away. The badge shows pending 
 - Git status indicator per file (modified, new, untracked, etc.)
 
 ### Git Integration
-- **Commit reminder** — Footer shows time since last commit:
-  - Green (under 15 min), Yellow (15–30 min), Red pulsing (30+ min)
-- **Source control view** — File changes grouped by status (conflicts, modified, added, deleted, renamed)
+- **Commit reminder** — Footer shows time since last commit (green/yellow/red)
+- **Source control view** — File changes grouped by status
 - **Branch display** — Current branch shown in footer
-- **Worktree support** — Optional isolated working directories per issue
+- **Worktree support** — Isolated working directories per issue/card, with a guided "finish" flow (review, commit, PR, cleanup)
 - **Conflict detection** — Visual warning on merge/rebase conflicts
 
-### GitHub Issues
-- **Issue sidebar** — View all GitHub Issues for the current project
-- **Issue details** — See title, description, labels, and comments
-- **Create/edit issues** — Dialog for creating and editing issues
-- **Launch Claude for an issue** — Click ▶ on any issue to start a Claude session with that issue's context
-- **Issue linking** — Panes can be linked to GitHub issues (e.g. "Claude – #42")
+### GitHub Issues & Pull Requests
+- **Issue sidebar** — View, create, and edit GitHub Issues for the current project
+- **Launch an agent for an issue** — Click ▶ on any issue to start a session with that issue's context
+- **Automatic progress reporting** — Optional comments on start/done/close
+- **Quick access** — Links to the project's GitHub Issues and Pull Requests pages right in the footer
 - Requires [GitHub CLI](https://cli.github.com/) (`gh`)
 
+### Dashboard
+An overview window across all open panes and tabs with live status — handy when many sessions are running at once.
+
+### Skills System
+Project-specific "skills" (e.g. Backend, DevOps, Technical Writing) can be assigned to a project; they're automatically injected into the project's `CLAUDE.md`.
+
+### Background Agents
+Optional automatic review and test runs after every commit, using a tool and prompt of your choice.
+
 ### Command Palette
-- **Ctrl+Shift+P** to open
-- Save custom commands/scripts and run them by name
+- Save custom commands/scripts and run them from the toolbar
 - Edit, delete, and organize your commands
 
 ### Audio Notifications
-- **Done sound** — Plays when Claude finishes
-- **Input sound** — Plays when Claude needs input
-- **Error sound** — Plays on errors
+- **Done / input / error sounds** depending on agent state
 - Volume control and "mute when focused" option
 - Custom audio file support
 
@@ -308,9 +260,8 @@ Perfect for batching tasks — set it up and walk away. The badge shows pending 
 | `nord` | Nord color scheme |
 | `solarized` | Solarized Dark |
 
-- **Custom accent color** — Color picker, hex input, or 8 presets
-- **Font** — Choose from installed monospace fonts
-- **Font size** — 8–20px in 2px steps
+- **Custom accent color** — Color picker, hex input, or presets
+- **Font & size** — Choose from installed monospace fonts, 8–20px
 
 ### Languages
 
@@ -324,11 +275,12 @@ The UI is available in: German, **English**, Italian, Spanish, French.
 | **Ctrl+W** | Close tab |
 | **Ctrl+N** | New terminal pane (launch dialog) |
 | **Ctrl+Z** | Maximize / restore focused pane |
-| **Ctrl+1-9** | Focus pane by index |
+| **Ctrl+1–9** | Focus pane by index |
 | **Ctrl+B** | Toggle file browser sidebar |
 | **Ctrl+F** | Terminal search |
 | **Ctrl+I** | Show GitHub Issues |
-| **Ctrl+Shift+P** | Command palette |
+| **Ctrl+Shift+H** | Toggle dashboard |
+| **Ctrl+Shift+S** | Open skills editor |
 | **Ctrl+V** | Paste |
 | **Ctrl+C** | Copy (when text selected) |
 | **Ctrl+Scroll** | Font size per terminal |
@@ -336,82 +288,10 @@ The UI is available in: German, **English**, Italian, Spanish, French.
 
 ## Prerequisites
 
-**To run:**
 - At least one AI CLI tool: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or [Gemini CLI](https://github.com/google-gemini/gemini-cli)
-- [GitHub CLI](https://cli.github.com/) (`gh`) — for GitHub Issues integration
+- [GitHub CLI](https://cli.github.com/) (`gh`) — for Issues, Pull Requests, and agent orchestration
 
-**To build from source:**
-- [Go 1.21+](https://go.dev/dl/)
-- [Node.js 18+](https://nodejs.org/)
-- [Wails CLI](https://wails.io/docs/gettingstarted/installation): `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-
-## Installation & Running
-
-```bash
-# Development mode (hot-reload)
-wails dev
-
-# Production build
-wails build
-
-# Debug build (with DevTools)
-wails build -debug
-```
-
-The binary is output to `build/bin/mtui.exe` (Windows) or `build/bin/mtui` (Linux/macOS).
-
-## Configuration
-
-A config file is auto-created at `~/.multiterminal.yaml` on first run.
-
-```yaml
-# Appearance
-theme: dark                              # dark, light, dracula, nord, solarized
-terminal_color: "#39ff14"                # Accent color (hex)
-font_family: ""                          # Monospace font name
-font_size: 10                            # Font size (px)
-language: de                             # Language (de/en/it/es/fr)
-
-# Terminal
-default_shell: ""                        # Default shell (auto-detected)
-default_dir: ""                          # Default working directory
-max_panes_per_tab: 12                    # Max terminals per tab
-sidebar_width: 30                        # Sidebar width (characters)
-
-# Git
-commit_reminder_minutes: 30              # Commit reminder threshold (minutes)
-use_worktrees: false                     # Create git worktrees per issue
-
-# AI Tools
-claude_enabled: true                     # Enable Claude Code
-claude_command: ""                       # Claude CLI path (auto-detected)
-claude_models:                           # Available Claude models
-  - label: "Default"
-    id: ""
-  - label: "Opus 4.6"
-    id: "claude-opus-4-6"
-  - label: "Sonnet 4.5"
-    id: "claude-sonnet-4-5-20250929"
-  - label: "Haiku 4.5"
-    id: "claude-haiku-4-5-20251001"
-codex_enabled: false                     # Enable Codex (OpenAI)
-codex_command: ""                        # Codex CLI path
-gemini_enabled: false                    # Enable Gemini (Google)
-gemini_command: ""                       # Gemini CLI path
-
-# Audio
-audio:
-  enabled: true                          # Audio notifications
-  volume: 50                             # Volume (0-100)
-  when_focused: true                     # Play sound even when focused
-  done_sound: ""                         # Custom done sound file
-  input_sound: ""                        # Custom input sound file
-  error_sound: ""                        # Custom error sound file
-
-# Misc
-logging_enabled: false                   # Enable debug logging
-commands: []                             # Saved commands (command palette)
-```
+All settings are available through the in-app Settings dialog; see [README_TECH.md](README_TECH.md) for the config file reference.
 
 ---
 
