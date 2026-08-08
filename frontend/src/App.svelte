@@ -916,13 +916,13 @@
   // Only $activeTab is a reactive dependency; the dedup lives inside the function so
   // Svelte does not track _lastWindowTitle (see CLAUDE.md $: footgun note).
   let _lastWindowTitle = '';
-  function syncWindowTitle(tab: typeof $activeTab) {
-    const title = windowTitle(tab);
+  function syncWindowTitle(tab: typeof $activeTab, version: string) {
+    const title = windowTitle(tab, version);
     if (title === _lastWindowTitle) return;
     _lastWindowTitle = title;
     Window.SetTitle(title).catch(() => {});
   }
-  $: syncWindowTitle($activeTab);
+  $: syncWindowTitle($activeTab, appVersion);
 
   async function handleChangeDir() {
     const tab = $activeTab;
@@ -1224,7 +1224,7 @@
   />
 
   <div class="content">
-    <LeftNav {issueCount} on:openSettings={() => (showSettingsDialog = true)} />
+    <LeftNav {issueCount} {appVersion} on:openSettings={() => (showSettingsDialog = true)} />
     <Sidebar visible={$workspace.activeView === 'terminals' && $workspace.sidebarView !== null} dir={$activeTab?.dir ?? ''} {issueCount} {paneIssues} {conflictFiles} {conflictOperation} initialView={$workspace.sidebarView || 'explorer'} pinned={$config.sidebar_pinned} on:close={() => workspace.closeSidebar()} on:togglePin={handleTogglePin} on:selectFile={handleSidebarFile} on:createIssue={handleCreateIssue} on:editIssue={handleEditIssue} on:launchForIssue={handleLaunchForIssue} />
     {#if $workspace.activeView === 'dashboard'}
       <DashboardView on:navigate={handleDashboardNavigate} on:undock={() => App.OpenDashboardWindow()} />

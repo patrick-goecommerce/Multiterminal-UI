@@ -467,6 +467,15 @@ describe('windowTitle', () => {
     const tab = { name: 'Backend', focusedPaneId: '', panes: [] } as any;
     expect(windowTitle(tab)).toBe('Backend — Multiterminal');
   });
+
+  it('includes the version when provided, with no tab', () => {
+    expect(windowTitle(null, '2.0.0-alpha.25')).toBe('Multiterminal v2.0.0-alpha.25');
+  });
+
+  it('includes the version alongside the tab context', () => {
+    const tab = { name: 'Backend', focusedPaneId: '', panes: [] } as any;
+    expect(windowTitle(tab, '2.0.0-alpha.25')).toBe('Backend — Multiterminal v2.0.0-alpha.25');
+  });
 });
 
 describe('computeTabActivity', () => {
