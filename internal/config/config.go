@@ -311,7 +311,12 @@ func DefaultConfig() Config {
 			Enabled: boolPtr(true),
 			Port:    51533,
 		},
-		UpdateChannel:          "stable",
+		// UpdateChannel defaults to "alpha": every published release is
+		// currently a prerelease (v2.0.0-alpha.N) — there is no "stable"
+		// GitHub release for this repo yet, and won't be until Wails v3 is
+		// stable. Defaulting to "stable" would mean CheckForUpdates finds
+		// nothing and reports "already current", which is misleading.
+		UpdateChannel:          "alpha",
 		AutoUpdateCheckMinutes: 0,
 		TerminalScrollback:     10000,
 	}
@@ -546,10 +551,11 @@ func Load() Config {
 		cfg.MCPServer.Port = 51533
 	}
 
-	// Validate update_channel
+	// Validate update_channel — falls back to "alpha" (see DefaultConfig),
+	// not "stable", since there is currently no stable release to find.
 	validUpdateChannels := map[string]bool{"stable": true, "alpha": true}
 	if !validUpdateChannels[cfg.UpdateChannel] {
-		cfg.UpdateChannel = "stable"
+		cfg.UpdateChannel = "alpha"
 	}
 	if cfg.AutoUpdateCheckMinutes < 0 {
 		cfg.AutoUpdateCheckMinutes = 0

@@ -4,8 +4,8 @@ import "testing"
 
 func TestDefaultConfig_UpdateDefaults(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.UpdateChannel != "stable" {
-		t.Errorf("UpdateChannel = %q, want 'stable'", cfg.UpdateChannel)
+	if cfg.UpdateChannel != "alpha" {
+		t.Errorf("UpdateChannel = %q, want 'alpha' (no stable release exists yet)", cfg.UpdateChannel)
 	}
 	if cfg.AutoUpdateCheckMinutes != 0 {
 		t.Errorf("AutoUpdateCheckMinutes = %d, want 0 (disabled by default)", cfg.AutoUpdateCheckMinutes)
@@ -19,16 +19,16 @@ func TestConfig_Validation_UpdateChannel(t *testing.T) {
 	}{
 		{"stable", "stable"},
 		{"alpha", "alpha"},
-		{"", "stable"},
-		{"bogus", "stable"},
-		{"STABLE", "stable"}, // case-sensitive: not in the allow-list, resets
+		{"", "alpha"},
+		{"bogus", "alpha"},
+		{"STABLE", "alpha"}, // case-sensitive: not in the allow-list, resets
 	}
 
 	validUpdateChannels := map[string]bool{"stable": true, "alpha": true}
 	for _, tt := range tests {
 		got := tt.input
 		if !validUpdateChannels[got] {
-			got = "stable"
+			got = "alpha"
 		}
 		if got != tt.want {
 			t.Errorf("UpdateChannel(%q) after validation = %q, want %q", tt.input, got, tt.want)

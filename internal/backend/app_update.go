@@ -27,7 +27,7 @@ import (
 func (a *AppService) ApplyUpdate() error {
 	channel := a.cfg.UpdateChannel
 	if channel == "" {
-		channel = "stable"
+		channel = "alpha"
 	}
 
 	release, err := resolveLatestRelease(channel)
