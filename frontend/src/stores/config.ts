@@ -120,8 +120,9 @@ export const config = writable<AppConfig>({
   gemini_enabled: false,
   claude_models: [
     { label: 'Default', id: '' },
-    { label: 'Opus 4.6', id: 'claude-opus-4-6' },
-    { label: 'Sonnet 4.5', id: 'claude-sonnet-4-5-20250929' },
+    { label: 'Opus 5', id: 'claude-opus-5' },
+    { label: 'Sonnet 5', id: 'claude-sonnet-5' },
+    { label: 'Fable 5', id: 'claude-fable-5' },
     { label: 'Haiku 4.5', id: 'claude-haiku-4-5-20251001' },
   ],
   commit_reminder_minutes: 30,
