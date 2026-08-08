@@ -51,6 +51,8 @@ const es = {
     conflicts: '\u26A0 {count} conflicto(s){op}',
     updateAvailable: 'Actualización v{version} disponible',
     editSkills: 'Editar skills del proyecto',
+    openIssues: 'Abrir GitHub Issues',
+    openPulls: 'Abrir GitHub Pull Requests',
   },
   launch: {
     titleIssue: 'Agente para #{number}',

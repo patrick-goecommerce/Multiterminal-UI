@@ -207,6 +207,10 @@ export function GetQueue(arg1) {
   return $Call.ByID(2075083900, arg1);
 }
 
+export function GetRepoURL(arg1) {
+  return $Call.ByID(2937945610, arg1);
+}
+
 export function GetResolvedClaudePath() {
   return $Call.ByID(2078339156);
 }

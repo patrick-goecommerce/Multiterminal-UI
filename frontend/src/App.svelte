@@ -35,7 +35,7 @@
   import { sendNotification } from './lib/notifications';
   import { restoreSession, saveSession } from './lib/session';
   import { startKeepAliveLoop } from './lib/keepalive';
-  import { fetchBranch, fetchCommitAge, fetchConflicts, fetchIssueCount } from './lib/git-polling';
+  import { fetchBranch, fetchCommitAge, fetchConflicts, fetchIssueCount, fetchRepoURL } from './lib/git-polling';
   import { checkForNewCommit } from './lib/background-agents';
   import { buildIssuePrompt, setupIssueBranch, resolveBranchConflict } from './lib/launch';
   import type { IssueContext } from './lib/launch';
@@ -114,6 +114,7 @@
   let issueCount = 0;
   let sidebarView: 'explorer' | 'source-control' | 'issues' = 'explorer';
   let branch = '';
+  let repoURL = '';
   let commitAgeMinutes = -1;
   let updateAvailable = false;
   let latestVersion = '';
@@ -441,6 +442,7 @@
 
     window.addEventListener('beforeunload', saveSession);
     updateBranch();
+    updateRepoURL();
     updateCommitAge();
     updateIssueCount();
     updateConflicts();
@@ -465,6 +467,11 @@
     branch = await fetchBranch(tab.dir || '.');
   }
 
+  async function updateRepoURL() {
+    const tab = $activeTab;
+    repoURL = tab ? await fetchRepoURL(tab.dir || '') : '';
+  }
+
   // Refresh per-tab git/issue/worktree state only when the ACTIVE TAB actually
   // changes (id or dir), NOT on every tabStore mutation. The derived $activeTab
   // re-emits on every scan-driven activity/cost update (many times per second),
@@ -481,6 +488,7 @@
     if (key === lastActiveTabKey) return;
     lastActiveTabKey = key;
     updateBranch();
+    updateRepoURL();
     updateCommitAge();
     updateIssueCount();
     updateConflicts();
@@ -1220,7 +1228,7 @@
     {/if}
   </div>
 
-  <Footer {branch} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} {projectInitialized} skillCount={activeSkillCount} on:editSkills={openSkillEditor} />
+  <Footer {branch} {repoURL} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} {projectInitialized} skillCount={activeSkillCount} on:editSkills={openSkillEditor} />
   <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} {codexDetected} {geminiDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
   <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} try { resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex'; codexDetected = await App.IsCodexDetected(); } catch {} try { resolvedGeminiPath = (await App.GetResolvedGeminiPath()) || 'gemini'; geminiDetected = await App.IsGeminiDetected(); } catch {} }} />
