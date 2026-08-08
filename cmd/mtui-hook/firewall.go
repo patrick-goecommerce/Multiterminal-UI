@@ -110,7 +110,37 @@ type toolInputPath struct {
 	NotebookPath string `json:"notebook_path"`
 }
 
+// writeTools are the tools this firewall can police. KNOWN GAP: writes made
+// through the shell (Bash: `sed -i`, `tee`, `echo > file`) bypass it entirely,
+// because a PreToolUse hook cannot tell which files an arbitrary command will
+// touch. Accepted deliberately — pattern-denying Bash would never be airtight
+// and would block legitimate shell work. Documented in README_TECH.md.
 var writeTools = map[string]bool{"Edit": true, "Write": true, "NotebookEdit": true}
+
+// worktreeExemptDirs are project-relative directories that stay writable in
+// the main checkout even under the worktree-mandatory policy: documentation,
+// specs/plans and MTUI's own project state are not code and are routinely
+// edited outside a feature worktree.
+var worktreeExemptDirs = []string{"docs", ".mtui", ".claude"}
+
+// isWorktreeExemptPath reports whether path is exempt from the
+// worktree-mandatory block: any *.md file, or anything under one of
+// worktreeExemptDirs relative to root.
+//
+// This applies ONLY to the force-mode branch. Once a worktree IS active the
+// original rule stands unchanged — splitting one session's work across the
+// worktree and the main checkout is what that branch exists to prevent.
+func isWorktreeExemptPath(path, root string) bool {
+	if strings.EqualFold(filepath.Ext(path), ".md") {
+		return true
+	}
+	for _, dir := range worktreeExemptDirs {
+		if isUnderDir(path, filepath.Join(root, dir)) {
+			return true
+		}
+	}
+	return false
+}
 
 // checkPathFirewall inspects a PreToolUse event for Edit/Write/NotebookEdit
 // and reports whether it should be blocked, plus the path it classified.
@@ -133,6 +163,17 @@ func checkPathFirewall(ev claudeEvent, hooksDir string) (blocked bool, path stri
 
 	worktreePath, mainRoot := resolveWorktreeContext(hooksDir, ev.SessionID)
 	if worktreePath == "" || mainRoot == "" {
+		// Worktree-mandatory policy: with no worktree active yet, code changes
+		// in the main checkout are denied so the model has to isolate first.
+		// A deny is not a dead end — permissionDecisionReason goes back to the
+		// model, which can call EnterWorktree and retry the write there.
+		forced := os.Getenv("MULTITERMINAL_FORCE_WORKTREE_ROOT")
+		if forced != "" && isUnderDir(path, forced) && !isWorktreeExemptPath(path, forced) {
+			return true, path, "Worktree-Pflicht: In diesem Projekt sind Code-Änderungen nur in " +
+				"einem Worktree erlaubt, nicht direkt im Hauptrepo (" + forced + "). Nutze zuerst " +
+				"das EnterWorktree-Tool und wiederhole die Änderung dort. (Dokumentation und " +
+				"Planung — .md, docs/, .mtui/, .claude/ — sind ausgenommen.)"
+		}
 		return false, path, ""
 	}
 	if isUnderDir(path, worktreePath) {

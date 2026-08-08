@@ -105,6 +105,10 @@ export function GetOpenWindows():Promise<Array<{id: string, tabIds: string[]}>>;
 
 export function GetOrCreateIssueBranch(arg1:string,arg2:number,arg3:string):Promise<string>;
 
+export function GetProjectForceWorktrees(arg1:string):Promise<string>;
+
+export function SetProjectForceWorktrees(arg1:string,arg2:string):Promise<void>;
+
 export function GetQueue(arg1:number):Promise<Array<backend.QueueItem>>;
 
 export function GetRepoURL(arg1:string):Promise<string>;

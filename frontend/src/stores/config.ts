@@ -77,6 +77,8 @@ export interface AppConfig {
   commit_reminder_minutes: number;
   restore_session?: boolean;
   logging_enabled?: boolean;
+  auto_branch_on_issue?: boolean;
+  force_worktrees?: boolean;
   commands: CommandEntry[];
   finish_prep_prompt: string;
   quick_actions: QuickAction[];
@@ -126,6 +128,7 @@ export const config = writable<AppConfig>({
     { label: 'Haiku (latest)', id: 'haiku' },
   ],
   commit_reminder_minutes: 30,
+  force_worktrees: false,
   commands: [
     { name: 'Commit & Push', text: "git add -A && git commit -m 'update' && git push" },
   ],

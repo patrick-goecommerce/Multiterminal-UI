@@ -13,70 +13,6 @@ import (
 	"path/filepath"
 )
 
-const projectWorktreeMemoryFile = "CLAUDE.local.md"
-
-const projectWorktreeMemoryContent = `# MTUI-Projekt: Worktree-Isolation
-
-Nutze für Aufgaben mit eigenem, klar abgegrenztem Arbeitsbereich das
-` + "`EnterWorktree`" + `-Tool, um deine Änderungen zu isolieren. Der Haupt-Branch
-dieses Projekts darf dabei nie direkt gewechselt werden.
-
-Wenn eine Aufgabe erledigt ist: committe deine Arbeit in nachvollziehbaren
-Commits. Push, das Erstellen eines Pull Requests (` + "`gh pr create`" + `) und jeder
-Merge oder Fast-Forward durch dich selbst erfordern IMMER vorherige Zustimmung
-des Nutzers — frage vorher nach, statt eigenständig zu pushen, zu mergen oder
-einen PR zu öffnen.
-
-Nutze ` + "`ExitWorktree`" + ` mit ` + "`discard_changes: true`" + ` oder erzwungenem Entfernen
-NIEMALS eigenständig — nur nach ausdrücklicher Rückfrage beim Nutzer und
-dessen Bestätigung.
-
-Wenn du innerhalb dieses Worktrees eine Spec (` + "`docs/superpowers/specs/...`" + `)
-oder einen Plan (` + "`docs/superpowers/plans/...`" + `) erstellst, ergänze den
-Dokument-Header um eine Zeile ` + "`**Worktree:** <absoluter Pfad zu diesem Worktree-Checkout>`" + `
-(direkt nach ` + "`**Status:**`" + `, bzw. als letzte Header-Zeile ohne Status-Feld).
-Im Hauptrepo (kein aktiver Worktree) entfällt die Zeile. So bleibt auch nach
-einem Merge erkennbar, in welchem Worktree ein Dokument entstanden ist.
-`
-
-// projectWorktreeMemoryPriorVersions lists exact text this function itself
-// wrote out in earlier revisions. A CLAUDE.local.md matching one of these
-// verbatim is entirely MTUI-owned and safe to migrate to the current text;
-// anything else (custom user content, or the current version already) is
-// left untouched.
-var projectWorktreeMemoryPriorVersions = []string{
-	`# MTUI-Projekt: Worktree-Isolation
-
-Nutze für Aufgaben mit eigenem, klar abgegrenztem Arbeitsbereich das
-` + "`EnterWorktree`" + `-Tool, um deine Änderungen zu isolieren. Der Haupt-Branch
-dieses Projekts darf dabei nie direkt gewechselt werden.
-
-Wenn eine Aufgabe erledigt ist: committe, pushe bei Bedarf und öffne einen
-Pull Request (` + "`gh pr create`" + `), oder frage den Nutzer nach dem gewünschten
-Vorgehen.
-
-Nutze ` + "`ExitWorktree`" + ` mit ` + "`discard_changes: true`" + ` oder erzwungenem Entfernen
-NIEMALS eigenständig — nur nach ausdrücklicher Rückfrage beim Nutzer und
-dessen Bestätigung.
-`,
-	`# MTUI-Projekt: Worktree-Isolation
-
-Nutze für Aufgaben mit eigenem, klar abgegrenztem Arbeitsbereich das
-` + "`EnterWorktree`" + `-Tool, um deine Änderungen zu isolieren. Der Haupt-Branch
-dieses Projekts darf dabei nie direkt gewechselt werden.
-
-Wenn eine Aufgabe erledigt ist: committe deine Arbeit in nachvollziehbaren
-Commits. Push, das Erstellen eines Pull Requests (` + "`gh pr create`" + `) und jeder
-Merge oder Fast-Forward durch dich selbst erfordern IMMER vorherige Zustimmung
-des Nutzers — frage vorher nach, statt eigenständig zu pushen, zu mergen oder
-einen PR zu öffnen.
-
-Nutze ` + "`ExitWorktree`" + ` mit ` + "`discard_changes: true`" + ` oder erzwungenem Entfernen
-NIEMALS eigenständig — nur nach ausdrücklicher Rückfrage beim Nutzer und
-dessen Bestätigung.
-`,
-}
-
 // worktreeDenyRules are the hard-enforced Bash denies (user-mandated after a
 // real dev test caught Claude switching branches while a worktree was open —
 // the memory-only instruction "Haupt-Branch darf nie direkt gewechselt
@@ -114,45 +50,29 @@ const projectWorktreeSettingsContent = `{
 // worktree.baseRef is merged into an existing settings.local.json without
 // touching unrelated keys. Anything not recognized as MTUI's own prior output
 // (custom user content) is left untouched.
+//
+// Which memory variant is written follows the worktree-mandatory policy for
+// this project (EffectiveForceWorktrees). The settings half is written
+// identically either way — the git checkout/switch denies are worth having
+// regardless of who creates the worktree.
 func (a *AppService) EnsureProjectWorktreeSetup(dir string) error {
 	root, err := mainRepoRoot(dir)
 	if err != nil {
 		return err
 	}
 
-	if err := ensureProjectWorktreeMemory(root); err != nil {
+	if err := ensureProjectWorktreeMemory(root, a.EffectiveForceWorktrees(root)); err != nil {
 		return err
 	}
 	if err := ensureProjectWorktreeSettings(root); err != nil {
 		return err
 	}
-	return nil
-}
-
-func ensureProjectWorktreeMemory(root string) error {
-	memPath := filepath.Join(root, projectWorktreeMemoryFile)
-	existing, err := os.ReadFile(memPath)
-	if os.IsNotExist(err) {
-		if err := os.WriteFile(memPath, []byte(projectWorktreeMemoryContent), 0644); err != nil {
-			return fmt.Errorf("memory file: %w", err)
-		}
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("memory file: %w", err)
-	}
-
-	content := string(existing)
-	if content == projectWorktreeMemoryContent {
-		return nil
-	}
-	for _, prior := range projectWorktreeMemoryPriorVersions {
-		if content == prior {
-			if err := os.WriteFile(memPath, []byte(projectWorktreeMemoryContent), 0644); err != nil {
-				return fmt.Errorf("memory file: %w", err)
-			}
-			return nil
-		}
+	// Keep the generated memory file out of `git status`: it is MTUI's own
+	// per-project state, and letting an agent commit it would (a) leak the
+	// instruction into the repo and (b) risk a CRLF round-trip that makes the
+	// file look user-customized, silently freezing the policy for that project.
+	if err := ensureInfoExclude(root, []string{projectWorktreeMemoryFile}); err != nil {
+		log.Printf("[worktree-setup] info/exclude: %v", err) // non-fatal
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import { config } from '../stores/config';
+  import { activeTab } from '../stores/tabs';
   import { applyAccentColor, applyTheme } from '../stores/theme';
   import type { ThemeName } from '../stores/theme';
   import * as App from '../../wailsjs/go/backend/App';
@@ -36,7 +37,12 @@
   let sttModel = ($config as any).stt?.cloud?.model || 'whisper-1';
   let sttApiKey = ($config as any).stt?.cloud?.api_key || '';
   let loggingEnabled = $config.logging_enabled || false;
-  let useWorktrees = $config.use_worktrees || false;
+  let forceWorktrees = $config.force_worktrees === true;
+  // Per-project override for the worktree policy: 'inherit' | 'on' | 'off'.
+  // Saved immediately on change (it lives in the project, not in the global
+  // config that Speichern writes).
+  let projectForceMode = 'inherit';
+  let projectDir = '';
   let logPath = '';
 
   let dialogEl: HTMLDivElement;
@@ -120,7 +126,8 @@
     sttModel = ($config as any).stt?.cloud?.model || 'whisper-1';
     sttApiKey = ($config as any).stt?.cloud?.api_key || '';
     loggingEnabled = $config.logging_enabled || false;
-    useWorktrees = $config.use_worktrees || false;
+    forceWorktrees = $config.force_worktrees === true;
+    loadProjectForceMode();
     claudeCommand = $config.claude_command || '';
     audioEnabled = $config.audio?.enabled ?? true;
     audioWhenFocused = $config.audio?.when_focused ?? true;
@@ -262,6 +269,25 @@
     } catch {}
   }
 
+  // Read outside a reactive block on purpose: assigning inside `$:` would make
+  // Svelte track these vars and reset the whole dialog on any change
+  // (recurring bug, see CLAUDE.md).
+  function loadProjectForceMode() {
+    projectDir = $activeTab?.dir || '';
+    projectForceMode = 'inherit';
+    if (!projectDir) return;
+    App.GetProjectForceWorktrees(projectDir)
+      .then((mode: string) => { projectForceMode = mode || 'inherit'; })
+      .catch(() => {});
+  }
+
+  function saveProjectForceMode() {
+    if (!projectDir) return;
+    App.SetProjectForceWorktrees(projectDir, projectForceMode).catch((err: any) => {
+      console.error('[SettingsDialog] SetProjectForceWorktrees failed:', err);
+    });
+  }
+
   function previewAudio() {
     playBell('done', audioVolume, audioDoneSound || undefined);
   }
@@ -299,7 +325,7 @@
       update_channel: updateChannel,
       auto_update_check_minutes: autoUpdateMinutes,
       logging_enabled: loggingEnabled,
-      use_worktrees: useWorktrees,
+      force_worktrees: forceWorktrees,
       finish_prep_prompt: finishPrepPrompt,
       quick_actions: quickActions,
       claude_command: claudeCommand,
@@ -352,6 +378,7 @@
     colorValue = '#39ff14';
     selectedTheme = 'dark';
     chatStyle = 'claude-code';
+    forceWorktrees = false;
     updateChannel = 'stable';
     autoUpdateMinutes = 0;
     applyTheme('dark', '#39ff14');
@@ -556,14 +583,35 @@
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label class="setting-label">Git Worktrees</label>
-        <p class="setting-desc">Erstellt pro Issue ein isoliertes Arbeitsverzeichnis statt nur einen Branch zu wechseln.</p>
+        <label class="setting-label">Worktree-Pflicht</label>
+        <p class="setting-desc">
+          Claude-Panes dürfen Code nur innerhalb eines Worktrees ändern; Schreibzugriffe direkt im
+          Hauptrepo werden abgelehnt, mit dem Hinweis, zuerst ein Worktree anzulegen. Ausgenommen
+          sind Dokumentation und Planung (<code>.md</code>, <code>docs/</code>, <code>.mtui/</code>,
+          <code>.claude/</code>). Gilt nur für Claude-Panes (Codex und Gemini unterstützen das
+          nicht) und wirkt ab dem nächsten Pane-Start. Änderungen über die Shell (z.B.
+          <code>sed -i</code>) werden nicht erfasst.
+        </p>
         <div class="toggle-row">
-          <button class="toggle-btn" class:toggle-on={useWorktrees} on:click={() => useWorktrees = !useWorktrees}>
+          <button class="toggle-btn" class:toggle-on={forceWorktrees} on:click={() => forceWorktrees = !forceWorktrees}>
             <span class="toggle-knob"></span>
           </button>
-          <span class="toggle-label">{useWorktrees ? 'Aktiv' : 'Inaktiv'}</span>
+          <span class="toggle-label">{forceWorktrees ? 'Aktiv' : 'Inaktiv'}</span>
         </div>
+        {#if projectDir}
+          <div class="orch-field" style="margin-top: 10px;">
+            <label class="orch-label" for="project-force-worktrees">Für dieses Projekt</label>
+            <select id="project-force-worktrees" class="claude-input" bind:value={projectForceMode} on:change={saveProjectForceMode}>
+              <option value="inherit">Globale Einstellung übernehmen</option>
+              <option value="on">Immer erzwingen</option>
+              <option value="off">Nie erzwingen (ausgenommen)</option>
+            </select>
+          </div>
+          <p class="setting-desc" style="margin-top: 6px;">
+            Wird in <code>.mtui/config.json</code> im Projekt gespeichert und damit eingecheckt —
+            gilt also für alle, die das Repository nutzen. Wird sofort gespeichert.
+          </p>
+        {/if}
       </div>
 
       <div class="setting-group">
