@@ -37,6 +37,15 @@ export async function fetchConflicts(dir: string): Promise<ConflictInfo> {
   }
 }
 
+export async function fetchRepoURL(dir: string): Promise<string> {
+  if (!dir) return '';
+  try {
+    return await App.GetRepoURL(dir);
+  } catch {
+    return '';
+  }
+}
+
 export async function fetchIssueCount(dir: string): Promise<number> {
   if (!dir) return 0;
   try {

@@ -62,6 +62,8 @@ const de = {
     conflicts: '\u26A0 {count} Konflikt(e){op}',
     updateAvailable: 'Update v{version} verfügbar',
     editSkills: 'Projekt-Skills bearbeiten',
+    openIssues: 'GitHub Issues öffnen',
+    openPulls: 'GitHub Pull Requests öffnen',
   },
 
   // LaunchDialog

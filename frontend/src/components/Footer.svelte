@@ -3,6 +3,7 @@
   import { t } from '../stores/i18n';
 
   export let branch: string = '';
+  export let repoURL: string = '';
   export let totalCost: string = '';
   export let tabInfo: string = '';
   export let commitAgeMinutes: number = -1;
@@ -56,6 +57,10 @@
       <span class="footer-item cost">
         <span class="label">total:</span> {totalCost}
       </span>
+    {/if}
+    {#if repoURL}
+      <a class="footer-link" href="{repoURL}/issues" target="_blank" rel="noopener" title={$t('footer.openIssues')}>Issues</a>
+      <a class="footer-link" href="{repoURL}/pulls" target="_blank" rel="noopener" title={$t('footer.openPulls')}>PRs</a>
     {/if}
     {#if projectInitialized}
       <button class="footer-btn skills-btn" title={skillCount > 0 ? `${$t('footer.editSkills')} (${skillCount})` : $t('footer.editSkills')} on:click={() => dispatch('editSkills')}>
@@ -210,6 +215,21 @@
 
   .skills-btn {
     color: var(--accent);
+  }
+
+  .footer-link {
+    color: var(--fg-muted);
+    text-decoration: none;
+    font-size: 12px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    transition: all 0.15s;
+  }
+
+  .footer-link:hover {
+    color: var(--fg);
+    background: var(--bg-tertiary);
+    text-decoration: underline;
   }
 
   .skill-count {

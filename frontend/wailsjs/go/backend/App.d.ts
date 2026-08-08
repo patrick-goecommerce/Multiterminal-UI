@@ -103,6 +103,8 @@ export function GetOrCreateIssueBranch(arg1:string,arg2:number,arg3:string):Prom
 
 export function GetQueue(arg1:number):Promise<Array<backend.QueueItem>>;
 
+export function GetRepoURL(arg1:string):Promise<string>;
+
 export function GetResolvedClaudePath():Promise<string>;
 
 export function GetStatusLineStatus():Promise<backend.StatusLineStatus>;
