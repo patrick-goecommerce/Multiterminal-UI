@@ -35,11 +35,27 @@ func (a *AppService) SaveConfig(cfg config.Config) error {
 	return nil
 }
 
-// GetWorkingDir returns the effective working directory (from config or cwd).
+// GetWorkingDir returns the effective working directory: the last folder the
+// user opened, falling back to the configured DefaultDir, then the process cwd.
 func (a *AppService) GetWorkingDir() string {
+	if a.cfg.LastOpenedDir != "" {
+		return a.cfg.LastOpenedDir
+	}
 	if a.cfg.DefaultDir != "" {
 		return a.cfg.DefaultDir
 	}
 	dir, _ := os.Getwd()
 	return dir
+}
+
+// RecordOpenedDir persists dir as the last opened project folder, so future
+// launches (and the SelectDirectory picker) default to it.
+func (a *AppService) RecordOpenedDir(dir string) {
+	if dir == "" || dir == a.cfg.LastOpenedDir {
+		return
+	}
+	a.cfg.LastOpenedDir = dir
+	if err := config.Save(a.cfg); err != nil {
+		log.Printf("[RecordOpenedDir] save error: %v", err)
+	}
 }
