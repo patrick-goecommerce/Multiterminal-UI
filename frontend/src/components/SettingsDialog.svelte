@@ -51,6 +51,11 @@
   let autoNamingEnabled = $config.auto_naming?.enabled ?? true;
   let autoNamingModel = $config.auto_naming?.model || 'claude-haiku-4-5';
 
+  let mcpEnabled = ($config as any).mcp_server?.enabled ?? true;
+  let mcpPort = ($config as any).mcp_server?.port ?? 51533;
+  let mcpLivePort = 0;
+  let mcpCopied = false;
+
   let fontFamily = $config.font_family || '';
   let fontSize = $config.font_size || 10;
   let savedFontFamily = fontFamily;
@@ -116,6 +121,9 @@
     audioErrorSound = $config.audio?.error_sound || '';
     autoNamingEnabled = $config.auto_naming?.enabled ?? true;
     autoNamingModel = $config.auto_naming?.model || 'claude-haiku-4-5';
+    mcpEnabled = ($config as any).mcp_server?.enabled ?? true;
+    mcpPort = ($config as any).mcp_server?.port ?? 51533;
+    App.GetMCPServerPort().then((p: number) => { mcpLivePort = p; }).catch(() => {});
     fontFamily = $config.font_family || '';
     fontSize = $config.font_size || 10;
     savedFontFamily = fontFamily;
@@ -248,6 +256,15 @@
     playBell('done', audioVolume, audioDoneSound || undefined);
   }
 
+  function copyMcpConfig() {
+    const port = mcpLivePort || mcpPort;
+    const cmd = `claude mcp add --transport http mtui http://127.0.0.1:${port}/mcp`;
+    navigator.clipboard.writeText(cmd).then(() => {
+      mcpCopied = true;
+      setTimeout(() => { mcpCopied = false; }, 1500);
+    }).catch(() => {});
+  }
+
   async function save() {
     const updated = {
       ...$config,
@@ -286,6 +303,10 @@
         enabled: autoNamingEnabled,
         model: autoNamingModel,
       },
+      mcp_server: {
+        enabled: mcpEnabled,
+        port: mcpPort,
+      },
     };
     config.set(updated);
     try { await App.SaveConfig(updated); } catch (err) { console.error('[SettingsDialog] SaveConfig failed:', err); }
@@ -315,6 +336,8 @@
     audioErrorSound = '';
     autoNamingEnabled = true;
     autoNamingModel = 'claude-haiku-4-5';
+    mcpEnabled = true;
+    mcpPort = 51533;
     orchMaxParallel = 3;
     orchAutoMerge = false;
     orchAutoStart = false;
@@ -558,6 +581,28 @@
           </button>
           <span class="toggle-label">{autoNamingEnabled ? 'Aktiv' : 'Inaktiv'}</span>
         </div>
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Agent-Steuerung (MCP-Server)</label>
+        <p class="setting-desc">Erlaubt einem Agent in einem MTUI-Pane (z.B. Claude Code), selbstständig neue Sessions zu öffnen, ihnen Prompts zu schicken und sie wieder zu schließen &mdash; z.B. um eine Aufgabe an Codex oder Gemini zu delegieren. Nur lokal erreichbar (127.0.0.1).</p>
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <button class="toggle-btn" class:toggle-on={mcpEnabled} on:click={() => mcpEnabled = !mcpEnabled}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{mcpEnabled ? 'Aktiv' : 'Inaktiv'}</span>
+        </div>
+        {#if mcpEnabled}
+          <div class="orch-field">
+            <label class="orch-label" for="mcp-port">Port</label>
+            <input id="mcp-port" type="number" class="claude-input" bind:value={mcpPort} min="1" max="65535" />
+          </div>
+          <div class="claude-row" style="margin-top: 8px;">
+            <input type="text" class="claude-input" readonly value={`http://127.0.0.1:${mcpLivePort || mcpPort}/mcp`} />
+            <button class="claude-btn" on:click={copyMcpConfig} title="claude mcp add-Befehl kopieren">{mcpCopied ? 'Kopiert!' : 'Config kopieren'}</button>
+          </div>
+        {/if}
       </div>
 
       <div class="setting-group">

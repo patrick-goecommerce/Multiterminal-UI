@@ -93,6 +93,8 @@ export function GetLocalBranches(arg1:string):Promise<Array<string>>;
 
 export function GetLogPath():Promise<string>;
 
+export function GetMCPServerPort():Promise<number>;
+
 export function GetMergeConflicts(arg1:string):Promise<backend.MergeConflictInfo>;
 
 export function GetOpenWindows():Promise<Array<{id: string, tabIds: string[]}>>;
