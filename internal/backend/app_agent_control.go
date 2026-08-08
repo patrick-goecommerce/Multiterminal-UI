@@ -130,6 +130,20 @@ func (a *AppService) SendAgentInput(sessionID int, text string) error {
 	return nil
 }
 
+// ReadAgentSessionOutput returns the session's current visible screen
+// content as plain text (VT100 buffer rendered without escape sequences).
+// This is the only way an MCP-driven agent can see what a delegated session
+// actually produced — list_sessions only reports run state.
+func (a *AppService) ReadAgentSessionOutput(sessionID int) (string, error) {
+	a.mu.Lock()
+	sess, exists := a.sessions[sessionID]
+	a.mu.Unlock()
+	if !exists {
+		return "", fmt.Errorf("session %d not found", sessionID)
+	}
+	return sess.Screen.PlainText(), nil
+}
+
 // CloseAgentSession closes a running session. reason is logged only.
 func (a *AppService) CloseAgentSession(sessionID int, reason string) error {
 	a.mu.Lock()

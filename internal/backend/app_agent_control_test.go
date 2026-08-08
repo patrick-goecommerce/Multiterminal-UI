@@ -62,6 +62,13 @@ func TestCloseAgentSessionUnknownSession(t *testing.T) {
 	}
 }
 
+func TestReadAgentSessionOutputUnknownSession(t *testing.T) {
+	a := newTestAgentControlService()
+	if _, err := a.ReadAgentSessionOutput(999); err == nil {
+		t.Fatal("expected error for unknown session, got nil")
+	}
+}
+
 func TestListAgentSessionsEmpty(t *testing.T) {
 	a := newTestAgentControlService()
 	got := a.ListAgentSessions()

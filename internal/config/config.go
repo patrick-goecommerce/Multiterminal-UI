@@ -385,6 +385,12 @@ func configPath() string {
 // Load reads the config file, falling back to defaults for missing fields.
 func Load() Config {
 	cfg := DefaultConfig()
+	// Saved before Unmarshal, which overwrites these wholesale (even with an
+	// empty list) if the key is present in the YAML at all — the fallback
+	// below needs the real defaults, not whatever Unmarshal left behind.
+	defaultClaudeModels := cfg.ClaudeModels
+	defaultCodexModels := cfg.CodexModels
+	defaultGeminiModels := cfg.GeminiModels
 
 	p := configPath()
 	if p == "" {
@@ -399,6 +405,21 @@ func Load() Config {
 	}
 
 	_ = yaml.Unmarshal(data, &cfg)
+
+	// An empty (as opposed to absent) claude/codex/gemini_models list in the
+	// YAML — e.g. from a config file predating one of these fields, or any
+	// past save that round-tripped an empty array — would otherwise persist
+	// forever: yaml.Unmarshal only fills in defaults for missing keys, not
+	// present-but-empty ones. Self-heal it back to the built-in model list.
+	if len(cfg.ClaudeModels) == 0 {
+		cfg.ClaudeModels = defaultClaudeModels
+	}
+	if len(cfg.CodexModels) == 0 {
+		cfg.CodexModels = defaultCodexModels
+	}
+	if len(cfg.GeminiModels) == 0 {
+		cfg.GeminiModels = defaultGeminiModels
+	}
 
 	// Apply sensible bounds
 	if cfg.MaxPanesPerTab < 1 {

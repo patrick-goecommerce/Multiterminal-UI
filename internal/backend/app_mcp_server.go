@@ -39,6 +39,11 @@ func (a *AppService) startMCPServer(port int) (int, error) {
 		mcp.WithString("text", mcp.Required(), mcp.Description("Text to send")),
 	), a.handleSendInput)
 
+	mcpSrv.AddTool(mcp.NewTool("read_output",
+		mcp.WithDescription("Read the current visible terminal output of an MTUI session as plain text. Use this after send_input or open_session (with a prompt) to see what the delegated CLI actually produced — list_sessions only reports whether it's still running."),
+		mcp.WithNumber("session_id", mcp.Required(), mcp.Description("Session id returned by open_session or list_sessions")),
+	), a.handleReadOutput)
+
 	mcpSrv.AddTool(mcp.NewTool("close_session",
 		mcp.WithDescription("Close a running MTUI session."),
 		mcp.WithNumber("session_id", mcp.Required(), mcp.Description("Session id to close")),
@@ -107,6 +112,18 @@ func (a *AppService) handleSendInput(_ context.Context, req mcp.CallToolRequest)
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	return mcp.NewToolResultText(fmt.Sprintf("Queued input for session %d", sessionID)), nil
+}
+
+func (a *AppService) handleReadOutput(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	sessionID, err := req.RequireInt("session_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	output, err := a.ReadAgentSessionOutput(sessionID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return mcp.NewToolResultText(output), nil
 }
 
 func (a *AppService) handleCloseSession(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

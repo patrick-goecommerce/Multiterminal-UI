@@ -146,6 +146,7 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 			log.Printf("[mcp-server] failed to start: %v", err)
 		} else {
 			a.mcpServerPort = port
+			go a.ensureMCPRegisteredWithClaude(port)
 		}
 	}
 
