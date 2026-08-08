@@ -871,12 +871,16 @@
     if (!tab || tab.panes.length > 0) return;
     try {
       const dir = await App.SelectDirectory(tab.dir);
-      if (dir) tabStore.setTabDir(tab.id, dir);
+      if (dir) {
+        tabStore.setTabDir(tab.id, dir);
+        App.RecordOpenedDir(dir).catch(() => {});
+      }
     } catch (err) { console.error('[handleChangeDir]', err); }
   }
 
   function handleProjectCreate(e: CustomEvent<{ name: string; dir: string }>) {
     tabStore.addTab(e.detail.name, e.detail.dir);
+    App.RecordOpenedDir(e.detail.dir).catch(() => {});
   }
 
   async function handleSetupFinish(e: CustomEvent<{ language: Language; claudeEnabled: boolean; codexEnabled: boolean; geminiEnabled: boolean }>) {

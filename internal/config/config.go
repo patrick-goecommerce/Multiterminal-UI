@@ -15,6 +15,11 @@ import (
 type Config struct {
 	DefaultShell          string         `yaml:"default_shell" json:"default_shell"`
 	DefaultDir            string         `yaml:"default_dir" json:"default_dir"`
+	// LastOpenedDir is updated automatically whenever the user opens or
+	// creates a project folder. It takes precedence over DefaultDir when
+	// resolving the working directory for a fresh app start (see
+	// GetWorkingDir), so MTUI starts back up where the user left off.
+	LastOpenedDir         string         `yaml:"last_opened_dir" json:"last_opened_dir"`
 	Theme                 string         `yaml:"theme" json:"theme"`
 	TerminalColor         string         `yaml:"terminal_color" json:"terminal_color"`
 	MaxPanesPerTab        int            `yaml:"max_panes_per_tab" json:"max_panes_per_tab"`

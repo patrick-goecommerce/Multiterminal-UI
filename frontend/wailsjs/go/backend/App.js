@@ -347,6 +347,10 @@ export function SearchFiles(arg1, arg2) {
   return $Call.ByID(4086168286, arg1, arg2);
 }
 
+export function RecordOpenedDir(arg1) {
+  return $Call.ByID(873803662, arg1);
+}
+
 export function SelectDirectory(arg1) {
   return $Call.ByID(1609319006, arg1);
 }
