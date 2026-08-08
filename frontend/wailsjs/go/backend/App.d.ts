@@ -59,6 +59,8 @@ export function EnableLogging(arg1:boolean):Promise<string>;
 
 export function GetAppVersion():Promise<string>;
 
+export function ApplyUpdate():Promise<void>;
+
 export function CommitStaged(arg1:string,arg2:string):Promise<void>;
 
 export function GenerateCommitSuggestion(arg1:string,arg2:Array<string>):Promise<backend.CommitSuggestion>;

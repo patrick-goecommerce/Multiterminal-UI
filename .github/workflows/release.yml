@@ -52,12 +52,19 @@ jobs:
           mv build/bin/mtui-portable.exe "mtui-portable-${{ steps.version.outputs.version }}.exe"
           mv installer-output/mtui-setup-${{ steps.version.outputs.version }}.exe .
 
+      - name: Compute SHA256 checksums
+        shell: bash
+        run: |
+          sha256sum "mtui-portable-${{ steps.version.outputs.version }}.exe" > "mtui-portable-${{ steps.version.outputs.version }}.exe.sha256"
+          sha256sum "mtui-setup-${{ steps.version.outputs.version }}.exe" > "mtui-setup-${{ steps.version.outputs.version }}.exe.sha256"
+
       - uses: actions/upload-artifact@v4
         with:
           name: mtui-windows
           path: |
             mtui-portable-*.exe
             mtui-setup-*.exe
+            *.sha256
 
   release:
     needs: [build-windows]
@@ -75,3 +82,4 @@ jobs:
           files: |
             artifacts/mtui-portable-*.exe
             artifacts/mtui-setup-*.exe
+            artifacts/*.sha256
