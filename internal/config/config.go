@@ -236,17 +236,16 @@ func DefaultConfig() Config {
 			AutoCloseIssue:      false,
 			IncludeCostInReport: true,
 		},
-		// "opus"/"sonnet"/"fable" are the claude CLI's own aliases and always
-		// resolve to the latest model in that tier (per `claude --help`), so
-		// these never need updating as Anthropic ships new versions. Haiku
-		// has no such alias yet (still on the pre-"5" naming scheme), so it's
-		// pinned to a concrete model ID that must be bumped by hand.
+		// "opus"/"sonnet"/"fable"/"haiku" are the claude CLI's own aliases and
+		// always resolve to the latest model in that tier (per `claude --help`
+		// and confirmed in practice for haiku too), so this list never needs
+		// updating as Anthropic ships new versions.
 		ClaudeModels: []ModelEntry{
 			{Label: "Default", ID: ""},
 			{Label: "Opus (latest)", ID: "opus"},
 			{Label: "Sonnet (latest)", ID: "sonnet"},
 			{Label: "Fable (latest)", ID: "fable"},
-			{Label: "Haiku 4.5", ID: "claude-haiku-4-5-20251001"},
+			{Label: "Haiku (latest)", ID: "haiku"},
 		},
 		Commands: []CommandEntry{
 			{Name: "Commit & Push", Text: "git add -A && git commit -m 'update' && git push"},

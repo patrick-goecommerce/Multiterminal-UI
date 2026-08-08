@@ -123,7 +123,7 @@ export const config = writable<AppConfig>({
     { label: 'Opus (latest)', id: 'opus' },
     { label: 'Sonnet (latest)', id: 'sonnet' },
     { label: 'Fable (latest)', id: 'fable' },
-    { label: 'Haiku 4.5', id: 'claude-haiku-4-5-20251001' },
+    { label: 'Haiku (latest)', id: 'haiku' },
   ],
   commit_reminder_minutes: 30,
   commands: [
