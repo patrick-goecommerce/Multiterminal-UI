@@ -1236,6 +1236,8 @@
               panes={tab.panes}
               active={tab.id === $activeTab?.id}
               tabDir={tab.dir || ''}
+              colFractions={tab.colFractions}
+              rowFractions={tab.rowFractions}
               on:closePane={handleClosePane}
               on:maximizePane={handleMaximizePane}
               on:focusPane={handleFocusPane}

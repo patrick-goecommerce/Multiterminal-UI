@@ -24,6 +24,12 @@ type SavedTab struct {
 	Dir      string      `json:"dir"`
 	FocusIdx int         `json:"focus_idx"`
 	Panes    []SavedPane `json:"panes"`
+	// ColFractions/RowFractions are the pane-grid's relative column-width /
+	// row-height weights (see PaneGrid.svelte resize handles). Only applied
+	// on restore if their length matches the tab's derived grid shape;
+	// otherwise the grid falls back to equal fractions.
+	ColFractions []float64 `json:"col_fractions,omitempty"`
+	RowFractions []float64 `json:"row_fractions,omitempty"`
 }
 
 // SavedPane captures enough information to re-launch a single pane.

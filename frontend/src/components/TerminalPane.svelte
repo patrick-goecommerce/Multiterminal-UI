@@ -361,7 +361,7 @@
     // JS thread from N concurrent rAF loops, ResizeObservers and VT100 parse jobs.
     function mountTerminal() {
       if (termInstance) return; // idempotent guard
-      termInstance = createTerminal($currentTheme, handleLink, $config.font_family, ($config.font_size || 10) + (pane.zoomDelta || 0));
+      termInstance = createTerminal($currentTheme, handleLink, $config.font_family, ($config.font_size || 10) + (pane.zoomDelta || 0), $config.terminal_scrollback);
       termInstance.terminal.open(containerEl);
       // WebGL renderer: offloads rendering to GPU, significantly faster than DOM renderer.
       // Must be called after open() — needs a live canvas element in the DOM.
@@ -459,6 +459,10 @@
     if (termInstance.terminal.options.fontSize !== clampedSize) {
       termInstance.terminal.options.fontSize = clampedSize;
       needsFit = true;
+    }
+    const newScrollback = $config.terminal_scrollback || 10000;
+    if (termInstance.terminal.options.scrollback !== newScrollback) {
+      termInstance.terminal.options.scrollback = newScrollback;
     }
     if (needsFit) {
       termInstance.fitAddon.fit();
