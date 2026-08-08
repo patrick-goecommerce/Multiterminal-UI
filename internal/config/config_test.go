@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -304,6 +305,43 @@ func TestSavedPane_UserRenamedRoundTrip(t *testing.T) {
 	}
 	if loaded.Tabs[0].Panes[1].UserRenamed {
 		t.Error("pane 1 UserRenamed should be false")
+	}
+}
+
+func TestSavedTab_GridFractionsRoundTrip(t *testing.T) {
+	state := SessionState{
+		Tabs: []SavedTab{{
+			Name:         "T",
+			ColFractions: []float64{1.5, 1, 0.75},
+			RowFractions: []float64{1, 2},
+			Panes:        []SavedPane{{Name: "p1"}},
+		}},
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var loaded SessionState
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(loaded.Tabs[0].ColFractions) != 3 || loaded.Tabs[0].ColFractions[0] != 1.5 {
+		t.Errorf("ColFractions = %v, want [1.5 1 0.75]", loaded.Tabs[0].ColFractions)
+	}
+	if len(loaded.Tabs[0].RowFractions) != 2 || loaded.Tabs[0].RowFractions[1] != 2 {
+		t.Errorf("RowFractions = %v, want [1 2]", loaded.Tabs[0].RowFractions)
+	}
+}
+
+func TestSavedTab_GridFractionsOmittedWhenEmpty(t *testing.T) {
+	state := SessionState{Tabs: []SavedTab{{Name: "T", Panes: []SavedPane{{Name: "p1"}}}}}
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(data), "col_fractions") || strings.Contains(string(data), "row_fractions") {
+		t.Errorf("expected col_fractions/row_fractions to be omitted when empty, got: %s", data)
 	}
 }
 

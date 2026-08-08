@@ -53,7 +53,6 @@ const baseOptions: Partial<import('@xterm/xterm').ITerminalOptions> = {
   cursorBlink: false,
   cursorStyle: 'bar',
   cursorInactiveStyle: 'none',
-  scrollback: 10000,
   allowProposedApi: true,
 };
 
@@ -202,11 +201,13 @@ export function createTerminal(
   linkHandler?: LinkHandler,
   fontFamily?: string,
   fontSize?: number,
+  scrollback?: number,
 ): TerminalInstance {
   const terminal = new Terminal({
     ...baseOptions,
     fontFamily: buildFontFamily(fontFamily || ''),
     fontSize: fontSize || 10,
+    scrollback: scrollback || 10000,
     theme: terminalThemes[theme] || terminalThemes.dark,
   });
 

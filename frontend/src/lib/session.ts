@@ -80,6 +80,15 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
           console.error('[restoreSession] failed to create session:', err);
         }
       }
+      // Restore pane-grid column/row sizing (resize handles). The store's
+      // own reactive length-check (PaneGrid.svelte) is the actual safety
+      // net if the pane count doesn't match what was saved.
+      const savedCols = (savedTab as any).col_fractions;
+      const savedRows = (savedTab as any).row_fractions;
+      if (savedCols || savedRows) {
+        tabStore.setGridFractions(tabId, savedCols, savedRows);
+      }
+
       // Restore focused pane (addPane always focuses the last-added pane)
       if (savedTab.focus_idx >= 0) {
         const curState = tabStore.getState();
@@ -130,6 +139,8 @@ export function saveSession(): void {
     dir: tab.dir,
     focus_idx: tab.panes.findIndex((p) => p.focused),
     panes: tab.panes.map(paneToSaved),
+    col_fractions: tab.colFractions,
+    row_fractions: tab.rowFractions,
   }));
   App.SaveTabs({ active_tab: Math.max(activeIdx, 0), tabs } as any);
 }

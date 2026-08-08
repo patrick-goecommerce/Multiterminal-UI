@@ -69,6 +69,12 @@ export interface Tab {
   focusedPaneId: string;
   _highlight?: boolean;
   unreadActivity: 'waitingPermission' | 'waitingAnswer' | 'error' | 'active' | 'done' | null;
+  /** Relative column-width / row-height weights for the pane grid (resize
+   *  handles). Applied only while their length matches the tab's current
+   *  grid shape (see PaneGrid.svelte) — a mismatch (pane added/removed)
+   *  falls back to equal fractions rather than a stale/misaligned layout. */
+  colFractions?: number[];
+  rowFractions?: number[];
 }
 
 /** Whether closing this tab should first ask for confirmation (it still has open panes). */
@@ -303,6 +309,16 @@ function createTabStore() {
         if (!tab) return state;
         const pane = tab.panes.find((p) => p.id === paneId);
         if (pane) pane.zoomDelta = delta;
+        return state;
+      });
+    },
+
+    setGridFractions(tabId: string, cols: number[] | undefined, rows: number[] | undefined) {
+      update((state) => {
+        const tab = state.tabs.find((t) => t.id === tabId);
+        if (!tab) return state;
+        tab.colFractions = cols;
+        tab.rowFractions = rows;
         return state;
       });
     },

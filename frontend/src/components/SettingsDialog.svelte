@@ -65,6 +65,7 @@
   let savedFontFamily = fontFamily;
   let savedFontSize = fontSize;
   let availableFonts: { name: string; available: boolean }[] = [];
+  let terminalScrollback = ($config as any).terminal_scrollback || 10000;
 
   let orchMaxParallel = $config.orchestrator?.max_parallel_agents ?? 3;
   let orchAutoMerge = $config.orchestrator?.default_auto_merge ?? false;
@@ -136,6 +137,7 @@
     fontSize = $config.font_size || 10;
     savedFontFamily = fontFamily;
     savedFontSize = fontSize;
+    terminalScrollback = ($config as any).terminal_scrollback || 10000;
     availableFonts = MONOSPACE_FONTS.map(name => ({
       name,
       available: isFontAvailable(name),
@@ -303,6 +305,7 @@
       claude_command: claudeCommand,
       font_family: fontFamily,
       font_size: fontSize,
+      terminal_scrollback: terminalScrollback,
       audio: {
         enabled: audioEnabled,
         volume: audioVolume,
@@ -354,6 +357,7 @@
     applyTheme('dark', '#39ff14');
     fontFamily = '';
     fontSize = 10;
+    terminalScrollback = 10000;
     config.update(c => ({ ...c, font_family: '', font_size: 10 }));
     audioEnabled = true;
     audioWhenFocused = true;
@@ -518,6 +522,16 @@
         <select id="font-size" class="theme-select" bind:value={fontSize}>
           {#each [8, 10, 12, 14, 16, 18, 20] as size}
             <option value={size}>{size}px</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="terminal-scrollback">Scrollback-Puffer</label>
+        <p class="setting-desc">Anzahl der Zeilen Terminal-Verlauf pro Pane. Gilt sofort für offene Panes.</p>
+        <select id="terminal-scrollback" class="theme-select" bind:value={terminalScrollback}>
+          {#each [1000, 2500, 5000, 10000, 25000, 50000, 100000] as size}
+            <option value={size}>{size.toLocaleString('de-DE')} Zeilen</option>
           {/each}
         </select>
       </div>

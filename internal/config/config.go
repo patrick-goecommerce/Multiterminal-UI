@@ -73,6 +73,9 @@ type Config struct {
 	// periodic check every N minutes. Manual checks (Settings button) always
 	// work regardless of this value.
 	AutoUpdateCheckMinutes int           `yaml:"auto_update_check_minutes" json:"auto_update_check_minutes"`
+	// TerminalScrollback is the xterm.js scrollback buffer size (lines kept
+	// per pane). Must be one of validScrollbackSizes; defaults to 10000.
+	TerminalScrollback    int           `yaml:"terminal_scrollback" json:"terminal_scrollback"`
 }
 
 // MCPServerSettings configures the local MCP server that lets an AI agent
@@ -300,6 +303,7 @@ func DefaultConfig() Config {
 		},
 		UpdateChannel:          "stable",
 		AutoUpdateCheckMinutes: 0,
+		TerminalScrollback:     10000,
 	}
 }
 
@@ -432,6 +436,11 @@ func Load() Config {
 	validFontSizes := map[int]bool{8: true, 10: true, 12: true, 14: true, 16: true, 18: true, 20: true}
 	if !validFontSizes[cfg.FontSize] {
 		cfg.FontSize = 10
+	}
+
+	validScrollbackSizes := map[int]bool{1000: true, 2500: true, 5000: true, 10000: true, 25000: true, 50000: true, 100000: true}
+	if !validScrollbackSizes[cfg.TerminalScrollback] {
+		cfg.TerminalScrollback = 10000
 	}
 
 	if cfg.Favorites == nil {

@@ -888,6 +888,7 @@ export namespace config {
 	    auto_naming: AutoNamingSettings;
 	    update_channel: string;
 	    auto_update_check_minutes: number;
+	    terminal_scrollback: number;
 
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -923,6 +924,7 @@ export namespace config {
 	        this.auto_naming = this.convertValues(source["auto_naming"], AutoNamingSettings);
 	        this.update_channel = source["update_channel"];
 	        this.auto_update_check_minutes = source["auto_update_check_minutes"];
+	        this.terminal_scrollback = source["terminal_scrollback"];
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -978,17 +980,21 @@ export namespace config {
 	    dir: string;
 	    focus_idx: number;
 	    panes: SavedPane[];
-	
+	    col_fractions?: number[];
+	    row_fractions?: number[];
+
 	    static createFrom(source: any = {}) {
 	        return new SavedTab(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.dir = source["dir"];
 	        this.focus_idx = source["focus_idx"];
 	        this.panes = this.convertValues(source["panes"], SavedPane);
+	        this.col_fractions = source["col_fractions"];
+	        this.row_fractions = source["row_fractions"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
