@@ -107,6 +107,32 @@ type ModelEntry struct {
 	ID    string `yaml:"id" json:"id"`
 }
 
+// legacyClaudeModelMap maps Claude model IDs that were previously baked into
+// every user's ~/.multiterminal.yaml via DefaultConfig (and are no longer
+// valid model names) to their current replacement. Config.Save persists the
+// full ClaudeModels list, so once written it never picks up later
+// DefaultConfig changes on its own — this migration is applied on every
+// Load() so existing installs get model-ID fixes automatically.
+var legacyClaudeModelMap = map[string]ModelEntry{
+	"claude-opus-4-6":            {Label: "Opus (latest)", ID: "opus"},
+	"claude-sonnet-4-5-20250929": {Label: "Sonnet (latest)", ID: "sonnet"},
+	"claude-opus-5":              {Label: "Opus (latest)", ID: "opus"},
+	"claude-sonnet-5":            {Label: "Sonnet (latest)", ID: "sonnet"},
+	"claude-fable-5":             {Label: "Fable (latest)", ID: "fable"},
+	"claude-haiku-4-5-20251001":  {Label: "Haiku (latest)", ID: "haiku"},
+}
+
+// migrateLegacyClaudeModels rewrites any entries with a known-stale ID
+// in-place, leaving user-added custom entries untouched.
+func migrateLegacyClaudeModels(models []ModelEntry) []ModelEntry {
+	for i, m := range models {
+		if replacement, ok := legacyClaudeModelMap[m.ID]; ok {
+			models[i] = replacement
+		}
+	}
+	return models
+}
+
 // CommandEntry represents a user-defined command in the command palette.
 type CommandEntry struct {
 	Name string `yaml:"name" json:"name"`
@@ -371,6 +397,8 @@ func Load() Config {
 	}
 
 	_ = yaml.Unmarshal(data, &cfg)
+
+	cfg.ClaudeModels = migrateLegacyClaudeModels(cfg.ClaudeModels)
 
 	// Apply sensible bounds
 	if cfg.MaxPanesPerTab < 1 {

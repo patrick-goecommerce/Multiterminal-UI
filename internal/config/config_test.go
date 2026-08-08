@@ -53,6 +53,38 @@ func TestDefaultConfig_ModelEntries(t *testing.T) {
 	}
 }
 
+func TestMigrateLegacyClaudeModels(t *testing.T) {
+	// Simulates a ~/.multiterminal.yaml written before the alias-based model
+	// list existed (any of the historical DefaultConfig snapshots), plus a
+	// user-added custom entry that must survive untouched.
+	stale := []ModelEntry{
+		{Label: "Default", ID: ""},
+		{Label: "Opus 4.6", ID: "claude-opus-4-6"},
+		{Label: "Sonnet 4.5", ID: "claude-sonnet-4-5-20250929"},
+		{Label: "Haiku 4.5", ID: "claude-haiku-4-5-20251001"},
+		{Label: "My Custom Model", ID: "some-custom-id"},
+	}
+
+	got := migrateLegacyClaudeModels(stale)
+
+	want := []ModelEntry{
+		{Label: "Default", ID: ""},
+		{Label: "Opus (latest)", ID: "opus"},
+		{Label: "Sonnet (latest)", ID: "sonnet"},
+		{Label: "Haiku (latest)", ID: "haiku"},
+		{Label: "My Custom Model", ID: "some-custom-id"},
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("migrateLegacyClaudeModels() returned %d entries, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("entry %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ShouldRestoreSession
 // ---------------------------------------------------------------------------
