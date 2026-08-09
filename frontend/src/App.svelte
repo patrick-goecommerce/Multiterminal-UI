@@ -532,14 +532,21 @@
     conflictOperation = info.operation;
   }
 
+  // Shared by the periodic background check below and by SettingsDialog's
+  // manual "Jetzt nach Updates suchen" button (via the updateChecked event) —
+  // both need to feed the same App-level state that drives the footer's
+  // apply-update button, not just show a message locally.
+  function applyUpdateInfo(info: { updateAvailable: boolean; latestVersion: string; downloadURL: string; assetURL?: string; checksumURL?: string }) {
+    updateAvailable = info.updateAvailable;
+    latestVersion = info.latestVersion;
+    downloadURL = info.downloadURL;
+    canApplyUpdate = !!(info.assetURL && info.checksumURL);
+    if (updateAvailable) updateStatus = 'idle';
+  }
+
   async function checkForUpdates() {
     try {
-      const info = await App.CheckForUpdates();
-      updateAvailable = info.updateAvailable;
-      latestVersion = info.latestVersion;
-      downloadURL = info.downloadURL;
-      canApplyUpdate = !!(info.assetURL && info.checksumURL);
-      if (updateAvailable) updateStatus = 'idle';
+      applyUpdateInfo(await App.CheckForUpdates());
     } catch {
       // best-effort background check — ignore errors (network, rate-limit, etc.)
     }
@@ -1267,7 +1274,7 @@
   <Footer {branch} {repoURL} {totalCost} {tabInfo} {commitAgeMinutes} {conflictCount} {conflictOperation} {updateAvailable} {latestVersion} {downloadURL} {canApplyUpdate} {updateStatus} {updateError} {appVersion} {projectInitialized} skillCount={activeSkillCount} on:editSkills={openSkillEditor} on:applyUpdate={applyUpdate} />
   <LaunchDialog visible={showLaunchDialog} issueContext={launchIssueContext} {claudeDetected} {codexDetected} {geminiDetected} on:launch={handleLaunch} on:openSettings={() => { showLaunchDialog = false; showSettingsDialog = true; }} on:close={() => { showLaunchDialog = false; launchIssueContext = null; }} />
   <ProjectDialog visible={showProjectDialog} on:create={handleProjectCreate} on:close={() => (showProjectDialog = false)} />
-  <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} try { resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex'; codexDetected = await App.IsCodexDetected(); } catch {} try { resolvedGeminiPath = (await App.GetResolvedGeminiPath()) || 'gemini'; geminiDetected = await App.IsGeminiDetected(); } catch {} }} />
+  <SettingsDialog visible={showSettingsDialog} on:close={() => (showSettingsDialog = false)} on:updateChecked={(e) => applyUpdateInfo(e.detail)} on:saved={async () => { try { resolvedClaudePath = (await App.GetResolvedClaudePath()) || 'claude'; claudeDetected = await App.IsClaudeDetected(); } catch {} try { resolvedCodexPath = (await App.GetResolvedCodexPath()) || 'codex'; codexDetected = await App.IsCodexDetected(); } catch {} try { resolvedGeminiPath = (await App.GetResolvedGeminiPath()) || 'gemini'; geminiDetected = await App.IsGeminiDetected(); } catch {} }} />
   <CommandPalette visible={showCommandPalette} on:send={handleSendCommand} on:close={() => (showCommandPalette = false)} />
   <SetupDialog visible={showSetupDialog} {claudeDetected} {codexDetected} {geminiDetected} on:finish={handleSetupFinish} on:langChange={handleSetupLangChange} on:close={() => { showSetupDialog = false; }} />
   <CrashDialog visible={showCrashDialog} on:enable={handleCrashEnable} on:dismiss={() => (showCrashDialog = false)} />

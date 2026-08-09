@@ -71,7 +71,7 @@ func (a *AppService) CheckForUpdates() UpdateInfo {
 
 	channel := a.cfg.UpdateChannel
 	if channel == "" {
-		channel = "stable"
+		channel = "alpha"
 	}
 
 	release, err := resolveLatestRelease(channel)

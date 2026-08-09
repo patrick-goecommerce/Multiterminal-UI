@@ -297,6 +297,7 @@
     manualCheckMessage = '';
     try {
       const info = await App.CheckForUpdates();
+      dispatch('updateChecked', info);
       manualCheckStatus = 'done';
       manualCheckMessage = info.updateAvailable
         ? `Update v${info.latestVersion} verfügbar`
