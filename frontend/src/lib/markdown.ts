@@ -137,6 +137,9 @@ function renderInline(text: string): string {
     /\[([^\]]+)\]\(([^)]+)\)/g,
     (match, label, url) => {
       if (!/^(https?:|mailto:)/i.test(url)) return label;
+      // target="_blank" only guards the worst case (an in-place navigation that
+      // would replace the app UI). Clicks are caught by the global interceptor
+      // in lib/external-links.ts and handed to the OS default browser.
       return `<a href="${url}" class="md-link" target="_blank" rel="noopener">${label}</a>`;
     }
   );

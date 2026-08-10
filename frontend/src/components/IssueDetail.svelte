@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { t } from '../stores/i18n';
-  import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
+  import { openExternal } from '../lib/external-links';
 
   interface IssueDetail {
     number: number;
@@ -48,7 +48,7 @@
       {issue.state === 'OPEN' ? 'Open' : 'Closed'}
     </button>
     {#if issue.url}
-      <button class="edit-btn" on:click={() => BrowserOpenURL(issue.url)} title={$t('issues.openInBrowser')}>
+      <button class="edit-btn" on:click={() => openExternal(issue.url)} title={$t('issues.openInBrowser')}>
         <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
           <path d="M3.75 2h3.5a.75.75 0 010 1.5h-3.5a.25.25 0 00-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 00.25-.25v-3.5a.75.75 0 011.5 0v3.5A1.75 1.75 0 0112.25 14h-8.5A1.75 1.75 0 012 12.25v-8.5C2 2.784 2.784 2 3.75 2zm6.854-.22a.75.75 0 01.22.53v4.25a.75.75 0 01-1.5 0V3.56L6.22 6.72a.75.75 0 01-1.06-1.06l3.1-3.1H5.31a.75.75 0 010-1.5h4.25a.75.75 0 01.53.22z"/>
         </svg>
