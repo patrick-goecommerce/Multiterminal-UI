@@ -11,7 +11,8 @@
   import { currentTheme } from '../stores/theme';
   import { config } from '../stores/config';
   import * as App from '../../wailsjs/go/backend/App';
-  import { EventsOn, BrowserOpenURL } from '../../wailsjs/runtime/runtime';
+  import { EventsOn } from '../../wailsjs/runtime/runtime';
+  import { openExternal } from '../lib/external-links';
   import { isUrl, LOCALHOST_REGEX } from '../lib/links';
   import QueuePanel from './QueuePanel.svelte';
   import PaneTitlebar from './PaneTitlebar.svelte';
@@ -57,7 +58,7 @@
 
   function handleLink(_event: MouseEvent, uri: string) {
     if (isUrl(uri)) {
-      BrowserOpenURL(uri);
+      openExternal(uri);
     } else {
       // Strip :line:col suffix so the sidebar gets a clean file path
       const path = uri.replace(/:\d+(:\d+)?$/, '');
@@ -331,7 +332,7 @@
             if (!seenLocalhostUrls.has(url)) {
               seenLocalhostUrls.add(url);
               if (mode === 'auto') {
-                BrowserOpenURL(url);
+                openExternal(url);
                 sendNotification($t('terminal.devServer'), $t('terminal.urlOpened', { url }));
               } else {
                 sendNotification($t('terminal.devServer'), $t('terminal.urlDetected', { url }));
