@@ -19,6 +19,40 @@ export interface SessionOpts {
   resumeId?: string;
   /** Launch a fresh claude session with a fixed id (`--session-id`) so it can be resumed later. */
   sessionId?: string;
+  /**
+   * MCP profile name for this pane (issue #179). Every claude pane spawns its
+   * own stdio child process per MCP server, so panes that need none should say so:
+   *   - MCP_PROFILE_GLOBAL ('' / undefined) — no MCP flags, inherit every
+   *     globally registered server (pre-#179 behaviour).
+   *   - MCP_PROFILE_NONE ('none') — `--strict-mcp-config` alone, which loads
+   *     ZERO servers and needs no file on disk.
+   *   - any other name — `--strict-mcp-config --mcp-config <mcpConfigPath>`.
+   */
+  mcpProfile?: string;
+  /** Path of the .mcp.json the backend resolved for mcpProfile (AppService.ResolveMCPProfile). */
+  mcpConfigPath?: string;
+}
+
+/** Inherit every globally registered MCP server (no MCP flags at all). */
+export const MCP_PROFILE_GLOBAL = '';
+/** Load zero MCP servers, without writing a temporary config file. */
+export const MCP_PROFILE_NONE = 'none';
+
+/**
+ * MCP flags for a claude pane. Mirrors app_pane_name.go's naming call:
+ * `--strict-mcp-config` with no `--mcp-config` loads ZERO MCP servers while
+ * leaving OAuth/model/settings intact.
+ *
+ * A named profile whose config path could not be resolved deliberately falls
+ * back to "no servers" rather than "all servers" — the pane the user asked to
+ * keep small must never silently become the expensive one.
+ */
+export function mcpArgs(profile?: string, configPath?: string): string[] {
+  const name = (profile || '').trim();
+  if (name === MCP_PROFILE_GLOBAL) return [];
+  if (name === MCP_PROFILE_NONE) return ['--strict-mcp-config'];
+  const path = (configPath || '').trim();
+  return path ? ['--strict-mcp-config', '--mcp-config', path] : ['--strict-mcp-config'];
 }
 
 /** Modes backed by the claude CLI, which understands --session-id / --resume. */
@@ -85,6 +119,8 @@ export function buildClaudeArgv(mode: PaneMode, model: string, claudeCmd: string
   if (opts && CLAUDE_MODES.has(mode)) {
     if (opts.resumeId) argv.push('--resume', opts.resumeId);
     else if (opts.sessionId) argv.push('--session-id', opts.sessionId);
+    // MCP flags are claude-CLI-only; codex/gemini don't understand them.
+    argv.push(...mcpArgs(opts.mcpProfile, opts.mcpConfigPath));
   }
   return argv;
 }

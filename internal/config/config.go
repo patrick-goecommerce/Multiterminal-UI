@@ -85,7 +85,15 @@ type Config struct {
 	// TerminalScrollback is the xterm.js scrollback buffer size (lines kept
 	// per pane). Must be one of validScrollbackSizes; defaults to 10000.
 	TerminalScrollback    int           `yaml:"terminal_scrollback" json:"terminal_scrollback"`
+	// MCPProfiles are the selectable per-pane MCP server sets (see MCPProfile).
+	MCPProfiles           []MCPProfile  `yaml:"mcp_profiles" json:"mcp_profiles"`
+	// DefaultMCPProfile preselects a profile in the launch dialog. Empty means
+	// MCPProfileGlobal (inherit every globally registered server).
+	DefaultMCPProfile     string        `yaml:"default_mcp_profile" json:"default_mcp_profile"`
 }
+
+// MCPProfile, the MCPProfile* sentinels and their helpers live in
+// mcp_profile.go.
 
 // MCPServerSettings configures the local MCP server that lets an AI agent
 // running inside an MTUI pane delegate work by opening, feeding, and closing
@@ -319,6 +327,15 @@ func DefaultConfig() Config {
 		UpdateChannel:          "alpha",
 		AutoUpdateCheckMinutes: 0,
 		TerminalScrollback:     10000,
+		// A single starter profile: MTUI's own MCP server is registered
+		// globally (see app_mcp_register.go), so "only mtui" is the smallest
+		// useful set for a pane that should not spawn npx-based servers.
+		MCPProfiles: []MCPProfile{
+			{Name: "Nur MTUI", Servers: []string{"mtui"}},
+		},
+		// Default to the pre-#179 behaviour so existing setups are unchanged
+		// until the user opts a pane (or this default) into a profile.
+		DefaultMCPProfile: MCPProfileGlobal,
 	}
 }
 
@@ -560,6 +577,8 @@ func Load() Config {
 	if cfg.AutoUpdateCheckMinutes < 0 {
 		cfg.AutoUpdateCheckMinutes = 0
 	}
+
+	normalizeMCPProfiles(&cfg)
 
 	return cfg
 }

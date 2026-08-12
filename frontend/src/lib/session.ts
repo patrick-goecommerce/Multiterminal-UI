@@ -1,5 +1,7 @@
 import { tabStore } from '../stores/tabs';
 import { INDEX_TO_MODE, MODE_TO_INDEX, buildClaudeArgv, genSessionId } from './claude';
+import type { SessionOpts } from './claude';
+import { resolveMCPConfigPath } from './mcp';
 import * as App from '../../wailsjs/go/backend/App';
 
 /** Restore saved tabs/panes from the backend session file. */
@@ -31,9 +33,11 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
         const display = (savedPane as any).display || 'terminal';
         const conversationId = (savedPane as any).conversation_id || '';
 
+        const mcpProfile = (savedPane as any).mcp_profile || '';
+
         if (display === 'chat') {
           // Chat panes have no PTY; the backend chat process restarts lazily on next message (with --resume).
-          const chatPaneId = tabStore.addPane(tabId, 0, savedPane.name, mode, savedPane.model || '', null, '', '', '', '', '', false, 'chat', conversationId);
+          const chatPaneId = tabStore.addPane(tabId, 0, savedPane.name, mode, savedPane.model || '', null, '', '', '', '', '', false, 'chat', conversationId, '', mcpProfile);
           if ((savedPane as any).user_renamed) tabStore.renamePane(tabId, chatPaneId, savedPane.name);
           continue;
         }
@@ -42,10 +46,9 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
         // context (and stay toggle-able to chat). Pin a fresh id if none saved.
         let claudeSessionId = (savedPane as any).claude_session_id || '';
         if (mode.startsWith('claude') && !claudeSessionId) claudeSessionId = genSessionId();
-        const sessOpts = mode.startsWith('claude')
+        const sessOpts: SessionOpts | undefined = mode.startsWith('claude')
           ? ((savedPane as any).claude_session_id ? { resumeId: claudeSessionId } : { sessionId: claudeSessionId })
           : undefined;
-        const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath, codexPath || 'codex', geminiPath || 'gemini', sessOpts);
 
         // Worktree panes MUST restore into their worktree, not the tab dir
         // (spec 4.2 — otherwise badge/finish point at the worktree while the
@@ -63,12 +66,22 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
             wtBranch = ''; wtTarget = '';
           }
         }
+
+        // The MCP profile is resolved against the pane's FINAL directory
+        // (project-scope .mcp.json lives in the worktree), so argv is built
+        // only after the worktree fallback above settled sessionDir.
+        if (sessOpts) {
+          sessOpts.mcpProfile = mcpProfile;
+          sessOpts.mcpConfigPath = await resolveMCPConfigPath(sessionDir, mcpProfile);
+        }
+        const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath, codexPath || 'codex', geminiPath || 'gemini', sessOpts);
+
         try {
           const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, mode);
           if (sessionId > 0) {
             const issueNum = (savedPane as any).issue_number || 0;
             const issueBranch = (savedPane as any).issue_branch || '';
-            const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch, wtPath && sessionDir === wtPath ? wtPath : '', wtBranch, wtTarget, false, 'terminal', '', claudeSessionId);
+            const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch, wtPath && sessionDir === wtPath ? wtPath : '', wtBranch, wtTarget, false, 'terminal', '', claudeSessionId, mcpProfile);
             if ((savedPane as any).user_renamed) tabStore.renamePane(tabId, paneId, savedPane.name);
             const zd = (savedPane as any).zoom_delta || 0;
             if (zd !== 0) {
@@ -122,6 +135,7 @@ export function paneToSaved(pane: any) {
     display: pane.display || 'terminal',
     conversation_id: pane.conversationId || '',
     claude_session_id: pane.claudeSessionId || '',
+    mcp_profile: pane.mcpProfile || '',
     user_renamed: pane.userRenamed || false,
     worktree_path: pane.worktreePath || '',
     worktree_branch: pane.branch || '',

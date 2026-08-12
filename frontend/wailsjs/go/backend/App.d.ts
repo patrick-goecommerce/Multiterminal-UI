@@ -177,6 +177,8 @@ export function ResumeSession(arg1:number):Promise<void>;
 
 export function IsSessionSuspended(arg1:number):Promise<boolean>;
 
+export function ResolveMCPProfile(arg1:string,arg2:string):Promise<string>;
+
 export function SaveConfig(arg1:config.Config):Promise<void>;
 
 export function SaveTabs(arg1:config.SessionState):Promise<void>;
