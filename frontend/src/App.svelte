@@ -33,6 +33,7 @@
   import { getWindowId, isMainWindow, getInitialTabs, getInitialView } from './lib/window';
   import { createGlobalKeyHandler } from './lib/shortcuts';
   import { sendNotification } from './lib/notifications';
+  import { installExternalLinkInterceptor } from './lib/external-links';
   import { restoreSession, saveSession } from './lib/session';
   import { startKeepAliveLoop } from './lib/keepalive';
   import { fetchBranch, fetchCommitAge, fetchConflicts, fetchIssueCount, fetchRepoURL } from './lib/git-polling';
@@ -160,6 +161,7 @@
   let storeUnsubscribe: (() => void) | null = null;
   let keepAliveCleanup: (() => void) | null = null;
   let chatEventsCleanup: (() => void) | null = null;
+  let linkInterceptorCleanup: (() => void) | null = null;
 
   const handleGlobalKeydown = createGlobalKeyHandler({
     onNewPane: () => { showLaunchDialog = true; },
@@ -184,6 +186,10 @@
   });
 
   onMount(async () => {
+    // Every window (main and detached) routes external links to the OS default
+    // browser — WebView2 would otherwise open them in a chrome-less popup.
+    linkInterceptorCleanup = installExternalLinkInterceptor();
+
     // Secondary window: load config (theme), restore detached tab, set up merge-on-close
     if (!_isMain) {
       // Apply theme from config
@@ -465,6 +471,7 @@
     if (storeUnsubscribe) storeUnsubscribe();
     if (keepAliveCleanup) keepAliveCleanup();
     if (chatEventsCleanup) chatEventsCleanup();
+    if (linkInterceptorCleanup) linkInterceptorCleanup();
     window.removeEventListener('beforeunload', saveSession);
     document.removeEventListener('keydown', handleGlobalKeydown);
   });

@@ -2,7 +2,7 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import { t } from '../stores/i18n';
   import * as App from '../../wailsjs/go/backend/App';
-  import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
+  import { openExternal } from '../lib/external-links';
   import IssueDetailComponent from './IssueDetail.svelte';
 
   export let dir: string = '';
@@ -224,7 +224,7 @@
           </div>
           <div class="issue-actions">
             {#if issue.url}
-              <button class="action-btn open-btn" on:click|stopPropagation={() => BrowserOpenURL(issue.url)} title={$t('issues.openInBrowser')}>&#8599;</button>
+              <button class="action-btn open-btn" on:click|stopPropagation={() => openExternal(issue.url)} title={$t('issues.openInBrowser')}>&#8599;</button>
             {/if}
             {#if issue.state === 'OPEN' && !paneIssues[issue.number]}
               <button class="action-btn launch-btn" on:click={(e) => launchForIssue(e, issue)} title={$t('issues.launchForIssue')}>▶</button>

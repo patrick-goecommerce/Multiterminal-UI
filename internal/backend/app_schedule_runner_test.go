@@ -47,6 +47,11 @@ func TestRunDueSchedules_ExecutesDueTask(t *testing.T) {
 	saveKanbanState(dir, state)
 
 	app := newTestApp()
+	// Point at a harmless, quickly-exiting command instead of the real Claude
+	// CLI: resolvedClaudePath empty falls back to "claude", which on a machine
+	// with the CLI installed spawns a real interactive session that never
+	// exits, hanging closeSpawnedSessions' t.Cleanup indefinitely.
+	app.resolvedClaudePath = "hostname"
 	closeSpawnedSessions(t, app)
 	// runDueSchedules spawns a session for the due task; the schedule state
 	// must still be updated regardless of whether the session does any work.
