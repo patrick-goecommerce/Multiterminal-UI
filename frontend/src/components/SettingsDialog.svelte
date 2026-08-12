@@ -62,7 +62,7 @@
   let autoNamingModel = $config.auto_naming?.model || 'claude-haiku-4-5';
 
   let mcpEnabled = ($config as any).mcp_server?.enabled ?? true;
-  let mcpPort = ($config as any).mcp_server?.port ?? 51533;
+  let mcpPort = ($config as any).mcp_server?.port ?? 0;
   let mcpLivePort = 0;
   let mcpCopied = false;
 
@@ -138,7 +138,7 @@
     autoNamingEnabled = $config.auto_naming?.enabled ?? true;
     autoNamingModel = $config.auto_naming?.model || 'claude-haiku-4-5';
     mcpEnabled = ($config as any).mcp_server?.enabled ?? true;
-    mcpPort = ($config as any).mcp_server?.port ?? 51533;
+    mcpPort = ($config as any).mcp_server?.port ?? 0;
     App.GetMCPServerPort().then((p: number) => { mcpLivePort = p; }).catch(() => {});
     fontFamily = $config.font_family || '';
     fontSize = $config.font_size || 10;
@@ -309,7 +309,11 @@
   }
 
   function copyMcpConfig() {
+    // With the default port 0 the real port is only known once the server is
+    // running, so fall back to the live port and refuse to copy a URL for
+    // port 0 — it would never connect.
     const port = mcpLivePort || mcpPort;
+    if (!port) return;
     const cmd = `claude mcp add --transport http mtui http://127.0.0.1:${port}/mcp`;
     navigator.clipboard.writeText(cmd).then(() => {
       mcpCopied = true;
@@ -396,7 +400,7 @@
     autoNamingEnabled = true;
     autoNamingModel = 'claude-haiku-4-5';
     mcpEnabled = true;
-    mcpPort = 51533;
+    mcpPort = 0;
     orchMaxParallel = 3;
     orchAutoMerge = false;
     orchAutoStart = false;
@@ -694,6 +698,7 @@
         <!-- svelte-ignore a11y-label-has-associated-control -->
         <label class="setting-label">Agent-Steuerung (MCP-Server)</label>
         <p class="setting-desc">Erlaubt einem Agent in einem MTUI-Pane (z.B. Claude Code), selbstständig neue Sessions zu öffnen, ihnen Prompts zu schicken und sie wieder zu schließen &mdash; z.B. um eine Aufgabe an Codex oder Gemini zu delegieren. Nur lokal erreichbar (127.0.0.1).</p>
+        <p class="setting-desc">Port <strong>0</strong> (empfohlen) lässt das Betriebssystem einen freien Port vergeben. Nur so bekommt jede Instanz &mdash; auch die eines zweiten Windows-Benutzers auf derselben Maschine &mdash; ihren eigenen Server. Ein fester Port gilt maschinenweit und kann von einer fremden Instanz belegt sein.</p>
         <div class="toggle-row" style="margin-bottom: 12px;">
           <button class="toggle-btn" class:toggle-on={mcpEnabled} on:click={() => mcpEnabled = !mcpEnabled}>
             <span class="toggle-knob"></span>
@@ -702,11 +707,11 @@
         </div>
         {#if mcpEnabled}
           <div class="orch-field">
-            <label class="orch-label" for="mcp-port">Port</label>
-            <input id="mcp-port" type="number" class="claude-input" bind:value={mcpPort} min="1" max="65535" />
+            <label class="orch-label" for="mcp-port">Port (0 = automatisch)</label>
+            <input id="mcp-port" type="number" class="claude-input" bind:value={mcpPort} min="0" max="65535" />
           </div>
           <div class="claude-row" style="margin-top: 8px;">
-            <input type="text" class="claude-input" readonly value={`http://127.0.0.1:${mcpLivePort || mcpPort}/mcp`} />
+            <input type="text" class="claude-input" readonly value={mcpLivePort || mcpPort ? `http://127.0.0.1:${mcpLivePort || mcpPort}/mcp` : 'Wird beim Start vergeben — MTUI neu starten'} />
             <button class="claude-btn" on:click={copyMcpConfig} title="claude mcp add-Befehl kopieren">{mcpCopied ? 'Kopiert!' : 'Config kopieren'}</button>
           </div>
         {/if}

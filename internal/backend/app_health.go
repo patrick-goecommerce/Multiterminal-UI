@@ -13,11 +13,15 @@ import (
 )
 
 // HealthInfo is returned to the frontend on startup to indicate
-// whether crash-based logging should be suggested.
+// whether crash-based logging should be suggested and whether any local
+// listener failed to come up.
 type HealthInfo struct {
-	CrashDetected  bool `json:"crash_detected"`
-	LoggingEnabled bool `json:"logging_enabled"`
-	LoggingAuto    bool `json:"logging_auto"`
+	CrashDetected  bool `json:"crash_detected" yaml:"crash_detected"`
+	LoggingEnabled bool `json:"logging_enabled" yaml:"logging_enabled"`
+	LoggingAuto    bool `json:"logging_auto" yaml:"logging_auto"`
+	// BindWarnings lists listeners that failed to start (see BindWarning).
+	// Empty in the normal case.
+	BindWarnings []BindWarning `json:"bind_warnings" yaml:"bind_warnings"`
 }
 
 // CheckHealth returns the current health/logging state for the frontend.
@@ -26,6 +30,7 @@ func (a *AppService) CheckHealth() HealthInfo {
 		CrashDetected:  config.HasRepeatedCrashes(&a.health),
 		LoggingEnabled: a.cfg.LoggingEnabled,
 		LoggingAuto:    a.health.LoggingAuto,
+		BindWarnings:   a.bindWarningsSnapshot(),
 	}
 }
 

@@ -77,6 +77,9 @@ func TestHandleListSessionsEmpty(t *testing.T) {
 }
 
 func TestStartMCPServerBindsToLoopback(t *testing.T) {
+	// startMCPServer publishes its port; without the redirect the test would
+	// overwrite the record of the developer's own running instance.
+	useTempDiscoveryDir(t)
 	a := newTestAgentControlService()
 
 	port, err := a.startMCPServer(0)
