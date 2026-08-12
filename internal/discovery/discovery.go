@@ -29,10 +29,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -221,17 +219,9 @@ func ProcessAlive(pid int) bool {
 	if pid <= 0 {
 		return false
 	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		// Windows: FindProcess opens a real handle, so an error here means the
-		// process is gone. Unix: FindProcess never fails.
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		_ = proc.Release()
-		return true
-	}
-	return proc.Signal(syscall.Signal(0)) == nil
+	// The actual check is platform-specific (alive_windows.go / alive_other.go):
+	// Windows needs the process handle's signal state, Unix the null signal.
+	return processAlive(pid)
 }
 
 // newToken returns a random 128-bit hex token identifying one listener
