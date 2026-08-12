@@ -72,6 +72,25 @@ A GUI terminal multiplexer built for Claude Code power users.
   comparison — a byte-exact check breaks on CRLF round-trips through git on Windows and would
   silently freeze the file forever.
 
+## Local Listeners & Port Discovery
+- **Never bind a fixed port.** TCP ports on Windows are machine-wide, not per logon session:
+  on an RDP host the first instance wins the port, every later one fails to bind, and helper
+  processes of user B resolve to user A's listener. That is exactly how the focus listener
+  (41987) and the MCP server (51533) let one account drive another account's sessions (#183).
+  Bind `127.0.0.1:0` and let the OS assign.
+- **Publish the bound port via `internal/discovery`.** `discovery.Publish(svc, port)` writes a
+  record (port, PID, random token) into a **per-user** directory — `os.UserCacheDir()/mtui`,
+  i.e. `%LOCALAPPDATA%\mtui`, deliberately *not* `os.UserConfigDir()` (`%APPDATA%`), which
+  roams. Readers use `discovery.Resolve`, which rejects records whose PID is gone.
+- **A stale record is normal, not exceptional** — a crash skips cleanup, and so does the
+  in-app updater's `os.Exit(0)` (#184). Never assume the file was cleaned up.
+- **Reachability is not identity.** A dial only proves *something* listens; ports get recycled.
+  Where the protocol allows it (the focus listener), the caller echoes the record's token and
+  the listener verifies it before acting.
+- **A failed bind must reach the UI.** Use `recordBindWarning`; the warnings ride along on
+  `CheckHealth()`, which the frontend pulls on mount. An event would be emitted before the
+  frontend is listening.
+
 ## Issue & Commit Discipline
 - **Issues schließen nur mit Commit-Referenz.** Nutze `Closes #123` oder `Fixes #123` im Commit-Message-Body. So ist für jeden nachvollziehbar, welcher Commit welches Issue löst.
 - **Ein Issue ist erst "done" wenn:** (1) Code implementiert, (2) Tests geschrieben UND grün, (3) E2E-getestet oder als `needs-e2e-testing` getaggt, (4) Commit mit `Closes #N` referenziert das Issue.
@@ -123,7 +142,8 @@ internal/
     app_worktree_policy.go       Worktree-mandatory policy (global + per-project resolution)
     app_worktree_setup_memory.go Generated CLAUDE.local.md variants + ownership detection
     app_claude_detect.go         Claude CLI path resolution
-    app_notify.go                Desktop notifications
+    app_notify.go                Desktop notifications + token-checked focus listener
+    app_ports.go                 Bind warnings (→ CheckHealth) + discovery record cleanup
     app_health.go                Crash detection & health tracking
     app_audio.go                 Audio notification playback
     app_version.go               Version info
@@ -141,6 +161,8 @@ internal/
   config/
     config.go                    YAML configuration loader
     session.go                   Session state persistence (JSON)
+  discovery/
+    discovery.go                 Per-user runtime port records (publish/resolve/stale check)
 frontend/src/
   App.svelte                     Root application component
   main.ts                        Entry point

@@ -255,6 +255,15 @@
     try {
       const health = await App.CheckHealth();
       if (health.crash_detected && !health.logging_enabled) showCrashDialog = true;
+      // Listeners that failed to bind used to be logged and swallowed, so a
+      // second instance silently lost notification focus and agent control.
+      const bindWarnings = health.bind_warnings || [];
+      if (bindWarnings.length > 0) {
+        const details = bindWarnings
+          .map(w => `• ${$t(`app.bindService.${w.service}`)}: ${w.detail}`)
+          .join('\n');
+        alert($t('app.bindWarning', { details }));
+      }
     } catch {}
 
     try { appVersion = await App.GetAppVersion(); } catch { appVersion = ''; }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/backend"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/discovery"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -140,12 +141,26 @@ func runClean() {
 	fmt.Println("Session file cleared.")
 }
 
-// signalFocus connects to the running instance's focus listener
-// to bring the window to the foreground.
+// signalFocus connects to the running instance's focus listener to bring its
+// window to the foreground.
+//
+// The address comes from the per-user discovery record, not from the old fixed
+// port 41987: that port was machine-wide, so on an RDP host a notification
+// click by one Windows user raised the window of whichever user's instance had
+// won the port (issue #183). Resolve only ever sees records written by this
+// same user's instances, and rejects records whose process has died. The token
+// echoed on the connection proves we reached that instance's listener and not
+// an unrelated process that inherited a recycled port.
 func signalFocus() {
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:41987", 2*time.Second)
+	rec, err := discovery.Resolve(discovery.ServiceFocus)
+	if err != nil {
+		return // no running instance of this user, or its listener never started
+	}
+	conn, err := net.DialTimeout("tcp", rec.Addr(), 2*time.Second)
 	if err != nil {
 		return
 	}
-	conn.Close()
+	defer conn.Close()
+	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	_, _ = conn.Write([]byte(rec.Token + "\n"))
 }

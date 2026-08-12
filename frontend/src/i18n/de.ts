@@ -3,6 +3,11 @@ const de = {
   app: {
     agentDone: 'Agent fertig – #{number}',
     terminalError: 'Terminal-Fehler (Session {id}): {msg}',
+    bindWarning: 'Ein lokaler Dienst konnte nicht gestartet werden und steht in dieser MTUI-Instanz nicht zur Verfügung:\n\n{details}\n\nMeist ist der Port bereits belegt oder von der Firewall blockiert.',
+    bindService: {
+      focus: 'Fenster-Fokus per Benachrichtigungsklick',
+      mcp: 'Agent-Steuerung (MCP-Server)',
+    },
     mergeConflicts: 'Merge-Konflikte erkannt{op}',
     conflictFiles: '{count} Datei(en) mit Konflikten',
     maxPanes: 'Max. {max} Terminals pro Tab erreicht.',

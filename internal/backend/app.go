@@ -56,6 +56,9 @@ type AppService struct {
 	geminiDetected     bool
 	tmuxAPIPort        int                         // port for the tmux shim HTTP API
 	mcpServerPort      int                         // port for the agent-control MCP server
+	focusToken         string                      // token a focus request must present (see app_notify.go)
+	bindWarnings       []BindWarning               // listeners that failed to start, surfaced via CheckHealth
+	bindWarningsMu     sync.Mutex
 	agentSessions      map[int]AgentSessionInfo    // sessions spawned via SpawnAgentSession (agent-control)
 	sessionMode        map[int]string              // mode ("claude"/"shell"/...) each session was created with, across all windows
 	chatSessions       map[string]*ChatSession     // active chat sessions keyed by conversation ID
@@ -130,26 +133,16 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	go a.batchLoop(scanCtx)
 	go a.scheduleLoop(scanCtx)
 
-	// Start focus listener and register custom protocol for notification clicks
-	a.startFocusListener()
+	// Register custom protocol for notification clicks, then bring up the
+	// loopback listeners (focus signal, agent-control MCP server).
 	registerProtocol()
+	a.startLocalListeners()
 
 	// Start tmux shim API server
 	if port, err := a.startTmuxAPI(); err != nil {
 		log.Printf("[tmux-api] failed to start: %v", err)
 	} else {
 		a.tmuxAPIPort = port
-	}
-
-	// Start the local MCP server (lets an agent in a pane delegate tasks by
-	// opening/feeding/closing other MTUI sessions), unless disabled.
-	if a.cfg.ShouldRunMCPServer() {
-		if port, err := a.startMCPServer(a.cfg.MCPServer.Port); err != nil {
-			log.Printf("[mcp-server] failed to start: %v", err)
-		} else {
-			a.mcpServerPort = port
-			go a.ensureMCPRegisteredWithClaude(port)
-		}
 	}
 
 	return nil
@@ -170,6 +163,11 @@ func (a *AppService) ServiceShutdown() error {
 	for _, s := range sessions {
 		s.Close()
 	}
+
+	// Withdraw the published loopback ports so no helper process dials a port
+	// this instance no longer owns.
+	a.releaseDiscoveryRecords()
+
 	// Mark clean shutdown and auto-disable logging if stable
 	config.MarkCleanShutdown(&a.health)
 	if config.ShouldAutoDisableLogging(&a.health) {

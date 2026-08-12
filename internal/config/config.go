@@ -98,10 +98,16 @@ type Config struct {
 // MCPServerSettings configures the local MCP server that lets an AI agent
 // running inside an MTUI pane delegate work by opening, feeding, and closing
 // other MTUI sessions (e.g. handing a task to Codex or Gemini). It listens on
-// 127.0.0.1 only; there is no auth layer, since this is a single-user desktop app.
+// 127.0.0.1 only and has no auth layer, so reachability is the authorisation.
 type MCPServerSettings struct {
 	Enabled *bool `yaml:"enabled" json:"enabled"`
-	Port    int   `yaml:"port" json:"port"`
+	// Port is the TCP port to bind. 0 (the default) asks the OS for a free
+	// ephemeral port, which is what keeps two instances — in particular two
+	// instances of *different* Windows users on the same RDP host — from
+	// fighting over one machine-wide port and reaching into each other's
+	// sessions (issue #183). The bound port is published per user, so clients
+	// still find it. A non-zero value is honoured as an explicit user choice.
+	Port int `yaml:"port" json:"port"`
 }
 
 // AutoNamingSettings controls automatic pane naming for Claude panes. When
@@ -317,7 +323,7 @@ func DefaultConfig() Config {
 		},
 		MCPServer: MCPServerSettings{
 			Enabled: boolPtr(true),
-			Port:    51533,
+			Port:    0, // 0 = OS-assigned ephemeral port, published per user
 		},
 		// UpdateChannel defaults to "alpha": every published release is
 		// currently a prerelease (v2.0.0-alpha.N) — there is no "stable"
@@ -564,8 +570,11 @@ func Load() Config {
 	if cfg.MCPServer.Enabled == nil {
 		cfg.MCPServer.Enabled = boolPtr(true)
 	}
-	if cfg.MCPServer.Port <= 0 || cfg.MCPServer.Port > 65535 {
-		cfg.MCPServer.Port = 51533
+	// Port 0 means "let the OS pick a free port" and is the default; only
+	// out-of-range values are corrected. A value the user set explicitly is
+	// always kept — see MCPServerSettings.Port.
+	if cfg.MCPServer.Port < 0 || cfg.MCPServer.Port > 65535 {
+		cfg.MCPServer.Port = 0
 	}
 
 	// Validate update_channel — falls back to "alpha" (see DefaultConfig),
