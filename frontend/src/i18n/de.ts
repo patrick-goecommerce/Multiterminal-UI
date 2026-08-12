@@ -3,6 +3,11 @@ const de = {
   app: {
     agentDone: 'Agent fertig – #{number}',
     terminalError: 'Terminal-Fehler (Session {id}): {msg}',
+    bindWarning: 'Ein lokaler Dienst konnte nicht gestartet werden und steht in dieser MTUI-Instanz nicht zur Verfügung:\n\n{details}\n\nMeist ist der Port bereits belegt oder von der Firewall blockiert.',
+    bindService: {
+      focus: 'Fenster-Fokus per Benachrichtigungsklick',
+      mcp: 'Agent-Steuerung (MCP-Server)',
+    },
     mergeConflicts: 'Merge-Konflikte erkannt{op}',
     conflictFiles: '{count} Datei(en) mit Konflikten',
     maxPanes: 'Max. {max} Terminals pro Tab erreicht.',
@@ -97,6 +102,10 @@ const de = {
     geminiYolo: 'Gemini Sandbox',
     geminiYoloDesc: 'Sandbox-Modus',
     modelLabel: 'Claude Modell:',
+    mcpLabel: 'MCP-Profil:',
+    mcpGlobal: 'Alle (global registriert)',
+    mcpNone: 'Kein MCP',
+    mcpHint: 'Begrenzt, welche MCP-Server dieser Pane startet – jeder Server ist ein eigener Kindprozess.',
     cancel: 'Abbrechen (Esc)',
   },
 
@@ -294,6 +303,7 @@ const de = {
     search: 'Suchen',
     clearTerminal: 'Terminal leeren',
     newTerminal: 'Neues Terminal',
+    sleepPane: 'Pane einschlafen',
   },
 
   // QueuePanel

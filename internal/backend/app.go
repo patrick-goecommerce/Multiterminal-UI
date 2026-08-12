@@ -33,6 +33,7 @@ type AppService struct {
 	cfg                config.Config
 	health             config.HealthState
 	sessions           map[int]*terminal.Session
+	launches           map[int]launchSpec // how each session was started (for ResumeSession)
 	queues             map[int]*sessionQueue
 	finishStates       map[int]*finishState  // active worktree-finish flows, keyed by session ID
 	sessionIssues      map[int]*sessionIssue // issue linked to each session
@@ -55,6 +56,9 @@ type AppService struct {
 	geminiDetected     bool
 	tmuxAPIPort        int                         // port for the tmux shim HTTP API
 	mcpServerPort      int                         // port for the agent-control MCP server
+	focusToken         string                      // token a focus request must present (see app_notify.go)
+	bindWarnings       []BindWarning               // listeners that failed to start, surfaced via CheckHealth
+	bindWarningsMu     sync.Mutex
 	agentSessions      map[int]AgentSessionInfo    // sessions spawned via SpawnAgentSession (agent-control)
 	sessionMode        map[int]string              // mode ("claude"/"shell"/...) each session was created with, across all windows
 	chatSessions       map[string]*ChatSession     // active chat sessions keyed by conversation ID
@@ -73,6 +77,7 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		app:           app,
 		cfg:           cfg,
 		sessions:      make(map[int]*terminal.Session),
+		launches:      make(map[int]launchSpec),
 		queues:        make(map[int]*sessionQueue),
 		finishStates:  make(map[int]*finishState),
 		sessionIssues: make(map[int]*sessionIssue),
@@ -128,26 +133,16 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	go a.batchLoop(scanCtx)
 	go a.scheduleLoop(scanCtx)
 
-	// Start focus listener and register custom protocol for notification clicks
-	a.startFocusListener()
+	// Register custom protocol for notification clicks, then bring up the
+	// loopback listeners (focus signal, agent-control MCP server).
 	registerProtocol()
+	a.startLocalListeners()
 
 	// Start tmux shim API server
 	if port, err := a.startTmuxAPI(); err != nil {
 		log.Printf("[tmux-api] failed to start: %v", err)
 	} else {
 		a.tmuxAPIPort = port
-	}
-
-	// Start the local MCP server (lets an agent in a pane delegate tasks by
-	// opening/feeding/closing other MTUI sessions), unless disabled.
-	if a.cfg.ShouldRunMCPServer() {
-		if port, err := a.startMCPServer(a.cfg.MCPServer.Port); err != nil {
-			log.Printf("[mcp-server] failed to start: %v", err)
-		} else {
-			a.mcpServerPort = port
-			go a.ensureMCPRegisteredWithClaude(port)
-		}
 	}
 
 	return nil
@@ -168,6 +163,11 @@ func (a *AppService) ServiceShutdown() error {
 	for _, s := range sessions {
 		s.Close()
 	}
+
+	// Withdraw the published loopback ports so no helper process dials a port
+	// this instance no longer owns.
+	a.releaseDiscoveryRecords()
+
 	// Mark clean shutdown and auto-disable logging if stable
 	config.MarkCleanShutdown(&a.health)
 	if config.ShouldAutoDisableLogging(&a.health) {
@@ -225,26 +225,24 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 		argv = []string{a.cfg.DefaultShell}
 	}
 
-	// Inject env vars for all sessions
-	var env []string
-	if a.tmuxAPIPort > 0 {
-		env = append(env, fmt.Sprintf("MTUI_PORT=%d", a.tmuxAPIPort))
-	}
-	if mode == "claude" || mode == "claude-auto" || mode == "claude-yolo" {
-		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
-		env = append(env, worktreeEnvVars(dir)...)
-		// Worktree-mandatory policy, resolved once here (global setting +
-		// per-project override) so mtui-hook only has to read one env var.
-		// Empty when the policy is off or dir is not a git repo.
-		if root := a.forceWorktreeRoot(dir); root != "" {
-			env = append(env, "MULTITERMINAL_FORCE_WORKTREE_ROOT="+root)
-		}
-	}
+	// Inject env vars for all sessions. Shared with ResumeSession so a woken
+	// pane gets an identical environment (app_suspend.go).
+	env := a.sessionEnv(id, dir, mode)
 
 	sess := terminal.NewSession(id, rows, cols)
+	// The Claude session UUID lives only in the argv the frontend built. Parse
+	// it here so a pane can be resumed even before the first hook event; the
+	// hook-reported id overwrites it as soon as it arrives.
+	if isClaudeMode(mode) {
+		sess.SetResumeID(claudeSessionIDFromArgv(argv))
+	}
+	a.rememberLaunch(id, argv, dir, mode)
 	if err := sess.Start(argv, dir, env); err != nil {
 		errMsg := fmt.Sprintf("Session start failed: %v", err)
 		log.Printf("[CreateSession] ERROR: %s", errMsg)
+		a.mu.Lock()
+		delete(a.launches, id)
+		a.mu.Unlock()
 		a.app.Event.Emit("terminal:error", TerminalErrorEvent{ID: id, Message: errMsg})
 		return -1
 	}
@@ -282,6 +280,16 @@ func (a *AppService) WriteToSession(id int, b64data string) {
 	if err != nil {
 		return
 	}
+	// A sleeping pane has no PTY: the write would fail with ErrSuspended and the
+	// keystroke would vanish. Wake it instead — typing into a pane is exactly
+	// the user gesture that means "I want this back" (design D7). The keystroke
+	// that triggered the wake is dropped on purpose; replaying it into a Claude
+	// TUI that is still replaying its transcript would land somewhere random.
+	if sess.IsSuspended() {
+		log.Printf("[suspend] session %d: input received while asleep — waking up", id)
+		a.wakeSession(id)
+		return
+	}
 	sess.Write(data)
 }
 
@@ -314,6 +322,7 @@ func (a *AppService) CloseSession(id int) {
 		sess.Close() // blocks until process exits and readLoop closes RawOutputCh
 		a.mu.Lock()
 		delete(a.sessions, id)
+		delete(a.launches, id)
 		delete(a.queues, id)
 		delete(a.finishStates, id)
 		delete(a.sessionIssues, id)

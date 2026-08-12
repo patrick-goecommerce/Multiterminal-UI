@@ -10,6 +10,7 @@ import (
 func newTestApp() *AppService {
 	return &AppService{
 		sessions:      make(map[int]*terminal.Session),
+		launches:      make(map[int]launchSpec),
 		sessionMode:   make(map[int]string),
 		queues:        make(map[int]*sessionQueue),
 		sessionIssues: make(map[int]*sessionIssue),

@@ -2,10 +2,11 @@ package backend
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/discovery"
 )
 
 // ensureMCPRegisteredWithClaude registers mtui's local MCP server with the
@@ -16,12 +17,23 @@ import (
 // this sidesteps. Best-effort and silent: run in the background after the
 // MCP server itself is already listening; any failure (claude CLI missing,
 // unexpected output) is logged, never surfaced to the user.
-func (a *AppService) ensureMCPRegisteredWithClaude(port int) {
+//
+// The URL is read back from the per-user discovery record rather than passed
+// in, so the registration and every other consumer resolve the port through
+// exactly one source of truth. That matters because ~/.claude.json is written
+// at user scope: registering a port that is not this user's own listener is
+// how an agent would end up driving another account's MTUI (issue #183).
+func (a *AppService) ensureMCPRegisteredWithClaude() {
 	if a.cfg.ClaudeEnabled != nil && !*a.cfg.ClaudeEnabled {
 		return
 	}
 
-	url := fmt.Sprintf("http://127.0.0.1:%d/mcp", port)
+	rec, err := discovery.Resolve(discovery.ServiceMCP)
+	if err != nil {
+		log.Printf("[mcp-register] no usable MCP port record, skipping registration: %v", err)
+		return
+	}
+	url := mcpURL(rec.Port)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

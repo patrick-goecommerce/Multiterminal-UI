@@ -105,6 +105,14 @@ func (a *AppService) scanAllSessions() {
 
 	for i, sess := range sessions {
 		id := ids[i]
+
+		// A sleeping pane has a frozen screen (issue #180). Classifying it would
+		// re-emit the state it had before falling asleep and overwrite the
+		// "schläft" badge on every tick; its tokens cannot change either.
+		if sess.IsSuspendedOrSuspending() {
+			continue
+		}
+
 		sess.ScanTokens() // always scan for token/cost data
 
 		var activity terminal.ActivityState

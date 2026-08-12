@@ -7,10 +7,6 @@ package terminal
 
 import (
 	"io"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,9 +17,11 @@ import (
 type SessionStatus int
 
 const (
-	StatusRunning SessionStatus = iota // process is alive
-	StatusExited                       // process has exited
-	StatusError                        // an error occurred
+	StatusRunning    SessionStatus = iota // process is alive
+	StatusExited                          // process has exited
+	StatusError                           // an error occurred
+	StatusSuspending                      // suspend armed: process still alive, kill pending
+	StatusSuspended                       // process tree killed on purpose, session object alive
 )
 
 // Session wraps a PTY-backed shell process and its virtual screen.
@@ -40,7 +38,12 @@ type Session struct {
 	p   gopty.Pty  // cross-platform PTY (Unix PTY or Windows ConPTY)
 	cmd *gopty.Cmd // the spawned child process
 
+	// done is re-armed per process generation: it is closed when the current
+	// generation's process exits, and replaced by Resume. Read it via Done().
 	done chan struct{}
+
+	// sus holds the process-generation bookkeeping (see session_suspend.go).
+	sus suspendState
 
 	// OutputCh receives a signal each time new data is written to Screen.
 	OutputCh chan struct{}
@@ -90,151 +93,20 @@ func NewSession(id, rows, cols int) *Session {
 // argv is the command + arguments (e.g. []string{"bash"} or
 // []string{"claude", "--dangerously-skip-permissions"}).
 // dir is the working directory; env holds additional environment variables.
+//
+// The actual spawn lives in spawnLocked (session_spawn.go) so Resume can
+// re-run it verbatim for the next process generation.
 func (s *Session) Start(argv []string, dir string, env []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	s.Dir = dir
-
-	if len(argv) == 0 {
-		argv = defaultShell()
-	} else if runtime.GOOS == "windows" {
-		// On Windows, CLI tools like "claude" are often .cmd/.bat shims
-		// that cannot be executed directly by ConPTY. Wrap them via COMSPEC
-		// so the shell resolves PATHEXT and handles .cmd files properly.
-		shell := os.Getenv("COMSPEC")
-		if shell == "" {
-			shell = `C:\Windows\System32\cmd.exe`
-		}
-		argv = append([]string{shell, "/c"}, argv...)
-	}
-
-	// Build environment: inherit from parent but strip variables that would
-	// prevent Claude Code from launching inside our terminal panes.
-	parentEnv := os.Environ()
-	fullEnv := make([]string, 0, len(parentEnv)+len(env)+2)
-	for _, e := range parentEnv {
-		// CLAUDECODE is set by Claude Code sessions; remove it so nested
-		// Claude instances don't refuse to start.
-		if strings.HasPrefix(e, "CLAUDECODE=") {
-			continue
-		}
-		fullEnv = append(fullEnv, e)
-	}
-	fullEnv = append(fullEnv, "TERM=xterm-256color", "COLORTERM=truecolor")
-	fullEnv = append(fullEnv, env...)
-
-	// Prepend executable directory to PATH so the tmux shim is found first.
-	// On Windows the env var is often "Path" not "PATH", so check case-insensitively.
-	if exePath, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exePath)
-		found := false
-		for i, e := range fullEnv {
-			if len(e) > 5 && strings.EqualFold(e[:5], "PATH=") {
-				fullEnv[i] = e[:5] + exeDir + string(os.PathListSeparator) + e[5:]
-				found = true
-				break
-			}
-		}
-		if !found {
-			fullEnv = append(fullEnv, "PATH="+exeDir)
-		}
-	}
-
-	rows := s.Screen.Rows()
-	cols := s.Screen.Cols()
-
-	// Create the cross-platform PTY
-	p, err := gopty.New()
-	if err != nil {
+	s.sus.readExit = make(chan struct{})
+	if err := s.spawnLocked(argv, dir, env); err != nil {
 		s.Status = StatusError
+		close(s.sus.readExit)
+		s.sus.readExit = nil
 		return err
 	}
-
-	// Set initial size (width=cols, height=rows)
-	if err := p.Resize(cols, rows); err != nil {
-		p.Close()
-		s.Status = StatusError
-		return err
-	}
-
-	// Create the command to run inside the PTY
-	cmd := p.Command(argv[0], argv[1:]...)
-	cmd.Dir = dir
-	cmd.Env = fullEnv
-	hidePTYConsole(cmd)
-
-	if err := cmd.Start(); err != nil {
-		p.Close()
-		s.Status = StatusError
-		return err
-	}
-
-	s.p = p
-	s.cmd = cmd
-
-	go s.readLoop()
-	go s.waitLoop()
-
 	return nil
-}
-
-// readLoop continuously reads from the PTY and writes to the Screen.
-func (s *Session) readLoop() {
-	buf := make([]byte, 65536)
-	for {
-		n, err := s.p.Read(buf)
-		if n > 0 {
-			chunk := make([]byte, n)
-			copy(chunk, buf[:n])
-
-			s.Screen.Write(chunk)
-
-			// Update title and timestamps
-			s.mu.Lock()
-			if s.Screen.Title != "" {
-				s.Title = s.Screen.Title
-			}
-			s.LastOutputAt = time.Now()
-			s.Activity = ActivityActive
-			s.mu.Unlock()
-
-			// Send raw bytes to GUI frontend (blocking with done-guard)
-			select {
-			case s.RawOutputCh <- chunk:
-			case <-s.done:
-			}
-
-			// Signal for legacy TUI consumers (non-blocking)
-			select {
-			case s.OutputCh <- struct{}{}:
-			default:
-			}
-		}
-		if err != nil {
-			break
-		}
-	}
-	// Sender closes the channel so receivers (streamOutput) detect completion.
-	close(s.RawOutputCh)
-}
-
-// waitLoop waits for the process to exit and updates the session status.
-func (s *Session) waitLoop() {
-	err := s.cmd.Wait()
-	s.mu.Lock()
-	if err != nil {
-		if s.cmd.ProcessState != nil {
-			s.ExitCode = s.cmd.ProcessState.ExitCode()
-		} else {
-			s.ExitCode = 1
-		}
-	} else {
-		s.ExitCode = 0
-	}
-	s.Status = StatusExited
-	s.mu.Unlock()
-	close(s.done)
 }
 
 // Write sends raw bytes to the PTY (i.e. keyboard input or pasted text).
@@ -253,7 +125,14 @@ func (s *Session) waitLoop() {
 func (s *Session) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	pty := s.p
+	suspended := s.Status == StatusSuspended
 	s.mu.Unlock()
+	// A suspended session has no PTY on purpose. Report that explicitly instead
+	// of the generic closed-pipe error so callers can wake it (or refuse) rather
+	// than dropping the input silently.
+	if suspended {
+		return 0, ErrSuspended
+	}
 	if pty == nil {
 		return 0, io.ErrClosedPipe
 	}
@@ -313,11 +192,23 @@ func (s *Session) Resize(rows, cols int) {
 	}
 }
 
-// Close terminates the session: kills the process and closes the PTY.
+// Close terminates the session for good: kills the current process, closes the
+// PTY and — as the very last step — closes RawOutputCh. It is idempotent: a
+// second call returns immediately instead of panicking on a double close.
+//
+// RawOutputCh is closed here and nowhere else. readLoop must never close it,
+// because a suspended session keeps the same channel across process
+// generations while collectOutput (app_stream.go) reads it without a lock.
 func (s *Session) Close() {
 	s.mu.Lock()
-	cmd := s.cmd
-	pty := s.p
+	if s.sus.closed {
+		s.mu.Unlock()
+		return
+	}
+	s.sus.closed = true
+	cmd, pty := s.cmd, s.p
+	done, readExit := s.done, s.sus.readExit
+	s.closeWakeLocked() // release anyone waiting for a resume that will never come
 	s.mu.Unlock()
 
 	// Kill the process first
@@ -329,12 +220,33 @@ func (s *Session) Close() {
 		pty.Close()
 	}
 
-	// Wait for the process to actually finish
-	<-s.done
+	// Only a live generation has loops to wait for. A suspended session (its
+	// process is already gone, done closed) and a session that never started
+	// (done never closed) must not block here.
+	if cmd != nil {
+		<-done
+		if !waitClosed(readExit, readLoopDrainTimeout) {
+			// The PTY read did not return (a ConPTY handle can outlive its
+			// process). readLoop may still be sending, so closing RawOutputCh
+			// now would panic it. Leave the channel open — collectOutput then
+			// ends with its context instead. Leaking one channel beats
+			// crashing the app.
+			return
+		}
+	}
+	s.closeRawOutput()
 }
 
-// Done returns a channel that is closed when the session exits.
+// readLoopDrainTimeout bounds how long Close waits for a generation's readLoop
+// to return before giving up on closing RawOutputCh.
+const readLoopDrainTimeout = 2 * time.Second
+
+// Done returns a channel that is closed when the current process generation
+// exits. Resume replaces it, so callers that outlive a suspend must re-read it
+// (see watchExit in app_suspend.go) instead of caching the value.
 func (s *Session) Done() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.done
 }
 
@@ -367,10 +279,13 @@ func (s *Session) Name() string {
 	return s.Title
 }
 
-// Pid returns the wrapper process id (cmd.exe on Windows), or 0 before Start.
-// The finish flow needs it to kill the whole process tree BEFORE Close():
-// after Process.Kill() the grandchildren are orphaned and taskkill /T cannot
-// find them anymore.
+// Pid returns the id of the process started in the PTY, or 0 before Start.
+// On Windows that is the cmd.exe wrapper for .cmd/.bat shims and the target
+// binary itself for a real .exe (see windowsArgv) — either way it is the root
+// of the session's process tree.
+// The finish flow needs it to kill the whole tree BEFORE Close(): after
+// Process.Kill() the descendants are orphaned and taskkill /T cannot find
+// them anymore.
 func (s *Session) Pid() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

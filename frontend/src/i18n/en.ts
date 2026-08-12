@@ -2,6 +2,11 @@ const en = {
   app: {
     agentDone: 'Agent done – #{number}',
     terminalError: 'Terminal error (Session {id}): {msg}',
+    bindWarning: 'A local service could not start and is unavailable in this MTUI instance:\n\n{details}\n\nUsually the port is already in use or blocked by the firewall.',
+    bindService: {
+      focus: 'Window focus on notification click',
+      mcp: 'Agent control (MCP server)',
+    },
     mergeConflicts: 'Merge conflicts detected{op}',
     conflictFiles: '{count} file(s) with conflicts',
     maxPanes: 'Max. {max} terminals per tab reached.',
@@ -84,6 +89,10 @@ const en = {
     geminiYolo: 'Gemini Sandbox',
     geminiYoloDesc: 'Sandbox mode',
     modelLabel: 'Claude model:',
+    mcpLabel: 'MCP profile:',
+    mcpGlobal: 'All (globally registered)',
+    mcpNone: 'No MCP',
+    mcpHint: 'Limits which MCP servers this pane starts – each server is its own child process.',
     cancel: 'Cancel (Esc)',
   },
   settings: {
@@ -259,6 +268,7 @@ const en = {
     search: 'Search',
     clearTerminal: 'Clear terminal',
     newTerminal: 'New terminal',
+    sleepPane: 'Put pane to sleep',
   },
   queue: {
     title: 'Pipeline Queue',

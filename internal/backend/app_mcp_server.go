@@ -10,14 +10,29 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/discovery"
 )
+
+// mcpURL builds the endpoint URL clients use to reach the local MCP server.
+func mcpURL(port int) string {
+	return fmt.Sprintf("http://127.0.0.1:%d/mcp", port)
+}
 
 // startMCPServer starts the local MCP server that exposes session
 // open/send/close/list tools to any MCP-capable agent (Claude Code, Codex,
 // Gemini CLI, ...) configured to connect to it, letting an agent running in
-// one MTUI pane delegate a task to a fresh session in another. Bound to
-// 127.0.0.1 only; there is no auth layer, since MTUI is a single-user local
-// desktop app. Returns the bound port (0 on failure).
+// one MTUI pane delegate a task to a fresh session in another. Returns the
+// bound port (0 on failure).
+//
+// The server is bound to 127.0.0.1 and carries no auth layer, so reaching it
+// *is* the authorisation. That was defensible while the port was a fixed
+// machine-wide constant on a single-user desktop, and wrong the moment two
+// Windows accounts shared a machine: user B's agents could drive user A's
+// sessions through open_session / send_input / close_session (issue #183).
+// port 0 (the default) therefore asks the OS for a free ephemeral port and the
+// result is published per-user via the discovery package, so only processes of
+// the same Windows account can find it. An explicitly configured port is still
+// honoured — the user asked for it, and it is the only way to pin a URL.
 func (a *AppService) startMCPServer(port int) (int, error) {
 	mcpSrv := server.NewMCPServer(
 		"multiterminal-ui",
@@ -61,10 +76,18 @@ func (a *AppService) startMCPServer(port int) (int, error) {
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
-		return 0, fmt.Errorf("mcp server listen: %w", err)
+		return 0, fmt.Errorf("mcp server listen on port %d: %w", port, err)
 	}
 	boundPort := listener.Addr().(*net.TCPAddr).Port
-	log.Printf("[mcp-server] listening on http://127.0.0.1:%d/mcp", boundPort)
+
+	if _, err := discovery.Publish(discovery.ServiceMCP, boundPort); err != nil {
+		// Without the record nothing can find this server — including our own
+		// registration with the claude CLI — so this is a startup failure, not
+		// a cosmetic one.
+		listener.Close()
+		return 0, fmt.Errorf("mcp server publish port: %w", err)
+	}
+	log.Printf("[mcp-server] listening on %s", mcpURL(boundPort))
 
 	go func() {
 		if err := http.Serve(listener, mux); err != nil {

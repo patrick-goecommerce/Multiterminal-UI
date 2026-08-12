@@ -39,6 +39,7 @@
   import { fetchBranch, fetchCommitAge, fetchConflicts, fetchIssueCount, fetchRepoURL } from './lib/git-polling';
   import { checkForNewCommit } from './lib/background-agents';
   import { buildIssuePrompt, setupIssueBranch, resolveBranchConflict } from './lib/launch';
+  import { resolveMCPConfigPath } from './lib/mcp';
   import type { IssueContext } from './lib/launch';
   import * as App from '../wailsjs/go/backend/App';
   import { EventsOn, Window } from '../wailsjs/runtime/runtime';
@@ -143,9 +144,9 @@
     model: string;
     issueCtx: { number: number; title: string; body: string; labels: string[] };
     name: string;
-    argv: string[];
     sessionDir: string;
     claudeSessionId: string;
+    mcpProfile: string;
   } | null = null;
 
   let resolvedClaudePath = 'claude';
@@ -260,6 +261,15 @@
     try {
       const health = await App.CheckHealth();
       if (health.crash_detected && !health.logging_enabled) showCrashDialog = true;
+      // Listeners that failed to bind used to be logged and swallowed, so a
+      // second instance silently lost notification focus and agent control.
+      const bindWarnings = health.bind_warnings || [];
+      if (bindWarnings.length > 0) {
+        const details = bindWarnings
+          .map(w => `• ${$t(`app.bindService.${w.service}`)}: ${w.detail}`)
+          .join('\n');
+        alert($t('app.bindWarning', { details }));
+      }
     } catch {}
 
     try { appVersion = await App.GetAppVersion(); } catch { appVersion = ''; }
@@ -572,8 +582,8 @@
     }
   }
 
-  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string }>) {
-    const { type, model, issue, display = 'terminal', permissionMode = 'plan' } = e.detail;
+  async function handleLaunch(e: CustomEvent<{ type: PaneMode; model: string; issue?: { number: number; title: string; body: string; labels: string[] } | null; display?: 'terminal' | 'chat'; permissionMode?: string; mcpProfile?: string }>) {
+    const { type, model, issue, display = 'terminal', permissionMode = 'plan', mcpProfile = '' } = e.detail;
     showLaunchDialog = false;
     const issueCtx = issue || launchIssueContext;
     launchIssueContext = null;
@@ -589,7 +599,9 @@
       try {
         const conv = await App.CreateConversation(provider, model || '', tab.dir || '', permissionMode, '');
         const name = getClaudeName(type, model);
-        tabStore.addPane(tab.id, 0, name, type, model || '', null, '', '', '', '', '', false, 'chat', conv.id);
+        // Chat panes have no argv, but the profile rides along so toggling the
+        // pane back to terminal keeps the user's MCP choice.
+        tabStore.addPane(tab.id, 0, name, type, model || '', null, '', '', '', '', '', false, 'chat', conv.id, '', mcpProfile);
         workspace.setView('terminals');
       } catch (err) { console.error('[handleLaunch] CreateConversation failed:', err); }
       return;
@@ -598,7 +610,6 @@
     // Pin a session id for claude panes so they can be resumed when toggled to
     // chat display (and vice versa). Empty for shell/codex/gemini.
     const claudeSessionId = type.startsWith('claude') ? genSessionId() : '';
-    const argv = buildClaudeArgv(type, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, { sessionId: claudeSessionId });
     const baseName = getClaudeName(type, model);
     const name = issueCtx ? `${baseName} – #${issueCtx.number}` : baseName;
     try {
@@ -621,7 +632,7 @@
             targetIssueTitle: issueCtx.title,
             dirtyWorkingTree: result.conflict.dirtyWorkingTree,
           };
-          pendingLaunch = { type, model, issueCtx, name, argv, sessionDir, claudeSessionId };
+          pendingLaunch = { type, model, issueCtx, name, sessionDir, claudeSessionId, mcpProfile };
           showBranchConflict = true;
           return;
         }
@@ -642,6 +653,15 @@
         }
       }
 
+      // Built here, not before the issue setup: the MCP profile resolves
+      // against the pane's FINAL directory (a project .mcp.json lives in the
+      // issue worktree, not in the tab dir).
+      const argv = buildClaudeArgv(type, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, {
+        sessionId: claudeSessionId,
+        mcpProfile,
+        mcpConfigPath: await resolveMCPConfigPath(sessionDir, mcpProfile),
+      });
+
       const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, type);
       if (sessionId > 0) {
         let paneBranch = issueBranch;
@@ -650,7 +670,7 @@
         }
         tabStore.addPane(tab.id, sessionId, name, type, model,
           issueCtx?.number, issueCtx?.title, issueBranch, worktreePath, paneBranch,
-          targetBranch, false, 'terminal', '', claudeSessionId);
+          targetBranch, false, 'terminal', '', claudeSessionId, mcpProfile);
         if (issueCtx) {
           App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, issueBranch, sessionDir);
           setTimeout(() => {
@@ -671,12 +691,17 @@
 
     const tab = $activeTab;
     if (!tab) return;
-    const { type, model, issueCtx, name, argv, claudeSessionId } = launch;
+    const { type, model, issueCtx, name, claudeSessionId, mcpProfile } = launch;
 
     try {
       const resolved = await resolveBranchConflict(e.detail.action, launch.sessionDir, issueCtx);
       if (resolved.cancelled) return;
 
+      const argv = buildClaudeArgv(type, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, {
+        sessionId: claudeSessionId,
+        mcpProfile,
+        mcpConfigPath: await resolveMCPConfigPath(resolved.sessionDir, mcpProfile),
+      });
       const sessionId = await App.CreateSession(argv, resolved.sessionDir, 24, 80, type);
       if (sessionId > 0) {
         let paneBranch = resolved.issueBranch;
@@ -685,7 +710,7 @@
         }
         tabStore.addPane(tab.id, sessionId, name, type, model,
           issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.worktreePath, paneBranch,
-          resolved.targetBranch, false, 'terminal', '', claudeSessionId);
+          resolved.targetBranch, false, 'terminal', '', claudeSessionId, mcpProfile);
         App.LinkSessionIssue(sessionId, issueCtx.number, issueCtx.title, resolved.issueBranch, resolved.sessionDir);
         setTimeout(() => {
           const prompt = buildIssuePrompt(issueCtx);
@@ -799,15 +824,22 @@
     const tab = $activeTab;
     if (!tab) return;
     const { paneId, sessionId, mode, model, name } = e.detail;
+    // Read the MCP profile off the pane BEFORE closing it, so a restart keeps
+    // the pane's server set instead of silently reverting to "all servers".
+    const mcpProfile = tab.panes.find((p) => p.id === paneId)?.mcpProfile || '';
     App.CloseSession(sessionId);
     tabStore.closePane(tab.id, paneId);
     // Restart = fresh session, but still pin an id so it stays toggle-able to chat.
     const sid = mode.startsWith('claude') ? genSessionId() : '';
-    const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, { sessionId: sid });
+    const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, {
+      sessionId: sid,
+      mcpProfile,
+      mcpConfigPath: await resolveMCPConfigPath(tab.dir || '', mcpProfile),
+    });
     try {
       const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
       if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model,
-        null, '', '', '', '', '', false, 'terminal', '', sid);
+        null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile);
     } catch (err) { console.error('[handleRestartPane] failed:', err); }
   }
 
@@ -833,12 +865,16 @@
       // Keep the pane resumable after the toggle: reuse the resumed id, or pin a
       // fresh one for claude panes that never got a session id yet.
       const sid = resumeId || (mode.startsWith('claude') ? genSessionId() : '');
-      const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath,
-        resumeId ? { resumeId } : { sessionId: sid });
+      const mcpProfile = pane.mcpProfile || '';
+      const argv = buildClaudeArgv(mode, model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, {
+        ...(resumeId ? { resumeId } : { sessionId: sid }),
+        mcpProfile,
+        mcpConfigPath: await resolveMCPConfigPath(tab.dir || '', mcpProfile),
+      });
       try {
         const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
         if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model,
-          null, '', '', '', '', '', false, 'terminal', '', sid);
+          null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile);
       } catch (err) { console.error('[toggleDisplay→terminal] failed:', err); }
     } else {
       // Terminal → Chat: an interactive terminal session id is NOT a resumable
@@ -1176,14 +1212,19 @@
     const { tab, pane } = loc;
     tabStore.closePane(tab.id, pane.id);
     const sid = mode !== 'shell' ? genSessionId() : '';
+    const mcpProfile = pane.mcpProfile || '';
     const argv = mode !== 'shell'
-      ? buildClaudeArgv(pane.mode, pane.model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, { sessionId: sid })
+      ? buildClaudeArgv(pane.mode, pane.model, resolvedClaudePath, resolvedCodexPath, resolvedGeminiPath, {
+          sessionId: sid,
+          mcpProfile,
+          mcpConfigPath: await resolveMCPConfigPath(mainRoot, mcpProfile),
+        })
       : [];
     try {
       const newId = await App.CreateSession(argv, mainRoot, 24, 80, pane.mode);
       if (newId > 0) {
         tabStore.addPane(tab.id, newId, pane.name, pane.mode, pane.model,
-          null, '', '', '', '', '', false, 'terminal', '', sid);
+          null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile);
       }
     } catch (err) { console.error('[relaunchPaneAfterFinish] failed:', err); }
   }

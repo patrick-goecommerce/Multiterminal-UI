@@ -2,6 +2,11 @@ const fr = {
   app: {
     agentDone: 'Agent terminé – #{number}',
     terminalError: 'Erreur terminal (Session {id}) : {msg}',
+    bindWarning: 'Un service local n\'a pas pu démarrer et n\'est pas disponible dans cette instance MTUI :\n\n{details}\n\nLe port est généralement déjà utilisé ou bloqué par le pare-feu.',
+    bindService: {
+      focus: 'Focus de la fenêtre au clic sur la notification',
+      mcp: 'Contrôle des agents (serveur MCP)',
+    },
     mergeConflicts: 'Conflits de merge détectés{op}',
     conflictFiles: '{count} fichier(s) avec conflits',
     maxPanes: 'Max. {max} terminaux par onglet atteint.',
@@ -84,6 +89,10 @@ const fr = {
     geminiYolo: 'Gemini Sandbox',
     geminiYoloDesc: 'Mode sandbox',
     modelLabel: 'Modèle Claude :',
+    mcpLabel: 'Profil MCP :',
+    mcpGlobal: 'Tous (enregistrés globalement)',
+    mcpNone: 'Aucun MCP',
+    mcpHint: 'Limite les serveurs MCP démarrés par ce panneau — chaque serveur est un processus enfant.',
     cancel: 'Annuler (Esc)',
   },
   settings: {
@@ -259,6 +268,7 @@ const fr = {
     search: 'Rechercher',
     clearTerminal: 'Effacer le terminal',
     newTerminal: 'Nouveau terminal',
+    sleepPane: 'Mettre le volet en veille',
   },
   queue: {
     title: 'Pipeline Queue',

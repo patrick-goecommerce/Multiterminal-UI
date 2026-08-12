@@ -17,6 +17,12 @@
   let selectedPermissionMode: 'plan' | 'acceptEdits' | 'bypassPermissions' = 'plan';
   let dialogEl: HTMLDivElement;
 
+  // MCP profile (issue #179). Sticky across dialog openings within a session,
+  // seeded from the configured default; the pane keeps its choice in the saved
+  // session, so a restored pane relaunches with the same profile.
+  let selectedMCPProfile: string = $config.default_mcp_profile || '';
+  let mcpProfileTouched = false;
+
   const agentModes: PaneMode[] = ['claude', 'claude-yolo', 'codex', 'codex-auto', 'gemini', 'gemini-yolo'];
 
   interface LaunchOption {
@@ -53,13 +59,31 @@
 
   $: if (visible) {
     requestAnimationFrame(() => dialogEl?.focus());
+    syncMCPProfile();
+  }
+
+  /** Re-seed the MCP profile from config on open (config loads async, after
+   *  this component is first created) and drop a selection whose profile was
+   *  meanwhile deleted. A function — never inline assignments in a `$:` block,
+   *  which would re-run on every referenced variable's change. */
+  function syncMCPProfile() {
+    const cfg = $config;
+    if (!mcpProfileTouched) {
+      selectedMCPProfile = cfg.default_mcp_profile || '';
+    }
+    const known = selectedMCPProfile === '' || selectedMCPProfile === 'none'
+      || (cfg.mcp_profiles || []).some((p) => p.name === selectedMCPProfile);
+    if (!known) selectedMCPProfile = '';
   }
 
   function launch(type: PaneMode) {
     const isAgent = agentModes.includes(type);
     const display = isAgent ? selectedDisplay : 'terminal';
     const permissionMode = display === 'chat' ? selectedPermissionMode : 'plan';
-    dispatch('launch', { type, model: selectedModel, issue: issueContext, display, permissionMode });
+    dispatch('launch', {
+      type, model: selectedModel, issue: issueContext, display, permissionMode,
+      mcpProfile: selectedMCPProfile,
+    });
     dispatch('close');
     selectedModel = '';
     selectedDisplay = 'terminal';
@@ -109,6 +133,9 @@
     return models;
   })();
   $: showModelPicker = allModels.length > 0;
+  // MCP flags only exist on the claude CLI, so the picker follows claude panes.
+  $: showMCPPicker = $config.claude_enabled !== false
+    && options.some(o => o.mode.startsWith('claude'));
 </script>
 
 {#if visible}
@@ -189,6 +216,24 @@
                 {/each}
               </optgroup>
             {/if}
+          </select>
+        </div>
+      {/if}
+
+      {#if showMCPPicker}
+        <div class="mcp-picker">
+          <label for="mcp-profile-select">{$t('launch.mcpLabel')}</label>
+          <select
+            id="mcp-profile-select"
+            bind:value={selectedMCPProfile}
+            on:change={() => mcpProfileTouched = true}
+            title={$t('launch.mcpHint')}
+          >
+            <option value="">{$t('launch.mcpGlobal')}</option>
+            <option value="none">{$t('launch.mcpNone')}</option>
+            {#each ($config.mcp_profiles || []) as profile}
+              <option value={profile.name}>{profile.name}</option>
+            {/each}
           </select>
         </div>
       {/if}
@@ -338,6 +383,29 @@
   }
 
   .model-picker select {
+    flex: 1;
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg);
+    font-size: 12px;
+  }
+
+  .mcp-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .mcp-picker label {
+    font-size: 12px;
+    color: var(--fg-muted);
+    white-space: nowrap;
+  }
+
+  .mcp-picker select {
     flex: 1;
     padding: 6px 8px;
     background: var(--bg-secondary);
