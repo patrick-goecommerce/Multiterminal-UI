@@ -140,12 +140,16 @@ func (a *AppService) ClearQueue(sessionId int) {
 }
 
 // tryProcessQueue sends the next pending item if the session is ready.
+//
+// "sleeping" must be in this set: a sleeping pane emits no further activity of
+// its own, so without it AddToQueue would enqueue an item that nothing ever
+// picks up — a silent hang. processQueue turns the attempt into a wake-up.
 func (a *AppService) tryProcessQueue(sessionId int) {
 	prevActivityMu.Lock()
 	act := prevActivity[sessionId]
 	prevActivityMu.Unlock()
 
-	if act == "done" || act == "idle" || act == "" {
+	if act == "done" || act == "idle" || act == "" || act == "sleeping" {
 		a.processQueue(sessionId)
 	}
 }
@@ -153,6 +157,19 @@ func (a *AppService) tryProcessQueue(sessionId int) {
 // processQueue advances the queue: marks "sent" as "done", sends next "pending".
 // Called on activity→done transitions and when new items are added to idle sessions.
 func (a *AppService) processQueue(sessionId int) {
+	// A sleeping pane cannot take a prompt: sess.Write would fail and the item
+	// would be marked "sent" without ever being delivered. Wake it instead and
+	// leave the queue untouched — the resumed pane's next "done" transition
+	// (scanAllSessions) runs processQueue again.
+	a.mu.Lock()
+	suspendCandidate := a.sessions[sessionId]
+	a.mu.Unlock()
+	if suspendCandidate != nil && suspendCandidate.IsSuspendedOrSuspending() {
+		log.Printf("[queue] session %d: queued while asleep — waking up", sessionId)
+		a.wakeSession(sessionId)
+		return
+	}
+
 	a.mu.Lock()
 	q := a.queues[sessionId]
 	if q == nil || len(q.items) == 0 {

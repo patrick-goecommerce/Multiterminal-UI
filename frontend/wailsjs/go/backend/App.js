@@ -343,6 +343,18 @@ export function ResyncSession(arg1) {
   return $Call.ByID(3517924751, arg1);
 }
 
+export function SuspendSession(arg1) {
+  return $Call.ByID(2429289791, arg1);
+}
+
+export function ResumeSession(arg1) {
+  return $Call.ByID(1824890424, arg1);
+}
+
+export function IsSessionSuspended(arg1) {
+  return $Call.ByID(61607298, arg1);
+}
+
 export function SaveConfig(arg1) {
   return $Call.ByID(2393674620, arg1);
 }
