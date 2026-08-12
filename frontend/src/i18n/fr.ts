@@ -259,6 +259,7 @@ const fr = {
     search: 'Rechercher',
     clearTerminal: 'Effacer le terminal',
     newTerminal: 'Nouveau terminal',
+    sleepPane: 'Mettre le volet en veille',
   },
   queue: {
     title: 'Pipeline Queue',

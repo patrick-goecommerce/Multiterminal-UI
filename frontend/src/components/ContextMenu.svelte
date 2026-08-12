@@ -6,6 +6,12 @@
   export let y: number = 0;
   export let visible: boolean = false;
   export let hasSelection: boolean = false;
+  /** Show the "Pane einschlafen" entry (claude panes only). */
+  export let canSleep: boolean = false;
+  /** Whether sleeping is possible right now (only a finished pane may sleep). */
+  export let sleepEnabled: boolean = false;
+  /** Why sleeping is unavailable — shown as the entry's tooltip. */
+  export let sleepHint: string = '';
 
   const dispatch = createEventDispatcher();
 
@@ -66,6 +72,13 @@
     <button class="ctx-item" on:click={() => handleAction('splitPane')}>
       <span class="ctx-icon">&#x229e;</span> {$t('contextMenu.newTerminal')} <span class="ctx-shortcut">Ctrl+N</span>
     </button>
+    {#if canSleep}
+      <div class="ctx-separator"></div>
+      <button class="ctx-item" class:disabled={!sleepEnabled} disabled={!sleepEnabled}
+        title={sleepHint} on:click={() => handleAction('sleep')}>
+        <span class="ctx-icon">&#x1f319;</span> {$t('contextMenu.sleepPane')}
+      </button>
+    {/if}
   </div>
 {/if}
 

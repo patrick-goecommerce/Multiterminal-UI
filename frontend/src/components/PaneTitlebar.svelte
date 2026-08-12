@@ -97,6 +97,9 @@
       case 'waitingPermission': return 'dot-waiting-permission';
       case 'waitingAnswer': return 'dot-waiting-answer';
       case 'error': return 'dot-error';
+      // A sleeping pane is a calm, static state — no pulse, no glow.
+      case 'sleeping': return 'dot-sleeping';
+      case 'resuming': return 'dot-resuming';
       default: return 'dot-idle';
     }
   }
@@ -109,6 +112,15 @@
       case 'waitingPermission': return 'wartet auf dich';
       case 'waitingAnswer': return 'wartet auf dich';
       case 'error': return 'Fehler';
+      case 'sleeping': return 'schläft';
+      case 'resuming': return 'wacht auf';
+      default: return '';
+    }
+  })();
+  $: statusTitle = (() => {
+    switch (pane.activity) {
+      case 'sleeping': return 'Pane schläft – Prozess beendet, Verlauf erhalten. Klicken oder tippen weckt es auf.';
+      case 'resuming': return 'Claude lädt den Verlauf neu – das dauert rund 15 Sekunden.';
       default: return '';
     }
   })();
@@ -119,6 +131,8 @@
       case 'waitingPermission':
       case 'waitingAnswer': return 'status-waiting';
       case 'error': return 'status-danger';
+      case 'sleeping':
+      case 'resuming': return 'status-sleeping';
       default: return '';
     }
   })();
@@ -163,7 +177,7 @@
     {/if}
     <span class="mode-badge {getModeBadgeClass(pane.mode)}">{getModeLabel(pane.mode)}</span>
     {#if statusLabel}
-      <span class="status-badge {statusClass}">{statusLabel}</span>
+      <span class="status-badge {statusClass}" title={statusTitle}>{statusLabel}</span>
     {/if}
     {#if pane.background}
       <span class="mode-badge badge-bg">BG</span>
@@ -288,6 +302,9 @@
   .dot-idle { background: var(--status-idle, var(--fg-muted)); }
   .dot-active { background: var(--status-running); animation: dot-spin 1s linear infinite; }
   .dot-done { background: var(--status-running); box-shadow: 0 0 6px var(--status-running); }
+  /* Sleeping/waking: grey, static. No animation and no glow — a pane that is
+   * off must not compete for attention with one that needs it. */
+  .dot-sleeping, .dot-resuming { background: var(--fg-muted); opacity: 0.6; }
 
   :global(.dot-waiting-permission),
   :global(.dot-waiting-answer) {
@@ -336,6 +353,7 @@
   .status-badge.status-done { color: var(--fg-muted); background: var(--bg-tertiary); }
   .status-badge.status-waiting { color: var(--status-waiting); background: var(--status-waiting-tint); }
   .status-badge.status-danger { color: var(--status-danger); background: var(--status-danger-tint); }
+  .status-badge.status-sleeping { color: var(--fg-muted); background: var(--bg-tertiary); }
 
   /* Segmented Terminal | Chat toggle */
   .display-toggle {

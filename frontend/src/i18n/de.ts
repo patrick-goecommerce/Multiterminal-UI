@@ -294,6 +294,7 @@ const de = {
     search: 'Suchen',
     clearTerminal: 'Terminal leeren',
     newTerminal: 'Neues Terminal',
+    sleepPane: 'Pane einschlafen',
   },
 
   // QueuePanel

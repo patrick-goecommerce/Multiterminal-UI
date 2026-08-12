@@ -75,6 +75,57 @@
     termInstance?.terminal.focus();
   }
 
+  // --- Pane sleeping (issue #180) -------------------------------------------
+  // A sleeping pane keeps its session id and its xterm.js scrollback; only the
+  // process tree is gone. Waking restarts claude with --resume into the same
+  // backend session, so nothing here may dispose or re-create the terminal.
+  const SLEEPABLE_MODES = ['claude', 'claude-auto', 'claude-yolo'];
+  let waking = false;
+
+  $: canSleep = SLEEPABLE_MODES.includes(pane.mode);
+  $: sleepEnabled = canSleep && pane.activity === 'done';
+  $: sleepHint = sleepEnabled
+    ? 'Prozess beenden, Verlauf behalten – Klick weckt das Pane wieder auf.'
+    : pane.activity === 'sleeping'
+      ? 'Pane schläft bereits – Klick oder Tastendruck weckt es auf.'
+      : pane.activity === 'resuming'
+        ? 'Pane wacht gerade auf.'
+        : 'Nur ein fertiges Pane kann einschlafen.';
+
+  async function sleepPane() {
+    try {
+      await App.SuspendSession(pane.sessionId);
+    } catch (err) {
+      console.error('[sleepPane] failed:', err);
+    }
+  }
+
+  /** Wake a sleeping pane. Triggered by user gestures on THIS pane only
+   *  (click, keyboard input) — a tab switch must never wake several panes. */
+  async function wakePane() {
+    if (waking || pane.activity !== 'sleeping') return;
+    waking = true;
+    try {
+      await App.ResumeSession(pane.sessionId);
+      // The resumed claude inherits the PTY's start geometry, so re-send the
+      // pane's real size — otherwise the woken TUI renders at 24x80.
+      if (termInstance) {
+        termInstance.fitAddon.fit();
+        const dims = termInstance.fitAddon.proposeDimensions();
+        if (dims) App.ResizeSession(pane.sessionId, dims.rows, dims.cols);
+      }
+    } catch (err) {
+      console.error('[wakePane] failed:', err);
+    } finally {
+      waking = false;
+    }
+  }
+
+  function handlePaneMouseDown() {
+    dispatch('focus', { paneId: pane.id });
+    if (pane.activity === 'sleeping') void wakePane();
+  }
+
   function handleContextMenu(e: MouseEvent) {
     e.preventDefault();
     ctxMenuX = e.clientX;
@@ -111,6 +162,9 @@
         break;
       case 'splitPane':
         dispatch('splitPane');
+        break;
+      case 'sleep':
+        void sleepPane();
         break;
     }
 
@@ -414,6 +468,12 @@
       });
 
       termInstance.terminal.onData((data: string) => {
+        // Typing into a sleeping pane means "I want it back". The keystroke is
+        // dropped on purpose: it would land in a TUI that is still replaying.
+        if (pane.activity === 'sleeping') {
+          void wakePane();
+          return;
+        }
         App.WriteToSession(pane.sessionId, encodeForPty(data));
       });
     }
@@ -553,7 +613,7 @@
   class:activity-done={pane.activity === 'done'}
   class:activity-waiting={pane.activity === 'waitingPermission' || pane.activity === 'waitingAnswer'}
   class:drop-target={dropHighlight}
-  on:mousedown={() => dispatch('focus', { paneId: pane.id })}
+  on:mousedown={handlePaneMouseDown}
   on:dragover={handleDragOver}
   on:dragleave={handleDragLeave}
   on:drop={handleDrop}
@@ -596,6 +656,9 @@
     x={ctxMenuX}
     y={ctxMenuY}
     hasSelection={ctxHasSelection}
+    {canSleep}
+    {sleepEnabled}
+    {sleepHint}
     on:action={handleContextAction}
     on:close={closeContextMenu}
   />
