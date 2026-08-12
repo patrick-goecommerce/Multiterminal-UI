@@ -163,8 +163,21 @@ func (a *AppService) collectOutput(id int, sess *terminal.Session, ctx context.C
 }
 
 // watchExit waits for a session to exit and notifies the frontend.
+//
+// A suspend kills the process on purpose (issue #180). Emitting terminal:exit
+// for it would drop the "Prozess beendet" overlay over a merely sleeping pane
+// and hide its scrollback, so the exit of a suspended generation is swallowed
+// and the watcher re-arms on the next generation's done channel.
 func (a *AppService) watchExit(id int, sess *terminal.Session) {
-	<-sess.Done()
+	for {
+		<-sess.Done()
+		if !sess.IsSuspendedOrSuspending() {
+			break
+		}
+		if !sess.WaitAwake() {
+			return // closed for good while asleep — nothing to report
+		}
+	}
 	if a.app == nil {
 		return // no frontend to notify (e.g. before ServiceStartup, in tests)
 	}

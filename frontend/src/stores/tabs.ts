@@ -9,7 +9,11 @@ export interface Pane {
   mode: PaneMode;
   model: string;
   focused: boolean;
-  activity: 'starting' | 'idle' | 'active' | 'done' | 'waitingPermission' | 'waitingAnswer' | 'error';
+  /** 'sleeping' = pane was put to sleep on purpose (process tree killed, session
+   *  object and scrollback alive); 'resuming' = claude is replaying the
+   *  transcript after a wake-up (~12–15 s). Both are lifecycle states, not
+   *  activity: they never contribute to a tab's unread badge. */
+  activity: 'starting' | 'idle' | 'active' | 'done' | 'waitingPermission' | 'waitingAnswer' | 'error' | 'sleeping' | 'resuming';
   cost: string;
   running: boolean;
   maximized: boolean;
@@ -84,6 +88,10 @@ export function tabNeedsCloseConfirm(tab: Tab): boolean {
   return tab.panes.length > 0;
 }
 
+/** Roll the panes' activity up into the tab badge.
+ *  'sleeping' and 'resuming' are deliberately not mapped: a sleeping pane is
+ *  waiting for nobody, so it must never make an inactive tab look like it
+ *  needs attention. */
 export function computeTabActivity(panes: Pane[]): Tab['unreadActivity'] {
   let result: Tab['unreadActivity'] = null;
   for (const pane of panes) {
@@ -121,7 +129,12 @@ function createTabStore() {
       for (const tab of state.tabs) {
         for (const pane of tab.panes) {
           if (pane.sessionId === sessionId) {
-            if (activity) pane.activity = activity as Pane['activity'];
+            // A waking pane produces a burst of output while claude replays its
+            // transcript (~12–15 s). Keeping "wacht auf" through that stretch
+            // bridges the whole wake-up instead of flipping to "läuft" after a
+            // second; any settled state (done/waiting/error) ends it.
+            const stayResuming = pane.activity === 'resuming' && activity === 'active';
+            if (activity && !stayResuming) pane.activity = activity as Pane['activity'];
             if (cost) pane.cost = cost;
             if (tab.id !== state.activeTabId) {
               tab.unreadActivity = computeTabActivity(tab.panes);
@@ -335,6 +348,10 @@ function createTabStore() {
       // deferred: a redraw of Claude's TUI quickly flips back to "active" and
       // cancels the pending change, so the badge reads calmly as "läuft" while
       // work continues and only settles once a state truly holds.
+      // 'sleeping' and 'resuming' are deliberately NOT calm states: they are
+      // lifecycle facts the backend reports once, not classifications of a
+      // quiet screen. Debouncing them would leave the pane showing "fertig"
+      // for another second after the user put it to sleep.
       const isCalm = activity === 'done' || activity === 'idle'
         || activity === 'waitingPermission' || activity === 'waitingAnswer';
       if (isCalm) {

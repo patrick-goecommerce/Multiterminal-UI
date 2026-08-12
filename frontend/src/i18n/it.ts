@@ -259,6 +259,7 @@ const it = {
     search: 'Cerca',
     clearTerminal: 'Cancella terminale',
     newTerminal: 'Nuovo terminale',
+    sleepPane: 'Sospendi pannello',
   },
   queue: {
     title: 'Pipeline Queue',

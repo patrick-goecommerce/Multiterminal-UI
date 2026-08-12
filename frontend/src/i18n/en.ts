@@ -259,6 +259,7 @@ const en = {
     search: 'Search',
     clearTerminal: 'Clear terminal',
     newTerminal: 'New terminal',
+    sleepPane: 'Put pane to sleep',
   },
   queue: {
     title: 'Pipeline Queue',

@@ -33,6 +33,7 @@ type AppService struct {
 	cfg                config.Config
 	health             config.HealthState
 	sessions           map[int]*terminal.Session
+	launches           map[int]launchSpec // how each session was started (for ResumeSession)
 	queues             map[int]*sessionQueue
 	finishStates       map[int]*finishState  // active worktree-finish flows, keyed by session ID
 	sessionIssues      map[int]*sessionIssue // issue linked to each session
@@ -73,6 +74,7 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		app:           app,
 		cfg:           cfg,
 		sessions:      make(map[int]*terminal.Session),
+		launches:      make(map[int]launchSpec),
 		queues:        make(map[int]*sessionQueue),
 		finishStates:  make(map[int]*finishState),
 		sessionIssues: make(map[int]*sessionIssue),
@@ -225,26 +227,24 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 		argv = []string{a.cfg.DefaultShell}
 	}
 
-	// Inject env vars for all sessions
-	var env []string
-	if a.tmuxAPIPort > 0 {
-		env = append(env, fmt.Sprintf("MTUI_PORT=%d", a.tmuxAPIPort))
-	}
-	if mode == "claude" || mode == "claude-auto" || mode == "claude-yolo" {
-		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
-		env = append(env, worktreeEnvVars(dir)...)
-		// Worktree-mandatory policy, resolved once here (global setting +
-		// per-project override) so mtui-hook only has to read one env var.
-		// Empty when the policy is off or dir is not a git repo.
-		if root := a.forceWorktreeRoot(dir); root != "" {
-			env = append(env, "MULTITERMINAL_FORCE_WORKTREE_ROOT="+root)
-		}
-	}
+	// Inject env vars for all sessions. Shared with ResumeSession so a woken
+	// pane gets an identical environment (app_suspend.go).
+	env := a.sessionEnv(id, dir, mode)
 
 	sess := terminal.NewSession(id, rows, cols)
+	// The Claude session UUID lives only in the argv the frontend built. Parse
+	// it here so a pane can be resumed even before the first hook event; the
+	// hook-reported id overwrites it as soon as it arrives.
+	if isClaudeMode(mode) {
+		sess.SetResumeID(claudeSessionIDFromArgv(argv))
+	}
+	a.rememberLaunch(id, argv, dir, mode)
 	if err := sess.Start(argv, dir, env); err != nil {
 		errMsg := fmt.Sprintf("Session start failed: %v", err)
 		log.Printf("[CreateSession] ERROR: %s", errMsg)
+		a.mu.Lock()
+		delete(a.launches, id)
+		a.mu.Unlock()
 		a.app.Event.Emit("terminal:error", TerminalErrorEvent{ID: id, Message: errMsg})
 		return -1
 	}
@@ -282,6 +282,16 @@ func (a *AppService) WriteToSession(id int, b64data string) {
 	if err != nil {
 		return
 	}
+	// A sleeping pane has no PTY: the write would fail with ErrSuspended and the
+	// keystroke would vanish. Wake it instead — typing into a pane is exactly
+	// the user gesture that means "I want this back" (design D7). The keystroke
+	// that triggered the wake is dropped on purpose; replaying it into a Claude
+	// TUI that is still replaying its transcript would land somewhere random.
+	if sess.IsSuspended() {
+		log.Printf("[suspend] session %d: input received while asleep — waking up", id)
+		a.wakeSession(id)
+		return
+	}
 	sess.Write(data)
 }
 
@@ -314,6 +324,7 @@ func (a *AppService) CloseSession(id int) {
 		sess.Close() // blocks until process exits and readLoop closes RawOutputCh
 		a.mu.Lock()
 		delete(a.sessions, id)
+		delete(a.launches, id)
 		delete(a.queues, id)
 		delete(a.finishStates, id)
 		delete(a.sessionIssues, id)
