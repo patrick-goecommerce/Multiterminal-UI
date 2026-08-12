@@ -845,6 +845,22 @@ export namespace config {
 	        this.id = source["id"];
 	    }
 	}
+	export class MCPProfile {
+	    name: string;
+	    servers?: string[];
+	    config_path?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new MCPProfile(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.servers = source["servers"];
+	        this.config_path = source["config_path"];
+	    }
+	}
 	export class AutoNamingSettings {
 	    enabled?: boolean;
 	    model: string;
@@ -889,6 +905,8 @@ export namespace config {
 	    update_channel: string;
 	    auto_update_check_minutes: number;
 	    terminal_scrollback: number;
+	    mcp_profiles: MCPProfile[];
+	    default_mcp_profile: string;
 
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -925,6 +943,8 @@ export namespace config {
 	        this.update_channel = source["update_channel"];
 	        this.auto_update_check_minutes = source["auto_update_check_minutes"];
 	        this.terminal_scrollback = source["terminal_scrollback"];
+	        this.mcp_profiles = this.convertValues(source["mcp_profiles"], MCPProfile);
+	        this.default_mcp_profile = source["default_mcp_profile"];
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -957,6 +977,7 @@ export namespace config {
 	    worktree_branch?: string;
 	    target_branch?: string;
 	    zoom_delta?: number;
+	    mcp_profile?: string;
 
 	    static createFrom(source: any = {}) {
 	        return new SavedPane(source);
@@ -973,6 +994,7 @@ export namespace config {
 	        this.worktree_branch = source["worktree_branch"];
 	        this.target_branch = source["target_branch"];
 	        this.zoom_delta = source["zoom_delta"];
+	        this.mcp_profile = source["mcp_profile"];
 	    }
 	}
 	export class SavedTab {

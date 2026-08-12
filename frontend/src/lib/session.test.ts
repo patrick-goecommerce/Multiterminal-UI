@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, linkSessionIssue } = vi.hoisted(() => ({
+const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, linkSessionIssue, resolveMCPProfile } = vi.hoisted(() => ({
   loadTabs: vi.fn(),
   ensureProjectWorktreeSetup: vi.fn(),
   createSession: vi.fn(),
   worktreeDirExists: vi.fn(),
   linkSessionIssue: vi.fn(),
+  resolveMCPProfile: vi.fn(),
 }));
 
 vi.mock('../../wailsjs/go/backend/App', () => ({
@@ -14,6 +15,7 @@ vi.mock('../../wailsjs/go/backend/App', () => ({
   CreateSession: createSession,
   WorktreeDirExists: worktreeDirExists,
   LinkSessionIssue: linkSessionIssue,
+  ResolveMCPProfile: resolveMCPProfile,
 }));
 
 import { paneToSaved, restoreSession } from './session';
@@ -30,6 +32,11 @@ describe('paneToSaved', () => {
     expect(saved.worktree_branch).toBe('terminal/a');
     expect(saved.target_branch).toBe('alpha-main');
   });
+
+  it('serialisiert das MCP-Profil (sonst startet der Pane nach Neustart wieder alle MCP-Server)', () => {
+    expect(paneToSaved({ name: 'x', mode: 'claude', mcpProfile: 'none' } as any).mcp_profile).toBe('none');
+    expect(paneToSaved({ name: 'x', mode: 'claude' } as any).mcp_profile).toBe('');
+  });
 });
 
 // Bug: EnsureProjectWorktreeSetup only ran on fresh pane launches (App.svelte
@@ -43,14 +50,15 @@ describe('restoreSession worktree setup', () => {
     createSession.mockReset().mockResolvedValue(1);
     worktreeDirExists.mockReset().mockResolvedValue(false);
     linkSessionIssue.mockReset();
+    resolveMCPProfile.mockReset().mockResolvedValue('');
   });
 
-  function savedPane(mode: number) {
+  function savedPane(mode: number, extra: Record<string, unknown> = {}) {
     return {
       name: 'p', mode, model: '', display: 'terminal', conversation_id: '',
       claude_session_id: '', user_renamed: false, worktree_path: '',
       worktree_branch: '', target_branch: '', issue_number: 0, issue_branch: '',
-      zoom_delta: 0,
+      zoom_delta: 0, ...extra,
     };
   }
 
@@ -74,5 +82,60 @@ describe('restoreSession worktree setup', () => {
     await restoreSession('claude');
 
     expect(ensureProjectWorktreeSetup).not.toHaveBeenCalled();
+  });
+});
+
+// A restored pane must keep the MCP profile it was launched with — otherwise
+// every app restart silently re-multiplies the MCP child processes (#179).
+describe('restoreSession MCP profile', () => {
+  beforeEach(() => {
+    loadTabs.mockReset();
+    ensureProjectWorktreeSetup.mockReset().mockResolvedValue(undefined);
+    createSession.mockReset().mockResolvedValue(1);
+    worktreeDirExists.mockReset().mockResolvedValue(false);
+    linkSessionIssue.mockReset();
+    resolveMCPProfile.mockReset().mockResolvedValue('');
+  });
+
+  function restoreWith(extra: Record<string, unknown>) {
+    loadTabs.mockResolvedValue({
+      active_tab: 0,
+      tabs: [{
+        name: 't', dir: 'D:/repos/foo', focus_idx: 0,
+        panes: [{
+          name: 'p', mode: 1, model: '', display: 'terminal', conversation_id: '',
+          claude_session_id: '', user_renamed: false, worktree_path: '',
+          worktree_branch: '', target_branch: '', issue_number: 0, issue_branch: '',
+          zoom_delta: 0, ...extra,
+        }],
+      }],
+    });
+    return restoreSession('claude');
+  }
+
+  it('restores a "none" pane with --strict-mcp-config and no backend lookup', async () => {
+    await restoreWith({ mcp_profile: 'none' });
+
+    expect(resolveMCPProfile).not.toHaveBeenCalled();
+    const argv = createSession.mock.calls[0][0];
+    expect(argv).toContain('--strict-mcp-config');
+    expect(argv).not.toContain('--mcp-config');
+  });
+
+  it('restores a named profile with the backend-resolved --mcp-config path', async () => {
+    resolveMCPProfile.mockResolvedValue('D:/home/.multiterminal/mcp-profiles/p-1.json');
+
+    await restoreWith({ mcp_profile: 'Nur MTUI' });
+
+    expect(resolveMCPProfile).toHaveBeenCalledWith('D:/repos/foo', 'Nur MTUI');
+    const argv = createSession.mock.calls[0][0];
+    expect(argv.slice(-3)).toEqual(['--strict-mcp-config', '--mcp-config', 'D:/home/.multiterminal/mcp-profiles/p-1.json']);
+  });
+
+  it('adds no MCP flags for a pane saved without a profile', async () => {
+    await restoreWith({});
+
+    const argv = createSession.mock.calls[0][0];
+    expect(argv).not.toContain('--strict-mcp-config');
   });
 });

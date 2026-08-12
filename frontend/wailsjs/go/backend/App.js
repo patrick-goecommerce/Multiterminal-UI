@@ -343,6 +343,10 @@ export function ResyncSession(arg1) {
   return $Call.ByID(3517924751, arg1);
 }
 
+export function ResolveMCPProfile(arg1, arg2) {
+  return $Call.ByID(55755472, arg1, arg2);
+}
+
 export function SaveConfig(arg1) {
   return $Call.ByID(2393674620, arg1);
 }

@@ -58,6 +58,15 @@ export interface OrchestratorConfig {
   sync_subtasks_to_github: boolean;
 }
 
+/** A named subset of MCP servers a Claude pane may load (see internal/config/mcp_profile.go). */
+export interface MCPProfile {
+  name: string;
+  /** MCP server names looked up in the user's claude registration. */
+  servers?: string[];
+  /** Ready-made .mcp.json handed to `claude --mcp-config` (wins over servers). */
+  config_path?: string;
+}
+
 export interface AppConfig {
   default_shell: string;
   default_dir: string;
@@ -94,6 +103,9 @@ export interface AppConfig {
   orchestrator: OrchestratorConfig;
   language: string;
   setup_done: boolean;
+  mcp_profiles: MCPProfile[];
+  /** Profile preselected in the launch dialog ('' = all global MCP servers). */
+  default_mcp_profile: string;
 }
 
 export const config = writable<AppConfig>({
@@ -179,4 +191,8 @@ export const config = writable<AppConfig>({
   },
   language: 'de',
   setup_done: false,
+  mcp_profiles: [
+    { name: 'Nur MTUI', servers: ['mtui'] },
+  ],
+  default_mcp_profile: '',
 });

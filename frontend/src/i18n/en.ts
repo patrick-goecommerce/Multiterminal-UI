@@ -84,6 +84,10 @@ const en = {
     geminiYolo: 'Gemini Sandbox',
     geminiYoloDesc: 'Sandbox mode',
     modelLabel: 'Claude model:',
+    mcpLabel: 'MCP profile:',
+    mcpGlobal: 'All (globally registered)',
+    mcpNone: 'No MCP',
+    mcpHint: 'Limits which MCP servers this pane starts – each server is its own child process.',
     cancel: 'Cancel (Esc)',
   },
   settings: {

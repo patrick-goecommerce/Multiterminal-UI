@@ -26,6 +26,9 @@ export interface Pane {
   conversationId: string;
   /** Claude session id pinned at launch (--session-id), used to resume on terminal⇄chat toggle. Empty for shell/codex/gemini. */
   claudeSessionId: string;
+  /** MCP profile chosen at launch: '' = all globally registered servers,
+   *  'none' = zero servers, otherwise a config.mcp_profiles name (issue #179). */
+  mcpProfile: string;
   /** LLM-generated pane name (from the user's prompt). */
   autoName: string;
   /** OSC-derived window title from the PTY. */
@@ -224,7 +227,7 @@ function createTabStore() {
       });
     },
 
-    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, targetBranch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = '', claudeSessionId = ''): string {
+    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, targetBranch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = '', claudeSessionId = '', mcpProfile = ''): string {
       const paneId = `pane-${nextPaneNum++}`;
       update((state) => {
         const tab = state.tabs.find((t) => t.id === tabId);
@@ -253,6 +256,7 @@ function createTabStore() {
           display,
           conversationId,
           claudeSessionId,
+          mcpProfile,
           autoName: '',
           oscTitle: '',
           autoNameSource: '',
