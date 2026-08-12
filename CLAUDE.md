@@ -42,6 +42,11 @@ A GUI terminal multiplexer built for Claude Code power users.
 ## Platform Gotchas (Windows)
 - CLI tools (`claude`, `npm`) are `.cmd` shims — must wrap via `os.Getenv("COMSPEC")` + `/c` for ConPTY.
   Never use bare `cmd.exe` (Go resolves relative to exe dir).
+  **PTY sessions wrap conditionally** (`terminal.windowsArgv`, `session_argv.go`): argv[0] is resolved
+  against the *session* PATH (which has the tmux-shim dir prepended); a `.exe`/`.com` starts directly
+  with argv[0] replaced by the resolved absolute path — go-pty resolves a bare name against `Cmd.Dir`,
+  not PATH, so an unresolved name would not be found. Everything else (shims, failed lookup) keeps the
+  COMSPEC wrapper. Non-PTY spawns still wrap unconditionally.
 - **Every non-PTY child process MUST call `hideConsole(cmd)` before `Start()`/`Run()`.** MTUI is a GUI app with no console, so any `exec.Command` that launches a console-subsystem program (esp. via `cmd.exe /c …`) makes Windows allocate a **visible console window that flashes**. `hideConsole` (`internal/backend/hide_windows.go`, sets `CREATE_NO_WINDOW`; no-op on non-Windows) is applied to every git/gh/worktree spawn — apply it to any new spawn too. PTY sessions are exempt (ConPTY has no window). **Recurring bug:** the statusline forwarder shim and the chat/pane-name `claude` spawns each shipped this flash because they skipped `hideConsole`.
 - `CLAUDECODE` env var must be stripped from PTY environment (see `session.go:Start`).
 - `beforeunload` does NOT fire reliably in WebView2 — use reactive auto-save (store subscription + debounce).

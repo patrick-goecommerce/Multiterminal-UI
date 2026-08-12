@@ -96,17 +96,13 @@ func (s *Session) Start(argv []string, dir string, env []string) error {
 
 	s.Dir = dir
 
+	// defaultShell already yields a real executable; only a caller-supplied
+	// argv may need the Windows COMSPEC wrapper. The decision itself happens
+	// further down, once the session's PATH is assembled (see windowsArgv).
+	prepareArgv := true
 	if len(argv) == 0 {
 		argv = defaultShell()
-	} else if runtime.GOOS == "windows" {
-		// On Windows, CLI tools like "claude" are often .cmd/.bat shims
-		// that cannot be executed directly by ConPTY. Wrap them via COMSPEC
-		// so the shell resolves PATHEXT and handles .cmd files properly.
-		shell := os.Getenv("COMSPEC")
-		if shell == "" {
-			shell = `C:\Windows\System32\cmd.exe`
-		}
-		argv = append([]string{shell, "/c"}, argv...)
+		prepareArgv = false
 	}
 
 	// Build environment: inherit from parent but strip variables that would
@@ -139,6 +135,12 @@ func (s *Session) Start(argv []string, dir string, env []string) error {
 		if !found {
 			fullEnv = append(fullEnv, "PATH="+exeDir)
 		}
+	}
+
+	// Decide the Windows wrapper here — after fullEnv is final — so the
+	// lookup runs against the same PATH the child process gets.
+	if prepareArgv && runtime.GOOS == "windows" {
+		argv = windowsArgv(argv, os.Getenv("COMSPEC"), sessionLookPath(fullEnv))
 	}
 
 	rows := s.Screen.Rows()
@@ -367,10 +369,13 @@ func (s *Session) Name() string {
 	return s.Title
 }
 
-// Pid returns the wrapper process id (cmd.exe on Windows), or 0 before Start.
-// The finish flow needs it to kill the whole process tree BEFORE Close():
-// after Process.Kill() the grandchildren are orphaned and taskkill /T cannot
-// find them anymore.
+// Pid returns the id of the process started in the PTY, or 0 before Start.
+// On Windows that is the cmd.exe wrapper for .cmd/.bat shims and the target
+// binary itself for a real .exe (see windowsArgv) — either way it is the root
+// of the session's process tree.
+// The finish flow needs it to kill the whole tree BEFORE Close(): after
+// Process.Kill() the descendants are orphaned and taskkill /T cannot find
+// them anymore.
 func (s *Session) Pid() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
