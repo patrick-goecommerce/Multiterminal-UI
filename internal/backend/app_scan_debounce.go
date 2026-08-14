@@ -5,12 +5,15 @@ import "time"
 // debounceWindow is how long a differing raw activity state must hold before it
 // counts as a real change.
 //
-// The scan tick is 500-750 ms depending on session count (see scanInterval), so
-// a confirmation costs two to three matching observations and up to ~1.75 s of
-// latency. That buys immunity against two independent flicker sources: Claude's
-// TUI repainting while idle, and classifyScreenState being a snapshot without
-// hysteresis — a tick landing between ESC[2K and the redraw of the input box
-// classifies the very same screen as "idle" (issue #188).
+// The scan tick is 500-750 ms depending on session count (see scanInterval).
+// At the fastest tick (500 ms) a confirmation costs four observations: arm at
+// t0, hold at t0+500ms and t0+1000ms (both still short of the 1.2 s window),
+// confirm at t0+1500ms. Counting the up-to-one-tick delay before the state is
+// first observed, worst-case latency is ~2.0 s. That buys immunity against two
+// independent flicker sources: Claude's TUI repainting while idle, and
+// classifyScreenState being a snapshot without hysteresis — a tick landing
+// between ESC[2K and the redraw of the input box classifies the very same
+// screen as "idle" (issue #188).
 //
 // The frontend's own 900 ms smoothing is removed in exchange, so this is not a
 // net slowdown.
@@ -82,6 +85,22 @@ func cleanupActivityDebounce(id int) {
 	delete(pendingActivity, id)
 	delete(pendingSince, id)
 	delete(activitySince, id)
+}
+
+// forceActivity sets the confirmed activity state and its start timestamp
+// together, and drops any pending debounce candidate. The caller must hold
+// prevActivityMu.
+//
+// Use this instead of writing prevActivity[id] directly whenever a state is
+// applied outside confirmActivity (e.g. a queue reset forcing "idle", or a
+// suspend/resume transition). A bare prevActivity write leaves activitySince
+// pointing at the *previous* state and leaves any armed candidate in place,
+// which can then confirm on a single unrelated tick (issue #188 follow-up).
+func forceActivity(id int, state string, now time.Time) {
+	prevActivity[id] = state
+	activitySince[id] = now
+	delete(pendingActivity, id)
+	delete(pendingSince, id)
 }
 
 // activitySinceUnix returns the confirmed state's start as seconds since epoch,

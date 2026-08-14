@@ -146,3 +146,45 @@ func TestActivitySinceUnix(t *testing.T) {
 		t.Errorf("activitySinceUnix = %d, want 7000", got)
 	}
 }
+
+// forceActivity is used by writers that bypass confirmActivity (queue reset,
+// suspend/resume). The forced state's timestamp must win, and any pending
+// candidate armed before the force must not survive to confirm on a later
+// unrelated tick.
+func TestForceActivitySetsTimestampAndClearsPending(t *testing.T) {
+	resetActivityDebounceForTest()
+
+	base := time.Unix(8000, 0)
+	prevActivityMu.Lock()
+	prevActivity[9] = "active"
+	// Arm a pending candidate for "done" that has not yet confirmed.
+	confirmActivity(9, "done", base)
+	prevActivityMu.Unlock()
+
+	forced := base.Add(300 * time.Millisecond)
+	prevActivityMu.Lock()
+	forceActivity(9, "idle", forced)
+	if got := prevActivity[9]; got != "idle" {
+		t.Errorf("prevActivity = %q, want %q", got, "idle")
+	}
+	if _, ok := pendingActivity[9]; ok {
+		t.Error("pendingActivity still holds a candidate after force")
+	}
+	if _, ok := pendingSince[9]; ok {
+		t.Error("pendingSince still holds a candidate after force")
+	}
+	prevActivityMu.Unlock()
+
+	if got := activitySinceFor(9); !got.Equal(forced) {
+		t.Errorf("activitySince = %v, want %v", got, forced)
+	}
+
+	// The candidate armed before the force must not confirm later just
+	// because enough time has passed since it was originally armed.
+	prevActivityMu.Lock()
+	confirmed := confirmActivity(9, "done", base.Add(debounceWindow))
+	prevActivityMu.Unlock()
+	if confirmed {
+		t.Fatal("a candidate armed before forceActivity confirmed after the force")
+	}
+}

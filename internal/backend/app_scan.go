@@ -177,6 +177,16 @@ func (a *AppService) scanAllSessions() {
 			prevTitle[id] = title
 		}
 		confirmedActivity := prevActivity[id]
+		if confirmedActivity == "" {
+			// No confirmed state yet (session just started, still on its
+			// first candidate). Fall back to the raw observation instead of
+			// emitting "" — outside the documented enum — when only cost or
+			// title changed on this tick. activityString never returns "",
+			// so this is always a valid value; it does not weaken the
+			// debounce guarantee because activityChanged is false here, so
+			// none of the confirmed-transition side effects below fire.
+			confirmedActivity = actStr
+		}
 		prevActivityMu.Unlock()
 
 		if changed && a.app != nil {

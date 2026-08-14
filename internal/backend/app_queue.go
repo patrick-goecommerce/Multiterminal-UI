@@ -225,10 +225,13 @@ func (a *AppService) processQueue(sessionId int) {
 		}
 		// Reset activity so the next "done" transition is detected as a change.
 		// Without this, prevActivity might already be "done" from the previous
-		// item, causing the scan loop to miss the transition.
+		// item, causing the scan loop to miss the transition. forceActivity also
+		// stamps activitySince to now and clears any armed debounce candidate —
+		// a bare prevActivity write would leave the timestamp on the previous
+		// state and let a stale candidate confirm on the next tick (issue #188).
 		sess.ResetActivity()
 		prevActivityMu.Lock()
-		prevActivity[sessionId] = "idle"
+		forceActivity(sessionId, "idle", time.Now())
 		prevActivityMu.Unlock()
 	}
 
