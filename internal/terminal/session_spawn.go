@@ -159,7 +159,13 @@ func (s *Session) readLoop(p gopty.Pty, gen int, done, exit chan struct{}) {
 // noteOutput records a fresh PTY chunk under s.mu. It reports false when the
 // chunk belongs to a stale generation, i.e. the caller must stop.
 //
-// This is the abort half of the two-phase suspend commit: a chunk arriving
+// It deliberately does NOT touch s.Activity. Doing so on every byte made a
+// cosmetic repaint of Claude's idle TUI — even a bare cursor hide/show —
+// indistinguishable from real work, and it silently overwrote authoritative
+// hook state (issue #188). Activity is decided in one place: DetectActivity /
+// the hook path, evaluated by the scan loop.
+//
+// This is also the abort half of the two-phase suspend commit: a chunk arriving
 // after a suspend was armed marks it aborted in the very same critical section
 // that TrySuspend used, so the kill goroutine cannot miss it.
 func (s *Session) noteOutput(gen int) bool {
@@ -175,7 +181,6 @@ func (s *Session) noteOutput(gen int) bool {
 	if s.Status == StatusSuspending {
 		s.sus.aborted = true
 	}
-	s.Activity = ActivityActive
 	return true
 }
 
