@@ -37,25 +37,30 @@ func TestHookEventToActivity(t *testing.T) {
 		event   string
 		message string
 		want    terminal.ActivityState
+		wantOK  bool
 	}{
-		{"PreToolUse", "", terminal.ActivityActive},
-		{"PostToolUse", "", terminal.ActivityActive},
-		{"PostToolUseFailure", "", terminal.ActivityError},
-		{"PermissionRequest", "", terminal.ActivityWaitingPermission},
-		// Notification with a question → user must respond
-		{"Notification", "Möchtest du fortfahren?", terminal.ActivityWaitingAnswer},
-		{"Notification", "Should I proceed?", terminal.ActivityWaitingAnswer},
-		// Notification without a question → informational, show as done
-		{"Notification", "Task completed successfully.", terminal.ActivityDone},
-		{"Notification", "", terminal.ActivityDone},
-		{"Stop", "", terminal.ActivityDone},
-		{"UserPromptSubmit", "", terminal.ActivityActive},
-		{"SessionEnd", "", terminal.ActivityIdle},
-		{"unknown", "", terminal.ActivityIdle},
+		{"PreToolUse", "", terminal.ActivityActive, true},
+		{"PostToolUse", "", terminal.ActivityActive, true},
+		{"UserPromptSubmit", "", terminal.ActivityActive, true},
+		{"PostToolUseFailure", "", terminal.ActivityError, true},
+		{"PermissionRequest", "", terminal.ActivityWaitingPermission, true},
+		{"Stop", "", terminal.ActivityDone, true},
+		{"Notification", "Weiter so?", terminal.ActivityWaitingAnswer, true},
+		// A notification without a question mark says nothing about whether the
+		// turn ended. Claude's own wording ("Claude needs your permission to use
+		// Bash") has no "?", and mapping it to Done tore a running session to
+		// "finished" (issue #188).
+		{"Notification", "Claude needs your permission to use Bash", terminal.ActivityIdle, false},
+		// An unknown event is not evidence of idleness either.
+		{"unknown", "", terminal.ActivityIdle, false},
 	}
 	for _, tt := range tests {
-		got := hookEventToActivity(tt.event, tt.message)
-		if got != tt.want {
+		got, ok := hookEventToActivity(tt.event, tt.message)
+		if ok != tt.wantOK {
+			t.Errorf("hookEventToActivity(%q, %q) ok = %v, want %v", tt.event, tt.message, ok, tt.wantOK)
+			continue
+		}
+		if ok && got != tt.want {
 			t.Errorf("hookEventToActivity(%q, %q) = %d, want %d", tt.event, tt.message, got, tt.want)
 		}
 	}
