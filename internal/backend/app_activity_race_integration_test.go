@@ -34,18 +34,15 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 		queues:   map[int]*sessionQueue{},
 	}
 
-	// Mirrors the real wiring in app_hooks_setup.go: the hook manager's
-	// onActivity callback advances the pipeline queue immediately on "done".
+	// The real wiring from app_hooks_setup.go: the hook callback only repaints
+	// the badge. The queue advances on the confirmed change in the scan loop,
+	// which is what the scan ticks at the end of this test exercise.
 	hm := newHookManager(dir, func(mtID int) *terminal.Session {
 		if mtID == sessID {
 			return sess
 		}
 		return nil
-	}, func(sessionID int, activity string, cost string) {
-		if activity == "done" {
-			app.processQueue(sessionID)
-		}
-	})
+	}, app.onHookActivity)
 
 	// User queues a prompt; the session is idle, so it is sent immediately.
 	app.AddToQueue(sessID, "test")
@@ -92,10 +89,16 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	// so the candidate confirms.
 	app.scanAllSessions()
 	prevActivityMu.Lock()
-	if since, ok := pendingSince[sessID]; ok {
+	since, armed := pendingSince[sessID]
+	if armed {
 		pendingSince[sessID] = since.Add(-debounceWindow)
 	}
 	prevActivityMu.Unlock()
+	if !armed {
+		// Without this the back-dating would silently do nothing and the
+		// assertions below would pass on an unarmed candidate.
+		t.Fatal("first scan armed no debounce candidate — the scan never observed 'done'")
+	}
 	app.scanAllSessions()
 
 	if got := activityString(sess.GetActivity()); got != "done" {

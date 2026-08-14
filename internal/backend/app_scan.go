@@ -202,8 +202,16 @@ func (a *AppService) scanAllSessions() {
 			})
 		}
 
+		// Everything below is a side effect of the *confirmed* change, and
+		// this is the only place any of it runs — the hook emit path
+		// (onHookActivity) repaints the badge early but deliberately triggers
+		// nothing, so a completion reports progress exactly once (#188).
+		//
+		// None of it is gated on a.app: the event emitter is display, and its
+		// absence says nothing about whether the queue must advance.
+
 		// Trigger pipeline queue on fresh "done" transition
-		if activityChanged && confirmedActivity == "done" && a.app != nil {
+		if activityChanged && confirmedActivity == "done" {
 			a.processQueue(id)
 			// Notify orchestrator that this agent finished
 			a.notifyOrchestratorDone(id)
@@ -214,19 +222,19 @@ func (a *AppService) scanAllSessions() {
 		// above never fires when Claude finishes without a visible ❯ prompt, which
 		// would otherwise strand the finish prep as "pending" forever. Scoped to a
 		// preparing finish flow so general pipeline timing is unaffected.
-		if activityChanged && confirmedActivity == "idle" && a.app != nil {
+		if activityChanged && confirmedActivity == "idle" {
 			if st := a.getFinishState(id); st != nil && st.Phase == "preparing" {
 				a.processQueue(id)
 			}
 		}
 
 		// Surface waiting states to an active finish flow (spec 5.1/2)
-		if activityChanged && a.app != nil {
+		if activityChanged {
 			a.notifyFinishOnActivity(id, confirmedActivity)
 		}
 
 		// Report issue progress on activity transitions
-		if activityChanged && a.app != nil {
+		if activityChanged {
 			a.onActivityChangeForIssue(id, confirmedActivity, costStr)
 		}
 	}

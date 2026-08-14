@@ -23,7 +23,14 @@ func (a *AppService) reportIssueProgress(sessionID int, event issueProgressEvent
 	a.mu.Lock()
 	si := a.sessionIssues[sessionID]
 	cfg := a.cfg
+	hook := a.issueProgressHook
 	a.mu.Unlock()
+
+	// Test seam (nil in production), deliberately ahead of every gate below so
+	// a test counts calls, not the config that suppresses them.
+	if hook != nil {
+		hook(sessionID, event)
+	}
 
 	if si == nil || si.Number == 0 || si.Dir == "" {
 		return
