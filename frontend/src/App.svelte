@@ -320,8 +320,8 @@
 
     // Wails v3: event handlers receive a WailsEvent object; payload is in event.data
     EventsOn('terminal:activity', (event: any) => {
-      const info = event.data; // ActivityInfo { id, activity, cost, title }
-      tabStore.updateActivity(info.id, info.activity, info.cost);
+      const info = event.data; // ActivityInfo { id, activity, cost, activitySince, title }
+      tabStore.updateActivity(info.id, info.activity, info.cost, info.activitySince ?? 0);
       if (info.title) tabStore.setAutoName(info.id, info.title, 'osc');
       // Notify when an issue-linked agent finishes (only when window is focused,
       // because TerminalPane already sends a notification when unfocused)

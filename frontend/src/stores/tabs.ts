@@ -45,6 +45,8 @@ export interface Pane {
    *  targetBranch: those track "a worktree is active", this tracks "a finish
    *  run is in progress". Empty when no finish flow is active. */
   finishPhase: '' | 'preparing' | 'ready' | 'blocked' | 'merging' | 'cleanup';
+  /** Unix seconds when the current activity state began; 0 = unknown. */
+  activitySince: number;
 }
 
 /** Resolve the name shown in a pane titlebar.
@@ -119,15 +121,9 @@ function createTabStore() {
   let nextTabNum = 1;
   let nextPaneNum = 1;
 
-  // Activity smoothing: Claude Code's animated TUI (spinner, cursor blink,
-  // status bar) emits bursty output, so the backend detector flips between
-  // "active" and "done"/"idle" every couple of seconds. We debounce only the
-  // transitions INTO the calm states so the badge/border doesn't flicker;
-  // attention states (waiting/error) and "active" apply immediately.
-  const calmDebounce = new Map<number, ReturnType<typeof setTimeout>>();
-  const CALM_DELAY_MS = 900;
-
-  function applyActivity(sessionId: number, activity: string, cost: string) {
+  // Activity states arrive pre-confirmed: the backend holds a differing state
+  // for debounceWindow before emitting it, so no smoothing is needed here.
+  function applyActivity(sessionId: number, activity: string, cost: string, activitySince: number) {
     update((state) => {
       for (const tab of state.tabs) {
         for (const pane of tab.panes) {
@@ -137,7 +133,13 @@ function createTabStore() {
             // bridges the whole wake-up instead of flipping to "läuft" after a
             // second; any settled state (done/waiting/error) ends it.
             const stayResuming = pane.activity === 'resuming' && activity === 'active';
-            if (activity && !stayResuming) pane.activity = activity as Pane['activity'];
+            // activitySince is paired with activity: while "resuming" is held,
+            // the duration shown must still count from when it began, not from
+            // the "active" state the backend confirmed underneath it.
+            if (activity && !stayResuming) {
+              pane.activity = activity as Pane['activity'];
+              pane.activitySince = activitySince;
+            }
             if (cost) pane.cost = cost;
             if (tab.id !== state.activeTabId) {
               tab.unreadActivity = computeTabActivity(tab.panes);
@@ -275,6 +277,7 @@ function createTabStore() {
           autoNameSource: '',
           userRenamed: false,
           finishPhase: '',
+          activitySince: 0,
         });
         tab.focusedPaneId = paneId;
         return state;
@@ -342,33 +345,8 @@ function createTabStore() {
       });
     },
 
-    updateActivity(sessionId: number, activity: string, cost: string) {
-      // Any incoming update cancels a pending calm transition.
-      const pending = calmDebounce.get(sessionId);
-      if (pending) { clearTimeout(pending); calmDebounce.delete(sessionId); }
-
-      // "active" is real-time truth (output is flowing) — apply at once.
-      // The states classified after a quiet pause (done/idle/waiting*) are
-      // deferred: a redraw of Claude's TUI quickly flips back to "active" and
-      // cancels the pending change, so the badge reads calmly as "läuft" while
-      // work continues and only settles once a state truly holds.
-      // 'sleeping' and 'resuming' are deliberately NOT calm states: they are
-      // lifecycle facts the backend reports once, not classifications of a
-      // quiet screen. Debouncing them would leave the pane showing "fertig"
-      // for another second after the user put it to sleep.
-      const isCalm = activity === 'done' || activity === 'idle'
-        || activity === 'waitingPermission' || activity === 'waitingAnswer';
-      if (isCalm) {
-        // Cost still updates immediately so the title bar number stays live.
-        if (cost) applyActivity(sessionId, '', cost);
-        const timer = setTimeout(() => {
-          calmDebounce.delete(sessionId);
-          applyActivity(sessionId, activity, '');
-        }, CALM_DELAY_MS);
-        calmDebounce.set(sessionId, timer);
-        return;
-      }
-      applyActivity(sessionId, activity, cost);
+    updateActivity(sessionId: number, activity: string, cost: string, activitySince: number) {
+      applyActivity(sessionId, activity, cost, activitySince);
     },
 
     setWorktree(sessionId: number, path: string, branch: string, targetBranch: string) {

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { tabStore, computeTabActivity } from './tabs';
 
 // Pane sleeping (issue #180, step 3): 'sleeping' and 'resuming' are lifecycle
@@ -9,10 +9,6 @@ function paneOf(tabId: string, sessionId: number) {
   const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
   return tab!.panes.find((p) => p.sessionId === sessionId)!;
 }
-
-afterEach(() => {
-  vi.useRealTimers();
-});
 
 describe('computeTabActivity with sleeping panes', () => {
   it('ignores a sleeping pane', () => {
@@ -40,97 +36,77 @@ describe('computeTabActivity with sleeping panes', () => {
   });
 });
 
-describe('updateActivity — sleeping bypasses the calm debounce', () => {
+describe('updateActivity — sleeping and resuming apply immediately', () => {
   it('applies "sleeping" immediately', () => {
-    vi.useFakeTimers();
     const tabId = tabStore.addTab('Sleep');
     tabStore.addPane(tabId, 9101, 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9101, 'sleeping', '');
-    // No timer advanced on purpose: the state must already be applied.
+    tabStore.updateActivity(9101, 'sleeping', '', 0);
     expect(paneOf(tabId, 9101).activity).toBe('sleeping');
   });
 
   it('applies "resuming" immediately', () => {
-    vi.useFakeTimers();
     const tabId = tabStore.addTab('Wake');
     tabStore.addPane(tabId, 9102, 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9102, 'resuming', '');
+    tabStore.updateActivity(9102, 'resuming', '', 0);
     expect(paneOf(tabId, 9102).activity).toBe('resuming');
   });
 
-  it('cancels a pending calm transition when the pane falls asleep', () => {
-    vi.useFakeTimers();
+  it('a later "sleeping" call wins over an earlier "done"', () => {
     const tabId = tabStore.addTab('SleepRace');
     tabStore.addPane(tabId, 9103, 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9103, 'done', '');   // debounced
-    tabStore.updateActivity(9103, 'sleeping', ''); // must win
-    vi.advanceTimersByTime(5000);
+    tabStore.updateActivity(9103, 'done', '', 0);
+    tabStore.updateActivity(9103, 'sleeping', '', 0); // must win
 
     expect(paneOf(tabId, 9103).activity).toBe('sleeping');
-  });
-
-  it('still debounces "done" (regression guard for the calm path)', () => {
-    vi.useFakeTimers();
-    const tabId = tabStore.addTab('Calm');
-    tabStore.addPane(tabId, 9104, 'Claude', 'claude', '');
-
-    tabStore.updateActivity(9104, 'active', '');
-    tabStore.updateActivity(9104, 'done', '');
-    expect(paneOf(tabId, 9104).activity).toBe('active'); // not yet settled
-    vi.advanceTimersByTime(1000);
-    expect(paneOf(tabId, 9104).activity).toBe('done');
   });
 });
 
 describe('updateActivity — the wake-up indicator bridges the replay', () => {
   it('keeps "resuming" while claude replays the transcript (~12–15 s of output)', () => {
-    vi.useFakeTimers();
     const tabId = tabStore.addTab('Resuming');
     tabStore.addPane(tabId, 9105, 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9105, 'sleeping', '');
-    tabStore.updateActivity(9105, 'resuming', '');
-    tabStore.updateActivity(9105, 'active', '$0.30'); // replay output starts
+    tabStore.updateActivity(9105, 'sleeping', '', 0);
+    tabStore.updateActivity(9105, 'resuming', '', 1_700_000_200);
+    tabStore.updateActivity(9105, 'active', '$0.30', 1_700_000_260); // replay output starts
 
     const pane = paneOf(tabId, 9105);
     expect(pane.activity).toBe('resuming');
     expect(pane.cost).toBe('$0.30'); // cost still tracks live
+    // The duration badge must keep counting from when "resuming" began, not
+    // reset to the "active" state the backend confirmed underneath it.
+    expect(pane.activitySince).toBe(1_700_000_200);
   });
 
   it('ends "resuming" once a settled state arrives', () => {
-    vi.useFakeTimers();
     const tabId = tabStore.addTab('ResumingDone');
     tabStore.addPane(tabId, 9106, 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9106, 'resuming', '');
-    tabStore.updateActivity(9106, 'active', '');
-    tabStore.updateActivity(9106, 'done', '');
-    vi.advanceTimersByTime(1000);
+    tabStore.updateActivity(9106, 'resuming', '', 0);
+    tabStore.updateActivity(9106, 'active', '', 0);
+    tabStore.updateActivity(9106, 'done', '', 0);
 
     expect(paneOf(tabId, 9106).activity).toBe('done');
   });
 
   it('lets an attention state interrupt the wake-up immediately', () => {
-    vi.useFakeTimers();
     const tabId = tabStore.addTab('ResumingAsk');
     tabStore.addPane(tabId, 9107, 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9107, 'resuming', '');
-    tabStore.updateActivity(9107, 'waitingPermission', '');
-    vi.advanceTimersByTime(1000);
+    tabStore.updateActivity(9107, 'resuming', '', 0);
+    tabStore.updateActivity(9107, 'waitingPermission', '', 0);
 
     expect(paneOf(tabId, 9107).activity).toBe('waitingPermission');
   });
 
   it('does not hold "resuming" for a pane that never slept', () => {
-    vi.useFakeTimers();
     const tabId = tabStore.addTab('NoSleep');
     tabStore.addPane(tabId, 9108, 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9108, 'active', '');
+    tabStore.updateActivity(9108, 'active', '', 0);
     expect(paneOf(tabId, 9108).activity).toBe('active');
   });
 });

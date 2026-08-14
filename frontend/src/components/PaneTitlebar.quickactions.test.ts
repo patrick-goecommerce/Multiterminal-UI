@@ -38,6 +38,7 @@ function basePane(overrides: Partial<Pane> = {}): Pane {
     autoNameSource: '',
     userRenamed: false,
     finishPhase: '',
+    activitySince: 0,
     ...overrides,
   };
 }
