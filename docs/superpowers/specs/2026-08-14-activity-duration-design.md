@@ -61,7 +61,9 @@ Das deckt Ursache 2 mit ab: ein einzelner Klassifikations-Aussetzer erreicht die
 
 **Gegenrechnung zur Reaktionszeit:** Der 900-ms-Debounce im Frontend entfällt dafür, und der ist heute nicht der einzige Aufschlag — vor der Beruhigung liegt das Zucken selbst, das die Anzeige über mehrere Sekunden unbrauchbar macht. Künftig steht dort nach spätestens ~2,25 s ein Wert, der stimmt und stehen bleibt. Sollte sich das im Betrieb träge anfühlen, ist das Fenster eine einzelne Konstante.
 
-Der zweite Emit-Pfad (`app_hooks_setup.go:64-77`) bleibt bewusst unabhängig von dieser Entprellung — sie würde genau die niedrige Latenz aufheben, die diesen Pfad rechtfertigt. Er trägt den Zeitstempel (`activitySinceUnix`) mit, wird aber nicht entprellt; sein schlimmster früherer Fehlerfall (Notification → Done ohne Fragezeichen) wurde bereits in Task 2 behoben.
+Der zweite Emit-Pfad (`app_hooks_setup.go:64-77`) bleibt bewusst unabhängig von dieser Entprellung — sie würde genau die niedrige Latenz aufheben, die diesen Pfad rechtfertigt. Er trägt den Zeitstempel mit, wird aber nicht entprellt; sein schlimmster früherer Fehlerfall (Notification → Done ohne Fragezeichen) wurde bereits in Task 2 behoben.
+
+Weil er dem Scan-Loop um ein Entprell-Fenster voraus ist, gehört der gespeicherte Zeitstempel in diesem Moment noch dem Zustand, den das Pane gerade verlässt. Er darf ihn deshalb nur weitergeben, wenn der bestätigte Zustand bereits der ist, den er meldet (`activitySinceUnixIfState`); sonst `0`. Andernfalls stünde für rund zwei Sekunden „fertig · 3 Std 20" auf einem eben fertig gewordenen Pane und spränge dann auf „gerade eben" — genau der Rücksprung, den die e2e-Kriterien ausschließen.
 
 ### 3. Zeitstempel
 
@@ -114,11 +116,18 @@ Der genaue Zeitpunkt steht im `title`-Tooltip des Badges (`Fertig seit 14:32 Uhr
 
 ### 6. Persistenz
 
-`SavedPane` (`internal/config/session.go`) bekommt `ActivitySince int64` (`activity_since`, beide Tags). `paneToSaved` schreibt ihn, der Restore-Pfad gibt ihn zurück.
+`SavedPane` (`internal/config/session.go`) bekommt **zwei** Felder: `ActivitySince int64` (`activity_since`) und `ActivityState string` (`activity_state`). `paneToSaved` schreibt beide, der Restore-Pfad gibt beide zurück. Nur JSON-Tags — `SavedPane` wird als JSON persistiert, nicht als YAML-Konfiguration.
 
-Damit der Wert nach dem Restore im Backend landet, nimmt `CreateSession` ihn als optionalen Parameter entgegen und initialisiert `activitySince` und `prevActivity` entsprechend vorbelegt. Ohne diesen Rückweg stünde der Wert zwar im Store, würde aber vom ersten bestätigten Wechsel überschrieben.
+Der Rückweg ins Backend ist eine **eigene Binding**, `SeedActivitySince(sessionID int, unix int64, state string)`, die der Restore-Pfad direkt nach `CreateSession` aufruft. Ohne diesen Rückweg stünde der Wert zwar im Store, würde aber vom ersten bestätigten Wechsel überschrieben.
 
-**`models.ts` muss von Hand nachgezogen werden** — `SavedPane` geht über eine Binding-Rückgabe. Feld deklarieren und im Konstruktor zuweisen (CLAUDE.md, wiederkehrender Fehler).
+**Nicht** als zusätzlicher `CreateSession`-Parameter, wie ein früherer Entwurf dieses Abschnitts es vorsah: `CreateSession` hat über ein Dutzend Aufrufer in Go und TypeScript, von denen genau einer — der Restore-Pfad — je einen Zeitstempel kennt. Alle anderen müssten `0` durchreichen, ohne dass irgendwer etwas davon hat. Eine eigene Binding sagt außerdem, was sie tut.
+
+Der Preis dieser Trennung ist ein Rennen: die Binding kommt an, nachdem `CreateSession` zurückgekehrt ist, also nachdem der Scan-Loop die Session bereits sehen kann. Zwei Regeln fangen das ab, und beide sind für die Korrektheit **notwendig**, nicht bloß Vorsicht:
+
+1. **Der Seed gilt nur für den Zustand, aus dem er stammt.** Ein wiederhergestelltes Pane startet seine CLI neu; deren Hochlauf erzeugt durchgehend Output, und `DetectActivity` meldet noch 1,5 s nach dem letzten Byte `Active` (`activity.go:104-111`) — deutlich mehr als das Entprell-Fenster. Der erste nach einem Neustart bestätigte Zustand ist deshalb fast immer ein flüchtiges `active`. Ein zustandsloser Seed würde genau davon aufgebraucht: das Pane zeigte „läuft · 3 Std 20" auf einer zwei Sekunden alten Session, und sobald sie sich auf `done` legt, ist der Seed verbraucht und die Dauer beginnt bei „gerade eben". Beide Hälften falsch, und zwar im Langsteh-Fall, für den das Feature überhaupt existiert. Passt der erste bestätigte Zustand nicht, wird der Seed **verworfen** — er wartet nicht auf ein späteres Vorkommen desselben Zustands, das dann Stunden zu früh datiert wäre.
+2. **Der Seed wird nur angenommen, solange `prevActivity[id]` leer ist.** Trifft er nach der ersten Bestätigung ein, hat er nichts mehr zu korrigieren und könnte nur einen Wechsel rückdatieren, der nachweislich nach dem Neustart stattfand.
+
+**`models.ts` muss von Hand nachgezogen werden** — `SavedPane` geht über eine Binding-Rückgabe. Beide Felder deklarieren und im Konstruktor zuweisen (CLAUDE.md, wiederkehrender Fehler). Ebenso `App.js`/`App.d.ts` für die neue Binding.
 
 ### 7. Nebenwirkungen
 
@@ -132,6 +141,13 @@ Das ist der Teil mit der größten Wirkung jenseits der Optik:
 `reportIssueProgress` hat keinerlei Dedup (`app_issue_progress.go:20-70`). Mit
 aktivem `auto_comment_on_done` bedeutet jeder Scheinabschluss heute einen
 GitHub-Kommentar, mit `auto_close_issue` einen erneuten Close-Versuch.
+
+Deshalb gilt das auch für den **zweiten Emit-Pfad** (`onHookActivity`,
+`app_hooks_setup.go`): er darf den Badge weiterhin sofort neu zeichnen — das ist
+seine einzige Daseinsberechtigung — löst aber selbst **keine** Nebenwirkung mehr
+aus. Täte er es, liefe jeder hook-getriebene Abschluss beide Sätze im Abstand von
+rund zwei Sekunden, und die fehlende Dedup in `reportIssueProgress` schlüge
+unmittelbar durch.
 
 ## Nebenläufigkeit
 
@@ -152,6 +168,8 @@ Keine neue Verschachtelung, keine Prozess-I/O unter Lock.
 - Ein Rückfall auf den alten Zustand vor Ablauf des Fensters verwirft `pending`.
 - Ein bestätigter Wechsel setzt `activitySince`; ein bestätigter *gleicher* Zustand lässt ihn unverändert.
 - Ein echter Abschluss löst genau **einen** `reportIssueProgress`-Aufruf aus (Regression zu #188).
+- Ein Seed aus dem Session-File überlebt die erste Bestätigung, wenn deren Zustand passt — und wird verworfen, wenn ein anderer Zustand (das `active` des CLI-Hochlaufs) zuerst bestätigt.
+- Ein Seed, der nach der ersten Bestätigung eintrifft, wird abgelehnt.
 - Session-Schließen räumt alle vier Maps ab.
 
 **Go — Lese-Pfad** (`internal/terminal`)
@@ -166,7 +184,7 @@ Keine neue Verschachtelung, keine Prozess-I/O unter Lock.
 - Formatierung über alle vier Staffelstufen inklusive der Grenzen.
 - Fehlender Zeitstempel → Badge ohne Dauer.
 - Ein einzelner Ticker unabhängig von der Pane-Anzahl; er stoppt ohne Abonnenten.
-- `paneToSaved` / Restore mit `activitySince`.
+- `paneToSaved` / Restore mit `activitySince` **und** `activityState`; ein Zeitstempel ohne Zustand wird nicht geseedet.
 
 **Nur e2e mit echtem Claude CLI** (`needs-e2e-testing`)
 - Die Anzeige bleibt über eine längere reale Sitzung ruhig — kein Zucken mehr.
@@ -180,7 +198,7 @@ Keine neue Verschachtelung, keine Prozess-I/O unter Lock.
 2. Entprellung samt Umzug der Nebenwirkungen und des zweiten Emit-Pfads — **danach ist #188 für sich erledigt und überprüfbar**
 3. Zeitstempel und `ActivityInfo`-Feld
 4. Anzeige im Badge, Ticker, Entfernen von `CALM_DELAY_MS`
-5. Persistenz inklusive `models.ts` und Restore-Rückweg
+5. Persistenz inklusive `models.ts` und Restore-Rückweg (`SeedActivitySince`)
 
 Schritte 1–2 sind eigenständig wertvoll und sollten vor dem Rest verifiziert werden.
 

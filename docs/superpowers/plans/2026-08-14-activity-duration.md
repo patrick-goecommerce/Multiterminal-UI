@@ -27,6 +27,10 @@
 
 Die Spec beschreibt in Abschnitt 7 ein „Umhängen" der Nebenwirkungen auf den bestätigten Wechsel. Beim Lesen des Codes zeigt sich: `processQueue`, `notifyOrchestratorDone`, `notifyFinishOnActivity` und `onActivityChangeForIssue` hängen bereits alle an derselben lokalen Variable `activityChanged` (`app_scan.go:184-209`). Es genügt, deren **Berechnung** zu ändern; ein Umhängen entfällt. Task 3 setzt genau dort an. Die Spec wird in Task 3 entsprechend korrigiert, damit Code und Spec nicht auseinanderlaufen.
 
+Eine Einschränkung dazu, die beim Umsetzen sichtbar wurde: `processQueue` und `onActivityChangeForIssue` hängen zwar im Scan-Loop an `activityChanged`, wurden aber **zusätzlich** direkt aus dem Hook-Callback aufgerufen. Der Hook-Pfad muss diese Aufrufe verlieren, sonst läuft jeder hook-getriebene Abschluss beide Sätze im Abstand von rund zwei Sekunden. Siehe die Notiz am Ende dieses Dokuments.
+
+Zweite bewusste Abweichung, Abschnitt 6: Der Restore-Rückweg ist eine eigene Binding `SeedActivitySince` statt eines zusätzlichen `CreateSession`-Parameters. Begründung und die daraus folgende Zustands-Bindung des Seeds stehen in Task 6, Step 8; die Spec ist entsprechend korrigiert.
+
 ## File Structure
 
 **Neu:**
@@ -338,7 +342,7 @@ Diese Task führt die Bestätigung ein. Weil `processQueue`, `notifyOrchestrator
 - Produces:
   - `confirmActivity(id int, raw string, now time.Time) bool` — Caller muss `prevActivityMu` halten. Liefert `true` genau dann, wenn `raw` als neuer Zustand bestätigt wurde.
   - `activitySinceFor(id int) time.Time` — nimmt `prevActivityMu` selbst; Nullwert bedeutet unbekannt.
-  - `setActivitySinceFor(id int, t time.Time)` — für den Restore-Rückweg in Task 6; nimmt `prevActivityMu` selbst.
+  - `setActivitySinceFor(id int, t time.Time, state string)` — für den Restore-Rückweg in Task 6; nimmt `prevActivityMu` selbst. Der Zustand gehört dazu, siehe Task 6 Step 8.
   - `cleanupActivityDebounce(id int)` — Caller muss `prevActivityMu` halten.
   - `resetActivityDebounceForTest()` — Testhilfe.
 
@@ -553,9 +557,10 @@ func activitySinceFor(id int) time.Time {
 	return activitySince[id]
 }
 
-// setActivitySinceFor seeds the timestamp of a restored pane, so a duration
+// setActivitySinceFor seeds the timestamp of a restored pane together with the
+// state it belongs to (see Task 6, Step 8), so a duration
 // survives an MTUI restart instead of starting over.
-func setActivitySinceFor(id int, t time.Time) {
+func setActivitySinceFor(id int, t time.Time, state string) {
 	if t.IsZero() {
 		return
 	}
@@ -763,6 +768,8 @@ Im Emit-Block von `scanAllSessions` das Feld ergänzen:
 ```
 
 Ebenso im zweiten Emit-Pfad in `internal/backend/app_hooks_setup.go` (Block ab Zeile ~64), damit beide Quellen dasselbe Feld liefern und die Anzeige nicht je nach Auslöser springt.
+
+Dort aber **nicht** `activitySinceUnix`, sondern `activitySinceUnixIfState(id, activity)`: Dieser Pfad ist dem Scan-Loop um ein Entprell-Fenster voraus, der gespeicherte Zeitstempel gehört also noch dem Zustand, den das Pane gerade verlässt. Mit dem neuen Label gepaart stünde für rund zwei Sekunden „fertig · 3 Std 20" auf einem eben fertig gewordenen Pane, danach „gerade eben". `0` (= unbekannt, Badge ohne Dauer) ist bis zur Bestätigung die einzige ehrliche Antwort.
 
 - [ ] **Step 6: Run the package**
 
@@ -1089,12 +1096,13 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Modify: `internal/config/session.go:36-51` (`SavedPane`)
 - Modify: `frontend/wailsjs/go/models.ts` (Klasse `SavedPane`)
 - Modify: `frontend/src/lib/session.ts` (`paneToSaved` und Restore)
-- Modify: `internal/backend/app.go` (`CreateSession`-Signatur um den Startwert)
-- Test: `internal/config/session_test.go`, `frontend/src/lib/session.test.ts`
+- Modify: `internal/backend/app_scan_debounce.go` (Binding `SeedActivitySince`)
+- Modify: `frontend/wailsjs/go/backend/App.js`, `App.d.ts` (Binding-Signatur)
+- Test: `internal/config/session_test.go`, `internal/backend/app_scan_debounce_test.go`, `frontend/src/lib/session.test.ts`
 
 **Interfaces:**
-- Consumes: `setActivitySinceFor(id int, t time.Time)` aus Task 3, `Pane.activitySince` aus Task 5.
-- Produces: `SavedPane.ActivitySince int64` (JSON `activity_since`), und `CreateSession` akzeptiert einen `activitySince int64`-Startwert.
+- Consumes: `setActivitySinceFor(id int, t time.Time, state string)` aus Task 3, `Pane.activitySince` und `Pane.activity` aus Task 5.
+- Produces: `SavedPane.ActivitySince int64` (JSON `activity_since`) und `SavedPane.ActivityState string` (JSON `activity_state`), sowie die Binding `SeedActivitySince(sessionID int, unix int64, state string)`.
 
 - [ ] **Step 1: Write the failing Go test**
 
@@ -1107,7 +1115,7 @@ func TestSavedPaneRoundTripsActivitySince(t *testing.T) {
 
 	in := SessionState{Tabs: []SavedTab{{
 		Name:  "t1",
-		Panes: []SavedPane{{Name: "p1", ActivitySince: 1700000000}},
+		Panes: []SavedPane{{Name: "p1", ActivitySince: 1700000000, ActivityState: "done"}},
 	}}}
 	if err := saveSessionTo(path, in); err != nil {
 		t.Fatalf("saveSessionTo: %v", err)
@@ -1119,6 +1127,9 @@ func TestSavedPaneRoundTripsActivitySince(t *testing.T) {
 	}
 	if got := out.Tabs[0].Panes[0].ActivitySince; got != 1700000000 {
 		t.Errorf("ActivitySince = %d, want 1700000000", got)
+	}
+	if got := out.Tabs[0].Panes[0].ActivityState; got != "done" {
+		t.Errorf("ActivityState = %q, want %q", got, "done")
 	}
 }
 ```
@@ -1136,7 +1147,10 @@ In `internal/config/session.go` an `SavedPane` anhängen:
 
 ```go
 	ActivitySince   int64  `json:"activity_since,omitempty"`   // unix seconds when the current activity state began; survives a restart so the pane keeps its duration
+	ActivityState   string `json:"activity_state,omitempty"`   // the activity ActivitySince belongs to; the seed is honoured on restore only if the pane confirms this same state first
 ```
+
+Der Zustand gehört zwingend dazu — warum, steht in Step 8.
 
 - [ ] **Step 4: Run it to verify it passes**
 
@@ -1149,12 +1163,14 @@ In `frontend/wailsjs/go/models.ts` die Klasse `SavedPane` suchen. Feld deklarier
 
 ```ts
     activity_since?: number;
+    activity_state?: string;
 ```
 
 Und im Konstruktor zuweisen, neben den anderen primitiven Feldern:
 
 ```ts
         this.activity_since = source["activity_since"];
+        this.activity_state = source["activity_state"];
 ```
 
 Wails v3 regeneriert diese Datei nicht — ohne beide Änderungen wird das Feld beim Deserialisieren still verworfen und ist im Frontend immer `undefined`.
@@ -1165,9 +1181,10 @@ An `frontend/src/lib/session.test.ts` anhängen:
 
 ```ts
 it('round-trips activitySince through save and restore', () => {
-  const pane = makePane({ activitySince: 1700000000 });
+  const pane = makePane({ activitySince: 1700000000, activity: 'done' });
   const saved = paneToSaved(pane);
   expect(saved.activity_since).toBe(1700000000);
+  expect(saved.activity_state).toBe('done');
 });
 
 it('defaults activitySince to 0 when the saved pane predates the field', () => {
@@ -1183,30 +1200,76 @@ it('defaults activitySince to 0 when the saved pane predates the field', () => {
 - [ ] **Step 7: Wire save and restore**
 
 In `frontend/src/lib/session.ts`:
-- `paneToSaved` schreibt `activity_since: pane.activitySince || 0`.
-- Der Restore-Pfad liest `activitySince: (savedPane as any).activity_since ?? 0` und gibt den Wert beim Anlegen des Panes mit.
+- `paneToSaved` schreibt `activity_since: pane.activitySince || 0` und `activity_state: pane.activity || ''`.
+- Der Restore-Pfad liest `activitySince: (savedPane as any).activity_since ?? 0` und `activityState: (savedPane as any).activity_state ?? ''` und gibt beides beim Anlegen des Panes mit.
 
 - [ ] **Step 8: Seed the backend on restore**
 
-Der Wert muss zurück ins Backend, sonst steht er zwar im Store, wird aber vom ersten bestätigten Wechsel überschrieben. Die Signatur in `internal/backend/app.go:205` lautet heute:
+Der Wert muss zurück ins Backend, sonst steht er zwar im Store, wird aber vom
+ersten bestätigten Wechsel überschrieben.
+
+Der Rückweg ist eine **eigene Binding** neben den anderen Debounce-Helfern in
+`internal/backend/app_scan_debounce.go`, kein zusätzlicher `CreateSession`-Parameter:
 
 ```go
-func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int, mode string) int
-```
-
-Sie bekommt einen weiteren Parameter und ruft direkt nach dem Anlegen der Session auf:
-
-```go
-func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int, mode string, activitySince int64) int
-```
-
-```go
-	if activitySince > 0 {
-		setActivitySinceFor(id, time.Unix(activitySince, 0))
+// SeedActivitySince restores a pane's state-start timestamp after a restart.
+// state is the activity the timestamp belongs to; the seed is honoured only if
+// the pane confirms that same state first. Zero or an empty state is ignored.
+func (a *AppService) SeedActivitySince(sessionID int, unix int64, state string) {
+	if unix <= 0 {
+		return
 	}
+	setActivitySinceFor(sessionID, time.Unix(unix, 0), state)
+}
 ```
 
-Passe **alle** Aufrufer an — `grep -rn "CreateSession(" --include='*.go' --include='*.ts' --include='*.svelte' .` — und übergib dort `0`, wo kein Wert bekannt ist. Vergiss `frontend/wailsjs/go/backend/App.js` und `App.d.ts` nicht: eine geänderte Parameterliste muss dort mitgeführt werden. Die Method-ID bleibt unverändert, sie hängt am Namen, nicht an der Signatur.
+Der Restore-Pfad ruft sie direkt nach `CreateSession` auf und fängt die
+Rejection ab (`.catch`), sonst steht eine unbehandelte Promise im Log:
+
+```ts
+if (activitySince && activityState) {
+  App.SeedActivitySince(sessionId, activitySince, activityState)
+    .catch((err) => console.error('[restoreSession] SeedActivitySince failed:', err));
+}
+```
+
+`frontend/wailsjs/go/backend/App.js` und `App.d.ts` müssen die Signatur
+mitführen (die Method-ID bleibt, sie hängt am Namen).
+
+**Warum keine Erweiterung von `CreateSession`:** die Funktion hat über ein
+Dutzend Aufrufer in Go und TypeScript, von denen genau dieser eine je einen
+Zeitstempel kennt. Alle anderen müssten `0` durchreichen, ohne dass irgendwer
+etwas davon hat.
+
+**Warum der Zustand mitmuss** — das ist der Punkt, an dem eine getrennte Binding
+sonst kippt: Sie kommt an, *nachdem* `CreateSession` zurückgekehrt ist, also
+wenn der Scan-Loop die Session bereits sieht. Ein wiederhergestelltes Pane
+startet dabei seine CLI neu, und deren Hochlauf erzeugt durchgehend Output;
+`DetectActivity` meldet noch 1,5 s nach dem letzten Byte `Active`
+(`activity.go:104-111`) — deutlich mehr als das 1,2-s-Entprell-Fenster. Der
+erste nach einem Neustart bestätigte Zustand ist deshalb fast immer ein
+flüchtiges `active`. Ein zustandsloser Seed würde genau davon aufgebraucht: das
+Pane zeigte „läuft · 3 Std 20" auf einer zwei Sekunden alten Session, und sobald
+sie sich auf `done` legt, ist der Seed verbraucht und die Dauer beginnt bei
+„gerade eben". Beide Hälften falsch, und zwar im Langsteh-Fall, für den #189
+überhaupt existiert.
+
+`confirmActivity` behält den Seed deshalb nur, wenn der erste bestätigte Zustand
+zum gespeicherten passt, und verwirft ihn sonst — er wartet **nicht** auf ein
+späteres Vorkommen desselben Zustands, das dann Stunden zu früh datiert wäre.
+`setActivitySinceFor` nimmt den Seed außerdem nur an, solange `prevActivity[id]`
+leer ist: trifft er nach der ersten Bestätigung ein, hat er nichts mehr zu
+korrigieren.
+
+Go-Tests dazu in `internal/backend/app_scan_debounce_test.go`:
+- Seed überlebt die erste Bestätigung, wenn deren Zustand passt — und
+  `confirmActivity` meldet dabei `true` (sonst bestünde der Test auch, wenn gar
+  nichts mehr bestätigt).
+- Die *zweite* Transition bekommt einen frischen Zeitstempel.
+- Ein Seed für `done` wird vom `active` des Hochlaufs verworfen und taucht auch
+  beim späteren echten `done` nicht wieder auf.
+- Ein Seed nach der ersten Bestätigung wird abgelehnt.
+- Ein Seed ohne Zustand wird abgelehnt.
 
 - [ ] **Step 9: Run everything**
 
@@ -1221,7 +1284,7 @@ Expected: alle Go-Pakete `ok`, `vet` ohne Ausgabe, alle Frontend-Tests PASS, Bui
 - [ ] **Step 10: Commit**
 
 ```bash
-git add internal/config/session.go internal/backend/app.go frontend/wailsjs/go/models.ts frontend/wailsjs/go/backend/App.js frontend/wailsjs/go/backend/App.d.ts frontend/src/lib/session.ts frontend/src/lib/session.test.ts internal/config/session_test.go
+git add internal/config/session.go internal/backend/app_scan_debounce.go internal/backend/app_scan_debounce_test.go frontend/wailsjs/go/models.ts frontend/wailsjs/go/backend/App.js frontend/wailsjs/go/backend/App.d.ts frontend/src/lib/session.ts frontend/src/lib/session.test.ts internal/config/session_test.go
 git commit -m "feat: keep a pane's state duration across a restart
 
 A pane open for hours is exactly the case the duration is for, so losing it on
@@ -1257,4 +1320,6 @@ Gegen die Spec geprüft:
 | Aufräumen der Maps | Task 3, Step 6 |
 | Zweiter Emit-Pfad | Task 4, Step 5 |
 
-Der zweite Emit-Pfad (`app_hooks_setup.go`) wird in Task 4 nur um das neue Feld ergänzt, nicht auf `confirmActivity` umgestellt. Er emittiert weiterhin ohne Dedup direkt aus dem Hook-Callback. Das ist bewusst: Ihn vollständig auf die Entprellung zu ziehen hieße, die Hook-Latenz aufzugeben, die ihn überhaupt rechtfertigt. Nach Task 2 ist seine schlimmste Fehlerquelle (`Notification` → `Done`) beseitigt. Bleibt im Betrieb ein Zucken sichtbar, ist das der nächste Verdächtige — dann als eigene Änderung mit eigener Begründung.
+Der zweite Emit-Pfad (`onHookActivity`, `app_hooks_setup.go`) wird in Task 4 nur um das neue Feld ergänzt, nicht auf `confirmActivity` umgestellt. Er emittiert weiterhin ohne Dedup direkt aus dem Hook-Callback. Das ist bewusst: Ihn vollständig auf die Entprellung zu ziehen hieße, die Hook-Latenz aufzugeben, die ihn überhaupt rechtfertigt. Nach Task 2 ist seine schlimmste Fehlerquelle (`Notification` → `Done`) beseitigt. Bleibt im Betrieb ein Zucken sichtbar, ist das der nächste Verdächtige — dann als eigene Änderung mit eigener Begründung.
+
+Der Emit ist dann aber auch **alles**, was er tun darf. `processQueue` und `onActivityChangeForIssue` hingen ursprünglich ebenfalls am Hook-Callback und liefen damit zweimal je Abschluss — einmal sofort, einmal rund zwei Sekunden später am bestätigten Wechsel. `reportIssueProgress` hat keine Dedup, das waren also zwei GitHub-Kommentare pro Abschluss. Nebenwirkungen gehören ausschließlich an den bestätigten Wechsel im Scan-Loop; dort sind sie auch nicht an `a.app != nil` gebunden, denn der Event-Emitter ist Anzeige und sagt nichts darüber, ob die Queue weiterlaufen muss.
