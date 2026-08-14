@@ -27,3 +27,22 @@ export function formatDuration(sinceUnix: number, nowMs: number): string {
   const days = Math.floor(hours / 24);
   return days === 1 ? '1 Tag' : `${days} Tage`;
 }
+
+/**
+ * Formats the exact moment a state began, for the status badge's tooltip
+ * (spec: `Fertig seit 14:32 Uhr`).
+ *
+ * Time of day only — the duration next to it already says how long ago that
+ * was, so a full date would only add noise for the common case of "today".
+ *
+ * @param sinceUnix seconds since epoch; 0 means unknown
+ * @returns `14:32 Uhr`, or '' when unknown
+ */
+export function formatClockTime(sinceUnix: number): string {
+  if (!sinceUnix || sinceUnix <= 0) return '';
+  const t = new Date(sinceUnix * 1000).toLocaleTimeString('de-DE', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${t} Uhr`;
+}

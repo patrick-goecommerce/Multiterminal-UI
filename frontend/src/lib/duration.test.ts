@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDuration } from './duration';
+import { formatDuration, formatClockTime } from './duration';
 
 const NOW = 1_800_000_000_000; // ms
 const sec = (agoSeconds: number) => Math.floor(NOW / 1000) - agoSeconds;
@@ -33,5 +33,18 @@ describe('formatDuration', () => {
 
   it('never renders a negative duration when clocks disagree', () => {
     expect(formatDuration(sec(-30), NOW)).toBe('gerade eben');
+  });
+});
+
+describe('formatClockTime', () => {
+  it('returns nothing for an unknown timestamp', () => {
+    expect(formatClockTime(0)).toBe('');
+  });
+
+  // Spec: the badge tooltip reads "Fertig seit 14:32 Uhr" — time of day, not
+  // the full "14.8.2026, 14:32:10" a bare toLocaleString produces.
+  it('renders the time of day in the form the spec names', () => {
+    const at = new Date(2026, 7, 14, 14, 32, 10).getTime() / 1000;
+    expect(formatClockTime(at)).toBe('14:32 Uhr');
   });
 });

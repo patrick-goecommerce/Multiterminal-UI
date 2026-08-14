@@ -8,7 +8,7 @@
   import { renderQuickActionPrompt } from '../lib/quickActions';
   import { config } from '../stores/config';
   import { now } from '../stores/clock';
-  import { formatDuration } from '../lib/duration';
+  import { formatDuration, formatClockTime } from '../lib/duration';
 
   export let pane: Pane;
   export let paneIndex: number = 0;
@@ -146,9 +146,9 @@
     : statusLabel;
   // sleeping/resuming already carry an explanatory tooltip (statusTitle) — keep
   // that one, since it's more useful than a bare timestamp. Everything else
-  // falls back to "<state> seit <time>".
+  // falls back to the form the spec names: "Fertig seit 14:32 Uhr".
   $: badgeTitle = statusTitle || (pane.activitySince
-    ? `${statusLabel} seit ${new Date(pane.activitySince * 1000).toLocaleString('de-DE')}`
+    ? `${statusLabel.charAt(0).toUpperCase()}${statusLabel.slice(1)} seit ${formatClockTime(pane.activitySince)}`
     : '');
 
   const chatModes = ['claude', 'claude-auto', 'claude-yolo', 'codex', 'codex-auto', 'gemini', 'gemini-yolo'];
