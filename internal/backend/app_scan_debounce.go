@@ -6,14 +6,16 @@ import "time"
 // counts as a real change.
 //
 // The scan tick is 500-750 ms depending on session count (see scanInterval).
-// At the fastest tick (500 ms) a confirmation costs four observations: arm at
-// t0, hold at t0+500ms and t0+1000ms (both still short of the 1.2 s window),
-// confirm at t0+1500ms. Counting the up-to-one-tick delay before the state is
-// first observed, worst-case latency is ~2.0 s. That buys immunity against two
-// independent flicker sources: Claude's TUI repainting while idle, and
-// classifyScreenState being a snapshot without hysteresis — a tick landing
-// between ESC[2K and the redraw of the input box classifies the very same
-// screen as "idle" (issue #188).
+// The observation count and the worst-case latency are maximised by different
+// ticks: at the fastest tick (500 ms) a confirmation costs four observations
+// (arm at t0, hold at t0+500ms and t0+1000ms, confirm at t0+1500ms), but the
+// coarsest tick (750 ms, 7+ sessions) needs only three observations while
+// producing the higher overall latency — ~2.25 s once the up-to-one-tick
+// delay before the state is first observed is counted. That buys immunity
+// against two independent flicker sources: Claude's TUI repainting while
+// idle, and classifyScreenState being a snapshot without hysteresis — a tick
+// landing between ESC[2K and the redraw of the input box classifies the very
+// same screen as "idle" (issue #188).
 //
 // The frontend's own 900 ms smoothing is removed in exchange, so this is not a
 // net slowdown.

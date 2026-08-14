@@ -55,13 +55,13 @@ Ablauf je Session und Tick:
 - Rohzustand weicht ab und unterscheidet sich vom bisherigen `pending` → `pending` neu setzen, `pendingSince = jetzt`.
 - Rohzustand weicht ab und ist gleich dem `pending`, und `jetzt - pendingSince >= debounceWindow` → **bestätigter Wechsel**: `prevActivity` aktualisieren, Zeitstempel setzen, emittieren, Nebenwirkungen auslösen.
 
-`debounceWindow` = 1,2 s, als benannte Konstante, nicht als Literal. Der Scan-Tick liegt je nach Sessionzahl bei 500–750 ms; beim schnellsten Tick (500 ms) vergehen bis zur Bestätigung vier übereinstimmende Beobachtungen (Arm bei t0, hält bei t0+500ms und t0+1000ms — beide noch innerhalb des 1,2-s-Fensters —, bestätigt bei t0+1500ms). Zählt man die bis zu einem Tick lange Verzögerung bis zur ersten Beobachtung mit, liegt die reale Worst-Case-Latenz bei ~2,0 s.
+`debounceWindow` = 1,2 s, als benannte Konstante, nicht als Literal. Der Scan-Tick liegt je nach Sessionzahl bei 500–750 ms; Beobachtungszahl und Worst-Case-Latenz werden von unterschiedlichen Ticks maximiert: Beim schnellsten Tick (500 ms) vergehen bis zur Bestätigung vier übereinstimmende Beobachtungen (Arm bei t0, hält bei t0+500ms und t0+1000ms — beide noch innerhalb des 1,2-s-Fensters —, bestätigt bei t0+1500ms). Der gröbste Tick (750 ms, ab 7 Sessions) braucht nur drei Beobachtungen, erzeugt aber die höhere Gesamtlatenz: Zählt man die bis zu einem Tick lange Verzögerung bis zur ersten Beobachtung mit, liegt die reale Worst-Case-Latenz bei ~2,25 s.
 
 Das deckt Ursache 2 mit ab: ein einzelner Klassifikations-Aussetzer erreicht die Bestätigungsschwelle nie.
 
-**Gegenrechnung zur Reaktionszeit:** Der 900-ms-Debounce im Frontend entfällt dafür, und der ist heute nicht der einzige Aufschlag — vor der Beruhigung liegt das Zucken selbst, das die Anzeige über mehrere Sekunden unbrauchbar macht. Künftig steht dort nach spätestens 2,0 s ein Wert, der stimmt und stehen bleibt. Sollte sich das im Betrieb träge anfühlen, ist das Fenster eine einzelne Konstante.
+**Gegenrechnung zur Reaktionszeit:** Der 900-ms-Debounce im Frontend entfällt dafür, und der ist heute nicht der einzige Aufschlag — vor der Beruhigung liegt das Zucken selbst, das die Anzeige über mehrere Sekunden unbrauchbar macht. Künftig steht dort nach spätestens ~2,25 s ein Wert, der stimmt und stehen bleibt. Sollte sich das im Betrieb träge anfühlen, ist das Fenster eine einzelne Konstante.
 
-Der zweite Emit-Pfad (`app_hooks_setup.go:64-77`) wird auf dieselbe Auswertung geführt, damit nicht weiterhin zwei Quellen unabhängig voneinander emittieren.
+Der zweite Emit-Pfad (`app_hooks_setup.go:64-77`) bleibt bewusst unabhängig von dieser Entprellung — sie würde genau die niedrige Latenz aufheben, die diesen Pfad rechtfertigt. Er trägt den Zeitstempel (`activitySinceUnix`) mit, wird aber nicht entprellt; sein schlimmster früherer Fehlerfall (Notification → Done ohne Fragezeichen) wurde bereits in Task 2 behoben.
 
 ### 3. Zeitstempel
 
