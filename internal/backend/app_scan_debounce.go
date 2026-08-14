@@ -84,6 +84,17 @@ func cleanupActivityDebounce(id int) {
 	delete(activitySince, id)
 }
 
+// activitySinceUnix returns the confirmed state's start as seconds since epoch,
+// or 0 when unknown. The frontend treats 0 as "show the state without a
+// duration" rather than rendering an epoch date.
+func activitySinceUnix(id int) int64 {
+	t := activitySinceFor(id)
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
+}
+
 // resetActivityDebounceForTest clears all debounce state between tests.
 func resetActivityDebounceForTest() {
 	prevActivityMu.Lock()

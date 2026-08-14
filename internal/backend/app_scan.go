@@ -18,6 +18,10 @@ type ActivityInfo struct {
 	Title      string `json:"title"`      // OSC-derived window title (fallback pane name)
 	ContextPct int    `json:"contextPct"` // % of context window used (statusline); 0 if unknown
 	Model      string `json:"model"`      // model display name (statusline); "" if unknown
+	// ActivitySince is when the confirmed state began, as seconds since epoch;
+	// 0 when unknown. Travels on the event only — events are plain JSON and do
+	// not need models.ts, unlike binding returns.
+	ActivitySince int64 `json:"activitySince"`
 }
 
 // prevActivity tracks the last emitted state per session to avoid spamming.
@@ -178,12 +182,13 @@ func (a *AppService) scanAllSessions() {
 		if changed && a.app != nil {
 			log.Printf("[scan] session %d: activity=%s cost=%s title=%q", id, confirmedActivity, costStr, title)
 			a.app.Event.Emit("terminal:activity", ActivityInfo{
-				ID:         id,
-				Activity:   confirmedActivity,
-				Cost:       costStr,
-				Title:      title,
-				ContextPct: ctxPct,
-				Model:      model,
+				ID:            id,
+				Activity:      confirmedActivity,
+				Cost:          costStr,
+				Title:         title,
+				ContextPct:    ctxPct,
+				Model:         model,
+				ActivitySince: activitySinceUnix(id),
 			})
 		}
 

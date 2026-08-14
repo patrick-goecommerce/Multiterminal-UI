@@ -125,3 +125,24 @@ func TestCleanupActivityDebounce(t *testing.T) {
 		t.Error("activitySince still holds the session")
 	}
 }
+
+// The wire format carries seconds since epoch; 0 means "unknown" so the badge
+// can omit the duration instead of rendering 1970.
+func TestActivitySinceUnix(t *testing.T) {
+	resetActivityDebounceForTest()
+
+	if got := activitySinceUnix(42); got != 0 {
+		t.Errorf("unknown session yielded %d, want 0", got)
+	}
+
+	base := time.Unix(7000, 0)
+	prevActivityMu.Lock()
+	prevActivity[42] = "active"
+	confirmActivity(42, "done", base)
+	confirmActivity(42, "done", base.Add(debounceWindow))
+	prevActivityMu.Unlock()
+
+	if got := activitySinceUnix(42); got != 7000 {
+		t.Errorf("activitySinceUnix = %d, want 7000", got)
+	}
+}

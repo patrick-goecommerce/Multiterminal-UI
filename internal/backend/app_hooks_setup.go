@@ -65,9 +65,10 @@ func (a *AppService) setupHooks(ctx context.Context) {
 			log.Printf("[hooks] session %d: %s", sessionID, activity)
 			if a.app != nil {
 				a.app.Event.Emit("terminal:activity", ActivityInfo{
-					ID:       sessionID,
-					Activity: activity,
-					Cost:     cost,
+					ID:            sessionID,
+					Activity:      activity,
+					Cost:          cost,
+					ActivitySince: activitySinceUnix(sessionID),
 				})
 			}
 			if activity == "done" {
