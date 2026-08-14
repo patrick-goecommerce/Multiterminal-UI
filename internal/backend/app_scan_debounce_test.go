@@ -225,16 +225,114 @@ func TestSeedActivitySince_SurvivesFirstConfirmationAfterRestart(t *testing.T) {
 	resetActivityDebounceForTest()
 
 	seeded := time.Unix(1700000000, 0) // long before "now"
-	setActivitySinceFor(50, seeded)
+	setActivitySinceFor(50, seeded, "idle")
 
 	restartTick := time.Now()
 	prevActivityMu.Lock()
-	confirmActivity(50, "idle", restartTick)
-	confirmActivity(50, "idle", restartTick.Add(debounceWindow))
+	armed := confirmActivity(50, "idle", restartTick)
+	confirmed := confirmActivity(50, "idle", restartTick.Add(debounceWindow))
 	prevActivityMu.Unlock()
 
+	if armed {
+		t.Error("the first observation confirmed immediately, without the debounce window")
+	}
+	if !confirmed {
+		// Without this the test would still pass if confirmation stopped
+		// happening at all — an untouched seed proves nothing on its own.
+		t.Fatal("a seeded session's stable state never confirmed")
+	}
 	if got := activitySinceFor(50); !got.Equal(seeded) {
 		t.Errorf("activitySince = %v, want seeded %v (seed was overwritten by the first post-restart confirmation)", got, seeded)
+	}
+
+	// The seed is consumed by that first confirmation: the *next* transition
+	// is a state that genuinely began now and must be stamped accordingly.
+	next := restartTick.Add(time.Hour)
+	prevActivityMu.Lock()
+	confirmActivity(50, "done", next)
+	confirmActivity(50, "done", next.Add(debounceWindow))
+	prevActivityMu.Unlock()
+
+	if got := activitySinceFor(50); !got.Equal(next) {
+		t.Errorf("activitySince after the second transition = %v, want %v — the seed must not outlive its first confirmation", got, next)
+	}
+}
+
+// A restored pane re-launches its CLI, and that boot keeps DetectActivity on
+// "active" well past the debounce window. The first state confirmed after a
+// restart is therefore usually a transient "active", not the state the badge
+// showed before the restart. A state-blind seed would attach to it and claim
+// the pane had been running for hours; then, once it settled on "done", the
+// seed would be spent and the duration would restart at "gerade eben".
+func TestSeedActivitySince_DroppedWhenAnotherStateConfirmsFirst(t *testing.T) {
+	resetActivityDebounceForTest()
+
+	seeded := time.Unix(1700000000, 0)
+	setActivitySinceFor(52, seeded, "done")
+
+	boot := time.Unix(1800000000, 0) // the CLI booting after the restart
+	prevActivityMu.Lock()
+	confirmActivity(52, "active", boot)
+	confirmActivity(52, "active", boot.Add(debounceWindow))
+	prevActivityMu.Unlock()
+
+	if got := activitySinceFor(52); !got.Equal(boot) {
+		t.Errorf("activitySince = %v, want %v — a seed for 'done' must not be consumed by the boot's 'active'", got, boot)
+	}
+
+	// And it must be gone, not lying in wait for the real "done".
+	settle := boot.Add(20 * time.Second)
+	prevActivityMu.Lock()
+	confirmActivity(52, "done", settle)
+	confirmActivity(52, "done", settle.Add(debounceWindow))
+	prevActivityMu.Unlock()
+
+	if got := activitySinceFor(52); !got.Equal(settle) {
+		t.Errorf("activitySince = %v, want %v — a dropped seed must not resurface on a later matching state", got, settle)
+	}
+}
+
+// The seed arrives through a binding called after CreateSession returns, so it
+// races the scan loop. Landing after the session already has a confirmed state
+// it has nothing left to correct, and applying it would back-date a state that
+// demonstrably began after the restart.
+func TestSeedActivitySince_IgnoredOnceAStateIsConfirmed(t *testing.T) {
+	resetActivityDebounceForTest()
+
+	base := time.Unix(9500, 0)
+	prevActivityMu.Lock()
+	confirmActivity(53, "active", base)
+	confirmActivity(53, "active", base.Add(debounceWindow))
+	prevActivityMu.Unlock()
+
+	setActivitySinceFor(53, time.Unix(1700000000, 0), "active")
+
+	if got := activitySinceFor(53); !got.Equal(base) {
+		t.Errorf("activitySince = %v, want %v — a late seed must not overwrite a confirmed state's start", got, base)
+	}
+	prevActivityMu.Lock()
+	_, stillSeeded := seededActivity[53]
+	prevActivityMu.Unlock()
+	if stillSeeded {
+		t.Error("a refused seed was still recorded and would hijack the next confirmation")
+	}
+}
+
+// A seed without a state cannot be matched against anything, so it must be
+// refused outright rather than attaching to whatever confirms first.
+func TestSeedActivitySince_RequiresAState(t *testing.T) {
+	resetActivityDebounceForTest()
+
+	setActivitySinceFor(54, time.Unix(1700000000, 0), "")
+
+	base := time.Unix(9600, 0)
+	prevActivityMu.Lock()
+	confirmActivity(54, "done", base)
+	confirmActivity(54, "done", base.Add(debounceWindow))
+	prevActivityMu.Unlock()
+
+	if got := activitySinceFor(54); !got.Equal(base) {
+		t.Errorf("activitySince = %v, want %v (stateless seed must be ignored)", got, base)
 	}
 }
 

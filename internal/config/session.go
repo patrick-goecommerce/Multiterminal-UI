@@ -49,6 +49,7 @@ type SavedPane struct {
 	UserRenamed     bool   `json:"user_renamed,omitempty"`      // true if the user manually named the pane (suppresses auto-naming)
 	MCPProfile      string `json:"mcp_profile,omitempty"`       // MCP profile name chosen at launch ("" = all global servers, "none" = zero); see config.MCPProfile
 	ActivitySince   int64  `json:"activity_since,omitempty"`    // unix seconds when the current activity state began; survives a restart so the pane keeps its duration
+	ActivityState   string `json:"activity_state,omitempty"`    // the activity ActivitySince belongs to ("done", "idle", …); the seed is honoured on restore only if the pane confirms this same state first
 }
 
 // sessionPath returns the path to ~/.multiterminal-session.json.

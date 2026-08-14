@@ -41,13 +41,16 @@ describe('paneToSaved', () => {
   });
 
   it('round-trips activitySince through save and restore', () => {
-    const pane = { name: 'x', mode: 'claude', activitySince: 1700000000 } as any;
+    const pane = { name: 'x', mode: 'claude', activitySince: 1700000000, activity: 'done' } as any;
     const saved = paneToSaved(pane);
     expect(saved.activity_since).toBe(1700000000);
+    // The state is what makes the timestamp usable on restore (#189).
+    expect(saved.activity_state).toBe('done');
   });
 
   it('defaults activity_since to 0 for a pane with no activitySince yet', () => {
     expect(paneToSaved({ name: 'x', mode: 'claude' } as any).activity_since).toBe(0);
+    expect(paneToSaved({ name: 'x', mode: 'claude' } as any).activity_state).toBe('');
   });
 });
 
@@ -163,7 +166,7 @@ describe('restoreSession activitySince seeding', () => {
     worktreeDirExists.mockReset().mockResolvedValue(false);
     linkSessionIssue.mockReset();
     resolveMCPProfile.mockReset().mockResolvedValue('');
-    seedActivitySince.mockReset();
+    seedActivitySince.mockReset().mockResolvedValue(undefined);
   });
 
   function restoreWith(extra: Record<string, unknown>) {
@@ -182,10 +185,10 @@ describe('restoreSession activitySince seeding', () => {
     return restoreSession('claude');
   }
 
-  it('seeds the backend with the restored timestamp when the saved pane has one', async () => {
-    await restoreWith({ activity_since: 1700000000 });
+  it('seeds the backend with the restored timestamp and the state it belongs to', async () => {
+    await restoreWith({ activity_since: 1700000000, activity_state: 'done' });
 
-    expect(seedActivitySince).toHaveBeenCalledWith(1, 1700000000);
+    expect(seedActivitySince).toHaveBeenCalledWith(1, 1700000000, 'done');
   });
 
   // A session file from before this field existed has no activity_since key
@@ -195,5 +198,22 @@ describe('restoreSession activitySince seeding', () => {
     await restoreWith({});
 
     expect(seedActivitySince).not.toHaveBeenCalled();
+  });
+
+  // A timestamp without its state cannot be matched on restore: the relaunched
+  // CLI boots into a transient "active" that would swallow the seed and claim
+  // the pane had been running for hours (#189).
+  it('does not seed a timestamp that carries no state', async () => {
+    await restoreWith({ activity_since: 1700000000 });
+
+    expect(seedActivitySince).not.toHaveBeenCalled();
+  });
+
+  // Fire-and-forget would surface as an unhandled rejection; a failed seed
+  // must not take the whole restore down either.
+  it('survives a rejected SeedActivitySince', async () => {
+    seedActivitySince.mockRejectedValue(new Error('boom'));
+
+    await expect(restoreWith({ activity_since: 1700000000, activity_state: 'done' })).resolves.toBe(true);
   });
 });

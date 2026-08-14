@@ -151,7 +151,7 @@ func TestSavedPaneRoundTripsActivitySince(t *testing.T) {
 
 	in := SessionState{Tabs: []SavedTab{{
 		Name:  "t1",
-		Panes: []SavedPane{{Name: "p1", ActivitySince: 1700000000}},
+		Panes: []SavedPane{{Name: "p1", ActivitySince: 1700000000, ActivityState: "done"}},
 	}}}
 	if err := saveSessionTo(path, in); err != nil {
 		t.Fatalf("saveSessionTo: %v", err)
@@ -163,5 +163,11 @@ func TestSavedPaneRoundTripsActivitySince(t *testing.T) {
 	}
 	if got := out.Tabs[0].Panes[0].ActivitySince; got != 1700000000 {
 		t.Errorf("ActivitySince = %d, want 1700000000", got)
+	}
+	// The state travels with the timestamp: without it the restore path
+	// cannot tell whether the seed still describes the pane's state, and the
+	// relaunched CLI's boot "active" would swallow it (#189).
+	if got := out.Tabs[0].Panes[0].ActivityState; got != "done" {
+		t.Errorf("ActivityState = %q, want %q", got, "done")
 	}
 }

@@ -31,16 +31,27 @@ var (
 	// single place it is written; the read path and SetHookActivity must never
 	// touch it, or the flicker this package just fixed returns in the duration.
 	activitySince = make(map[int]time.Time)
-	// seededActivity marks a session whose activitySince was seeded from a
-	// restored session file (setActivitySinceFor) but has not yet had its
-	// first confirmActivity call. A restored pane gets a brand-new session ID
-	// from CreateSession's counter, so prevActivity[id] starts empty exactly
-	// like a pane that was never restored — confirmActivity cannot otherwise
-	// tell the two apart. Without this flag, the first post-restart
-	// confirmation would stamp activitySince with the observation time,
-	// silently overwriting the seed within one debounce window and defeating
-	// the entire point of persisting it across a restart (#189).
-	seededActivity = make(map[int]bool)
+	// seededActivity maps a session whose activitySince was seeded from a
+	// restored session file (setActivitySinceFor) to the state that timestamp
+	// belongs to. The entry lives until that session's first confirmActivity
+	// call. A restored pane gets a brand-new session ID from CreateSession's
+	// counter, so prevActivity[id] starts empty exactly like a pane that was
+	// never restored — confirmActivity cannot otherwise tell the two apart.
+	// Without this, the first post-restart confirmation would stamp
+	// activitySince with the observation time, silently overwriting the seed
+	// within one debounce window and defeating the entire point of persisting
+	// it across a restart (#189).
+	//
+	// The state is part of the entry, not an afterthought: a restored pane
+	// re-launches its CLI, and that boot produces output for well over a
+	// debounce window, so DetectActivity reports "active" throughout it
+	// (activity.go: 1.5 s past the last byte). The first state confirmed after
+	// a restart is therefore almost always a transient "active" — with a
+	// state-blind seed it would swallow the timestamp, showing "läuft · 3 Std
+	// 20" on a session two seconds old and then "fertig · gerade eben" once it
+	// settled. Both halves wrong, in exactly the long-idle case the feature
+	// exists for.
+	seededActivity = make(map[int]string)
 )
 
 // confirmActivity applies the debounce for one session and reports whether raw
@@ -51,7 +62,9 @@ var (
 // window. Otherwise every duration would be short by up to one window.
 //
 // Exception: a session seeded via setActivitySinceFor keeps its seeded value
-// through its first confirmation instead — see seededActivity.
+// through its first confirmation, but only when that confirmation lands on the
+// state the seed was taken from — see seededActivity. Either way the seed is
+// consumed by the first confirmation and never applies to a later one.
 func confirmActivity(id int, raw string, now time.Time) bool {
 	if prevActivity[id] == raw {
 		// Back to (or still on) the confirmed state — drop any candidate.
@@ -69,9 +82,12 @@ func confirmActivity(id int, raw string, now time.Time) bool {
 		return false
 	}
 	prevActivity[id] = raw
-	if seededActivity[id] {
-		delete(seededActivity, id)
-	} else {
+	seedState, seeded := seededActivity[id]
+	delete(seededActivity, id)
+	if !seeded || seedState != raw {
+		// No seed, or the pane settled on a different state than the one the
+		// seed describes (the CLI-boot "active" above) — that state began now,
+		// so the observation time is the honest answer and the seed is dropped.
 		activitySince[id] = pendingSince[id]
 	}
 	delete(pendingActivity, id)
@@ -87,25 +103,39 @@ func activitySinceFor(id int) time.Time {
 	return activitySince[id]
 }
 
-// setActivitySinceFor seeds the timestamp of a restored pane, so a duration
-// survives an MTUI restart instead of starting over.
-func setActivitySinceFor(id int, t time.Time) {
-	if t.IsZero() {
+// setActivitySinceFor seeds the timestamp of a restored pane together with the
+// state it belongs to, so a duration survives an MTUI restart instead of
+// starting over. A zero time or an empty state is ignored: without a state the
+// seed could only attach to whatever confirms first, which is the bug this
+// pairing exists to prevent.
+//
+// The seed is also refused once the session has a confirmed state. It arrives
+// through a binding called after CreateSession returns, so it races the scan
+// loop; landing after a confirmation it would have nothing to correct and could
+// only mis-stamp a much later change.
+func setActivitySinceFor(id int, t time.Time, state string) {
+	if t.IsZero() || state == "" {
 		return
 	}
 	prevActivityMu.Lock()
+	defer prevActivityMu.Unlock()
+	if prevActivity[id] != "" {
+		return
+	}
 	activitySince[id] = t
-	seededActivity[id] = true
-	prevActivityMu.Unlock()
+	seededActivity[id] = state
 }
 
 // SeedActivitySince restores a pane's state-start timestamp after a restart, so
-// its badge keeps the duration it had instead of starting over. Zero is ignored.
-func (a *AppService) SeedActivitySince(sessionID int, unix int64) {
+// its badge keeps the duration it had instead of starting over. state is the
+// activity the timestamp belongs to ("done", "idle", …); the seed is honoured
+// only if the pane confirms that same state first. Zero or an empty state is
+// ignored.
+func (a *AppService) SeedActivitySince(sessionID int, unix int64, state string) {
 	if unix <= 0 {
 		return
 	}
-	setActivitySinceFor(sessionID, time.Unix(unix, 0))
+	setActivitySinceFor(sessionID, time.Unix(unix, 0), state)
 }
 
 // cleanupActivityDebounce drops a closed session's debounce state. The caller
@@ -188,5 +218,5 @@ func resetActivityDebounceForTest() {
 	pendingSince = make(map[int]time.Time)
 	activitySince = make(map[int]time.Time)
 	prevActivity = make(map[int]string)
-	seededActivity = make(map[int]bool)
+	seededActivity = make(map[int]string)
 }
