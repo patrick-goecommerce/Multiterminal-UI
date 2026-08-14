@@ -147,6 +147,31 @@ func TestActivitySinceUnix(t *testing.T) {
 	}
 }
 
+// The hook emit path announces a state before confirmActivity has seen it, so
+// the recorded timestamp still belongs to the previous state. Handing it out
+// with the new label would show "fertig · 3 Std 20" for a pane that just
+// finished, then snap back to "gerade eben" ~2 s later. 0 ("unknown") is the
+// only honest answer until the state is confirmed.
+func TestActivitySinceUnixIfState(t *testing.T) {
+	resetActivityDebounceForTest()
+
+	base := time.Unix(11000, 0)
+	prevActivityMu.Lock()
+	prevActivity[60] = "active"
+	activitySince[60] = base
+	prevActivityMu.Unlock()
+
+	if got := activitySinceUnixIfState(60, "done"); got != 0 {
+		t.Errorf("a state the session has not confirmed yielded %d, want 0 (unknown)", got)
+	}
+	if got := activitySinceUnixIfState(60, "active"); got != 11000 {
+		t.Errorf("the confirmed state yielded %d, want 11000", got)
+	}
+	if got := activitySinceUnixIfState(61, "done"); got != 0 {
+		t.Errorf("an unknown session yielded %d, want 0", got)
+	}
+}
+
 // forceActivity is used by writers that bypass confirmActivity (queue reset,
 // suspend/resume). The forced state's timestamp must win, and any pending
 // candidate armed before the force must not survive to confirm on a later

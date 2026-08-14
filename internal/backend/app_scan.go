@@ -13,7 +13,7 @@ import (
 // ActivityInfo is sent to the frontend when a session's activity state changes.
 type ActivityInfo struct {
 	ID         int    `json:"id"`
-	Activity   string `json:"activity"` // "idle", "active", "done", "waitingPermission", "waitingAnswer", "error"
+	Activity   string `json:"activity"` // "idle", "active", "done", "waitingPermission", "waitingAnswer", "error", plus "sleeping"/"resuming" from emitLifecycleActivity
 	Cost       string `json:"cost"`
 	Title      string `json:"title"`      // OSC-derived window title (fallback pane name)
 	ContextPct int    `json:"contextPct"` // % of context window used (statusline); 0 if unknown

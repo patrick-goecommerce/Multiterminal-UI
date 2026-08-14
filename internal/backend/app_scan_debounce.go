@@ -142,8 +142,38 @@ func forceActivity(id int, state string, now time.Time) {
 // activitySinceUnix returns the confirmed state's start as seconds since epoch,
 // or 0 when unknown. The frontend treats 0 as "show the state without a
 // duration" rather than rendering an epoch date.
+//
+// This takes prevActivityMu itself (via activitySinceFor), so the caller must
+// NOT hold it — unlike confirmActivity/forceActivity/cleanupActivityDebounce,
+// which require it. Calling this from inside a critical section would deadlock
+// the scan loop.
 func activitySinceUnix(id int) int64 {
 	t := activitySinceFor(id)
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
+}
+
+// activitySinceUnixIfState is activitySinceUnix restricted to a state: it
+// returns the start timestamp only when the session's *confirmed* state is
+// already `state`, and 0 ("unknown") otherwise. It takes prevActivityMu
+// itself, so the caller must not hold it.
+//
+// The hook emit path (app_hooks_setup.go) announces a state the moment the
+// hook event lands — one debounce window before confirmActivity has seen it.
+// At that moment activitySince still belongs to the *previous* state, so
+// pairing it with the new label would render e.g. "fertig · 3 Std 20" for
+// ~1.5-2.25 s and then snap to "fertig · gerade eben". Emitting 0 instead
+// shows the new state without a duration until the confirmed value arrives,
+// which is the documented meaning of 0 and never jumps backwards.
+func activitySinceUnixIfState(id int, state string) int64 {
+	prevActivityMu.Lock()
+	defer prevActivityMu.Unlock()
+	if prevActivity[id] != state {
+		return 0
+	}
+	t := activitySince[id]
 	if t.IsZero() {
 		return 0
 	}

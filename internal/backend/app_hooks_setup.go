@@ -65,10 +65,16 @@ func (a *AppService) setupHooks(ctx context.Context) {
 			log.Printf("[hooks] session %d: %s", sessionID, activity)
 			if a.app != nil {
 				a.app.Event.Emit("terminal:activity", ActivityInfo{
-					ID:            sessionID,
-					Activity:      activity,
-					Cost:          cost,
-					ActivitySince: activitySinceUnix(sessionID),
+					ID:       sessionID,
+					Activity: activity,
+					Cost:     cost,
+					// This path runs a debounce window ahead of
+					// confirmActivity, so the recorded timestamp still
+					// belongs to the previous state unless the confirmed
+					// state already *is* this one. Sending it anyway would
+					// pair a fresh label with a stale start time and make
+					// the duration jump backwards a moment later.
+					ActivitySince: activitySinceUnixIfState(sessionID, activity),
 				})
 			}
 			if activity == "done" {
