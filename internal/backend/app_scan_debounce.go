@@ -31,6 +31,16 @@ var (
 	// single place it is written; the read path and SetHookActivity must never
 	// touch it, or the flicker this package just fixed returns in the duration.
 	activitySince = make(map[int]time.Time)
+	// seededActivity marks a session whose activitySince was seeded from a
+	// restored session file (setActivitySinceFor) but has not yet had its
+	// first confirmActivity call. A restored pane gets a brand-new session ID
+	// from CreateSession's counter, so prevActivity[id] starts empty exactly
+	// like a pane that was never restored — confirmActivity cannot otherwise
+	// tell the two apart. Without this flag, the first post-restart
+	// confirmation would stamp activitySince with the observation time,
+	// silently overwriting the seed within one debounce window and defeating
+	// the entire point of persisting it across a restart (#189).
+	seededActivity = make(map[int]bool)
 )
 
 // confirmActivity applies the debounce for one session and reports whether raw
@@ -39,6 +49,9 @@ var (
 // On confirmation, activitySince is stamped with the *first* observation, not
 // with now: the state began when it was first seen, not when it survived the
 // window. Otherwise every duration would be short by up to one window.
+//
+// Exception: a session seeded via setActivitySinceFor keeps its seeded value
+// through its first confirmation instead — see seededActivity.
 func confirmActivity(id int, raw string, now time.Time) bool {
 	if prevActivity[id] == raw {
 		// Back to (or still on) the confirmed state — drop any candidate.
@@ -56,7 +69,11 @@ func confirmActivity(id int, raw string, now time.Time) bool {
 		return false
 	}
 	prevActivity[id] = raw
-	activitySince[id] = pendingSince[id]
+	if seededActivity[id] {
+		delete(seededActivity, id)
+	} else {
+		activitySince[id] = pendingSince[id]
+	}
 	delete(pendingActivity, id)
 	delete(pendingSince, id)
 	return true
@@ -78,7 +95,17 @@ func setActivitySinceFor(id int, t time.Time) {
 	}
 	prevActivityMu.Lock()
 	activitySince[id] = t
+	seededActivity[id] = true
 	prevActivityMu.Unlock()
+}
+
+// SeedActivitySince restores a pane's state-start timestamp after a restart, so
+// its badge keeps the duration it had instead of starting over. Zero is ignored.
+func (a *AppService) SeedActivitySince(sessionID int, unix int64) {
+	if unix <= 0 {
+		return
+	}
+	setActivitySinceFor(sessionID, time.Unix(unix, 0))
 }
 
 // cleanupActivityDebounce drops a closed session's debounce state. The caller
@@ -87,6 +114,7 @@ func cleanupActivityDebounce(id int) {
 	delete(pendingActivity, id)
 	delete(pendingSince, id)
 	delete(activitySince, id)
+	delete(seededActivity, id)
 }
 
 // forceActivity sets the confirmed activity state and its start timestamp
@@ -98,11 +126,17 @@ func cleanupActivityDebounce(id int) {
 // suspend/resume transition). A bare prevActivity write leaves activitySince
 // pointing at the *previous* state and leaves any armed candidate in place,
 // which can then confirm on a single unrelated tick (issue #188 follow-up).
+//
+// This also consumes any pending seed from setActivitySinceFor: the forced
+// timestamp already wins here, so a later confirmActivity call must not
+// treat the session as still-seeded and keep stamping activitySince with
+// this stale forced value forever.
 func forceActivity(id int, state string, now time.Time) {
 	prevActivity[id] = state
 	activitySince[id] = now
 	delete(pendingActivity, id)
 	delete(pendingSince, id)
+	delete(seededActivity, id)
 }
 
 // activitySinceUnix returns the confirmed state's start as seconds since epoch,
@@ -124,4 +158,5 @@ func resetActivityDebounceForTest() {
 	pendingSince = make(map[int]time.Time)
 	activitySince = make(map[int]time.Time)
 	prevActivity = make(map[int]string)
+	seededActivity = make(map[int]bool)
 }

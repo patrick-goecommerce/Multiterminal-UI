@@ -185,6 +185,8 @@ export function SaveTabs(arg1:config.SessionState):Promise<void>;
 
 export function SearchFiles(arg1:string,arg2:string):Promise<Array<backend.FileEntry>>;
 
+export function SeedActivitySince(arg1:number,arg2:number):Promise<void>;
+
 export function RecordOpenedDir(arg1:string):Promise<void>;
 
 export function SelectDirectory(arg1:string):Promise<string>;

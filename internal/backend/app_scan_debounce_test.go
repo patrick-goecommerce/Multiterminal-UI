@@ -188,3 +188,44 @@ func TestForceActivitySetsTimestampAndClearsPending(t *testing.T) {
 		t.Fatal("a candidate armed before forceActivity confirmed after the force")
 	}
 }
+
+// A restored session has no prevActivity entry yet (it is a brand-new
+// session ID from CreateSession's counter), so its very first observation
+// always looks like a fresh transition to confirmActivity — same as a pane
+// that was never restored at all. Without special-casing this, the seed
+// set by SeedActivitySince would be overwritten by that first confirmation
+// within one debounce window (~1.2-2.25s after restart), which defeats the
+// entire point of persisting the timestamp across a restart (#189).
+func TestSeedActivitySince_SurvivesFirstConfirmationAfterRestart(t *testing.T) {
+	resetActivityDebounceForTest()
+
+	seeded := time.Unix(1700000000, 0) // long before "now"
+	setActivitySinceFor(50, seeded)
+
+	restartTick := time.Now()
+	prevActivityMu.Lock()
+	confirmActivity(50, "idle", restartTick)
+	confirmActivity(50, "idle", restartTick.Add(debounceWindow))
+	prevActivityMu.Unlock()
+
+	if got := activitySinceFor(50); !got.Equal(seeded) {
+		t.Errorf("activitySince = %v, want seeded %v (seed was overwritten by the first post-restart confirmation)", got, seeded)
+	}
+}
+
+// A genuinely new (never-restored) pane must keep its existing behaviour:
+// no seed means the first confirmation stamps the observation time, same
+// as before this map existed.
+func TestConfirmActivity_UnseededFreshSessionStampsObservationTime(t *testing.T) {
+	resetActivityDebounceForTest()
+
+	base := time.Unix(9000, 0)
+	prevActivityMu.Lock()
+	confirmActivity(51, "idle", base)
+	confirmActivity(51, "idle", base.Add(debounceWindow))
+	prevActivityMu.Unlock()
+
+	if got := activitySinceFor(51); !got.Equal(base) {
+		t.Errorf("activitySince = %v, want %v (first observation, unseeded)", got, base)
+	}
+}

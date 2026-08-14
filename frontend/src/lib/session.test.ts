@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, linkSessionIssue, resolveMCPProfile } = vi.hoisted(() => ({
+const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, linkSessionIssue, resolveMCPProfile, seedActivitySince } = vi.hoisted(() => ({
   loadTabs: vi.fn(),
   ensureProjectWorktreeSetup: vi.fn(),
   createSession: vi.fn(),
   worktreeDirExists: vi.fn(),
   linkSessionIssue: vi.fn(),
   resolveMCPProfile: vi.fn(),
+  seedActivitySince: vi.fn(),
 }));
 
 vi.mock('../../wailsjs/go/backend/App', () => ({
@@ -16,6 +17,7 @@ vi.mock('../../wailsjs/go/backend/App', () => ({
   WorktreeDirExists: worktreeDirExists,
   LinkSessionIssue: linkSessionIssue,
   ResolveMCPProfile: resolveMCPProfile,
+  SeedActivitySince: seedActivitySince,
 }));
 
 import { paneToSaved, restoreSession } from './session';
@@ -36,6 +38,16 @@ describe('paneToSaved', () => {
   it('serialisiert das MCP-Profil (sonst startet der Pane nach Neustart wieder alle MCP-Server)', () => {
     expect(paneToSaved({ name: 'x', mode: 'claude', mcpProfile: 'none' } as any).mcp_profile).toBe('none');
     expect(paneToSaved({ name: 'x', mode: 'claude' } as any).mcp_profile).toBe('');
+  });
+
+  it('round-trips activitySince through save and restore', () => {
+    const pane = { name: 'x', mode: 'claude', activitySince: 1700000000 } as any;
+    const saved = paneToSaved(pane);
+    expect(saved.activity_since).toBe(1700000000);
+  });
+
+  it('defaults activity_since to 0 for a pane with no activitySince yet', () => {
+    expect(paneToSaved({ name: 'x', mode: 'claude' } as any).activity_since).toBe(0);
   });
 });
 
@@ -137,5 +149,51 @@ describe('restoreSession MCP profile', () => {
 
     const argv = createSession.mock.calls[0][0];
     expect(argv).not.toContain('--strict-mcp-config');
+  });
+});
+
+// A pane's state duration must survive an MTUI restart (#189): the saved
+// timestamp is seeded back into the backend's debounce bookkeeping right
+// after the session is recreated.
+describe('restoreSession activitySince seeding', () => {
+  beforeEach(() => {
+    loadTabs.mockReset();
+    ensureProjectWorktreeSetup.mockReset().mockResolvedValue(undefined);
+    createSession.mockReset().mockResolvedValue(1);
+    worktreeDirExists.mockReset().mockResolvedValue(false);
+    linkSessionIssue.mockReset();
+    resolveMCPProfile.mockReset().mockResolvedValue('');
+    seedActivitySince.mockReset();
+  });
+
+  function restoreWith(extra: Record<string, unknown>) {
+    loadTabs.mockResolvedValue({
+      active_tab: 0,
+      tabs: [{
+        name: 't', dir: 'D:/repos/foo', focus_idx: 0,
+        panes: [{
+          name: 'p', mode: 1, model: '', display: 'terminal', conversation_id: '',
+          claude_session_id: '', user_renamed: false, worktree_path: '',
+          worktree_branch: '', target_branch: '', issue_number: 0, issue_branch: '',
+          zoom_delta: 0, ...extra,
+        }],
+      }],
+    });
+    return restoreSession('claude');
+  }
+
+  it('seeds the backend with the restored timestamp when the saved pane has one', async () => {
+    await restoreWith({ activity_since: 1700000000 });
+
+    expect(seedActivitySince).toHaveBeenCalledWith(1, 1700000000);
+  });
+
+  // A session file from before this field existed has no activity_since key
+  // at all. `?? 0` must turn that into 0, not undefined — otherwise the
+  // badge later computes a duration against NaN.
+  it('does not call SeedActivitySince for a pane saved without activity_since (predates the field)', async () => {
+    await restoreWith({});
+
+    expect(seedActivitySince).not.toHaveBeenCalled();
   });
 });

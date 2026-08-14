@@ -1012,6 +1012,7 @@ export namespace config {
 	    target_branch?: string;
 	    zoom_delta?: number;
 	    mcp_profile?: string;
+	    activity_since?: number;
 
 	    static createFrom(source: any = {}) {
 	        return new SavedPane(source);
@@ -1029,6 +1030,7 @@ export namespace config {
 	        this.target_branch = source["target_branch"];
 	        this.zoom_delta = source["zoom_delta"];
 	        this.mcp_profile = source["mcp_profile"];
+	        this.activity_since = source["activity_since"];
 	    }
 	}
 	export class SavedTab {

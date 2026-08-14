@@ -387,6 +387,10 @@ export function SearchFiles(arg1, arg2) {
   return $Call.ByID(4086168286, arg1, arg2);
 }
 
+export function SeedActivitySince(arg1, arg2) {
+  return $Call.ByID(2482585263, arg1, arg2);
+}
+
 export function RecordOpenedDir(arg1) {
   return $Call.ByID(873803662, arg1);
 }

@@ -144,3 +144,24 @@ func TestRemoveTab_LastTabRemoved(t *testing.T) {
 		t.Fatalf("expected ActiveTab=0 after last tab removed, got %d", raw.ActiveTab)
 	}
 }
+
+func TestSavedPaneRoundTripsActivitySince(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.json")
+
+	in := SessionState{Tabs: []SavedTab{{
+		Name:  "t1",
+		Panes: []SavedPane{{Name: "p1", ActivitySince: 1700000000}},
+	}}}
+	if err := saveSessionTo(path, in); err != nil {
+		t.Fatalf("saveSessionTo: %v", err)
+	}
+
+	out := loadSessionFrom(path)
+	if out == nil {
+		t.Fatal("loadSessionFrom returned nil")
+	}
+	if got := out.Tabs[0].Panes[0].ActivitySince; got != 1700000000 {
+		t.Errorf("ActivitySince = %d, want 1700000000", got)
+	}
+}

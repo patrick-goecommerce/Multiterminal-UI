@@ -79,6 +79,14 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
         try {
           const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, mode);
           if (sessionId > 0) {
+            // Restore the pane's state-start timestamp so its duration badge
+            // keeps counting from where it was, instead of starting over on
+            // the first confirmed activity after restart (#189). A session
+            // file predating this field has no key here, so `?? 0` (not
+            // `||`) is what turns "missing" into 0 rather than undefined.
+            const activitySince = (savedPane as any).activity_since ?? 0;
+            if (activitySince) App.SeedActivitySince(sessionId, activitySince);
+
             const issueNum = (savedPane as any).issue_number || 0;
             const issueBranch = (savedPane as any).issue_branch || '';
             const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch, wtPath && sessionDir === wtPath ? wtPath : '', wtBranch, wtTarget, false, 'terminal', '', claudeSessionId, mcpProfile);
@@ -140,6 +148,7 @@ export function paneToSaved(pane: any) {
     worktree_path: pane.worktreePath || '',
     worktree_branch: pane.branch || '',
     target_branch: pane.targetBranch || '',
+    activity_since: pane.activitySince || 0,
   };
 }
 
