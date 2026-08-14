@@ -86,6 +86,16 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 
 	// The periodic scan tick must also observe "done" — this is what actually
 	// drives the pane badge and re-triggers the pipeline queue in production.
+	// A single tick only arms the debounce candidate (confirmActivity, task 3 /
+	// issue #188) — it takes debounceWindow of a stable state to confirm. Back-
+	// date the pending timestamp instead of sleeping the test, then tick again
+	// so the candidate confirms.
+	app.scanAllSessions()
+	prevActivityMu.Lock()
+	if since, ok := pendingSince[sessID]; ok {
+		pendingSince[sessID] = since.Add(-debounceWindow)
+	}
+	prevActivityMu.Unlock()
 	app.scanAllSessions()
 
 	if got := activityString(sess.GetActivity()); got != "done" {

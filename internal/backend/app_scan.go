@@ -89,6 +89,7 @@ func cleanupActivityTracking(id int) {
 	delete(prevActivity, id)
 	delete(prevCost, id)
 	delete(prevTitle, id)
+	cleanupActivityDebounce(id)
 	prevActivityMu.Unlock()
 }
 
@@ -155,24 +156,30 @@ func (a *AppService) scanAllSessions() {
 
 		title := sess.GetTitle()
 
-		// Only emit when state, cost, or title actually changed
+		// Only emit when state, cost, or title actually changed. The activity
+		// half runs through confirmActivity, so a one-tick flicker never
+		// reaches the UI — nor the queue, orchestrator and issue reporting
+		// below, which all key off activityChanged.
+		now := time.Now()
 		prevActivityMu.Lock()
-		activityChanged := prevActivity[id] != actStr
+		activityChanged := confirmActivity(id, actStr, now)
 		costChanged := prevCost[id] != costStr
 		titleChanged := prevTitle[id] != title
 		changed := activityChanged || costChanged || titleChanged
-		if changed {
-			prevActivity[id] = actStr
+		if costChanged {
 			prevCost[id] = costStr
+		}
+		if titleChanged {
 			prevTitle[id] = title
 		}
+		confirmedActivity := prevActivity[id]
 		prevActivityMu.Unlock()
 
 		if changed && a.app != nil {
-			log.Printf("[scan] session %d: activity=%s cost=%s title=%q", id, actStr, costStr, title)
+			log.Printf("[scan] session %d: activity=%s cost=%s title=%q", id, confirmedActivity, costStr, title)
 			a.app.Event.Emit("terminal:activity", ActivityInfo{
 				ID:         id,
-				Activity:   actStr,
+				Activity:   confirmedActivity,
 				Cost:       costStr,
 				Title:      title,
 				ContextPct: ctxPct,
@@ -181,7 +188,7 @@ func (a *AppService) scanAllSessions() {
 		}
 
 		// Trigger pipeline queue on fresh "done" transition
-		if activityChanged && actStr == "done" && a.app != nil {
+		if activityChanged && confirmedActivity == "done" && a.app != nil {
 			a.processQueue(id)
 			// Notify orchestrator that this agent finished
 			a.notifyOrchestratorDone(id)
@@ -192,7 +199,7 @@ func (a *AppService) scanAllSessions() {
 		// above never fires when Claude finishes without a visible ❯ prompt, which
 		// would otherwise strand the finish prep as "pending" forever. Scoped to a
 		// preparing finish flow so general pipeline timing is unaffected.
-		if activityChanged && actStr == "idle" && a.app != nil {
+		if activityChanged && confirmedActivity == "idle" && a.app != nil {
 			if st := a.getFinishState(id); st != nil && st.Phase == "preparing" {
 				a.processQueue(id)
 			}
@@ -200,12 +207,12 @@ func (a *AppService) scanAllSessions() {
 
 		// Surface waiting states to an active finish flow (spec 5.1/2)
 		if activityChanged && a.app != nil {
-			a.notifyFinishOnActivity(id, actStr)
+			a.notifyFinishOnActivity(id, confirmedActivity)
 		}
 
 		// Report issue progress on activity transitions
 		if activityChanged && a.app != nil {
-			a.onActivityChangeForIssue(id, actStr, costStr)
+			a.onActivityChangeForIssue(id, confirmedActivity, costStr)
 		}
 	}
 }

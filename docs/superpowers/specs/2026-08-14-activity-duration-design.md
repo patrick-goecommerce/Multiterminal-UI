@@ -120,11 +120,18 @@ Damit der Wert nach dem Restore im Backend landet, nimmt `CreateSession` ihn als
 
 **`models.ts` muss von Hand nachgezogen werden** — `SavedPane` geht über eine Binding-Rückgabe. Feld deklarieren und im Konstruktor zuweisen (CLAUDE.md, wiederkehrender Fehler).
 
-### 7. Nebenwirkungen umhängen
+### 7. Nebenwirkungen
 
-`processQueue`, `notifyOrchestratorDone` und `reportIssueProgress` (`app_scan.go:176-201`) hängen künftig am bestätigten Wechsel statt am rohen.
+`processQueue`, `notifyOrchestratorDone`, `notifyFinishOnActivity` und
+`onActivityChangeForIssue` (`app_scan.go:184-209`) hängen bereits alle an
+derselben lokalen Variable `activityChanged`. Sie müssen deshalb nicht
+umgehängt werden — es genügt, deren Berechnung auf `confirmActivity`
+umzustellen, dann ziehen alle vier automatisch mit.
 
-Das ist der Teil mit der größten Wirkung jenseits der Optik: `reportIssueProgress` hat keinerlei Dedup (`app_issue_progress.go:20-70`). Mit aktivem `auto_comment_on_done` bedeutet jeder Scheinabschluss heute einen GitHub-Kommentar, mit `auto_close_issue` einen erneuten Close-Versuch.
+Das ist der Teil mit der größten Wirkung jenseits der Optik:
+`reportIssueProgress` hat keinerlei Dedup (`app_issue_progress.go:20-70`). Mit
+aktivem `auto_comment_on_done` bedeutet jeder Scheinabschluss heute einen
+GitHub-Kommentar, mit `auto_close_issue` einen erneuten Close-Versuch.
 
 ## Nebenläufigkeit
 
