@@ -47,6 +47,14 @@ export function CheckGitHubCLI() {
   return $Call.ByID(2375732200);
 }
 
+export function RuntimeStats() {
+  return $Call.ByID(3036509304);
+}
+
+export function WriteDiagnosticDump() {
+  return $Call.ByID(3544939847);
+}
+
 export function CheckHealth() {
   return $Call.ByID(3622525547);
 }

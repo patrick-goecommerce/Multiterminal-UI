@@ -231,11 +231,31 @@ export namespace backend {
 	        this.detail = source["detail"];
 	    }
 	}
+	export class RuntimeStats {
+	    goroutines: number;
+	    threads_created: number;
+	    hook_files: number;
+	    sessions: number;
+
+	    static createFrom(source: any = {}) {
+	        return new RuntimeStats(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.goroutines = source["goroutines"];
+	        this.threads_created = source["threads_created"];
+	        this.hook_files = source["hook_files"];
+	        this.sessions = source["sessions"];
+	    }
+	}
 	export class HealthInfo {
 	    crash_detected: boolean;
 	    logging_enabled: boolean;
 	    logging_auto: boolean;
 	    bind_warnings: BindWarning[];
+	    runtime: RuntimeStats;
+	    hook_files_high: boolean;
 
 	    static createFrom(source: any = {}) {
 	        return new HealthInfo(source);
@@ -247,6 +267,8 @@ export namespace backend {
 	        this.logging_enabled = source["logging_enabled"];
 	        this.logging_auto = source["logging_auto"];
 	        this.bind_warnings = this.convertValues(source["bind_warnings"], BindWarning);
+	        this.runtime = this.convertValues(source["runtime"], RuntimeStats);
+	        this.hook_files_high = source["hook_files_high"];
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
