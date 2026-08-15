@@ -24,6 +24,16 @@ export const MONOSPACE_FONTS = [
 export const DEFAULT_FONT_FAMILY = MONOSPACE_FONTS.map(f => `'${f}'`).join(', ') + ', monospace';
 
 /**
+ * Scrollback lines a pane falls back to when the config names none.
+ *
+ * Mirrors config.DefaultTerminalScrollback in the Go backend, which normally
+ * supplies the value — this is the guard for the moment before the config has
+ * loaded. The buffer lives in the WebView heap once per pane, so it scales with
+ * the number of open panes rather than with any pane's output.
+ */
+export const DEFAULT_SCROLLBACK = 5000;
+
+/**
  * Check if a font is available in the browser.
  * Uses document.fonts.check() with a test string at 16px.
  */
@@ -207,7 +217,7 @@ export function createTerminal(
     ...baseOptions,
     fontFamily: buildFontFamily(fontFamily || ''),
     fontSize: fontSize || 10,
-    scrollback: scrollback || 10000,
+    scrollback: scrollback || DEFAULT_SCROLLBACK,
     theme: terminalThemes[theme] || terminalThemes.dark,
   });
 
