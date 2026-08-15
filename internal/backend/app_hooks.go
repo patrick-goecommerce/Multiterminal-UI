@@ -30,25 +30,30 @@ type rawHookEvent struct {
 }
 
 // hookEventToActivity maps a Claude Code event name to an ActivityState.
-// For Notification events the message content is inspected: if it contains
-// a question mark the user needs to respond, otherwise it is informational.
-func hookEventToActivity(event, message string) terminal.ActivityState {
+//
+// The bool reports whether the event carries any state information at all.
+// Not every event does: a Notification without a question mark says nothing
+// about whether the turn ended, and an unknown event says nothing at all.
+// Returning a state anyway meant inventing one, which tore running sessions to
+// "done" and idle ones to "idle" (issue #188). Callers must leave the current
+// state untouched when this is false.
+func hookEventToActivity(event, message string) (terminal.ActivityState, bool) {
 	switch event {
 	case "PreToolUse", "PostToolUse", "UserPromptSubmit":
-		return terminal.ActivityActive
+		return terminal.ActivityActive, true
 	case "PostToolUseFailure":
-		return terminal.ActivityError
+		return terminal.ActivityError, true
 	case "PermissionRequest":
-		return terminal.ActivityWaitingPermission
+		return terminal.ActivityWaitingPermission, true
 	case "Notification":
 		if strings.Contains(message, "?") {
-			return terminal.ActivityWaitingAnswer
+			return terminal.ActivityWaitingAnswer, true
 		}
-		return terminal.ActivityDone
+		return terminal.ActivityIdle, false
 	case "Stop":
-		return terminal.ActivityDone
+		return terminal.ActivityDone, true
 	default:
-		return terminal.ActivityIdle
+		return terminal.ActivityIdle, false
 	}
 }
 
@@ -235,7 +240,11 @@ func (hm *HookManager) handleEvent(ev rawHookEvent) {
 		hm.onPathBlocked(ev.MtID, ev.BlockedPath, ev.BlockReason)
 	}
 
-	newState := hookEventToActivity(ev.Event, ev.Message)
+	newState, ok := hookEventToActivity(ev.Event, ev.Message)
+	if !ok {
+		// The event carries no state claim — leave the session as it is.
+		return
+	}
 	sess.SetHookActivity(newState)
 
 	if hm.onActivity != nil {

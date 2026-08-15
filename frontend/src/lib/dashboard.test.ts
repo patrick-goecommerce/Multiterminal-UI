@@ -9,6 +9,7 @@ function makePane(overrides: Partial<Pane>): Pane {
     issueNumber: null, issueTitle: '', issueBranch: '', worktreePath: '',
     branch: 'main', targetBranch: '', zoomDelta: 0,
     background: false, display: 'terminal', conversationId: '', claudeSessionId: '',
+    activitySince: 0,
     ...overrides,
   };
 }

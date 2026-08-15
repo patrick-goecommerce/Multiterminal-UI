@@ -108,6 +108,22 @@ func TestScanGuard_StaleActiveHookFallsBackToScreen(t *testing.T) {
 	}
 
 	cleanupActivityTracking(9)
+	// A single tick only arms the debounce candidate (confirmActivity, task 3 /
+	// issue #188) — it takes debounceWindow of a stable state to confirm. Back-
+	// date the pending timestamp instead of sleeping the test, then tick again
+	// so the candidate confirms.
+	app.scanAllSessions()
+	prevActivityMu.Lock()
+	since, armed := pendingSince[9]
+	if armed {
+		pendingSince[9] = since.Add(-debounceWindow)
+	}
+	prevActivityMu.Unlock()
+	if !armed {
+		// Without this the back-dating would silently do nothing and the
+		// assertion below would pass on an unarmed candidate.
+		t.Fatal("first scan armed no debounce candidate — the fallback never observed 'done'")
+	}
 	app.scanAllSessions()
 
 	got := activityString(sess.GetActivity())

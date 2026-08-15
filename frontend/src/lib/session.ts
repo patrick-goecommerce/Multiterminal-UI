@@ -79,6 +79,25 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
         try {
           const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, mode);
           if (sessionId > 0) {
+            // Restore the pane's state-start timestamp so its duration badge
+            // keeps counting from where it was, instead of starting over on
+            // the first confirmed activity after restart (#189). A session
+            // file predating this field has no key here, so `?? 0` (not
+            // `||`) is what turns "missing" into 0 rather than undefined.
+            //
+            // The state travels with it: the relaunched CLI produces output
+            // for its whole boot, so the first state the backend confirms
+            // after a restart is almost always a transient "active". Without
+            // the state the seed would attach to that one and show hours of
+            // "läuft" on a session two seconds old.
+            const activitySince = (savedPane as any).activity_since ?? 0;
+            const activityState = (savedPane as any).activity_state ?? '';
+            if (activitySince && activityState) {
+              App.SeedActivitySince(sessionId, activitySince, activityState).catch((err) => {
+                console.error('[restoreSession] SeedActivitySince failed:', err);
+              });
+            }
+
             const issueNum = (savedPane as any).issue_number || 0;
             const issueBranch = (savedPane as any).issue_branch || '';
             const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch, wtPath && sessionDir === wtPath ? wtPath : '', wtBranch, wtTarget, false, 'terminal', '', claudeSessionId, mcpProfile);
@@ -140,6 +159,10 @@ export function paneToSaved(pane: any) {
     worktree_path: pane.worktreePath || '',
     worktree_branch: pane.branch || '',
     target_branch: pane.targetBranch || '',
+    activity_since: pane.activitySince || 0,
+    // Paired with the timestamp: on restore the seed only counts if the pane
+    // confirms this same state again (see restoreSession).
+    activity_state: pane.activity || '',
   };
 }
 

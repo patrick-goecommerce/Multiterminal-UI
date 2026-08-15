@@ -7,6 +7,8 @@
   import { CLAUDE_MODES } from '../lib/claude';
   import { renderQuickActionPrompt } from '../lib/quickActions';
   import { config } from '../stores/config';
+  import { now } from '../stores/clock';
+  import { formatDuration, formatClockTime } from '../lib/duration';
 
   export let pane: Pane;
   export let paneIndex: number = 0;
@@ -136,6 +138,18 @@
       default: return '';
     }
   })();
+  // How long the pane has held its current state. No "vor"/"seit" prefix here
+  // (see formatDuration) — the label in front already supplies the tense.
+  $: durationLabel = formatDuration(pane.activitySince, $now);
+  $: badgeText = statusLabel && durationLabel
+    ? `${statusLabel} · ${durationLabel}`
+    : statusLabel;
+  // sleeping/resuming already carry an explanatory tooltip (statusTitle) — keep
+  // that one, since it's more useful than a bare timestamp. Everything else
+  // falls back to the form the spec names: "Fertig seit 14:32 Uhr".
+  $: badgeTitle = statusTitle || (pane.activitySince
+    ? `${statusLabel.charAt(0).toUpperCase()}${statusLabel.slice(1)} seit ${formatClockTime(pane.activitySince)}`
+    : '');
 
   const chatModes = ['claude', 'claude-auto', 'claude-yolo', 'codex', 'codex-auto', 'gemini', 'gemini-yolo'];
   $: canChat = chatModes.includes(pane.mode);
@@ -177,7 +191,7 @@
     {/if}
     <span class="mode-badge {getModeBadgeClass(pane.mode)}">{getModeLabel(pane.mode)}</span>
     {#if statusLabel}
-      <span class="status-badge {statusClass}" title={statusTitle}>{statusLabel}</span>
+      <span class="status-badge {statusClass}" title={badgeTitle}>{badgeText}</span>
     {/if}
     {#if pane.background}
       <span class="mode-badge badge-bg">BG</span>

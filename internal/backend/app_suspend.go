@@ -269,13 +269,18 @@ const (
 //
 // prevActivity is updated in the same step so the scan loop treats the next
 // real state as a change (and, for "sleeping", does not immediately re-emit the
-// state it saw before the pane fell asleep).
+// state it saw before the pane fell asleep). forceActivity also stamps
+// activitySince to now and clears any armed debounce candidate — a bare
+// prevActivity write would leave the badge's timestamp on the state the pane
+// had before sleeping, and let a stale candidate confirm on the next tick
+// (issue #188).
 func (a *AppService) emitLifecycleActivity(id int, state string) {
+	now := time.Now()
 	prevActivityMu.Lock()
-	prevActivity[id] = state
+	forceActivity(id, state, now)
 	prevActivityMu.Unlock()
 	if a.app == nil {
 		return
 	}
-	a.app.Event.Emit("terminal:activity", ActivityInfo{ID: id, Activity: state})
+	a.app.Event.Emit("terminal:activity", ActivityInfo{ID: id, Activity: state, ActivitySince: now.Unix()})
 }

@@ -61,23 +61,40 @@ func (a *AppService) setupHooks(ctx context.Context) {
 			defer a.mu.Unlock()
 			return a.sessions[mtID]
 		},
-		func(sessionID int, activity string, cost string) {
-			log.Printf("[hooks] session %d: %s", sessionID, activity)
-			if a.app != nil {
-				a.app.Event.Emit("terminal:activity", ActivityInfo{
-					ID:       sessionID,
-					Activity: activity,
-					Cost:     cost,
-				})
-			}
-			if activity == "done" {
-				a.processQueue(sessionID)
-			}
-			a.onActivityChangeForIssue(sessionID, activity, cost)
-		},
+		a.onHookActivity,
 	)
 	a.hookMgr.onPrompt = a.maybeGeneratePaneName
 	a.hookMgr.onWorktreeChange = a.onWorktreeChange
 	a.hookMgr.onPathBlocked = a.onWorktreePathBlocked
 	a.hookMgr.Start(ctx)
+}
+
+// onHookActivity is the HookManager's activity callback. It repaints the badge
+// as soon as a hook event lands — roughly a debounce window before the scan
+// loop confirms the same state — and that low latency is the only reason this
+// second emit path exists.
+//
+// It deliberately triggers *no* side effects. Queue advance, orchestrator
+// notification and issue reporting all hang off the one confirmed change in
+// scanAllSessions (see confirmActivity). Firing them here as well meant every
+// hook-driven completion ran them twice about two seconds apart, and
+// reportIssueProgress has no deduplication: with auto_comment_on_done that was
+// two GitHub comments per completion, with auto_close_issue two close attempts
+// (issue #188).
+func (a *AppService) onHookActivity(sessionID int, activity string, cost string) {
+	log.Printf("[hooks] session %d: %s", sessionID, activity)
+	if a.app == nil {
+		return
+	}
+	a.app.Event.Emit("terminal:activity", ActivityInfo{
+		ID:       sessionID,
+		Activity: activity,
+		Cost:     cost,
+		// This path runs a debounce window ahead of confirmActivity, so the
+		// recorded timestamp still belongs to the previous state unless the
+		// confirmed state already *is* this one. Sending it anyway would pair
+		// a fresh label with a stale start time and make the duration jump
+		// backwards a moment later.
+		ActivitySince: activitySinceUnixIfState(sessionID, activity),
+	})
 }

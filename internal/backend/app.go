@@ -69,6 +69,12 @@ type AppService struct {
 	// a.app.Event.Emit in setupHooks. Never nil-checked directly — callers use
 	// the emitWorktreeEventSafe helper below.
 	emitWorktreeEvent func(name string, payload any)
+	// issueProgressHook is a seam for testing, nil in production. It fires on
+	// every reportIssueProgress call ahead of any config gate, so a test can
+	// count how often one real completion reports progress — the duplicate
+	// reporting from #188, where the hook callback and the scan loop each ran
+	// the side effects of the same transition.
+	issueProgressHook func(sessionID int, event issueProgressEvent)
 }
 
 // NewAppService creates a new AppService instance for Wails v3 service pattern.
