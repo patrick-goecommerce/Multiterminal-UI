@@ -102,16 +102,25 @@ func (hm *HookManager) Start(ctx context.Context) {
 		log.Printf("[hooks] could not create hooks dir: %v — hook integration disabled", err)
 		return
 	}
+	// Purge before recording offsets: a file removed here must not leave an
+	// entry behind in the offsets map.
+	hm.logPurge(hm.purgeStaleFiles(hookFileMaxAge), "at startup")
 	hm.skipExistingFiles()
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
+		purge := time.NewTicker(hookPurgeInterval)
+		defer purge.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				hm.processDirectory()
+			case <-purge.C:
+				// A long-running app would otherwise accumulate for days
+				// between restarts — which is exactly how this got out of hand.
+				hm.logPurge(hm.purgeStaleFiles(hookFileMaxAge), "during periodic sweep")
 			}
 		}
 	}()
@@ -139,6 +148,13 @@ func (hm *HookManager) skipExistingFiles() {
 }
 
 // processDirectory scans the hooks directory for new JSONL events.
+//
+// Only files whose size differs from the recorded offset are opened. That guard
+// is not a micro-optimisation: a file is written once per hook event and then
+// stays untouched forever, so at any tick nearly every file in the directory has
+// nothing new. Opening them all regardless cost 85 ms per pass against a 100 ms
+// ticker — 85 % of a core, indefinitely (issue #192). os.ReadDir already carries
+// the size on Windows, so the check itself is free.
 func (hm *HookManager) processDirectory() {
 	entries, err := os.ReadDir(hm.dir)
 	if err != nil {
@@ -146,6 +162,16 @@ func (hm *HookManager) processDirectory() {
 	}
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			// Vanished between ReadDir and Info, or unreadable — try a full read
+			// rather than skipping, so a transient error cannot drop events.
+			hm.processFile(filepath.Join(hm.dir, entry.Name()), entry.Name())
+			continue
+		}
+		if !hm.needsRead(entry.Name(), info.Size()) {
 			continue
 		}
 		hm.processFile(filepath.Join(hm.dir, entry.Name()), entry.Name())

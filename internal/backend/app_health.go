@@ -22,15 +22,26 @@ type HealthInfo struct {
 	// BindWarnings lists listeners that failed to start (see BindWarning).
 	// Empty in the normal case.
 	BindWarnings []BindWarning `json:"bind_warnings" yaml:"bind_warnings"`
+	// Runtime carries cheap counters (goroutines, OS threads, hook files) so
+	// the frontend can surface a warning before a runaway becomes a five-day
+	// CPU burn nobody noticed (see RuntimeStats).
+	Runtime RuntimeStats `json:"runtime" yaml:"runtime"`
+	// HookFilesHigh is true when the hooks directory holds enough files that
+	// the poller is heading for trouble. Pre-computed here so the UI does not
+	// have to carry the threshold.
+	HookFilesHigh bool `json:"hook_files_high" yaml:"hook_files_high"`
 }
 
 // CheckHealth returns the current health/logging state for the frontend.
 func (a *AppService) CheckHealth() HealthInfo {
+	stats := a.RuntimeStats()
 	return HealthInfo{
 		CrashDetected:  config.HasRepeatedCrashes(&a.health),
 		LoggingEnabled: a.cfg.LoggingEnabled,
 		LoggingAuto:    a.health.LoggingAuto,
 		BindWarnings:   a.bindWarningsSnapshot(),
+		Runtime:        stats,
+		HookFilesHigh:  stats.HookFiles > hookFileWarnThreshold,
 	}
 }
 
