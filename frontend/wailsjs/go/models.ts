@@ -909,6 +909,20 @@ export namespace config {
 	        this.model = source["model"];
 	    }
 	}
+	export class IdleSuspendSettings {
+	    enabled: boolean;
+	    timeout_minutes: number;
+
+	    static createFrom(source: any = {}) {
+	        return new IdleSuspendSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.timeout_minutes = source["timeout_minutes"];
+	    }
+	}
 	export class Config {
 	    default_shell: string;
 	    default_dir: string;
@@ -939,6 +953,7 @@ export namespace config {
 	    update_channel: string;
 	    auto_update_check_minutes: number;
 	    terminal_scrollback: number;
+	    idle_suspend: IdleSuspendSettings;
 	    mcp_profiles: MCPProfile[];
 	    default_mcp_profile: string;
 
@@ -977,6 +992,7 @@ export namespace config {
 	        this.update_channel = source["update_channel"];
 	        this.auto_update_check_minutes = source["auto_update_check_minutes"];
 	        this.terminal_scrollback = source["terminal_scrollback"];
+	        this.idle_suspend = this.convertValues(source["idle_suspend"], IdleSuspendSettings);
 	        this.mcp_profiles = this.convertValues(source["mcp_profiles"], MCPProfile);
 	        this.default_mcp_profile = source["default_mcp_profile"];
 	    }

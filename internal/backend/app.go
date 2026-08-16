@@ -54,10 +54,10 @@ type AppService struct {
 	codexDetected      bool
 	resolvedGeminiPath string
 	geminiDetected     bool
-	tmuxAPIPort        int                         // port for the tmux shim HTTP API
-	mcpServerPort      int                         // port for the agent-control MCP server
-	focusToken         string                      // token a focus request must present (see app_notify.go)
-	bindWarnings       []BindWarning               // listeners that failed to start, surfaced via CheckHealth
+	tmuxAPIPort        int           // port for the tmux shim HTTP API
+	mcpServerPort      int           // port for the agent-control MCP server
+	focusToken         string        // token a focus request must present (see app_notify.go)
+	bindWarnings       []BindWarning // listeners that failed to start, surfaced via CheckHealth
 	bindWarningsMu     sync.Mutex
 	agentSessions      map[int]AgentSessionInfo    // sessions spawned via SpawnAgentSession (agent-control)
 	sessionMode        map[int]string              // mode ("claude"/"shell"/...) each session was created with, across all windows
@@ -138,6 +138,7 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	go a.scanLoop(scanCtx)
 	go a.batchLoop(scanCtx)
 	go a.scheduleLoop(scanCtx)
+	go a.idleSuspendLoop(scanCtx)
 
 	// Register custom protocol for notification clicks, then bring up the
 	// loopback listeners (focus signal, agent-control MCP server).
