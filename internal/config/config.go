@@ -13,34 +13,34 @@ import (
 
 // Config holds all user-configurable settings.
 type Config struct {
-	DefaultShell          string         `yaml:"default_shell" json:"default_shell"`
-	DefaultDir            string         `yaml:"default_dir" json:"default_dir"`
+	DefaultShell string `yaml:"default_shell" json:"default_shell"`
+	DefaultDir   string `yaml:"default_dir" json:"default_dir"`
 	// LastOpenedDir is updated automatically whenever the user opens or
 	// creates a project folder. It takes precedence over DefaultDir when
 	// resolving the working directory for a fresh app start (see
 	// GetWorkingDir), so MTUI starts back up where the user left off.
-	LastOpenedDir         string         `yaml:"last_opened_dir" json:"last_opened_dir"`
-	Theme                 string         `yaml:"theme" json:"theme"`
-	TerminalColor         string         `yaml:"terminal_color" json:"terminal_color"`
-	MaxPanesPerTab        int            `yaml:"max_panes_per_tab" json:"max_panes_per_tab"`
-	SidebarWidth          int            `yaml:"sidebar_width" json:"sidebar_width"`
-	ClaudeCommand         string         `yaml:"claude_command" json:"claude_command"`
-	ClaudeModels          []ModelEntry   `yaml:"claude_models" json:"claude_models"`
-	ClaudeEnabled         *bool          `yaml:"claude_enabled" json:"claude_enabled"`
-	CodexCommand          string         `yaml:"codex_command" json:"codex_command"`
-	CodexModels           []ModelEntry   `yaml:"codex_models" json:"codex_models"`
-	CodexEnabled          *bool          `yaml:"codex_enabled" json:"codex_enabled"`
-	GeminiCommand         string         `yaml:"gemini_command" json:"gemini_command"`
-	GeminiModels          []ModelEntry   `yaml:"gemini_models" json:"gemini_models"`
-	GeminiEnabled         *bool          `yaml:"gemini_enabled" json:"gemini_enabled"`
-	CommitReminderMinutes int            `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
-	RestoreSession        *bool          `yaml:"restore_session" json:"restore_session"`
-	LoggingEnabled        bool           `yaml:"logging_enabled" json:"logging_enabled"`
+	LastOpenedDir         string       `yaml:"last_opened_dir" json:"last_opened_dir"`
+	Theme                 string       `yaml:"theme" json:"theme"`
+	TerminalColor         string       `yaml:"terminal_color" json:"terminal_color"`
+	MaxPanesPerTab        int          `yaml:"max_panes_per_tab" json:"max_panes_per_tab"`
+	SidebarWidth          int          `yaml:"sidebar_width" json:"sidebar_width"`
+	ClaudeCommand         string       `yaml:"claude_command" json:"claude_command"`
+	ClaudeModels          []ModelEntry `yaml:"claude_models" json:"claude_models"`
+	ClaudeEnabled         *bool        `yaml:"claude_enabled" json:"claude_enabled"`
+	CodexCommand          string       `yaml:"codex_command" json:"codex_command"`
+	CodexModels           []ModelEntry `yaml:"codex_models" json:"codex_models"`
+	CodexEnabled          *bool        `yaml:"codex_enabled" json:"codex_enabled"`
+	GeminiCommand         string       `yaml:"gemini_command" json:"gemini_command"`
+	GeminiModels          []ModelEntry `yaml:"gemini_models" json:"gemini_models"`
+	GeminiEnabled         *bool        `yaml:"gemini_enabled" json:"gemini_enabled"`
+	CommitReminderMinutes int          `yaml:"commit_reminder_minutes" json:"commit_reminder_minutes"`
+	RestoreSession        *bool        `yaml:"restore_session" json:"restore_session"`
+	LoggingEnabled        bool         `yaml:"logging_enabled" json:"logging_enabled"`
 	// AutoBranchOnIssue: true (default) isolates every issue-launched pane in
 	// its own deterministic worktree (CreateIssueWorktree) instead of leaving
 	// it in the main repo's working directory. false disables automatic
 	// branch/worktree handling entirely — the user manages branches manually.
-	AutoBranchOnIssue     *bool          `yaml:"auto_branch_on_issue" json:"auto_branch_on_issue"`
+	AutoBranchOnIssue *bool `yaml:"auto_branch_on_issue" json:"auto_branch_on_issue"`
 	// ForceWorktrees: when true, Claude panes may only modify code inside a
 	// worktree — the mtui-hook PreToolUse firewall denies Edit/Write/NotebookEdit
 	// targeting the main checkout while no worktree is active, so the model has
@@ -49,39 +49,41 @@ type Config struct {
 	// nil/false keeps the pre-existing advisory-only behaviour. A per-project
 	// override lives in .mtui/config.json — resolve both via
 	// AppService.EffectiveForceWorktrees, never this field alone.
-	ForceWorktrees        *bool          `yaml:"force_worktrees" json:"force_worktrees"`
-	IssueTracking         IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
-	Commands              []CommandEntry `yaml:"commands" json:"commands"`
+	ForceWorktrees *bool          `yaml:"force_worktrees" json:"force_worktrees"`
+	IssueTracking  IssueTracking  `yaml:"issue_tracking" json:"issue_tracking"`
+	Commands       []CommandEntry `yaml:"commands" json:"commands"`
 	// FinishPrepPrompt overrides the built-in worktree-finish prep prompt
 	// (see app_worktree_finish.go prepPromptTemplate) when non-empty. Supports
 	// the same {{branch}}/{{targetBranch}}/{{worktreePath}} placeholders.
-	FinishPrepPrompt      string         `yaml:"finish_prep_prompt" json:"finish_prep_prompt"`
-	QuickActions          []QuickAction  `yaml:"quick_actions" json:"quick_actions"`
-	Audio                 AudioSettings  `yaml:"audio" json:"audio"`
-	KeepAlive             KeepAliveSettings `yaml:"keep_alive" json:"keep_alive"`
-	StatusLine            StatusLineSettings `yaml:"status_line" json:"status_line"`
-	LocalhostAutoOpen     string         `yaml:"localhost_auto_open" json:"localhost_auto_open"`
-	SidebarPinned         bool           `yaml:"sidebar_pinned" json:"sidebar_pinned"`
-	Favorites             map[string][]string `yaml:"favorites,omitempty" json:"favorites,omitempty"`
-	FontFamily            string         `yaml:"font_family" json:"font_family"`
-	FontSize              int            `yaml:"font_size"   json:"font_size"`
-	BackgroundAgents      BackgroundAgents `yaml:"background_agents" json:"background_agents"`
-	Orchestrator          OrchestratorSettings `yaml:"orchestrator" json:"orchestrator"`
-	Language              string         `yaml:"language" json:"language"`
-	SetupDone             bool           `yaml:"setup_done" json:"setup_done"`
-	ChatStyle             string         `yaml:"chat_style" json:"chat_style"`
-	STT                   STTSettings    `yaml:"stt" json:"stt"`
-	AutoNaming            AutoNamingSettings `yaml:"auto_naming" json:"auto_naming"`
-	MCPServer             MCPServerSettings `yaml:"mcp_server" json:"mcp_server"`
+	FinishPrepPrompt  string               `yaml:"finish_prep_prompt" json:"finish_prep_prompt"`
+	QuickActions      []QuickAction        `yaml:"quick_actions" json:"quick_actions"`
+	Audio             AudioSettings        `yaml:"audio" json:"audio"`
+	KeepAlive         KeepAliveSettings    `yaml:"keep_alive" json:"keep_alive"`
+	StatusLine        StatusLineSettings   `yaml:"status_line" json:"status_line"`
+	LocalhostAutoOpen string               `yaml:"localhost_auto_open" json:"localhost_auto_open"`
+	SidebarPinned     bool                 `yaml:"sidebar_pinned" json:"sidebar_pinned"`
+	Favorites         map[string][]string  `yaml:"favorites,omitempty" json:"favorites,omitempty"`
+	FontFamily        string               `yaml:"font_family" json:"font_family"`
+	FontSize          int                  `yaml:"font_size"   json:"font_size"`
+	BackgroundAgents  BackgroundAgents     `yaml:"background_agents" json:"background_agents"`
+	Orchestrator      OrchestratorSettings `yaml:"orchestrator" json:"orchestrator"`
+	Language          string               `yaml:"language" json:"language"`
+	SetupDone         bool                 `yaml:"setup_done" json:"setup_done"`
+	ChatStyle         string               `yaml:"chat_style" json:"chat_style"`
+	STT               STTSettings          `yaml:"stt" json:"stt"`
+	AutoNaming        AutoNamingSettings   `yaml:"auto_naming" json:"auto_naming"`
+	MCPServer         MCPServerSettings    `yaml:"mcp_server" json:"mcp_server"`
+	// IdleSuspend releases the process tree of long-idle panes (see IdleSuspendSettings).
+	IdleSuspend IdleSuspendSettings `yaml:"idle_suspend" json:"idle_suspend"`
 	// UpdateChannel selects which GitHub release track CheckForUpdates/ApplyUpdate
 	// pull from: "stable" (release.yml, non-prerelease) or "alpha" (release-alpha.yml,
 	// prerelease). Defaults to "stable" regardless of the running build variant.
-	UpdateChannel         string         `yaml:"update_channel" json:"update_channel"`
+	UpdateChannel string `yaml:"update_channel" json:"update_channel"`
 	// AutoUpdateCheckMinutes: 0 (default) disables background update checks
 	// entirely (fully opt-in, no automatic network calls). >0 enables a
 	// periodic check every N minutes. Manual checks (Settings button) always
 	// work regardless of this value.
-	AutoUpdateCheckMinutes int           `yaml:"auto_update_check_minutes" json:"auto_update_check_minutes"`
+	AutoUpdateCheckMinutes int `yaml:"auto_update_check_minutes" json:"auto_update_check_minutes"`
 	// TerminalScrollback is the xterm.js scrollback buffer size (lines kept
 	// per pane). Must be one of validScrollbackSizes; defaults to 5000.
 	//
@@ -89,12 +91,12 @@ type Config struct {
 	// with how many panes are open, not with how much output any one of them
 	// produced. With several panes it is the largest single item there, which
 	// is why the default is deliberately below what a single pane could use.
-	TerminalScrollback    int           `yaml:"terminal_scrollback" json:"terminal_scrollback"`
+	TerminalScrollback int `yaml:"terminal_scrollback" json:"terminal_scrollback"`
 	// MCPProfiles are the selectable per-pane MCP server sets (see MCPProfile).
-	MCPProfiles           []MCPProfile  `yaml:"mcp_profiles" json:"mcp_profiles"`
+	MCPProfiles []MCPProfile `yaml:"mcp_profiles" json:"mcp_profiles"`
 	// DefaultMCPProfile preselects a profile in the launch dialog. Empty means
 	// MCPProfileGlobal (inherit every globally registered server).
-	DefaultMCPProfile     string        `yaml:"default_mcp_profile" json:"default_mcp_profile"`
+	DefaultMCPProfile string `yaml:"default_mcp_profile" json:"default_mcp_profile"`
 }
 
 // MCPProfile, the MCPProfile* sentinels and their helpers live in
@@ -114,6 +116,35 @@ type MCPServerSettings struct {
 	// still find it. A non-zero value is honoured as an explicit user choice.
 	Port int `yaml:"port" json:"port"`
 }
+
+// IdleSuspendSettings controls whether a pane that has been finished and quiet
+// for a while releases its process tree until it is used again.
+//
+// The point is memory: a Claude pane's process tree — claude.exe plus its
+// npx/node MCP children — measures around 860 MB, and it holds that whether the
+// pane is working or has been idle since this morning. Suspending kills the
+// tree and reopens the same conversation with --resume when the pane is touched
+// again, so the scrollback and the pane's place in the grid stay put.
+//
+// Off by default: it kills processes, and that is not something to switch on
+// behind a user's back.
+type IdleSuspendSettings struct {
+	Enabled *bool `yaml:"enabled" json:"enabled"`
+	// TimeoutMinutes is how long a pane must sit in a confirmed "done" state
+	// before it is suspended. Clamped to MinIdleSuspendMinutes: a value like 1
+	// would suspend panes faster than a person switches between them, and the
+	// wake-up costs 12-15 seconds.
+	TimeoutMinutes int `yaml:"timeout_minutes" json:"timeout_minutes"`
+}
+
+// MinIdleSuspendMinutes is the smallest timeout that still leaves the app
+// usable. Resuming a pane takes 12-15 s (measured), so a short timeout would
+// trade a little memory for a lot of waiting.
+const MinIdleSuspendMinutes = 5
+
+// DefaultIdleSuspendMinutes is generous on purpose — a pane that has been quiet
+// for half an hour is one the user has moved on from.
+const DefaultIdleSuspendMinutes = 30
 
 // AutoNamingSettings controls automatic pane naming for Claude panes. When
 // enabled, a fresh user prompt triggers a one-shot model call (Model) that
@@ -247,15 +278,15 @@ func boolPtr(b bool) *bool { return &b }
 
 func DefaultConfig() Config {
 	return Config{
-		DefaultShell:          "",
-		DefaultDir:            "",
-		Theme:                 "konzept",
-		TerminalColor:         "#39ff14",
-		MaxPanesPerTab:        9,
-		SidebarWidth:          30,
-		ClaudeCommand:         "claude",
-		ClaudeEnabled:         boolPtr(true),
-		CodexCommand: "codex",
+		DefaultShell:   "",
+		DefaultDir:     "",
+		Theme:          "konzept",
+		TerminalColor:  "#39ff14",
+		MaxPanesPerTab: 9,
+		SidebarWidth:   30,
+		ClaudeCommand:  "claude",
+		ClaudeEnabled:  boolPtr(true),
+		CodexCommand:   "codex",
 		CodexModels: []ModelEntry{
 			{Label: "Default", ID: ""},
 			{Label: "o4-mini", ID: "o4-mini"},
@@ -269,7 +300,7 @@ func DefaultConfig() Config {
 			{Label: "Gemini 2.5 Pro", ID: "gemini-2.5-pro"},
 			{Label: "Gemini 2.5 Flash", ID: "gemini-2.5-flash"},
 		},
-		GeminiEnabled: boolPtr(false),
+		GeminiEnabled:         boolPtr(false),
 		CommitReminderMinutes: 30,
 		RestoreSession:        boolPtr(true),
 		AutoBranchOnIssue:     boolPtr(true),
@@ -334,7 +365,7 @@ func DefaultConfig() Config {
 		Language:  "de",
 		SetupDone: false,
 		ChatStyle: "claude-code",
-		STT: STTSettings{Provider: "cloud-whisper", Language: "de", Cloud: STTCloudSettings{Model: "whisper-1"}},
+		STT:       STTSettings{Provider: "cloud-whisper", Language: "de", Cloud: STTCloudSettings{Model: "whisper-1"}},
 		AutoNaming: AutoNamingSettings{
 			Enabled: boolPtr(true),
 			Model:   "claude-haiku-4-5",
@@ -342,6 +373,12 @@ func DefaultConfig() Config {
 		MCPServer: MCPServerSettings{
 			Enabled: boolPtr(true),
 			Port:    0, // 0 = OS-assigned ephemeral port, published per user
+		},
+		// Off by default — it kills process trees, which is not something to
+		// enable on a user's behalf.
+		IdleSuspend: IdleSuspendSettings{
+			Enabled:        boolPtr(false),
+			TimeoutMinutes: DefaultIdleSuspendMinutes,
 		},
 		// UpdateChannel defaults to "alpha": every published release is
 		// currently a prerelease (v2.0.0-alpha.N) — there is no "stable"
@@ -542,12 +579,22 @@ func Load() Config {
 	}
 
 	ba := &cfg.BackgroundAgents
-	if ba.ReviewEnabled == nil { ba.ReviewEnabled = boolPtr(false) }
+	if ba.ReviewEnabled == nil {
+		ba.ReviewEnabled = boolPtr(false)
+	}
 	validTools := map[string]bool{"claude": true, "codex": true, "gemini": true}
-	if !validTools[ba.ReviewTool] { ba.ReviewTool = "claude" }
-	if ba.ReviewModel == "" { ba.ReviewModel = "claude-haiku-4-5-20251001" }
-	if ba.ReviewPrompt == "" { ba.ReviewPrompt = "Review the following commit diff. Flag bugs, security issues, and code quality problems:\n\n{diff}" }
-	if ba.TestEnabled == nil { ba.TestEnabled = boolPtr(false) }
+	if !validTools[ba.ReviewTool] {
+		ba.ReviewTool = "claude"
+	}
+	if ba.ReviewModel == "" {
+		ba.ReviewModel = "claude-haiku-4-5-20251001"
+	}
+	if ba.ReviewPrompt == "" {
+		ba.ReviewPrompt = "Review the following commit diff. Flag bugs, security issues, and code quality problems:\n\n{diff}"
+	}
+	if ba.TestEnabled == nil {
+		ba.TestEnabled = boolPtr(false)
+	}
 
 	// Validate orchestrator settings
 	if cfg.Orchestrator.MaxParallelAgents < 1 {
@@ -592,6 +639,14 @@ func Load() Config {
 	// always kept — see MCPServerSettings.Port.
 	if cfg.MCPServer.Port < 0 || cfg.MCPServer.Port > 65535 {
 		cfg.MCPServer.Port = 0
+	}
+
+	// A timeout below the floor would suspend panes faster than a user moves
+	// between them; 0 means "unset" and gets the default rather than the floor.
+	if cfg.IdleSuspend.TimeoutMinutes <= 0 {
+		cfg.IdleSuspend.TimeoutMinutes = DefaultIdleSuspendMinutes
+	} else if cfg.IdleSuspend.TimeoutMinutes < MinIdleSuspendMinutes {
+		cfg.IdleSuspend.TimeoutMinutes = MinIdleSuspendMinutes
 	}
 
 	// Validate update_channel — falls back to "alpha" (see DefaultConfig),

@@ -7,6 +7,12 @@ import (
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
+// newTestApp builds an AppService with every map initialised.
+//
+// Initialise new maps here as they are added. A nil map that production code
+// writes to panics *while holding a.mu*, so the deferred cleanup then blocks on
+// that mutex forever and the test hangs until the package times out instead of
+// failing — that cost ten minutes per run until it was found (issue #186).
 func newTestApp() *AppService {
 	return &AppService{
 		sessions:      make(map[int]*terminal.Session),
@@ -17,6 +23,8 @@ func newTestApp() *AppService {
 		chatSessions:  make(map[string]*ChatSession),
 		chatBuffers:   make(map[string]*strings.Builder),
 		finishStates:  make(map[int]*finishState),
+		agentSessions: make(map[int]AgentSessionInfo),
+		worktreeState: make(map[int]worktreeState),
 	}
 }
 
