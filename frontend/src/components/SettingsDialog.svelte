@@ -7,7 +7,7 @@
   import * as App from '../../wailsjs/go/backend/App';
   import ColorPicker from './ColorPicker.svelte';
   import { playBell } from '../lib/audio';
-  import { MONOSPACE_FONTS, isFontAvailable } from '../lib/terminal';
+  import { MONOSPACE_FONTS, isFontAvailable, DEFAULT_SCROLLBACK } from '../lib/terminal';
   import { EventsOn } from '../../wailsjs/runtime/runtime';
 
   export let visible: boolean = false;
@@ -71,7 +71,7 @@
   let savedFontFamily = fontFamily;
   let savedFontSize = fontSize;
   let availableFonts: { name: string; available: boolean }[] = [];
-  let terminalScrollback = ($config as any).terminal_scrollback || 10000;
+  let terminalScrollback = ($config as any).terminal_scrollback || DEFAULT_SCROLLBACK;
 
   let orchMaxParallel = $config.orchestrator?.max_parallel_agents ?? 3;
   let orchAutoMerge = $config.orchestrator?.default_auto_merge ?? false;
@@ -144,7 +144,7 @@
     fontSize = $config.font_size || 10;
     savedFontFamily = fontFamily;
     savedFontSize = fontSize;
-    terminalScrollback = ($config as any).terminal_scrollback || 10000;
+    terminalScrollback = ($config as any).terminal_scrollback || DEFAULT_SCROLLBACK;
     availableFonts = MONOSPACE_FONTS.map(name => ({
       name,
       available: isFontAvailable(name),
@@ -389,7 +389,7 @@
     applyTheme('dark', '#39ff14');
     fontFamily = '';
     fontSize = 10;
-    terminalScrollback = 10000;
+    terminalScrollback = DEFAULT_SCROLLBACK;
     config.update(c => ({ ...c, font_family: '', font_size: 10 }));
     audioEnabled = true;
     audioWhenFocused = true;
