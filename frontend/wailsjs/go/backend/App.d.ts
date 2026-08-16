@@ -25,6 +25,10 @@ export function CheckForUpdates():Promise<backend.UpdateInfo>;
 
 export function CheckGitHubCLI():Promise<string>;
 
+export function RuntimeStats():Promise<backend.RuntimeStats>;
+
+export function WriteDiagnosticDump():Promise<string>;
+
 export function CheckHealth():Promise<backend.HealthInfo>;
 
 export function ClearDoneFromQueue(arg1:number):Promise<void>;

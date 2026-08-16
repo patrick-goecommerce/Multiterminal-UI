@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { t } from '../stores/i18n';
-  import { createTerminal, getTerminalTheme, buildFontFamily, attachWebglRenderer } from '../lib/terminal';
+  import { createTerminal, getTerminalTheme, buildFontFamily, attachWebglRenderer, DEFAULT_SCROLLBACK } from '../lib/terminal';
   import { pasteToSession, copySelection, writeTextToSession } from '../lib/clipboard';
   import { encodeForPty } from '../lib/claude';
   import { PendingOutput } from '../lib/output-buffer';
@@ -521,7 +521,7 @@
       termInstance.terminal.options.fontSize = clampedSize;
       needsFit = true;
     }
-    const newScrollback = $config.terminal_scrollback || 10000;
+    const newScrollback = $config.terminal_scrollback || DEFAULT_SCROLLBACK;
     if (termInstance.terminal.options.scrollback !== newScrollback) {
       termInstance.terminal.options.scrollback = newScrollback;
     }

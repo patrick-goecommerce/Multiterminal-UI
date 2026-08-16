@@ -114,8 +114,17 @@ func TestStart_DirectExeTreeIsKillable(t *testing.T) {
 	}
 
 	kill := exec.Command("taskkill", "/PID", strconv.Itoa(rootPid), "/T", "/F")
-	if out, err := kill.CombinedOutput(); err != nil {
-		t.Fatalf("taskkill: %v – %s", err, out)
+	out, err := kill.CombinedOutput()
+	// The exit code is not the verdict. taskkill /T walks the tree from the
+	// leaves up and returns non-zero when a process ended on its own before it
+	// got there ("no running instance of the task") — an outcome that is
+	// indistinguishable from success by exit code alone, and the reason this
+	// test used to fail sporadically (#191). Parsing the message text would be
+	// worse still: it is localised, so a check against "SUCCESS" is blind on a
+	// German Windows. What the test actually claims is that the tree is gone,
+	// so assert that.
+	if err != nil {
+		t.Logf("taskkill exited with %v – %s (judging by the resulting state instead)", err, out)
 	}
 	s.Close()
 

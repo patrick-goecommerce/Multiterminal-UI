@@ -326,6 +326,19 @@ func (a *AppService) CloseSession(id int) {
 	a.reportIssueProgress(id, progressClose, a.getSessionCost(id))
 
 	go func() {
+		// Kill the whole tree before Close(). Session.Close() calls
+		// Process.Kill(), which only ends the root process; once it is gone
+		// taskkill /T can no longer reach its descendants (see Session.Pid).
+		// The suspend and worktree-finish paths already did this — only the
+		// ordinary close did not (#185).
+		//
+		// In practice ConPTY reclaims most of the subtree on its own: a child
+		// attached to the same pseudo-console dies with it, which is why a
+		// cmd->ping tree disappears cleanly even without this call. What it
+		// catches is the rest — processes that left the console. Measured on a
+		// machine after five days of use: 4 orphans out of 142 claude/node/
+		// cmd/conhost processes, 163 MB. Small, but free to prevent.
+		killProcessTree(sess.Pid())
 		sess.Close() // blocks until process exits and readLoop closes RawOutputCh
 		a.mu.Lock()
 		delete(a.sessions, id)

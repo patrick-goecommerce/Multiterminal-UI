@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -95,7 +96,21 @@ func (a *AppService) ApplyUpdate() error {
 	// window disappears; the relauncher script is already waiting on our PID
 	// and will proceed once this process actually exits (releasing the file
 	// lock on ownExe).
-	time.AfterFunc(1500*time.Millisecond, func() { os.Exit(0) })
+	time.AfterFunc(1500*time.Millisecond, func() {
+		// Run the normal shutdown path before exiting. os.Exit skips every
+		// deferred and every framework hook, so without this a self-update
+		// left MarkCleanShutdown unrecorded — two updates in a row then made
+		// HasRepeatedCrashes report a crash loop that never happened — and it
+		// left the discovery records behind, pointing at a port this process
+		// no longer owns (#184).
+		//
+		// The relauncher waits on our PID, so taking a moment longer here is
+		// safe; it simply starts the new binary a little later.
+		if err := a.ServiceShutdown(); err != nil {
+			log.Printf("[ApplyUpdate] shutdown before exit failed: %v (exiting anyway)", err)
+		}
+		os.Exit(0)
+	})
 
 	return nil
 }

@@ -85,7 +85,12 @@ type Config struct {
 	// work regardless of this value.
 	AutoUpdateCheckMinutes int `yaml:"auto_update_check_minutes" json:"auto_update_check_minutes"`
 	// TerminalScrollback is the xterm.js scrollback buffer size (lines kept
-	// per pane). Must be one of validScrollbackSizes; defaults to 10000.
+	// per pane). Must be one of validScrollbackSizes; defaults to 5000.
+	//
+	// The buffer lives in the WebView heap and is held per pane, so it scales
+	// with how many panes are open, not with how much output any one of them
+	// produced. With several panes it is the largest single item there, which
+	// is why the default is deliberately below what a single pane could use.
 	TerminalScrollback int `yaml:"terminal_scrollback" json:"terminal_scrollback"`
 	// MCPProfiles are the selectable per-pane MCP server sets (see MCPProfile).
 	MCPProfiles []MCPProfile `yaml:"mcp_profiles" json:"mcp_profiles"`
@@ -254,6 +259,19 @@ func normalizeSTT(c *Config) {
 	}
 }
 
+// DefaultTerminalScrollback is the scrollback size a pane gets when the config
+// names none, or names one that is not offered.
+//
+// It is deliberately not the largest sensible value: the buffer sits in the
+// WebView heap once per pane, so it scales with the number of open panes.
+const DefaultTerminalScrollback = 5000
+
+// validScrollbackSizes are the sizes the settings dialog offers. Anything else
+// in the config file falls back to DefaultTerminalScrollback.
+var validScrollbackSizes = map[int]bool{
+	1000: true, 2500: true, 5000: true, 10000: true, 25000: true, 50000: true, 100000: true,
+}
+
 // DefaultConfig returns the built-in defaults.
 // boolPtr returns a pointer to a bool value.
 func boolPtr(b bool) *bool { return &b }
@@ -369,7 +387,7 @@ func DefaultConfig() Config {
 		// nothing and reports "already current", which is misleading.
 		UpdateChannel:          "alpha",
 		AutoUpdateCheckMinutes: 0,
-		TerminalScrollback:     10000,
+		TerminalScrollback:     DefaultTerminalScrollback,
 		// A single starter profile: MTUI's own MCP server is registered
 		// globally (see app_mcp_register.go), so "only mtui" is the smallest
 		// useful set for a pane that should not spawn npx-based servers.
@@ -552,9 +570,8 @@ func Load() Config {
 		cfg.FontSize = 10
 	}
 
-	validScrollbackSizes := map[int]bool{1000: true, 2500: true, 5000: true, 10000: true, 25000: true, 50000: true, 100000: true}
 	if !validScrollbackSizes[cfg.TerminalScrollback] {
-		cfg.TerminalScrollback = 10000
+		cfg.TerminalScrollback = DefaultTerminalScrollback
 	}
 
 	if cfg.Favorites == nil {
