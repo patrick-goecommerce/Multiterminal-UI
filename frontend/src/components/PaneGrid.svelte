@@ -74,7 +74,9 @@
 
   $: maximizedPane = panes.find((p) => p.maximized);
   $: visiblePanes = maximizedPane ? [maximizedPane] : panes;
-  $: gridCols = maximizedPane ? 1 : Math.min(Math.ceil(Math.sqrt(panes.length)), 3);
+  // A tab with no panes still needs a 1x1 shape: a zero column count would
+  // make gridRows NaN (0/0), and Array(NaN) throws.
+  $: gridCols = maximizedPane ? 1 : Math.max(1, Math.min(Math.ceil(Math.sqrt(panes.length)), 3));
   $: gridRows = Math.max(1, Math.ceil(visiblePanes.length / gridCols));
 
   // Fall back to equal fractions whenever the saved array's length doesn't
