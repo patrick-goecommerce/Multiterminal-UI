@@ -306,6 +306,13 @@ const it = {
     empty: 'Nessun terminale aperto.',
     emptyHint: 'Premi Ctrl+N o clicca + New Terminal (max. {max} per tab)',
   },
+  // Tab-level error boundary (App.svelte)
+  tabError: {
+    title: 'Non è stato possibile visualizzare questa scheda.',
+    hint: 'Le altre schede continuano a funzionare. Le tue sessioni non sono interessate.',
+    reset: 'Riprova',
+  },
+
   paneError: {
     title: 'Errore pane',
     restart: 'Riavvia',

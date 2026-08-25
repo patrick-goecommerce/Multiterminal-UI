@@ -306,6 +306,13 @@ const en = {
     empty: 'No terminal open.',
     emptyHint: 'Press Ctrl+N or click + New Terminal (max. {max} per tab)',
   },
+  // Tab-level error boundary (App.svelte)
+  tabError: {
+    title: 'This tab could not be rendered.',
+    hint: 'The other tabs keep running. Your sessions are unaffected.',
+    reset: 'Try again',
+  },
+
   paneError: {
     title: 'Pane error',
     restart: 'Restart',
