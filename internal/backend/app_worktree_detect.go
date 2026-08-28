@@ -64,26 +64,107 @@ func (a *AppService) handleWorktreeDetected(mtID int, worktreePath, worktreeBran
 	})
 }
 
-// handleWorktreeCwdUpdate clears the tracked worktree once cwd is observed
-// outside it. Ordinary events for a session with no known worktree are a
-// silent no-op — only a real transition emits worktree:cleared.
+// handleWorktreeCwdUpdate reconciles the tracked worktree against the cwd that
+// rides along on every hook event.
+//
+// cwd is the only continuously observable truth about where a pane actually
+// works. PostToolUse:EnterWorktree fires at most once per session and misses
+// every pane that was restored into a worktree, resumed there with --continue,
+// or moved with a plain `cd` — 11 of 48 worktree sessions on a real
+// installation. Those panes used to keep an empty worktreePath forever and the
+// titlebar fell back to the main repo's branch, which is the base branch the
+// footer already shows.
+//
+// So cwd both sets and clears: entering a linked worktree emits detected,
+// moving between two of them emits detected for the new one, and leaving for
+// the main checkout emits cleared.
 func (a *AppService) handleWorktreeCwdUpdate(mtID int, cwd string) {
+	if cwd == "" {
+		return // event carries no location claim
+	}
+
 	a.worktreeStateMu.Lock()
 	st, known := a.worktreeState[mtID]
+	// Two guards, both keeping git off the 100ms hook path (issue #192): the
+	// cheap containment check covers working down inside a known worktree, and
+	// the probe cache covers everything else, including the ordinary pane that
+	// never sits in a worktree at all.
+	if known && pathWithin(cwd, st.Path) {
+		a.worktreeStateMu.Unlock()
+		return
+	}
+	if strings.EqualFold(a.lastProbedCwd[mtID], cwd) {
+		a.worktreeStateMu.Unlock()
+		return
+	}
+	a.worktreeStateMu.Unlock()
+
+	path, branch, isWorktree := a.probeWorktree(cwd)
+
+	a.worktreeStateMu.Lock()
+	a.lastProbedCwd[mtID] = cwd
+	a.worktreeStateMu.Unlock()
+
+	if isWorktree {
+		if known && strings.EqualFold(path, st.Path) {
+			return // same worktree, reached via a path spelling we had not seen
+		}
+		a.handleWorktreeDetected(mtID, path, branch)
+		return
+	}
 	if !known {
-		a.worktreeStateMu.Unlock()
-		return
+		return // main checkout and nothing tracked — the ordinary case
 	}
-	stillInside := cwd == "" || strings.EqualFold(cwd, st.Path) || strings.HasPrefix(strings.ToLower(cwd), strings.ToLower(st.Path)+`\`) || strings.HasPrefix(strings.ToLower(cwd), strings.ToLower(st.Path)+"/")
-	if stillInside {
-		a.worktreeStateMu.Unlock()
-		return
-	}
+
+	a.worktreeStateMu.Lock()
 	delete(a.worktreeState, mtID)
 	a.worktreeStateMu.Unlock()
 
 	log.Printf("[worktree-detect] session %d left %s", mtID, st.Path)
 	a.emitWorktreeEventSafe("worktree:cleared", WorktreeClearedEvent{ID: mtID})
+}
+
+// pathWithin reports whether cwd is dir itself or below it. Case-insensitive:
+// Windows hands back both C:\Repo and c:\repo for the same directory.
+func pathWithin(cwd, dir string) bool {
+	if dir == "" {
+		return false
+	}
+	if strings.EqualFold(cwd, dir) {
+		return true
+	}
+	lower, prefix := strings.ToLower(cwd), strings.ToLower(dir)
+	return strings.HasPrefix(lower, prefix+`\`) || strings.HasPrefix(lower, prefix+"/")
+}
+
+// probeWorktree runs the configured probe, defaulting to defaultWorktreeProbe.
+func (a *AppService) probeWorktree(dir string) (path, branch string, ok bool) {
+	if a.worktreeProbe != nil {
+		return a.worktreeProbe(dir)
+	}
+	return defaultWorktreeProbe(dir)
+}
+
+// defaultWorktreeProbe reports whether dir sits inside a LINKED worktree, and
+// on which branch.
+//
+// The comparison is toplevel-vs-main-worktree, not dir-vs-main-worktree: a
+// subdirectory of the main checkout is never equal to its root but is not a
+// linked worktree either (see gitToplevel).
+func defaultWorktreeProbe(dir string) (path, branch string, ok bool) {
+	top, err := gitToplevel(dir)
+	if err != nil {
+		return "", "", false // not a git repo, or dir is gone
+	}
+	main, err := mainRepoRoot(dir)
+	if err != nil || strings.EqualFold(top, main) {
+		return "", "", false
+	}
+	b := checkedOutBranch(top)
+	if b == "" {
+		return "", "", false // detached HEAD — nothing meaningful to show
+	}
+	return top, b, true
 }
 
 // onWorktreePathBlocked is the HookManager callback for a blocked write

@@ -9,6 +9,7 @@ import (
 func newDetectTestApp() *AppService {
 	return &AppService{
 		worktreeState: map[int]worktreeState{},
+		lastProbedCwd: map[int]string{},
 	}
 }
 
