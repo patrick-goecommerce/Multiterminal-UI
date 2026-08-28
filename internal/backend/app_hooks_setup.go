@@ -10,6 +10,23 @@ import (
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
+// resolveHookBinary resolves the hook helper and, when it cannot be found,
+// records a bind warning so the failure reaches the UI.
+//
+// Skipping hook integration disables activity detection, pane auto-naming and
+// worktree detection, and leaves the hook directory to grow unswept (#192).
+// Until now the only trace was a single log line, which is how a two-week
+// outage went unnoticed on a real installation.
+func (a *AppService) resolveHookBinary(name string, embedded []byte) string {
+	exe := resolveBundledBinary(name, embedded)
+	if exe == "" {
+		a.recordBindWarning("hooks", fmt.Errorf(
+			"%s nicht gefunden — Hook-Integration übersprungen: "+
+				"Aktivitätserkennung, Pane-Namen und Worktree-Anzeige bleiben aus", name))
+	}
+	return exe
+}
+
 // setupHooks deploys the hook script, registers hooks in ~/.claude/settings.json,
 // and starts the HookManager polling loop.
 func (a *AppService) setupHooks(ctx context.Context) {
@@ -32,9 +49,8 @@ func (a *AppService) setupHooks(ctx context.Context) {
 	// Register the GUI-subsystem hook binary directly (no powershell → no console
 	// window flash). There is no PowerShell fallback: if the binary cannot be
 	// resolved, skip hook integration entirely.
-	hookExe := resolveBundledBinary("mtui-hook", hookBin)
+	hookExe := a.resolveHookBinary("mtui-hook", hookBin)
 	if hookExe == "" {
-		log.Printf("[hooks] mtui-hook binary not found — hook integration skipped")
 		return
 	}
 

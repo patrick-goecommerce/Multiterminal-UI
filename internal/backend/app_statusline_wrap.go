@@ -21,9 +21,15 @@ func siblingBinaryPath(name string) string {
 	return filepath.ToSlash(p)
 }
 
-// resolveBundledBinary resolves a bundled helper binary: a sibling of the running
-// exe (dev / E2E), else the embedded bytes extracted to ~/.claude (production).
-// Returns "" if neither is available (caller must fail safe).
+// resolveBundledBinary resolves a bundled helper binary, in order: a sibling of
+// the running exe (dev / E2E), the embedded bytes extracted to ~/.claude
+// (production), or a shim an earlier build already extracted there.
+//
+// That last step matters because extractShim yields nothing when the build
+// embeds nothing. Without it an installed build that was produced without
+// -tags production declared the helper missing even though a working
+// ~/.claude/mtui-hook.exe sat right there, and skipped hook integration for
+// good (#199). Returns "" if none of the three is available.
 func resolveBundledBinary(name string, embedded []byte) string {
 	if p := siblingBinaryPath(name); p != "" {
 		return p
@@ -34,11 +40,13 @@ func resolveBundledBinary(name string, embedded []byte) string {
 		ext = ".exe"
 	}
 	dst := filepath.Join(home, ".claude", name+ext)
-	p, err := extractShim(dst, embedded)
-	if err != nil {
-		return ""
+	if p, err := extractShim(dst, embedded); err == nil && p != "" {
+		return filepath.ToSlash(p)
 	}
-	return filepath.ToSlash(p)
+	if fi, err := os.Stat(dst); err == nil && !fi.IsDir() && fi.Size() > 0 {
+		return filepath.ToSlash(dst)
+	}
+	return ""
 }
 
 // extractShim writes the embedded shim bytes to dst, returning the path to the
