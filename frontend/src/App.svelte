@@ -48,6 +48,11 @@
 
   const MAX_PANES_PER_TAB = 10;
 
+  /** Message of whatever a tab layer's boundary caught (may not be an Error). */
+  function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
+  }
+
   const _windowId = getWindowId();
   const _isMain = isMainWindow();
   // TODO: use _initialTabs to populate secondary window tabs (pending implementation)
@@ -1287,27 +1292,42 @@
       <div class="tab-layers">
         {#each $allTabs as tab (tab.id)}
           <div class="tab-layer" class:active={tab.id === $activeTab?.id}>
-            <PaneGrid
-              tabId={tab.id}
-              panes={tab.panes}
-              active={tab.id === $activeTab?.id}
-              tabDir={tab.dir || ''}
-              colFractions={tab.colFractions}
-              rowFractions={tab.rowFractions}
-              on:closePane={handleClosePane}
-              on:maximizePane={handleMaximizePane}
-              on:focusPane={handleFocusPane}
-              on:renamePane={handleRenamePane}
-              on:restartPane={handleRestartPane}
-              on:toggleDisplayPane={handleToggleDisplay}
-              on:issueAction={handleIssueAction}
-              on:commitPush={handleCommitPush}
-              on:finishWorktree={handleFinishWorktree}
-              on:quickAction={handleQuickAction}
-              on:cancelFinish={handleCancelFinish}
-              on:navigateFile={handleNavigateFile}
-              on:splitPane={() => (showLaunchDialog = true)}
-            />
+            <!-- Every tab's grid is rendered, not just the active one, so a
+                 throw inside one of them would abort this whole update flush
+                 and leave the window without any terminal. Contain it here.
+                 PaneGrid.boundary.test.ts pins down that the boundary catches
+                 a throw coming out of a child's reactive statement. -->
+            <svelte:boundary>
+              <PaneGrid
+                tabId={tab.id}
+                panes={tab.panes}
+                active={tab.id === $activeTab?.id}
+                tabDir={tab.dir || ''}
+                colFractions={tab.colFractions}
+                rowFractions={tab.rowFractions}
+                on:closePane={handleClosePane}
+                on:maximizePane={handleMaximizePane}
+                on:focusPane={handleFocusPane}
+                on:renamePane={handleRenamePane}
+                on:restartPane={handleRestartPane}
+                on:toggleDisplayPane={handleToggleDisplay}
+                on:issueAction={handleIssueAction}
+                on:commitPush={handleCommitPush}
+                on:finishWorktree={handleFinishWorktree}
+                on:quickAction={handleQuickAction}
+                on:cancelFinish={handleCancelFinish}
+                on:navigateFile={handleNavigateFile}
+                on:splitPane={() => (showLaunchDialog = true)}
+              />
+              {#snippet failed(error, reset)}
+                <div class="tab-error">
+                  <p class="tab-error-title">{$t('tabError.title')}</p>
+                  <p class="tab-error-message">{errorMessage(error)}</p>
+                  <p class="tab-error-hint">{$t('tabError.hint')}</p>
+                  <button class="tab-error-reset" on:click={reset}>{$t('tabError.reset')}</button>
+                </div>
+              {/snippet}
+            </svelte:boundary>
           </div>
         {/each}
         {#if previewFilePath}
@@ -1383,6 +1403,26 @@
     visibility: hidden; pointer-events: none;
   }
   .tab-layer.active { visibility: visible; pointer-events: auto; }
+  .tab-error {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 8px; padding: 24px; text-align: center;
+  }
+  .tab-error-title { margin: 0; font-size: 14px; color: var(--fg); }
+  .tab-error-message {
+    margin: 0; max-width: 520px;
+    font-family: monospace; font-size: 12px; color: #ef4444;
+    word-break: break-word;
+  }
+  .tab-error-hint { margin: 0; font-size: 12px; color: var(--fg-muted); }
+  .tab-error-reset {
+    margin-top: 4px; padding: 5px 16px;
+    background: var(--accent); color: var(--bg);
+    border: none; border-radius: 5px; cursor: pointer;
+    font-size: 12px; font-weight: 600;
+  }
+  .tab-error-reset:hover { filter: brightness(1.2); }
   .placeholder-view {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;

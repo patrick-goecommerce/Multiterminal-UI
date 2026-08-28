@@ -306,6 +306,13 @@ const fr = {
     empty: 'Aucun terminal ouvert.',
     emptyHint: 'Appuyez sur Ctrl+N ou cliquez sur + New Terminal (max. {max} par onglet)',
   },
+  // Tab-level error boundary (App.svelte)
+  tabError: {
+    title: 'Cet onglet n\'a pas pu être affiché.',
+    hint: 'Les autres onglets continuent de fonctionner. Vos sessions ne sont pas affectées.',
+    reset: 'Réessayer',
+  },
+
   paneError: {
     title: 'Erreur de panneau',
     restart: 'Redémarrer',

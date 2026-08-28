@@ -352,6 +352,13 @@ const de = {
     emptyHint: 'Drücke Ctrl+N oder klicke + New Terminal (max. {max} pro Tab)',
   },
 
+  // Tab-level error boundary (App.svelte)
+  tabError: {
+    title: 'Dieser Tab konnte nicht dargestellt werden.',
+    hint: 'Die übrigen Tabs laufen weiter. Deine Sessions sind nicht betroffen.',
+    reset: 'Erneut versuchen',
+  },
+
   // PaneErrorBoundary
   paneError: {
     title: 'Pane-Fehler',

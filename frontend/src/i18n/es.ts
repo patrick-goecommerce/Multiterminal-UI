@@ -306,6 +306,13 @@ const es = {
     empty: 'Ningún terminal abierto.',
     emptyHint: 'Presiona Ctrl+N o haz clic en + New Terminal (máx. {max} por pestaña)',
   },
+  // Tab-level error boundary (App.svelte)
+  tabError: {
+    title: 'No se ha podido mostrar esta pestaña.',
+    hint: 'Las demás pestañas siguen funcionando. Tus sesiones no se ven afectadas.',
+    reset: 'Reintentar',
+  },
+
   paneError: {
     title: 'Error de panel',
     restart: 'Reiniciar',
