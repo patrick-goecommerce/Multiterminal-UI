@@ -65,10 +65,19 @@ type AppService struct {
 	chatBuffers        map[string]*strings.Builder // buffered assistant text per conversation
 	worktreeStateMu    sync.Mutex
 	worktreeState      map[int]worktreeState
+	// lastProbedCwd is the cwd each session was last probed for with git, kept
+	// regardless of the verdict. Guarded by worktreeStateMu. Hook events arrive
+	// every 100ms, so without this the worktree probe in
+	// handleWorktreeCwdUpdate would run git twice per tick per session.
+	lastProbedCwd map[int]string
 	// emitWorktreeEvent is a seam for testing; production wiring assigns it to
 	// a.app.Event.Emit in setupHooks. Never nil-checked directly — callers use
 	// the emitWorktreeEventSafe helper below.
 	emitWorktreeEvent func(name string, payload any)
+	// worktreeProbe is a seam for testing, defaulting to defaultWorktreeProbe.
+	// It answers "is dir a linked worktree, and on which branch" — see
+	// app_worktree_detect.go.
+	worktreeProbe func(dir string) (path, branch string, ok bool)
 	// issueProgressHook is a seam for testing, nil in production. It fires on
 	// every reportIssueProgress call ahead of any config gate, so a test can
 	// count how often one real completion reports progress — the duplicate
@@ -92,6 +101,7 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		chatSessions:  make(map[string]*ChatSession),
 		chatBuffers:   make(map[string]*strings.Builder),
 		worktreeState: make(map[int]worktreeState),
+		lastProbedCwd: make(map[int]string),
 		winMgr:        newWindowManager(app),
 		safeMode:      safeMode,
 	}
@@ -350,6 +360,7 @@ func (a *AppService) CloseSession(id int) {
 		a.mu.Unlock()
 		a.worktreeStateMu.Lock()
 		delete(a.worktreeState, id)
+		delete(a.lastProbedCwd, id)
 		a.worktreeStateMu.Unlock()
 		// Clean up per-session activity tracking to prevent memory leak
 		cleanupActivityTracking(id)

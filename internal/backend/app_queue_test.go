@@ -25,6 +25,7 @@ func newTestApp() *AppService {
 		finishStates:  make(map[int]*finishState),
 		agentSessions: make(map[int]AgentSessionInfo),
 		worktreeState: make(map[int]worktreeState),
+		lastProbedCwd: make(map[int]string),
 	}
 }
 
