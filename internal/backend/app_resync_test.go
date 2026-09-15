@@ -22,7 +22,7 @@ func newResyncTestSession(t *testing.T, id int, lines ...string) *terminal.Sessi
 // must be dropped and replaced by a full repaint of the current screen.
 func TestResyncSession_ReplacesPendingWithSnapshot(t *testing.T) {
 	a := newTestApp()
-	a.host.AdoptForTest(7, newResyncTestSession(t, 7, "HEAD line", "second line"))
+	adopt(t, a, 7, newResyncTestSession(t, 7, "HEAD line", "second line"))
 
 	a.outputBatch().add(7, []byte("STALE-TAIL"))
 
@@ -49,7 +49,7 @@ func TestResyncSession_AddressesRowsAndRestoresCursor(t *testing.T) {
 	a := newTestApp()
 	sess := terminal.NewSession(1, 3, 10)
 	sess.Screen.Write([]byte("ab\r\ncd"))
-	a.host.AdoptForTest(1, sess)
+	adopt(t, a, 1, sess)
 
 	a.ResyncSession(1)
 	payload := string(a.outputBatch().swap()[1])
@@ -72,7 +72,7 @@ func TestResyncSession_AddressesRowsAndRestoresCursor(t *testing.T) {
 // A resync for one pane must not disturb the output queued for other panes.
 func TestResyncSession_LeavesOtherSessionsUntouched(t *testing.T) {
 	a := newTestApp()
-	a.host.AdoptForTest(1, newResyncTestSession(t, 1, "one"))
+	adopt(t, a, 1, newResyncTestSession(t, 1, "one"))
 	a.outputBatch().add(2, []byte("keep-me"))
 
 	a.ResyncSession(1)
@@ -131,7 +131,7 @@ func TestReplaceWith_BuildsUnderLock(t *testing.T) {
 func TestResyncSession_ConcurrentWithOutputDoesNotDeadlock(t *testing.T) {
 	a := newTestApp()
 	sess := terminal.NewSession(1, 24, 80)
-	a.host.AdoptForTest(1, sess)
+	adopt(t, a, 1, sess)
 
 	done := make(chan struct{})
 	go func() {

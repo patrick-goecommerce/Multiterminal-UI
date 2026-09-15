@@ -32,10 +32,10 @@ type AppService struct {
 	serviceCtx context.Context            // context from ServiceStartup
 	cfg        config.Config
 	health     config.HealthState
-	// host owns the terminal sessions. It is a hub.Embedded today, which runs
-	// them in this process exactly as the map it replaced did; swapping it for
-	// a hub.Remote is what makes the sessions outlive this process.
-	host               *hub.Embedded
+	// host owns the terminal sessions: a hub.Embedded runs them in this
+	// process and ends them with it, a hub.Remote leaves them to the daemon.
+	// Which one is decided by config.SessionHost (see newSessionHost).
+	host               hub.Host
 	launches           map[int]launchSpec // how each session was started (for ResumeSession)
 	queues             map[int]*sessionQueue
 	finishStates       map[int]*finishState  // active worktree-finish flows, keyed by session ID
@@ -106,11 +106,7 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		winMgr:        newWindowManager(app),
 		safeMode:      safeMode,
 	}
-	svc.host = hub.NewEmbedded(hub.Options{
-		Version:  Version,
-		KillTree: killProcessTree,
-		Sink:     hub.SinkFunc(svc.onHostEvent),
-	})
+	svc.host = svc.newSessionHost()
 	if safeMode {
 		svc.sessionBackup = config.LoadSession() // may be nil — that's fine
 		log.Println("[SafeMode] active: sessions will not be loaded or saved")

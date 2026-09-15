@@ -12,7 +12,7 @@ import (
 func TestHandleStatuslineUpdatesSession(t *testing.T) {
 	a := &AppService{host: testHost(map[int]*terminal.Session{})}
 	sess := terminal.NewSession(5, 24, 80)
-	a.host.AdoptForTest(5, sess)
+	adopt(t, a, 5, sess)
 
 	body := `{"sessionId":5,"payload":{"cost":{"total_cost_usd":1.23},` +
 		`"context_window":{"used_percentage":40},"model":{"display_name":"Opus 4.8"}}}`
@@ -67,7 +67,7 @@ func TestHandleStatuslineFractionalPercentageTruncates(t *testing.T) {
 	// float64 40.9 must truncate to int 40 (not round to 41).
 	a := &AppService{host: testHost(map[int]*terminal.Session{})}
 	sess := terminal.NewSession(7, 24, 80)
-	a.host.AdoptForTest(7, sess)
+	adopt(t, a, 7, sess)
 
 	body := `{"sessionId":7,"payload":{"context_window":{"used_percentage":40.9}}}`
 	req := httptest.NewRequest("POST", "/api/statusline", strings.NewReader(body))

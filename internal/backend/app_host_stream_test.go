@@ -22,6 +22,18 @@ func printArgv(text string) []string {
 	return []string{"/bin/sh", "-c", "printf '%s' " + text}
 }
 
+// sleepArgvForTest is a command that stays alive without producing output.
+func sleepArgvForTest() []string {
+	if runtime.GOOS == "windows" {
+		comspec := os.Getenv("COMSPEC")
+		if comspec == "" {
+			comspec = "cmd.exe"
+		}
+		return []string{comspec, "/c", "ping -n 60 127.0.0.1 > nul"}
+	}
+	return []string{"/bin/sh", "-c", "sleep 60"}
+}
+
 // drainBatcher swaps the batcher until it has seen want, or the deadline
 // passes. The batch loop that normally does this needs a Wails app.
 func drainBatcher(t *testing.T, a *AppService, id int, want string) string {
@@ -106,15 +118,7 @@ func TestCloseSession_ForgetsTheSession(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 
-	argv := []string{"/bin/sh", "-c", "sleep 60"}
-	if runtime.GOOS == "windows" {
-		comspec := os.Getenv("COMSPEC")
-		if comspec == "" {
-			comspec = "cmd.exe"
-		}
-		argv = []string{comspec, "/c", "ping -n 60 127.0.0.1 > nul"}
-	}
-	id := a.CreateSession(argv, t.TempDir(), 24, 80, "shell")
+	id := a.CreateSession(sleepArgvForTest(), t.TempDir(), 24, 80, "shell")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
@@ -137,7 +141,7 @@ func TestPumpToBatcher_TruncationTriggersARepaint(t *testing.T) {
 	t.Cleanup(a.host.Release)
 
 	sess := newResyncTestSession(t, 1, "mirror line")
-	a.host.AdoptForTest(1, sess)
+	adopt(t, a, 1, sess)
 
 	ch := make(chan hub.Chunk, 2)
 	ch <- hub.Chunk{Offset: 100, Data: []byte("after the gap"), Truncated: true}

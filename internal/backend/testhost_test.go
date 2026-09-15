@@ -1,6 +1,8 @@
 package backend
 
 import (
+	"testing"
+
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
@@ -29,3 +31,14 @@ func (c *countingSessions) Get(int) (hub.SessionSummary, error) {
 func (c *countingSessions) SetHookSessionID(int, string) error      { return hub.ErrNoSession }
 func (c *countingSessions) SetHookActivity(int, hub.Activity) error { return hub.ErrNoSession }
 func (c *countingSessions) ClearHookData(int) error                 { return hub.ErrNoSession }
+
+// adopt puts a hand-built session into an app's host. AppService.host is the
+// Host interface, so the test-only adoption hatch needs the concrete type.
+func adopt(t *testing.T, a *AppService, id int, sess *terminal.Session) {
+	t.Helper()
+	h, ok := a.host.(*hub.Embedded)
+	if !ok {
+		t.Fatalf("app host is %T, want an embedded host", a.host)
+	}
+	h.AdoptForTest(id, sess)
+}

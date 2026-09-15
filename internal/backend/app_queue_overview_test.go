@@ -21,7 +21,7 @@ func TestGetAllQueues_Empty(t *testing.T) {
 func TestGetAllQueues_SkipsEmptyQueues(t *testing.T) {
 	app := newTestApp()
 	sess := terminal.NewSession(1, 24, 80)
-	app.host.AdoptForTest(1, sess)
+	adopt(t, app, 1, sess)
 	app.queues[1] = &sessionQueue{items: []QueueItem{}}
 
 	result := app.GetAllQueues()
@@ -44,7 +44,7 @@ func TestGetAllQueues_SkipsOrphanQueues(t *testing.T) {
 func TestGetAllQueues_ReturnsMatchingQueues(t *testing.T) {
 	app := newTestApp()
 	sess := terminal.NewSession(1, 24, 80)
-	app.host.AdoptForTest(1, sess)
+	adopt(t, app, 1, sess)
 	app.queues[1] = &sessionQueue{
 		items: []QueueItem{
 			{ID: 1, Prompt: "hello", Status: "pending"},

@@ -25,7 +25,7 @@ func readyToSuspend(t *testing.T) (*AppService, *terminal.Session, int, time.Tim
 	sess.SetResumeID("11111111-2222-3333-4444-555555555555")
 
 	a.mu.Lock()
-	a.host.AdoptForTest(id, sess)
+	adopt(t, a, id, sess)
 	a.sessionMode[id] = "claude"
 	a.mu.Unlock()
 

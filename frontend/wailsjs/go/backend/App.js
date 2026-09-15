@@ -71,6 +71,18 @@ export function CloseChatSession(arg1) {
   return $Call.ByID(1679814237, arg1);
 }
 
+export function ListLiveSessions() {
+  return $Call.ByID(2626366812);
+}
+
+export function AttachSession(arg1, arg2, arg3) {
+  return $Call.ByID(1397991782, arg1, arg2, arg3);
+}
+
+export function UsesSessionDaemon() {
+  return $Call.ByID(3664577497);
+}
+
 export function CloseSession(arg1) {
   return $Call.ByID(961833007, arg1);
 }

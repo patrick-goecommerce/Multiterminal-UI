@@ -40,4 +40,3 @@ func (a *AppService) TranscribeAudio(audioB64, mime string) (string, error) {
 	}
 	return tr.Transcribe(context.Background(), audio, mime, a.cfg.STT.Language)
 }
-

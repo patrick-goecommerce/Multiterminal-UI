@@ -163,6 +163,28 @@ export namespace backend {
 	        this.event = source["event"];
 	    }
 	}
+	export class LiveSession {
+	    id: number;
+	    name: string;
+	    dir: string;
+	    mode: string;
+	    activity: string;
+	    running: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LiveSession(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.dir = source["dir"];
+	        this.mode = source["mode"];
+	        this.activity = source["activity"];
+	        this.running = source["running"];
+	    }
+	}
 	export class ClaudeDetectResult {
 	    path: string;
 	    source: string;
@@ -976,6 +998,7 @@ export namespace config {
 	    auto_update_check_minutes: number;
 	    terminal_scrollback: number;
 	    idle_suspend: IdleSuspendSettings;
+	    session_host: string;
 	    mcp_profiles: MCPProfile[];
 	    default_mcp_profile: string;
 
@@ -1015,6 +1038,7 @@ export namespace config {
 	        this.auto_update_check_minutes = source["auto_update_check_minutes"];
 	        this.terminal_scrollback = source["terminal_scrollback"];
 	        this.idle_suspend = this.convertValues(source["idle_suspend"], IdleSuspendSettings);
+	        this.session_host = source["session_host"];
 	        this.mcp_profiles = this.convertValues(source["mcp_profiles"], MCPProfile);
 	        this.default_mcp_profile = source["default_mcp_profile"];
 	    }

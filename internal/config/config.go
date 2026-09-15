@@ -75,6 +75,12 @@ type Config struct {
 	MCPServer         MCPServerSettings    `yaml:"mcp_server" json:"mcp_server"`
 	// IdleSuspend releases the process tree of long-idle panes (see IdleSuspendSettings).
 	IdleSuspend IdleSuspendSettings `yaml:"idle_suspend" json:"idle_suspend"`
+	// SessionHost decides who owns the terminal sessions: "embedded" (default)
+	// runs them inside this process, so closing the window ends them;
+	// "daemon" hands them to mtuid, which keeps them running across restarts.
+	// Anything unrecognised means embedded, because losing a pane is worse
+	// than ignoring a typo.
+	SessionHost string `yaml:"session_host" json:"session_host"`
 	// UpdateChannel selects which GitHub release track CheckForUpdates/ApplyUpdate
 	// pull from: "stable" (release.yml, non-prerelease) or "alpha" (release-alpha.yml,
 	// prerelease). Defaults to "stable" regardless of the running build variant.
