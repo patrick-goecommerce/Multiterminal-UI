@@ -11,14 +11,10 @@ import (
 func closeSpawnedSessions(t *testing.T, app *AppService) {
 	t.Helper()
 	t.Cleanup(func() {
-		app.mu.Lock()
-		sessions := app.liveSessions()
-		for _, s := range sessions {
-			sessions = append(sessions, s)
-		}
-		app.mu.Unlock()
-		for _, s := range sessions {
-			s.Close() // blocks until the process exits and the PTY closes
+		// Close through the host: it kills the process tree and blocks until
+		// the process is gone, which is what releases the handles.
+		for _, s := range app.sessionSummaries() {
+			_ = app.host.Close(s.ID)
 		}
 	})
 }

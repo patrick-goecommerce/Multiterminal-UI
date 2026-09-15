@@ -122,7 +122,7 @@ func TestCloseSession_ForgetsTheSession(t *testing.T) {
 	a.CloseSession(id)
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		if a.session(id) == nil {
+		if !a.hasSession(id) {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)

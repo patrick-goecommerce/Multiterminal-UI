@@ -38,9 +38,21 @@ func readyToSuspend(t *testing.T) (*AppService, *terminal.Session, int, time.Tim
 	return a, sess, id, now
 }
 
+// blockerFor asks the host for the session's current summary and runs the gate
+// against it, so a test can break a condition on the session object and still
+// see what the gate sees.
+func blockerFor(t *testing.T, a *AppService, id int, timeout time.Duration, now time.Time) string {
+	t.Helper()
+	summary, err := a.host.Get(id)
+	if err != nil {
+		return "no session"
+	}
+	return a.suspendBlocker(id, summary, timeout, now)
+}
+
 func TestSuspendBlocker_AllowsAnIdleFinishedPane(t *testing.T) {
-	a, sess, id, now := readyToSuspend(t)
-	if reason := a.suspendBlocker(id, sess, 30*time.Minute, now); reason != "" {
+	a, _, id, now := readyToSuspend(t)
+	if reason := blockerFor(t, a, id, 30*time.Minute, now); reason != "" {
 		t.Fatalf("a pane idle for 45 minutes was blocked: %s", reason)
 	}
 }
@@ -168,7 +180,7 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 			a, sess, id, now := readyToSuspend(t)
 			tt.break_(a, sess, id)
 
-			reason := a.suspendBlocker(id, sess, 30*time.Minute, now)
+			reason := blockerFor(t, a, id, 30*time.Minute, now)
 			if reason == "" {
 				t.Fatalf("pane was allowed to suspend, expected a block containing %q", tt.want)
 			}
@@ -180,8 +192,8 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 }
 
 func TestSuspendBlocker_DisabledFeatureBlocksEverything(t *testing.T) {
-	a, sess, id, now := readyToSuspend(t)
-	if reason := a.suspendBlocker(id, sess, 0, now); reason != "feature disabled" {
+	a, _, id, now := readyToSuspend(t)
+	if reason := blockerFor(t, a, id, 0, now); reason != "feature disabled" {
 		t.Errorf("blocker = %q, want %q", reason, "feature disabled")
 	}
 }
@@ -213,7 +225,7 @@ func TestSuspendBlocker_SkipsAnAlreadySuspendedPane(t *testing.T) {
 	if !sess.TrySuspend() {
 		t.Fatal("TrySuspend refused a done session")
 	}
-	if reason := a.suspendBlocker(id, sess, 30*time.Minute, now); reason != "already suspended" {
+	if reason := blockerFor(t, a, id, 30*time.Minute, now); reason != "already suspended" {
 		t.Errorf("blocker = %q, want %q", reason, "already suspended")
 	}
 }

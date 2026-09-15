@@ -6,8 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // resolveHookBinary resolves the hook helper and, when it cannot be found,
@@ -71,14 +69,7 @@ func (a *AppService) setupHooks(ctx context.Context) {
 	}
 
 	// Start the HookManager
-	a.hookMgr = newHookManager(hooksDir,
-		func(mtID int) *terminal.Session {
-			a.mu.Lock()
-			defer a.mu.Unlock()
-			return a.sessionLocked(mtID)
-		},
-		a.onHookActivity,
-	)
+	a.hookMgr = newHookManager(hooksDir, a.host, a.onHookActivity)
 	a.hookMgr.onPrompt = a.maybeGeneratePaneName
 	a.hookMgr.onWorktreeChange = a.onWorktreeChange
 	a.hookMgr.onPathBlocked = a.onWorktreePathBlocked

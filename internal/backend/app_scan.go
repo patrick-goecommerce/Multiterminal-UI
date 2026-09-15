@@ -6,8 +6,6 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // ActivityInfo is sent to the frontend when a session's activity state changes.
@@ -68,23 +66,6 @@ func (a *AppService) scanLoop(ctx context.Context) {
 	}
 }
 
-func activityString(a terminal.ActivityState) string {
-	switch a {
-	case terminal.ActivityActive:
-		return "active"
-	case terminal.ActivityDone:
-		return "done"
-	case terminal.ActivityWaitingPermission:
-		return "waitingPermission"
-	case terminal.ActivityWaitingAnswer:
-		return "waitingAnswer"
-	case terminal.ActivityError:
-		return "error"
-	default:
-		return "idle"
-	}
-}
-
 // cleanupActivityTracking removes stale tracking data for a closed session.
 func cleanupActivityTracking(id int) {
 	prevActivityMu.Lock()
@@ -97,59 +78,21 @@ func cleanupActivityTracking(id int) {
 
 // scanAllSessions checks each session for activity and token updates.
 func (a *AppService) scanAllSessions() {
-	ids, sessions := a.liveSessionsByID()
-
-	for i, sess := range sessions {
-		id := ids[i]
-
-		// A sleeping pane has a frozen screen (issue #180). Classifying it would
-		// re-emit the state it had before falling asleep and overwrite the
-		// "schläft" badge on every tick; its tokens cannot change either.
-		if sess.IsSuspendedOrSuspending() {
+	// The host decides what each session is doing; everything below decides
+	// what follows from a change. See hub.Embedded.ScanActivity.
+	for _, r := range a.host.ScanActivity() {
+		id := r.ID
+		if r.Asleep {
 			continue
 		}
 
-		sess.ScanTokens() // always scan for token/cost data
-
-		var activity terminal.ActivityState
-		if sess.HasHookData() {
-			// Hook events drive activity state for Claude panes — skip PTY regex scan
-			activity = sess.GetActivity()
-			// Exception: when hook says "done", cross-check screen for a trailing
-			// question (e.g. Claude ended with "Was liegt an?"). The Stop hook fires
-			// before the PTY scanner can see the question, so we do it here.
-			if activity == terminal.ActivityDone {
-				if screen := sess.ClassifyScreenState(); screen == terminal.ActivityWaitingAnswer {
-					activity = terminal.ActivityWaitingAnswer
-				}
-			}
-			// Exception: when hook says "active" but the PTY has been quiet well
-			// past the normal detection threshold AND the screen already shows a
-			// completed prompt, the terminating hook event (Stop) was lost or
-			// delayed. Without this, a pane — and any pipeline queue waiting on
-			// it via the "done" transition below — would hang forever, since
-			// hook-driven sessions never fall back to the PTY scan otherwise.
-			if activity == terminal.ActivityActive {
-				if lastOutput := sess.GetLastOutputAt(); !lastOutput.IsZero() && time.Since(lastOutput) > terminal.ActivityStaleThreshold {
-					if screen := sess.ClassifyScreenState(); screen == terminal.ActivityDone || screen == terminal.ActivityWaitingAnswer {
-						activity = screen
-					}
-				}
-			}
-		} else {
-			activity = sess.DetectActivity()
-		}
-		actStr := activityString(activity)
-
-		tokens := sess.GetTokens()
+		actStr := string(r.Activity)
 		costStr := ""
-		if tokens.TotalCost > 0 {
-			costStr = fmt.Sprintf("$%.2f", tokens.TotalCost)
+		if r.Cost > 0 {
+			costStr = fmt.Sprintf("$%.2f", r.Cost)
 		}
-
-		ctxPct, model, _ := sess.StatuslineInfo()
-
-		title := sess.GetTitle()
+		ctxPct, model := r.ContextPct, r.Model
+		title := r.Title
 
 		// Only emit when state, cost, or title actually changed. The activity
 		// half runs through confirmActivity, so a one-tick flicker never
@@ -172,8 +115,8 @@ func (a *AppService) scanAllSessions() {
 			// No confirmed state yet (session just started, still on its
 			// first candidate). Fall back to the raw observation instead of
 			// emitting "" — outside the documented enum — when only cost or
-			// title changed on this tick. activityString never returns "",
-			// so this is always a valid value; it does not weaken the
+			// title changed on this tick. The host never reports an empty
+			// activity, so this is always a valid value; it does not weaken the
 			// debounce guarantee because activityChanged is false here, so
 			// none of the confirmed-transition side effects below fire.
 			confirmedActivity = actStr

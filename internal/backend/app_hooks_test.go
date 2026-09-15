@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
@@ -36,23 +37,23 @@ func TestHookEventToActivity(t *testing.T) {
 	tests := []struct {
 		event   string
 		message string
-		want    terminal.ActivityState
+		want    hub.Activity
 		wantOK  bool
 	}{
-		{"PreToolUse", "", terminal.ActivityActive, true},
-		{"PostToolUse", "", terminal.ActivityActive, true},
-		{"UserPromptSubmit", "", terminal.ActivityActive, true},
-		{"PostToolUseFailure", "", terminal.ActivityError, true},
-		{"PermissionRequest", "", terminal.ActivityWaitingPermission, true},
-		{"Stop", "", terminal.ActivityDone, true},
-		{"Notification", "Weiter so?", terminal.ActivityWaitingAnswer, true},
+		{"PreToolUse", "", hub.ActivityActive, true},
+		{"PostToolUse", "", hub.ActivityActive, true},
+		{"UserPromptSubmit", "", hub.ActivityActive, true},
+		{"PostToolUseFailure", "", hub.ActivityError, true},
+		{"PermissionRequest", "", hub.ActivityWaitingPermission, true},
+		{"Stop", "", hub.ActivityDone, true},
+		{"Notification", "Weiter so?", hub.ActivityWaitingAnswer, true},
 		// A notification without a question mark says nothing about whether the
 		// turn ended. Claude's own wording ("Claude needs your permission to use
 		// Bash") has no "?", and mapping it to Done tore a running session to
 		// "finished" (issue #188).
-		{"Notification", "Claude needs your permission to use Bash", terminal.ActivityIdle, false},
+		{"Notification", "Claude needs your permission to use Bash", hub.ActivityIdle, false},
 		// An unknown event is not evidence of idleness either.
-		{"unknown", "", terminal.ActivityIdle, false},
+		{"unknown", "", hub.ActivityIdle, false},
 	}
 	for _, tt := range tests {
 		got, ok := hookEventToActivity(tt.event, tt.message)
@@ -61,7 +62,7 @@ func TestHookEventToActivity(t *testing.T) {
 			continue
 		}
 		if ok && got != tt.want {
-			t.Errorf("hookEventToActivity(%q, %q) = %d, want %d", tt.event, tt.message, got, tt.want)
+			t.Errorf("hookEventToActivity(%q, %q) = %q, want %q", tt.event, tt.message, got, tt.want)
 		}
 	}
 }
@@ -70,12 +71,7 @@ func TestHookManager_ProcessesNewEvents(t *testing.T) {
 	dir := t.TempDir()
 	sess := terminal.NewSession(42, 24, 80)
 
-	hm := newHookManager(dir, func(mtID int) *terminal.Session {
-		if mtID == 42 {
-			return sess
-		}
-		return nil
-	}, nil)
+	hm := newHookManager(dir, testHost(map[int]*terminal.Session{42: sess}), nil)
 
 	writeTestHookEvent(t, dir, "claude-abc", testHookEvent{
 		Ts: time.Now().Unix(), Event: "PermissionRequest",
@@ -99,12 +95,7 @@ func TestHookManager_IncrementalRead(t *testing.T) {
 	dir := t.TempDir()
 	sess := terminal.NewSession(10, 24, 80)
 
-	hm := newHookManager(dir, func(mtID int) *terminal.Session {
-		if mtID == 10 {
-			return sess
-		}
-		return nil
-	}, nil)
+	hm := newHookManager(dir, testHost(map[int]*terminal.Session{10: sess}), nil)
 
 	// First event
 	writeTestHookEvent(t, dir, "s1", testHookEvent{
@@ -132,12 +123,7 @@ func TestHookManager_SessionEnd_ClearsHookData(t *testing.T) {
 	sess := terminal.NewSession(7, 24, 80)
 	sess.SetHookActivity(terminal.ActivityActive)
 
-	hm := newHookManager(dir, func(mtID int) *terminal.Session {
-		if mtID == 7 {
-			return sess
-		}
-		return nil
-	}, nil)
+	hm := newHookManager(dir, testHost(map[int]*terminal.Session{7: sess}), nil)
 
 	writeTestHookEvent(t, dir, "sess7", testHookEvent{
 		Ts: time.Now().Unix(), Event: "SessionEnd", SessionID: "sess7", MtID: 7,
@@ -158,12 +144,7 @@ func TestHookManager_UserPromptSubmitTriggersOnPrompt(t *testing.T) {
 	dir := t.TempDir()
 	sess := terminal.NewSession(8, 24, 80)
 
-	hm := newHookManager(dir, func(mtID int) *terminal.Session {
-		if mtID == 8 {
-			return sess
-		}
-		return nil
-	}, nil)
+	hm := newHookManager(dir, testHost(map[int]*terminal.Session{8: sess}), nil)
 
 	var gotID int
 	var gotPrompt string
@@ -188,31 +169,23 @@ func TestHookManager_UserPromptSubmitTriggersOnPrompt(t *testing.T) {
 
 func TestHookManager_IgnoresZeroMtID(t *testing.T) {
 	dir := t.TempDir()
-	called := false
 
-	hm := newHookManager(dir, func(mtID int) *terminal.Session {
-		called = true
-		return nil
-	}, nil)
+	// An empty host: a zero MtID must be dropped before anything is looked up.
+	hm := newHookManager(dir, &countingSessions{}, nil)
 
 	writeTestHookEvent(t, dir, "no-mt", testHookEvent{
 		Ts: time.Now().Unix(), Event: "PreToolUse", SessionID: "no-mt", MtID: 0,
 	})
 	hm.processDirectory()
 
-	if called {
-		t.Error("lookup should not be called when mt_id = 0")
+	if hm.sessions.(*countingSessions).gets != 0 {
+		t.Error("an event without an MtID must not reach the session lookup")
 	}
 }
 
 func TestHandleEvent_CallsOnWorktreeChangeForEnterWorktree(t *testing.T) {
 	sess := terminal.NewSession(1, 24, 80)
-	hm := newHookManager("", func(mtID int) *terminal.Session {
-		if mtID == 1 {
-			return sess
-		}
-		return nil
-	}, nil)
+	hm := newHookManager("", testHost(map[int]*terminal.Session{1: sess}), nil)
 
 	var gotPath, gotBranch, gotCwd string
 	var calls int
@@ -241,7 +214,7 @@ func TestHandleEvent_CallsOnWorktreeChangeForEnterWorktree(t *testing.T) {
 
 func TestHandleEvent_CallsOnWorktreeChangeWithEmptyPathForOrdinaryEvents(t *testing.T) {
 	sess := terminal.NewSession(1, 24, 80)
-	hm := newHookManager("", func(mtID int) *terminal.Session { return sess }, nil)
+	hm := newHookManager("", testHost(map[int]*terminal.Session{1: sess}), nil)
 
 	var gotPath string
 	var calls int
@@ -262,7 +235,7 @@ func TestHandleEvent_CallsOnWorktreeChangeWithEmptyPathForOrdinaryEvents(t *test
 
 func TestHandleEvent_CallsOnPathBlocked(t *testing.T) {
 	sess := terminal.NewSession(1, 24, 80)
-	hm := newHookManager("", func(mtID int) *terminal.Session { return sess }, nil)
+	hm := newHookManager("", testHost(map[int]*terminal.Session{1: sess}), nil)
 
 	var gotPath, gotReason string
 	var calls int
@@ -287,7 +260,7 @@ func TestHandleEvent_CallsOnPathBlocked(t *testing.T) {
 
 func TestHandleEvent_DoesNotCallOnPathBlockedWhenEmpty(t *testing.T) {
 	sess := terminal.NewSession(1, 24, 80)
-	hm := newHookManager("", func(mtID int) *terminal.Session { return sess }, nil)
+	hm := newHookManager("", testHost(map[int]*terminal.Session{1: sess}), nil)
 
 	calls := 0
 	hm.onPathBlocked = func(int, string, string) { calls++ }

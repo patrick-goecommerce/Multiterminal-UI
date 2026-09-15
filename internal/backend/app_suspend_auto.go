@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // suspendCheckInterval is how often idle panes are looked for. The timeout is
@@ -38,17 +38,17 @@ func (a *AppService) idleSuspendTimeout() time.Duration {
 //     "idle" in particular is not a safe signal.
 //   - A queued prompt, a running finish flow, an orchestrator card or an
 //     agent-control session all mean something is about to write to this pane.
-func (a *AppService) suspendBlocker(id int, sess *terminal.Session, timeout time.Duration, now time.Time) string {
+func (a *AppService) suspendBlocker(id int, s hub.SessionSummary, timeout time.Duration, now time.Time) string {
 	if timeout <= 0 {
 		return "feature disabled"
 	}
-	if sess == nil {
+	if s.ID == 0 {
 		return "no session"
 	}
-	if sess.IsSuspendedOrSuspending() {
+	if s.Asleep() {
 		return "already suspended"
 	}
-	if !sess.IsRunning() {
+	if s.Status != hub.StatusRunning {
 		return "not running"
 	}
 
@@ -68,10 +68,10 @@ func (a *AppService) suspendBlocker(id int, sess *terminal.Session, timeout time
 	if finish != nil {
 		return "worktree finish in progress"
 	}
-	if resumeIDFor(sess) == "" {
+	if s.ResumeID == "" {
 		return "no resume id"
 	}
-	if !sess.HasHookData() {
+	if !s.HasHookData {
 		return "no hook data yet"
 	}
 	if queue != nil && (queueHasStatus(queue.items, "pending") || queueHasStatus(queue.items, "sent")) {
@@ -118,11 +118,9 @@ func (a *AppService) suspendIdleSessions(now time.Time) {
 		return
 	}
 
-	ids, sessions := a.liveSessionsByID()
-
-	for i, sess := range sessions {
-		id := ids[i]
-		if reason := a.suspendBlocker(id, sess, timeout, now); reason != "" {
+	for _, s := range a.sessionSummaries() {
+		id := s.ID
+		if reason := a.suspendBlocker(id, s, timeout, now); reason != "" {
 			continue
 		}
 		log.Printf("[idle-suspend] session %d idle past %s, suspending", id, timeout)

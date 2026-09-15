@@ -55,15 +55,28 @@ func (a *AppService) pumpToBatcher(id int, sub *hub.Subscription) {
 // frontend already listens for. Keeping the translation here is what lets the
 // frontend stay unchanged when the host moves into another process.
 func (a *AppService) onHostEvent(name string, payload any) {
-	if a.app == nil {
-		return // no frontend to notify (before ServiceStartup, and in tests)
-	}
 	switch name {
 	case hub.EventSessionExited:
 		ev, ok := payload.(hub.SessionExited)
+		if !ok || a.app == nil {
+			return // no frontend to notify (before ServiceStartup, and in tests)
+		}
+		a.app.Event.Emit("terminal:exit", TerminalExitEvent{ID: ev.ID, ExitCode: ev.ExitCode})
+
+	case hub.EventSessionSuspended:
+		ev, ok := payload.(hub.SessionSuspended)
 		if !ok {
 			return
 		}
-		a.app.Event.Emit("terminal:exit", TerminalExitEvent{ID: ev.ID, ExitCode: ev.ExitCode})
+		a.emitLifecycleActivity(ev.ID, "sleeping")
+
+	case hub.EventSessionResumed:
+		ev, ok := payload.(hub.SessionResumed)
+		if !ok {
+			return
+		}
+		// 12 to 15 seconds pass before the agent has replayed its transcript;
+		// the pane shows "wacht auf" until the scan reports a real state.
+		a.emitLifecycleActivity(ev.ID, "resuming")
 	}
 }

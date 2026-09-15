@@ -101,7 +101,18 @@ type SessionSummary struct {
 	ContextPct int    `json:"context_pct" yaml:"context_pct"`
 	Model      string `json:"model" yaml:"model"`
 	// ResumeID is the agent's own conversation ID, for waking it up again.
+	// It is the effective one: what a lifecycle hook reported wins over what
+	// was parsed out of argv at launch, because the agent may have picked a
+	// different ID internally.
 	ResumeID string `json:"resume_id" yaml:"resume_id"`
+	// HookSessionID is the agent's own session ID exactly as a hook reported
+	// it, empty until one has. ResumeID prefers it; this is the raw value,
+	// which is what "have we heard from this session yet" asks about.
+	HookSessionID string `json:"hook_session_id" yaml:"hook_session_id"`
+	// HasHookData reports whether lifecycle hooks have been heard from. Until
+	// they have, the session's state is guesswork from screen patterns, which
+	// is not a good enough basis for putting a pane to sleep.
+	HasHookData bool `json:"has_hook_data" yaml:"has_hook_data"`
 	// Offset is how many bytes this session has produced since it started.
 	// A client that reconnects passes the last offset it applied back to
 	// Attach and continues without a hole.
@@ -113,6 +124,19 @@ type SessionSummary struct {
 // only way to reach it.
 func (s SessionSummary) Asleep() bool {
 	return s.Status == StatusSuspended || s.Status == StatusSuspending
+}
+
+// ScanResult is one session's agent state as of a scan tick.
+type ScanResult struct {
+	ID int `json:"id" yaml:"id"`
+	// Asleep marks a suspended pane: its screen is frozen, so there is nothing
+	// to classify and the other fields are not filled in.
+	Asleep     bool     `json:"asleep" yaml:"asleep"`
+	Activity   Activity `json:"activity" yaml:"activity"`
+	Cost       float64  `json:"cost" yaml:"cost"`
+	Title      string   `json:"title" yaml:"title"`
+	ContextPct int      `json:"context_pct" yaml:"context_pct"`
+	Model      string   `json:"model" yaml:"model"`
 }
 
 // Info describes a Host to a client that just connected.
@@ -140,8 +164,10 @@ type Chunk struct {
 // Event names emitted by a Host. They are deliberately not the Wails event
 // names: a client translates them into whatever its UI listens for.
 const (
-	EventSessionCreated = "session.created"
-	EventSessionExited  = "session.exited"
+	EventSessionCreated   = "session.created"
+	EventSessionExited    = "session.exited"
+	EventSessionSuspended = "session.suspended"
+	EventSessionResumed   = "session.resumed"
 )
 
 // SessionCreated is the payload of EventSessionCreated.
@@ -153,6 +179,19 @@ type SessionCreated struct {
 type SessionExited struct {
 	ID       int `json:"id" yaml:"id"`
 	ExitCode int `json:"exit_code" yaml:"exit_code"`
+}
+
+// SessionSuspended is the payload of EventSessionSuspended: the pane's process
+// tree is gone on purpose and the session object is waiting to be resumed.
+type SessionSuspended struct {
+	ID       int    `json:"id" yaml:"id"`
+	ResumeID string `json:"resume_id" yaml:"resume_id"`
+}
+
+// SessionResumed is the payload of EventSessionResumed.
+type SessionResumed struct {
+	ID       int    `json:"id" yaml:"id"`
+	ResumeID string `json:"resume_id" yaml:"resume_id"`
 }
 
 // EventSink receives Host events. The daemon's sink fans them out to connected

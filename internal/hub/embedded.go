@@ -302,25 +302,12 @@ func (h *Embedded) AdoptForTest(id int, sess *terminal.Session) {
 	h.mu.Unlock()
 }
 
-// Session returns the underlying terminal session.
+// sessions returns every session object, paired with its ID.
 //
-// It is a transitional hatch for code that still reaches into the session
-// object directly (the activity scan, suspend, the hook reader). Those move
-// behind the Host interface in a later phase; until then this is what keeps
-// the store swappable without rewriting all of them at once. A Remote host
-// cannot answer it, which is the point: every remaining caller is a caller
-// that would break against the daemon.
-func (h *Embedded) Session(id int) *terminal.Session {
-	m, err := h.lookup(id)
-	if err != nil {
-		return nil
-	}
-	return m.sess
-}
-
-// Sessions returns every session object, paired with its ID. Transitional,
-// like Session.
-func (h *Embedded) Sessions() (ids []int, sessions []*terminal.Session) {
+// It is unexported on purpose: handing out the session itself is the one thing
+// a host in another process cannot do, so the only caller is this package's
+// own activity scan, which runs where the screens are.
+func (h *Embedded) sessionObjects() (ids []int, sessions []*terminal.Session) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	ids = make([]int, 0, len(h.sessions))
@@ -351,23 +338,34 @@ func (h *Embedded) emit(name string, payload any) {
 func summarize(id int, m *managed) SessionSummary {
 	contextPct, model, _ := m.sess.StatuslineInfo()
 	return SessionSummary{
-		ID:           id,
-		Name:         m.sess.Name(),
-		Dir:          m.spec.Dir,
-		Mode:         m.spec.Mode,
-		Status:       statusOf(m.sess),
-		ExitCode:     m.sess.GetExitCode(),
-		PID:          m.sess.Pid(),
-		StartedAt:    m.startedAt,
-		LastOutputAt: m.sess.GetLastOutputAt(),
-		Activity:     activityOf(m.sess.GetActivity()),
-		Title:        m.sess.GetTitle(),
-		Cost:         m.sess.GetTokens().TotalCost,
-		ContextPct:   contextPct,
-		Model:        model,
-		ResumeID:     m.sess.ResumeID(),
-		Offset:       m.ring.End(),
+		ID:            id,
+		Name:          m.sess.Name(),
+		Dir:           m.spec.Dir,
+		Mode:          m.spec.Mode,
+		Status:        statusOf(m.sess),
+		ExitCode:      m.sess.GetExitCode(),
+		PID:           m.sess.Pid(),
+		StartedAt:     m.startedAt,
+		LastOutputAt:  m.sess.GetLastOutputAt(),
+		Activity:      activityOf(m.sess.GetActivity()),
+		Title:         m.sess.GetTitle(),
+		Cost:          m.sess.GetTokens().TotalCost,
+		ContextPct:    contextPct,
+		Model:         model,
+		ResumeID:      effectiveResumeID(m.sess),
+		HookSessionID: m.sess.HookSessionID(),
+		HasHookData:   m.sess.HasHookData(),
+		Offset:        m.ring.End(),
 	}
+}
+
+// effectiveResumeID is the ID to resume a session with: the hook-reported one
+// wins, the one parsed out of argv at launch is the fallback.
+func effectiveResumeID(s *terminal.Session) string {
+	if id := s.HookSessionID(); id != "" {
+		return id
+	}
+	return s.ResumeID()
 }
 
 // activityOf maps the terminal package's numeric state onto the wire strings.

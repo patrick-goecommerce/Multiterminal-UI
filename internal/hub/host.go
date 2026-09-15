@@ -5,6 +5,12 @@ import "errors"
 var (
 	// ErrNoSession means the ID does not name a session this Host owns.
 	ErrNoSession = errors.New("hub: no such session")
+	// ErrNoResumeID means the session has no agent conversation ID, so it
+	// could be put to sleep but never woken up again.
+	ErrNoResumeID = errors.New("hub: session has no resume id")
+	// ErrNotIdle means the session is doing something. Only a finished pane
+	// may be suspended; killing a working one would throw away the work.
+	ErrNotIdle = errors.New("hub: session is not idle")
 	// ErrClosed means the Host is shutting down and takes no new work.
 	ErrClosed = errors.New("hub: host is closed")
 )
@@ -67,6 +73,28 @@ type Host interface {
 	// ClearHookData forgets what the hooks reported, returning the session to
 	// screen-pattern detection.
 	ClearHookData(id int) error
+
+	// ScanActivity re-evaluates every session's agent state and returns what
+	// it found. It is a call rather than a stream because the caller decides
+	// how often to look, and because what follows from a change (debouncing,
+	// advancing a queue, reporting progress) is the caller's business.
+	ScanActivity() []ScanResult
+
+	// ResetActivity puts the session back to idle. A caller that has just sent
+	// it work uses this so the next "done" reads as a change rather than as
+	// the previous item's leftover state.
+	ResetActivity(id int) error
+
+	// Suspend puts a finished session to sleep: its process tree is killed and
+	// the session object stays, ready to be resumed. It returns as soon as the
+	// suspend is armed, because the kill takes long enough that no caller
+	// should wait on it; EventSessionSuspended reports the finish.
+	Suspend(id int) error
+
+	// Resume starts a fresh process into a sleeping session. argv, dir and env
+	// are built by the caller exactly as for Create, because what a resumed
+	// agent needs in its environment is the caller's policy.
+	Resume(id int, argv []string, dir string, env []string) error
 
 	// Attach subscribes to a session's output starting at from, which may be
 	// ReplayAll. The caller must Close the subscription.

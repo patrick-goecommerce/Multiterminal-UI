@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // rawHookEvent is the JSONL structure written by mtui-hook.
@@ -37,30 +37,41 @@ type rawHookEvent struct {
 // Returning a state anyway meant inventing one, which tore running sessions to
 // "done" and idle ones to "idle" (issue #188). Callers must leave the current
 // state untouched when this is false.
-func hookEventToActivity(event, message string) (terminal.ActivityState, bool) {
+func hookEventToActivity(event, message string) (hub.Activity, bool) {
 	switch event {
 	case "PreToolUse", "PostToolUse", "UserPromptSubmit":
-		return terminal.ActivityActive, true
+		return hub.ActivityActive, true
 	case "PostToolUseFailure":
-		return terminal.ActivityError, true
+		return hub.ActivityError, true
 	case "PermissionRequest":
-		return terminal.ActivityWaitingPermission, true
+		return hub.ActivityWaitingPermission, true
 	case "Notification":
 		if strings.Contains(message, "?") {
-			return terminal.ActivityWaitingAnswer, true
+			return hub.ActivityWaitingAnswer, true
 		}
-		return terminal.ActivityIdle, false
+		return hub.ActivityIdle, false
 	case "Stop":
-		return terminal.ActivityDone, true
+		return hub.ActivityDone, true
 	default:
-		return terminal.ActivityIdle, false
+		return hub.ActivityIdle, false
 	}
+}
+
+// hookSessions is what the hook manager needs from the session host: enough to
+// find a session and record what a lifecycle event said about it. It is an
+// interface rather than the Host itself so the manager's tests can answer
+// those four questions without a terminal.
+type hookSessions interface {
+	Get(id int) (hub.SessionSummary, error)
+	SetHookSessionID(id int, agentSessionID string) error
+	SetHookActivity(id int, activity hub.Activity) error
+	ClearHookData(id int) error
 }
 
 // HookManager polls the hooks directory and dispatches events to sessions.
 type HookManager struct {
 	dir        string
-	lookupFn   func(mtID int) *terminal.Session
+	sessions   hookSessions
 	onActivity func(sessionID int, activity string, cost string)
 	// onPrompt, if set, is called with the user's prompt text on every
 	// UserPromptSubmit event (used to auto-generate a pane name). Optional.
@@ -82,12 +93,12 @@ type HookManager struct {
 
 func newHookManager(
 	dir string,
-	lookupFn func(mtID int) *terminal.Session,
+	sessions hookSessions,
 	onActivity func(sessionID int, activity string, cost string),
 ) *HookManager {
 	return &HookManager{
 		dir:        dir,
-		lookupFn:   lookupFn,
+		sessions:   sessions,
 		onActivity: onActivity,
 		offsets:    make(map[string]int64),
 	}
@@ -236,18 +247,18 @@ func (hm *HookManager) handleEvent(ev rawHookEvent) {
 	if ev.MtID == 0 {
 		return
 	}
-	sess := hm.lookupFn(ev.MtID)
-	if sess == nil {
+	summary, err := hm.sessions.Get(ev.MtID)
+	if err != nil {
 		return
 	}
 
 	// Record Claude's session UUID on first event
-	if ev.SessionID != "" && sess.HookSessionID() == "" {
-		sess.SetHookSessionID(ev.SessionID)
+	if ev.SessionID != "" && summary.HookSessionID == "" {
+		_ = hm.sessions.SetHookSessionID(ev.MtID, ev.SessionID)
 	}
 
 	if ev.Event == "SessionEnd" {
-		sess.ClearHookData()
+		_ = hm.sessions.ClearHookData(ev.MtID)
 		hm.cleanupFile(ev.SessionID + ".jsonl")
 		return
 	}
@@ -271,10 +282,10 @@ func (hm *HookManager) handleEvent(ev rawHookEvent) {
 		// The event carries no state claim — leave the session as it is.
 		return
 	}
-	sess.SetHookActivity(newState)
+	_ = hm.sessions.SetHookActivity(ev.MtID, newState)
 
 	if hm.onActivity != nil {
-		hm.onActivity(ev.MtID, activityString(newState), "")
+		hm.onActivity(ev.MtID, string(newState), "")
 	}
 }
 

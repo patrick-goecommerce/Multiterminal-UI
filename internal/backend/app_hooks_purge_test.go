@@ -5,19 +5,17 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
-// newPurgeTestManager builds a HookManager over a temp dir. lookupFn returns
-// nil for every id — dispatch then finds no session and stops, which is what
-// these directory-level tests want; leaving it unset would panic instead.
+// newPurgeTestManager builds a HookManager over a temp dir whose host owns no
+// sessions: dispatch then finds nothing and stops, which is what these
+// directory-level tests want; leaving it unset would panic instead.
 func newPurgeTestManager(t *testing.T) *HookManager {
 	t.Helper()
 	return &HookManager{
 		dir:      t.TempDir(),
 		offsets:  make(map[string]int64),
-		lookupFn: func(int) *terminal.Session { return nil },
+		sessions: testHost(nil),
 	}
 }
 

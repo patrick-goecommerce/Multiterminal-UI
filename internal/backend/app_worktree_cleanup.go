@@ -145,7 +145,7 @@ func (a *AppService) FinishWorktree(sessionId int) {
 	}
 	st.Phase = "merging"
 	cp := *st
-	sess := a.sessionLocked(sessionId)
+	hasSession := a.hasSession(sessionId)
 	a.mu.Unlock()
 
 	go func() {
@@ -184,7 +184,7 @@ func (a *AppService) FinishWorktree(sessionId int) {
 		// synchronously. The host does both and forgets the session; a retry
 		// that lands here again finds no session and skips straight to the
 		// cleanup, which is what the phase table expects (spec 4.3).
-		if sess != nil {
+		if hasSession {
 			_ = a.host.Close(sessionId)
 		}
 		if err := cleanupWorktree(root, cp.WorktreePath, cp.Branch); err != nil {

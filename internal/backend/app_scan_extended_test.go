@@ -2,8 +2,6 @@ package backend
 
 import (
 	"testing"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // ---------------------------------------------------------------------------
@@ -44,52 +42,6 @@ func TestCleanupActivityTracking_RemovesEntries(t *testing.T) {
 func TestCleanupActivityTracking_NonExistentSession(t *testing.T) {
 	// Should not panic
 	cleanupActivityTracking(99999)
-}
-
-// ---------------------------------------------------------------------------
-// activityString – comprehensive tests
-// ---------------------------------------------------------------------------
-
-func TestActivityString_Active(t *testing.T) {
-	if s := activityString(terminal.ActivityActive); s != "active" {
-		t.Fatalf("expected 'active', got %q", s)
-	}
-}
-
-func TestActivityString_Done(t *testing.T) {
-	if s := activityString(terminal.ActivityDone); s != "done" {
-		t.Fatalf("expected 'done', got %q", s)
-	}
-}
-
-func TestActivityString_WaitingAnswer(t *testing.T) {
-	if s := activityString(terminal.ActivityWaitingAnswer); s != "waitingAnswer" {
-		t.Fatalf("expected 'waitingAnswer', got %q", s)
-	}
-}
-
-func TestActivityString_WaitingPermission(t *testing.T) {
-	if s := activityString(terminal.ActivityWaitingPermission); s != "waitingPermission" {
-		t.Fatalf("expected 'waitingPermission', got %q", s)
-	}
-}
-
-func TestActivityString_Error(t *testing.T) {
-	if s := activityString(terminal.ActivityError); s != "error" {
-		t.Fatalf("expected 'error', got %q", s)
-	}
-}
-
-func TestActivityString_Idle(t *testing.T) {
-	if s := activityString(terminal.ActivityIdle); s != "idle" {
-		t.Fatalf("expected 'idle', got %q", s)
-	}
-}
-
-func TestActivityString_UnknownDefaultsToIdle(t *testing.T) {
-	if s := activityString(terminal.ActivityState(255)); s != "idle" {
-		t.Fatalf("expected 'idle' for unknown state, got %q", s)
-	}
 }
 
 // ---------------------------------------------------------------------------

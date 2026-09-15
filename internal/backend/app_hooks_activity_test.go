@@ -34,12 +34,7 @@ func TestHookDrivenCompletion_ReportsIssueProgressExactlyOnce(t *testing.T) {
 		reports = append(reports, ev)
 	}
 
-	hm := newHookManager(dir, func(mtID int) *terminal.Session {
-		if mtID == sessID {
-			return sess
-		}
-		return nil
-	}, app.onHookActivity)
+	hm := newHookManager(dir, app.host, app.onHookActivity)
 
 	// Claude starts working.
 	writeTestHookEvent(t, dir, "claude-sess-71", testHookEvent{

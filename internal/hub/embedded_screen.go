@@ -65,6 +65,16 @@ func (h *Embedded) ClearHookData(id int) error {
 	return nil
 }
 
+// ResetActivity implements Host.
+func (h *Embedded) ResetActivity(id int) error {
+	m, err := h.lookup(id)
+	if err != nil {
+		return err
+	}
+	m.sess.ResetActivity()
+	return nil
+}
+
 // terminalActivity is the inverse of activityOf.
 func terminalActivity(a Activity) terminal.ActivityState {
 	switch a {

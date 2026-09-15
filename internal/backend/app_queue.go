@@ -196,24 +196,23 @@ func (a *AppService) processQueue(sessionId int) {
 		}
 	}
 
-	sess := a.sessionLocked(sessionId)
 	a.mu.Unlock()
 
 	if doneItemID != 0 {
 		a.onQueueItemDone(sessionId, doneItemID)
 	}
 
-	if hasNext && sess != nil {
+	if hasNext && a.hasSession(sessionId) {
 		// Write prompt text first, then Enter separately with a small delay.
 		// Claude Code's TUI needs time to process the pasted text before
 		// receiving the Enter key — writing everything in one chunk can cause
 		// the \r to be swallowed.
-		_, err := sess.Write([]byte(next.Prompt))
+		err := a.host.Write(sessionId, []byte(next.Prompt))
 		if err != nil {
 			log.Printf("[queue] session %d: write error for item %d: %v", sessionId, next.ID, err)
 		} else {
 			time.Sleep(100 * time.Millisecond)
-			_, err = sess.Write([]byte("\r"))
+			err = a.host.Write(sessionId, []byte("\r"))
 			if err != nil {
 				log.Printf("[queue] session %d: enter error for item %d: %v", sessionId, next.ID, err)
 			} else {
@@ -226,7 +225,7 @@ func (a *AppService) processQueue(sessionId int) {
 		// stamps activitySince to now and clears any armed debounce candidate —
 		// a bare prevActivity write would leave the timestamp on the previous
 		// state and let a stale candidate confirm on the next tick (issue #188).
-		sess.ResetActivity()
+		_ = a.host.ResetActivity(sessionId)
 		prevActivityMu.Lock()
 		forceActivity(sessionId, "idle", time.Now())
 		prevActivityMu.Unlock()

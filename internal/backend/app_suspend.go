@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // launchSpec remembers how a session was started so a resume can rebuild an
@@ -121,113 +121,67 @@ func resumeArgv(argv []string, resumeID string) []string {
 	return out
 }
 
-// resumeIDFor returns the UUID to resume a session with: the hook-reported one
-// wins, the argv-parsed one is the fallback.
-func resumeIDFor(sess *terminal.Session) string {
-	if id := sess.HookSessionID(); id != "" {
-		return id
-	}
-	return sess.ResumeID()
-}
-
 // SuspendSession puts a finished Claude pane to sleep. Returns an error when
 // the pane is not eligible; the kill itself runs asynchronously because
 // taskkill takes 100–300 ms and must never run under a lock.
 func (a *AppService) SuspendSession(id int) error {
 	a.mu.Lock()
-	sess := a.sessionLocked(id)
 	mode := a.sessionMode[id]
 	a.mu.Unlock()
-	if sess == nil {
+	if !a.hasSession(id) {
 		return fmt.Errorf("session %d not found", id)
 	}
 	if !isClaudeMode(mode) {
 		return fmt.Errorf("sleeping is only supported for claude panes (mode %q)", mode)
 	}
-	if sess.IsSuspendedOrSuspending() {
-		return nil // already asleep or on its way — idempotent
-	}
-	resumeID := resumeIDFor(sess)
-	if resumeID == "" {
-		return errors.New("no claude session id known for this pane — it cannot be resumed")
-	}
-	sess.SetResumeID(resumeID)
 
-	// Phase one of the two-phase commit: re-check under Session.mu.
-	if !sess.TrySuspend() {
+	// The host runs the two-phase commit and reports the finished suspend as
+	// an event; the messages here are what the user sees, so they stay.
+	err := a.host.Suspend(id)
+	switch {
+	case errors.Is(err, hub.ErrNoResumeID):
+		return errors.New("no claude session id known for this pane — it cannot be resumed")
+	case errors.Is(err, hub.ErrNotIdle):
 		return errors.New("pane is not idle — only a finished (done) claude pane can sleep")
 	}
-	go a.completeSuspend(id, sess)
-	return nil
-}
-
-// completeSuspend runs the kill outside every lock and finalises the suspend.
-func (a *AppService) completeSuspend(id int, sess *terminal.Session) {
-	// Phase two: readLoop flags any chunk that arrived after arming. Killing a
-	// pane that just woke up would destroy work in flight.
-	if sess.SuspendAborted() {
-		sess.AbortSuspend()
-		log.Printf("[suspend] session %d: aborted, output arrived after arming", id)
-		return
-	}
-
-	// Order is mandatory: taskkill /T must see the whole tree. After
-	// Process.Kill() (inside FinishSuspend) the grandchildren are orphaned and
-	// the node/MCP processes survive.
-	killProcessTree(sess.Pid())
-	if !sess.FinishSuspend() {
-		log.Printf("[suspend] session %d: FinishSuspend found no armed suspend", id)
-		return
-	}
-	log.Printf("[suspend] session %d asleep (resume id %s)", id, sess.ResumeID())
-	a.emitLifecycleActivity(id, "sleeping")
+	return err
 }
 
 // ResumeSession wakes a sleeping pane by restarting claude with --resume into
 // the same session object. Calling it on an awake pane is a no-op.
 func (a *AppService) ResumeSession(id int) error {
 	a.mu.Lock()
-	sess := a.sessionLocked(id)
 	spec := a.launches[id]
 	a.mu.Unlock()
-	if sess == nil {
+
+	summary, err := a.host.Get(id)
+	if err != nil {
 		return fmt.Errorf("session %d not found", id)
 	}
-	if !sess.IsSuspended() {
+	if summary.Status != hub.StatusSuspended {
 		return nil
 	}
-
-	resumeID := resumeIDFor(sess)
-	if resumeID == "" {
+	if summary.ResumeID == "" {
 		return errors.New("no claude session id known for this pane — it cannot be resumed")
 	}
 	dir := spec.dir
 	if dir == "" {
-		dir = sess.Dir
+		dir = summary.Dir
 	}
-	argv := resumeArgv(spec.argv, resumeID)
+	argv := resumeArgv(spec.argv, summary.ResumeID)
 	env := a.sessionEnv(id, dir, spec.mode)
 
-	if err := sess.Resume(argv, dir, env); err != nil {
-		if errors.Is(err, terminal.ErrNotSuspended) {
-			return nil // a concurrent wake won the race — nothing to do
-		}
+	if err := a.host.Resume(id, argv, dir, env); err != nil {
 		log.Printf("[resume] session %d failed: %v", id, err)
 		return err
 	}
-	log.Printf("[resume] session %d waking up (resume id %s)", id, resumeID)
-	// ~12–15 s pass before Claude has replayed the transcript; the pane shows
-	// "wacht auf" until the scan loop reports a real state again.
-	a.emitLifecycleActivity(id, "resuming")
 	return nil
 }
 
 // IsSessionSuspended reports whether a pane is currently asleep.
 func (a *AppService) IsSessionSuspended(id int) bool {
-	a.mu.Lock()
-	sess := a.sessionLocked(id)
-	a.mu.Unlock()
-	return sess != nil && sess.IsSuspended()
+	summary, err := a.host.Get(id)
+	return err == nil && summary.Status == hub.StatusSuspended
 }
 
 // wakeSession resumes a pane in the background. Used by the write paths, which
@@ -239,14 +193,14 @@ func (a *AppService) IsSessionSuspended(id int) bool {
 func (a *AppService) wakeSession(id int) {
 	go func() {
 		for i := 0; i < wakeSettleAttempts; i++ {
-			sess := a.session(id)
-			if sess == nil {
+			summary, err := a.host.Get(id)
+			if err != nil {
 				return
 			}
-			if !sess.IsSuspendedOrSuspending() {
+			if !summary.Asleep() {
 				return // awake already (or the suspend was aborted)
 			}
-			if sess.IsSuspended() {
+			if summary.Status == hub.StatusSuspended {
 				break
 			}
 			time.Sleep(wakeSettleInterval)

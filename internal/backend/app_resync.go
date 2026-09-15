@@ -1,9 +1,5 @@
 package backend
 
-import (
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
-)
-
 // ResyncSession repaints a pane from the backend's VT100 mirror.
 //
 // The frontend calls this when a pane's output backlog overflowed and had to be
@@ -27,11 +23,4 @@ func (a *AppService) ResyncSession(id int) {
 		}
 		return painted
 	})
-}
-
-// screenRepaint renders a screen as a self-contained repaint sequence.
-// The rendering itself lives on Screen so the session daemon (internal/hub)
-// can produce the identical bytes without importing the GUI backend.
-func screenRepaint(scr *terminal.Screen) string {
-	return scr.Repaint()
 }

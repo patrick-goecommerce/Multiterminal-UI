@@ -58,3 +58,34 @@ func (r *Remote) SetHookSessionID(id int, agentSessionID string) error {
 func (r *Remote) ClearHookData(id int) error {
 	return r.call(http.MethodDelete, fmt.Sprintf("/v1/sessions/%d/hook-session", id), nil, nil)
 }
+
+// ResetActivity implements Host.
+func (r *Remote) ResetActivity(id int) error {
+	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/reset-activity", id), nil, nil)
+}
+
+// ScanActivity implements Host.
+func (r *Remote) ScanActivity() []ScanResult {
+	var out struct {
+		Results []ScanResult `json:"results"`
+	}
+	if err := r.call(http.MethodPost, "/v1/scan", nil, &out); err != nil {
+		return nil
+	}
+	return out.Results
+}
+
+// Suspend implements Host.
+func (r *Remote) Suspend(id int) error {
+	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/suspend", id), nil, nil)
+}
+
+// Resume implements Host.
+func (r *Remote) Resume(id int, argv []string, dir string, env []string) error {
+	body := struct {
+		Argv []string `json:"argv"`
+		Dir  string   `json:"dir"`
+		Env  []string `json:"env"`
+	}{argv, dir, env}
+	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/resume", id), body, nil)
+}

@@ -37,12 +37,7 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	// The real wiring from app_hooks_setup.go: the hook callback only repaints
 	// the badge. The queue advances on the confirmed change in the scan loop,
 	// which is what the scan ticks at the end of this test exercise.
-	hm := newHookManager(dir, func(mtID int) *terminal.Session {
-		if mtID == sessID {
-			return sess
-		}
-		return nil
-	}, app.onHookActivity)
+	hm := newHookManager(dir, app.host, app.onHookActivity)
 
 	// User queues a prompt; the session is idle, so it is sent immediately.
 	app.AddToQueue(sessID, "test")
@@ -101,7 +96,7 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	}
 	app.scanAllSessions()
 
-	if got := activityString(sess.GetActivity()); got != "done" {
+	if got := sess.GetActivity(); got != terminal.ActivityDone {
 		t.Fatalf("after scanAllSessions: activity = %q, want %q — pane would be stuck on 'läuft'", got, "done")
 	}
 	prevActivityMu.Lock()

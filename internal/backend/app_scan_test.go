@@ -17,43 +17,8 @@ func TestActivityInfoCarriesStatuslineFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// activityString — maps ActivityState to frontend event strings
-// These strings drive the CSS classes for pane border colors:
-//   "done"               → green glow (Claude finished)
-//   "waitingPermission"  → yellow pulse (tool approval needed)
-//   "waitingAnswer"      → yellow pulse (text input needed)
-//   "error"              → red indicator (tool execution failed)
-//   "active"             → normal active state
-//   "idle"               → no special styling
-// ---------------------------------------------------------------------------
-
-func TestActivityString_AllStates(t *testing.T) {
-	tests := []struct {
-		state terminal.ActivityState
-		want  string
-	}{
-		{terminal.ActivityIdle, "idle"},
-		{terminal.ActivityActive, "active"},
-		{terminal.ActivityDone, "done"},
-		{terminal.ActivityWaitingPermission, "waitingPermission"},
-		{terminal.ActivityWaitingAnswer, "waitingAnswer"},
-		{terminal.ActivityError, "error"},
-	}
-	for _, tt := range tests {
-		got := activityString(tt.state)
-		if got != tt.want {
-			t.Errorf("activityString(%d) = %q, want %q", tt.state, got, tt.want)
-		}
-	}
-}
-
-func TestActivityString_UnknownState(t *testing.T) {
-	// Any unknown state should default to "idle"
-	got := activityString(terminal.ActivityState(99))
-	if got != "idle" {
-		t.Errorf("activityString(99) = %q, want 'idle'", got)
-	}
-}
+// The ActivityState-to-string mapping moved to internal/hub, where the wire
+// format lives; its tests moved with it (TestActivityMapping_RoundTrips).
 
 func TestScan_TracksOSCTitleChange(t *testing.T) {
 	sess := terminal.NewSession(7, 24, 80)
@@ -126,7 +91,7 @@ func TestScanGuard_StaleActiveHookFallsBackToScreen(t *testing.T) {
 	}
 	app.scanAllSessions()
 
-	got := activityString(sess.GetActivity())
+	raw := sess.GetActivity()
 	// scanAllSessions doesn't persist the fallback into sess.Activity (same as
 	// the existing done→waitingAnswer cross-check), so assert on the emitted
 	// state via prevActivity instead of GetActivity().
@@ -134,7 +99,7 @@ func TestScanGuard_StaleActiveHookFallsBackToScreen(t *testing.T) {
 	emitted := prevActivity[9]
 	prevActivityMu.Unlock()
 	if emitted != "done" {
-		t.Fatalf("after scan with stale active hook + completed-prompt screen, emitted activity = %q (raw hook state %q), want %q — Stop-event-lost fallback not working", emitted, got, "done")
+		t.Fatalf("after scan with stale active hook + completed-prompt screen, emitted activity = %q (raw hook state %d), want %q — Stop-event-lost fallback not working", emitted, raw, "done")
 	}
 }
 
@@ -158,8 +123,7 @@ func TestScanGuard_HookActivityNotOverwrittenByScan(t *testing.T) {
 
 	// After scanning, the activity must still be WaitingPermission
 	// (the hook guard must have prevented DetectActivity() from resetting it)
-	got := activityString(sess.GetActivity())
-	if got != "waitingPermission" {
-		t.Errorf("after scan, activity = %q, want %q — hook guard not working", got, "waitingPermission")
+	if got := sess.GetActivity(); got != terminal.ActivityWaitingPermission {
+		t.Errorf("after scan, activity = %d, want ActivityWaitingPermission — hook guard not working", got)
 	}
 }

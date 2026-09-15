@@ -17,3 +17,15 @@ func testHost(sessions map[int]*terminal.Session) *hub.Embedded {
 	}
 	return h
 }
+
+// countingSessions is a hookSessions that owns nothing and counts lookups, for
+// the case where the manager must not look anything up at all.
+type countingSessions struct{ gets int }
+
+func (c *countingSessions) Get(int) (hub.SessionSummary, error) {
+	c.gets++
+	return hub.SessionSummary{}, hub.ErrNoSession
+}
+func (c *countingSessions) SetHookSessionID(int, string) error      { return hub.ErrNoSession }
+func (c *countingSessions) SetHookActivity(int, hub.Activity) error { return hub.ErrNoSession }
+func (c *countingSessions) ClearHookData(int) error                 { return hub.ErrNoSession }

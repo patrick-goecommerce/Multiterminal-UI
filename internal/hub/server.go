@@ -43,6 +43,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/sessions", s.guard(s.handleSessions))
 	mux.HandleFunc("/v1/sessions/", s.guard(s.handleSession))
 	mux.HandleFunc("/v1/hub/shutdown", s.guard(s.handleShutdown))
+	mux.HandleFunc("/v1/scan", s.guard(s.handleScan))
 	mux.HandleFunc("/v1/stream", s.guard(s.handleStream))
 	return mux
 }
@@ -126,6 +127,15 @@ func (s *Server) handleHub(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.host.Info())
 }
 
+// handleScan is a POST because it is not free: it re-reads every screen.
+func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"results": s.host.ScanActivity()})
+}
+
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -193,6 +203,20 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		s.handleInput(w, r, id)
 	case action == "resize" && r.Method == http.MethodPost:
 		s.handleResize(w, r, id)
+	case action == "reset-activity" && r.Method == http.MethodPost:
+		if err := s.host.ResetActivity(id); err != nil {
+			writeHostError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	case action == "suspend" && r.Method == http.MethodPost:
+		if err := s.host.Suspend(id); err != nil {
+			writeHostError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	case action == "resume" && r.Method == http.MethodPost:
+		s.handleResume(w, r, id)
 	case action == "text" && r.Method == http.MethodGet:
 		s.handleText(w, r, id)
 	case action == "statusline" && r.Method == http.MethodPost:
@@ -333,6 +357,23 @@ func (s *Server) handleHookSession(w http.ResponseWriter, r *http.Request, id in
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) handleResume(w http.ResponseWriter, r *http.Request, id int) {
+	var body struct {
+		Argv []string `json:"argv"`
+		Dir  string   `json:"dir"`
+		Env  []string `json:"env"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.host.Resume(id, body.Argv, body.Dir, body.Env); err != nil {
+		writeHostError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -347,6 +388,9 @@ func writeHostError(w http.ResponseWriter, err error) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 	case errors.Is(err, ErrClosed):
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+	case errors.Is(err, ErrNotIdle), errors.Is(err, ErrNoResumeID):
+		// The session is fine; the request was not applicable to it.
+		http.Error(w, err.Error(), http.StatusConflict)
 	default:
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
