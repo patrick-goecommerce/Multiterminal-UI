@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-toast/toast"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/discovery"
 )
 
@@ -21,20 +20,13 @@ const focusHandshakeTimeout = 2 * time.Second
 // stray connection cannot make us buffer without bound.
 const focusTokenMaxLen = 128
 
-// SendNotification shows a native Windows toast notification with
-// "Multiterminal" as the application name. Clicking it brings the
-// window to the foreground via the multiterminal: custom protocol.
+// SendNotification shows a desktop notification. Clicking it brings the window
+// to the foreground via the multiterminal: custom protocol. The implementation
+// is per platform (notify_toast_windows.go), because the toast library is
+// Windows-only and importing it unconditionally kept this whole package from
+// building anywhere else.
 func (a *AppService) SendNotification(title string, body string) {
-	n := toast.Notification{
-		AppID:               "Multiterminal",
-		Title:               title,
-		Message:             body,
-		ActivationType:      "protocol",
-		ActivationArguments: "multiterminal:focus",
-	}
-	if err := n.Push(); err != nil {
-		log.Printf("[SendNotification] failed: %v", err)
-	}
+	sendDesktopNotification(title, body)
 }
 
 // startFocusListener starts a TCP listener that brings the window to the

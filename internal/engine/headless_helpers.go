@@ -6,21 +6,17 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
-	"syscall"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/orchestrator"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/procs"
 )
 
-// hideWindow sets SysProcAttr to hide the console window on Windows.
+// hideWindow keeps a spawned claude from flashing a console window. See
+// internal/procs: a runtime check cannot hide fields that only exist on
+// Windows, which is why this file did not build anywhere else.
 func hideWindow(cmd *exec.Cmd) {
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    true,
-			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
-		}
-	}
+	procs.HideConsole(cmd)
 }
 
 // runClaude executes claude -p --output-format json and returns the raw stdout.

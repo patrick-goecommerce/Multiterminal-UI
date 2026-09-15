@@ -2,6 +2,7 @@ package backend
 
 import (
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -13,6 +14,11 @@ func TestParseAllWorktrees(t *testing.T) {
 		checkParseAll(t, output, root)
 	})
 	t.Run("windows paths", func(t *testing.T) {
+		if runtime.GOOS != "windows" {
+			// parseAllWorktreeList compares against the host's path rules, so
+			// a drive-letter root only parses as a root on Windows.
+			t.Skip("drive-letter paths only mean anything on Windows")
+		}
 		root := `C:\repo`
 		output := "worktree C:/repo\nHEAD abc1234\nbranch refs/heads/main\n\nworktree C:/repo/.mt-worktrees/issue-42\nHEAD def5678\nbranch refs/heads/fix/bug-42\n\nworktree C:/repo/.mt-worktrees/login\nHEAD aaa9999\nbranch refs/heads/terminal/login\n\n"
 		checkParseAll(t, output, root)

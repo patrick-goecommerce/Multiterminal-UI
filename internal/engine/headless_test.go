@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -42,7 +43,19 @@ func TestNewHeadlessEngine(t *testing.T) {
 	}
 }
 
+// runVerify runs every step through COMSPEC /c, so these tests describe
+// Windows behaviour. They started failing elsewhere only because the package
+// now compiles on other platforms at all; making runVerify cross-platform is a
+// separate change.
+func requireWindowsShell(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		t.Skip("runVerify runs its steps through COMSPEC /c")
+	}
+}
+
 func TestRunVerifySuccess(t *testing.T) {
+	requireWindowsShell(t)
 	ctx := context.Background()
 	dir := t.TempDir()
 	steps := []orchestrator.VerifyStep{
@@ -61,6 +74,7 @@ func TestRunVerifySuccess(t *testing.T) {
 }
 
 func TestRunVerifyFailure(t *testing.T) {
+	requireWindowsShell(t)
 	ctx := context.Background()
 	dir := t.TempDir()
 	steps := []orchestrator.VerifyStep{
@@ -79,6 +93,7 @@ func TestRunVerifyFailure(t *testing.T) {
 }
 
 func TestRunVerifyOutputTruncation(t *testing.T) {
+	requireWindowsShell(t)
 	ctx := context.Background()
 	dir := t.TempDir()
 
