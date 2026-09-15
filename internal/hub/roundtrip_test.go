@@ -293,3 +293,24 @@ func TestRemote_ReconnectsAndResumesTheStream(t *testing.T) {
 		t.Error("the ring still held those bytes, so the resume must not report a gap")
 	}
 }
+
+func TestRemote_ReserveComesFromTheDaemon(t *testing.T) {
+	host := newTestHost(t, nil)
+	addr, _ := serveHost(t, host)
+	r := dialTest(t, addr, nil)
+
+	reserved, err := r.Reserve()
+	if err != nil {
+		t.Fatalf("Reserve: %v", err)
+	}
+	id, err := r.Create(CreateSpec{ID: reserved, Argv: sleepArgv(), Dir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if id != reserved {
+		t.Errorf("Create used id %d, want the reserved %d", id, reserved)
+	}
+	if _, err := host.Get(reserved); err != nil {
+		t.Errorf("the daemon does not have session %d: %v", reserved, err)
+	}
+}

@@ -104,6 +104,17 @@ func (h *Embedded) Info() Info {
 	}
 }
 
+// Reserve implements Host.
+func (h *Embedded) Reserve() (int, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return 0, ErrClosed
+	}
+	h.nextID++
+	return h.nextID, nil
+}
+
 // Create implements Host.
 func (h *Embedded) Create(spec CreateSpec) (int, error) {
 	if spec.Rows < 5 {
@@ -121,11 +132,25 @@ func (h *Embedded) Create(spec CreateSpec) (int, error) {
 		h.mu.Unlock()
 		return 0, ErrClosed
 	}
-	h.nextID++
-	id := h.nextID
+	id := spec.ID
+	if id == 0 {
+		h.nextID++
+		id = h.nextID
+	} else if id > h.nextID {
+		// A reserved ID that came from somewhere else still has to move the
+		// counter, or the next allocation would hand out the same number.
+		h.nextID = id
+	}
+	if _, taken := h.sessions[id]; taken {
+		h.mu.Unlock()
+		return 0, fmt.Errorf("hub: session %d already exists", id)
+	}
 	h.mu.Unlock()
 
 	sess := terminal.NewSession(id, spec.Rows, spec.Cols)
+	if spec.ResumeID != "" {
+		sess.SetResumeID(spec.ResumeID)
+	}
 	if err := sess.Start(spec.Argv, spec.Dir, spec.Env); err != nil {
 		return 0, fmt.Errorf("hub: start session %d: %w", id, err)
 	}
@@ -256,6 +281,55 @@ func (h *Embedded) Release() {
 		}(id)
 	}
 	wg.Wait()
+}
+
+// AdoptForTest registers a session object the caller built itself, without
+// starting a process. It exists for tests that need a session in a known state
+// (a frozen screen, a given activity) and must not be used in production: a
+// session adopted this way has no output pump and no exit watcher.
+func (h *Embedded) AdoptForTest(id int, sess *terminal.Session) {
+	m := &managed{
+		sess:      sess,
+		ring:      NewRing(h.ringBytes),
+		spec:      CreateSpec{ID: id},
+		startedAt: time.Now(),
+	}
+	h.mu.Lock()
+	h.sessions[id] = m
+	if id > h.nextID {
+		h.nextID = id
+	}
+	h.mu.Unlock()
+}
+
+// Session returns the underlying terminal session.
+//
+// It is a transitional hatch for code that still reaches into the session
+// object directly (the activity scan, suspend, the hook reader). Those move
+// behind the Host interface in a later phase; until then this is what keeps
+// the store swappable without rewriting all of them at once. A Remote host
+// cannot answer it, which is the point: every remaining caller is a caller
+// that would break against the daemon.
+func (h *Embedded) Session(id int) *terminal.Session {
+	m, err := h.lookup(id)
+	if err != nil {
+		return nil
+	}
+	return m.sess
+}
+
+// Sessions returns every session object, paired with its ID. Transitional,
+// like Session.
+func (h *Embedded) Sessions() (ids []int, sessions []*terminal.Session) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ids = make([]int, 0, len(h.sessions))
+	sessions = make([]*terminal.Session, 0, len(h.sessions))
+	for id, m := range h.sessions {
+		ids = append(ids, id)
+		sessions = append(sessions, m.sess)
+	}
+	return ids, sessions
 }
 
 func (h *Embedded) lookup(id int) (*managed, error) {

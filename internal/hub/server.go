@@ -151,6 +151,24 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/v1/sessions/")
 	idPart, action, _ := strings.Cut(rest, "/")
+
+	// "reserve" sits under /v1/sessions/ but names an operation, not a
+	// session. It is spelled this way so the whole session API stays under one
+	// prefix and one guard.
+	if idPart == "reserve" && action == "" {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		id, err := s.host.Reserve()
+		if err != nil {
+			writeHostError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"id": id})
+		return
+	}
+
 	id, err := strconv.Atoi(idPart)
 	if err != nil {
 		http.Error(w, "bad session id", http.StatusBadRequest)

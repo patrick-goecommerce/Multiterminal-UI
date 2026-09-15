@@ -180,10 +180,12 @@ func (a *AppService) FinishWorktree(sessionId int) {
 		}
 		a.mu.Unlock()
 
-		// Kill the whole tree BEFORE Close (spec 5.2), then close synchronously.
+		// Kill the whole tree BEFORE Close (spec 5.2), then close
+		// synchronously. The host does both and forgets the session; a retry
+		// that lands here again finds no session and skips straight to the
+		// cleanup, which is what the phase table expects (spec 4.3).
 		if sess != nil {
-			killProcessTree(sess.Pid())
-			sess.Close()
+			_ = a.host.Close(sessionId)
 		}
 		if err := cleanupWorktree(root, cp.WorktreePath, cp.Branch); err != nil {
 			// Merge is through and the marker persists — only the worktree
@@ -197,7 +199,6 @@ func (a *AppService) FinishWorktree(sessionId int) {
 		_ = deleteFinishMarker(finishMarkerPath(), cp.WorktreePath)
 		a.mu.Lock()
 		delete(a.finishStates, sessionId)
-		a.dropSessionLocked(sessionId)
 		delete(a.queues, sessionId)
 		a.mu.Unlock()
 		if a.app != nil {

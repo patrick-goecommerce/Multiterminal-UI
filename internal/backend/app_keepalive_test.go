@@ -10,7 +10,7 @@ import (
 // without spawning a real PTY process.
 func fakeSession(a *AppService, id int, mode string) {
 	a.mu.Lock()
-	a.sessions[id] = terminal.NewSession(id, 24, 80)
+	a.host.AdoptForTest(id, terminal.NewSession(id, 24, 80))
 	a.sessionMode[id] = mode
 	a.mu.Unlock()
 }

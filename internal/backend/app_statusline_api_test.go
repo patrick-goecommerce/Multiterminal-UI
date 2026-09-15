@@ -10,9 +10,9 @@ import (
 )
 
 func TestHandleStatuslineUpdatesSession(t *testing.T) {
-	a := &AppService{sessions: map[int]*terminal.Session{}}
+	a := &AppService{host: testHost(map[int]*terminal.Session{})}
 	sess := terminal.NewSession(5, 24, 80)
-	a.sessions[5] = sess
+	a.host.AdoptForTest(5, sess)
 
 	body := `{"sessionId":5,"payload":{"cost":{"total_cost_usd":1.23},` +
 		`"context_window":{"used_percentage":40},"model":{"display_name":"Opus 4.8"}}}`
@@ -34,7 +34,7 @@ func TestHandleStatuslineUpdatesSession(t *testing.T) {
 }
 
 func TestHandleStatuslineUnknownSessionNoCrash(t *testing.T) {
-	a := &AppService{sessions: map[int]*terminal.Session{}}
+	a := &AppService{host: testHost(map[int]*terminal.Session{})}
 	req := httptest.NewRequest("POST", "/api/statusline", strings.NewReader(`{"sessionId":99,"payload":{}}`))
 	rec := httptest.NewRecorder()
 	a.handleStatusline(rec, req) // must not panic
@@ -44,7 +44,7 @@ func TestHandleStatuslineUnknownSessionNoCrash(t *testing.T) {
 }
 
 func TestHandleStatuslineGarbageBodyIsBadRequest(t *testing.T) {
-	a := &AppService{sessions: map[int]*terminal.Session{}}
+	a := &AppService{host: testHost(map[int]*terminal.Session{})}
 	req := httptest.NewRequest("POST", "/api/statusline", strings.NewReader(`not json`))
 	rec := httptest.NewRecorder()
 	a.handleStatusline(rec, req)
@@ -54,7 +54,7 @@ func TestHandleStatuslineGarbageBodyIsBadRequest(t *testing.T) {
 }
 
 func TestHandleStatuslineNonPostReturns405(t *testing.T) {
-	a := &AppService{sessions: map[int]*terminal.Session{}}
+	a := &AppService{host: testHost(map[int]*terminal.Session{})}
 	req := httptest.NewRequest("GET", "/api/statusline", nil)
 	rec := httptest.NewRecorder()
 	a.handleStatusline(rec, req)
@@ -65,9 +65,9 @@ func TestHandleStatuslineNonPostReturns405(t *testing.T) {
 
 func TestHandleStatuslineFractionalPercentageTruncates(t *testing.T) {
 	// float64 40.9 must truncate to int 40 (not round to 41).
-	a := &AppService{sessions: map[int]*terminal.Session{}}
+	a := &AppService{host: testHost(map[int]*terminal.Session{})}
 	sess := terminal.NewSession(7, 24, 80)
-	a.sessions[7] = sess
+	a.host.AdoptForTest(7, sess)
 
 	body := `{"sessionId":7,"payload":{"context_window":{"used_percentage":40.9}}}`
 	req := httptest.NewRequest("POST", "/api/statusline", strings.NewReader(body))

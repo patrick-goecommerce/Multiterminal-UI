@@ -355,3 +355,54 @@ func first(b []byte, n int) string {
 	}
 	return string(b[:n])
 }
+
+// Reserve exists so the caller can build an environment that names the session
+// before the session is there to name.
+func TestEmbedded_ReserveThenCreateKeepsTheID(t *testing.T) {
+	h := newTestHost(t, nil)
+
+	reserved, err := h.Reserve()
+	if err != nil {
+		t.Fatalf("Reserve: %v", err)
+	}
+	if reserved == 0 {
+		t.Fatal("Reserve returned 0, which means \"allocate one\" to Create")
+	}
+
+	id, err := h.Create(CreateSpec{ID: reserved, Argv: sleepArgv(), Dir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if id != reserved {
+		t.Errorf("Create used id %d, want the reserved %d", id, reserved)
+	}
+}
+
+// A reservation must not be handed out again by the next allocation.
+func TestEmbedded_ReserveIsNotReused(t *testing.T) {
+	h := newTestHost(t, nil)
+
+	reserved, err := h.Reserve()
+	if err != nil {
+		t.Fatalf("Reserve: %v", err)
+	}
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if id == reserved {
+		t.Errorf("Create allocated %d, which was already reserved", id)
+	}
+}
+
+func TestEmbedded_CreateRefusesAnIDThatIsInUse(t *testing.T) {
+	h := newTestHost(t, nil)
+
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := h.Create(CreateSpec{ID: id, Argv: sleepArgv(), Dir: t.TempDir()}); err == nil {
+		t.Error("creating a second session with a live ID succeeded")
+	}
+}

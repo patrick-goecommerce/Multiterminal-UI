@@ -3,8 +3,6 @@ package backend
 import (
 	"testing"
 	"time"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // closeSpawnedSessions synchronously closes every session the app spawned so
@@ -14,8 +12,8 @@ func closeSpawnedSessions(t *testing.T, app *AppService) {
 	t.Helper()
 	t.Cleanup(func() {
 		app.mu.Lock()
-		sessions := make([]*terminal.Session, 0, len(app.sessions))
-		for _, s := range app.sessions {
+		sessions := app.liveSessions()
+		for _, s := range sessions {
 			sessions = append(sessions, s)
 		}
 		app.mu.Unlock()

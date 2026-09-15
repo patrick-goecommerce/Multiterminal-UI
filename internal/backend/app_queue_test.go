@@ -3,8 +3,6 @@ package backend
 import (
 	"strings"
 	"testing"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // newTestApp builds an AppService with every map initialised.
@@ -15,7 +13,7 @@ import (
 // failing — that cost ten minutes per run until it was found (issue #186).
 func newTestApp() *AppService {
 	return &AppService{
-		sessions:      make(map[int]*terminal.Session),
+		host:          testHost(nil),
 		launches:      make(map[int]launchSpec),
 		sessionMode:   make(map[int]string),
 		queues:        make(map[int]*sessionQueue),

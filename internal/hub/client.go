@@ -109,6 +109,17 @@ func (r *Remote) WaitReady(timeout time.Duration) bool {
 	}
 }
 
+// Reserve implements Host.
+func (r *Remote) Reserve() (int, error) {
+	var out struct {
+		ID int `json:"id"`
+	}
+	if err := r.call(http.MethodPost, "/v1/sessions/reserve", nil, &out); err != nil {
+		return 0, err
+	}
+	return out.ID, nil
+}
+
 // Create implements Host.
 func (r *Remote) Create(spec CreateSpec) (int, error) {
 	var out struct {

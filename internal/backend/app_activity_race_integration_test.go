@@ -30,8 +30,8 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	sess.Screen.Write([]byte("$ "))
 
 	app := &AppService{
-		sessions: map[int]*terminal.Session{sessID: sess},
-		queues:   map[int]*sessionQueue{},
+		host:   testHost(map[int]*terminal.Session{sessID: sess}),
+		queues: map[int]*sessionQueue{},
 	}
 
 	// The real wiring from app_hooks_setup.go: the hook callback only repaints

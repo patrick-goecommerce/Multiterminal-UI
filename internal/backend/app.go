@@ -12,7 +12,7 @@ import (
 	"sync"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -27,19 +27,21 @@ type sessionIssue struct {
 // AppService is the main Wails application struct. All exported methods are
 // automatically available to the frontend via generated TypeScript bindings.
 type AppService struct {
-	app                *application.App           // Wails v3 application instance
-	mainWindow         *application.WebviewWindow // main window reference for dialogs
-	serviceCtx         context.Context            // context from ServiceStartup
-	cfg                config.Config
-	health             config.HealthState
-	sessions           map[int]*terminal.Session
+	app        *application.App           // Wails v3 application instance
+	mainWindow *application.WebviewWindow // main window reference for dialogs
+	serviceCtx context.Context            // context from ServiceStartup
+	cfg        config.Config
+	health     config.HealthState
+	// host owns the terminal sessions. It is a hub.Embedded today, which runs
+	// them in this process exactly as the map it replaced did; swapping it for
+	// a hub.Remote is what makes the sessions outlive this process.
+	host               *hub.Embedded
 	launches           map[int]launchSpec // how each session was started (for ResumeSession)
 	queues             map[int]*sessionQueue
 	finishStates       map[int]*finishState  // active worktree-finish flows, keyed by session ID
 	sessionIssues      map[int]*sessionIssue // issue linked to each session
 	mu                 sync.Mutex
 	finishMu           sync.Mutex // serializes merge+cleanup globally (index.lock, TOCTOU)
-	nextID             int
 	cancelAll          context.CancelFunc
 	batcher            *outputBatcher
 	batcherOnce        sync.Once
@@ -91,7 +93,6 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 	svc := &AppService{
 		app:           app,
 		cfg:           cfg,
-		sessions:      make(map[int]*terminal.Session),
 		launches:      make(map[int]launchSpec),
 		queues:        make(map[int]*sessionQueue),
 		finishStates:  make(map[int]*finishState),
@@ -105,6 +106,11 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		winMgr:        newWindowManager(app),
 		safeMode:      safeMode,
 	}
+	svc.host = hub.NewEmbedded(hub.Options{
+		Version:  Version,
+		KillTree: killProcessTree,
+		Sink:     hub.SinkFunc(svc.onHostEvent),
+	})
 	if safeMode {
 		svc.sessionBackup = config.LoadSession() // may be nil — that's fine
 		log.Println("[SafeMode] active: sessions will not be loaded or saved")
@@ -170,11 +176,11 @@ func (a *AppService) ServiceShutdown() error {
 	if a.cancelAll != nil {
 		a.cancelAll()
 	}
-	sessions := a.liveSessions()
-
-	for _, s := range sessions {
-		s.Close()
-	}
+	// The host owns the sessions, so releasing it ends them. It also kills
+	// each process tree first, which the old shutdown loop did not: Close only
+	// ends the root process, and the descendants it leaves behind hold handles
+	// inside worktrees (#185).
+	a.host.Release()
 
 	// Withdraw the published loopback ports so no helper process dials a port
 	// this instance no longer owns.
@@ -215,10 +221,14 @@ type SessionInfo struct {
 // to the frontend. Returns the session ID.
 // mode must be "shell", "claude", "claude-auto", or "claude-yolo"; it controls env injection.
 func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int, mode string) int {
-	a.mu.Lock()
-	a.nextID++
-	id := a.nextID
-	a.mu.Unlock()
+	// The ID has to exist before the environment can, because part of that
+	// environment names the session: the hook and the statusline shim report
+	// back with MULTITERMINAL_SESSION_ID.
+	id, err := a.host.Reserve()
+	if err != nil {
+		log.Printf("[CreateSession] ERROR: reserve: %v", err)
+		return -1
+	}
 
 	if dir == "" {
 		dir, _ = os.Getwd()
@@ -241,42 +251,35 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 	// pane gets an identical environment (app_suspend.go).
 	env := a.sessionEnv(id, dir, mode)
 
-	sess := terminal.NewSession(id, rows, cols)
-	// The Claude session UUID lives only in the argv the frontend built. Parse
-	// it here so a pane can be resumed even before the first hook event; the
+	spec := hub.CreateSpec{
+		ID: id, Argv: argv, Dir: dir, Rows: rows, Cols: cols, Mode: mode, Env: env,
+	}
+	// The Claude session UUID lives only in the argv the frontend built. Pass
+	// it in so a pane can be resumed even before the first hook event; the
 	// hook-reported id overwrites it as soon as it arrives.
 	if isClaudeMode(mode) {
-		sess.SetResumeID(claudeSessionIDFromArgv(argv))
+		spec.ResumeID = claudeSessionIDFromArgv(argv)
 	}
+
 	a.rememberLaunch(id, argv, dir, mode)
-	if err := sess.Start(argv, dir, env); err != nil {
+	if _, err := a.host.Create(spec); err != nil {
 		errMsg := fmt.Sprintf("Session start failed: %v", err)
 		log.Printf("[CreateSession] ERROR: %s", errMsg)
 		a.mu.Lock()
 		delete(a.launches, id)
 		a.mu.Unlock()
-		a.app.Event.Emit("terminal:error", TerminalErrorEvent{ID: id, Message: errMsg})
+		if a.app != nil {
+			a.app.Event.Emit("terminal:error", TerminalErrorEvent{ID: id, Message: errMsg})
+		}
 		return -1
 	}
 	log.Printf("[CreateSession] session %d started successfully", id)
 
 	a.mu.Lock()
-	a.putSessionLocked(id, sess)
 	a.sessionMode[id] = mode
 	a.mu.Unlock()
 
-	// Stream PTY output to frontend. serviceCtx is nil if CreateSession
-	// runs before ServiceStartup (e.g. scheduled tasks in tests); fall
-	// back to a non-nil context so collectOutput's select never panics.
-	streamCtx := a.serviceCtx
-	if streamCtx == nil {
-		streamCtx = context.Background()
-	}
-	go a.collectOutput(id, sess, streamCtx)
-
-	// Watch for process exit
-	go a.watchExit(id, sess)
-
+	a.streamSession(id)
 	return id
 }
 
@@ -317,30 +320,20 @@ func (a *AppService) ResizeSession(id int, rows int, cols int) {
 // after Close() completes, ensuring streamOutput drains all buffered
 // data before the session is gone.
 func (a *AppService) CloseSession(id int) {
-	sess := a.session(id)
-	if sess == nil {
+	if !a.hasSession(id) {
 		return
 	}
 	// Report "close" progress before removing the issue link
 	a.reportIssueProgress(id, progressClose, a.getSessionCost(id))
 
 	go func() {
-		// Kill the whole tree before Close(). Session.Close() calls
-		// Process.Kill(), which only ends the root process; once it is gone
-		// taskkill /T can no longer reach its descendants (see Session.Pid).
-		// The suspend and worktree-finish paths already did this — only the
-		// ordinary close did not (#185).
-		//
-		// In practice ConPTY reclaims most of the subtree on its own: a child
-		// attached to the same pseudo-console dies with it, which is why a
-		// cmd->ping tree disappears cleanly even without this call. What it
-		// catches is the rest — processes that left the console. Measured on a
-		// machine after five days of use: 4 orphans out of 142 claude/node/
-		// cmd/conhost processes, 163 MB. Small, but free to prevent.
-		killProcessTree(sess.Pid())
-		sess.Close() // blocks until process exits and readLoop closes RawOutputCh
+		// The host kills the whole process tree before closing and blocks
+		// until the process is gone, so the output pump has drained first.
+		// Killing the tree matters because Close only ends the root process;
+		// once it is gone taskkill /T can no longer reach its descendants
+		// (#185).
+		_ = a.host.Close(id)
 		a.mu.Lock()
-		a.dropSessionLocked(id)
 		delete(a.launches, id)
 		delete(a.queues, id)
 		delete(a.finishStates, id)

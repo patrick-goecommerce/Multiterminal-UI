@@ -26,8 +26,8 @@ func TestHookDrivenCompletion_ReportsIssueProgressExactlyOnce(t *testing.T) {
 	sess.Screen.Write([]byte("$ "))
 
 	app := &AppService{
-		sessions: map[int]*terminal.Session{sessID: sess},
-		queues:   map[int]*sessionQueue{},
+		host:   testHost(map[int]*terminal.Session{sessID: sess}),
+		queues: map[int]*sessionQueue{},
 	}
 	var reports []issueProgressEvent
 	app.issueProgressHook = func(_ int, ev issueProgressEvent) {
@@ -74,8 +74,8 @@ func TestOnHookActivity_TriggersNoSideEffects(t *testing.T) {
 
 	sess := terminal.NewSession(sessID, 24, 80)
 	app := &AppService{
-		sessions: map[int]*terminal.Session{sessID: sess},
-		queues:   map[int]*sessionQueue{},
+		host:   testHost(map[int]*terminal.Session{sessID: sess}),
+		queues: map[int]*sessionQueue{},
 	}
 	reports := 0
 	app.issueProgressHook = func(int, issueProgressEvent) { reports++ }

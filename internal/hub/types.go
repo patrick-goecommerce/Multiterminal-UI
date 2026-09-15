@@ -42,12 +42,24 @@ type Ref struct {
 // worktree firewall, session ID) is policy that belongs to the caller, and the
 // hub must not grow a second opinion about it.
 type CreateSpec struct {
-	Argv []string `json:"argv" yaml:"argv"`
-	Dir  string   `json:"dir" yaml:"dir"`
-	Rows int      `json:"rows" yaml:"rows"`
-	Cols int      `json:"cols" yaml:"cols"`
-	Mode string   `json:"mode" yaml:"mode"`
-	Env  []string `json:"env" yaml:"env"`
+	// ID is a previously reserved session ID, or zero to allocate one now.
+	//
+	// It exists because part of the environment names the session it belongs
+	// to (MULTITERMINAL_SESSION_ID, which the hook and the statusline shim
+	// report back with), so the caller has to know the ID before it can build
+	// Env. A callback would solve that locally and not at all over the wire,
+	// hence Reserve plus this field.
+	ID int `json:"id,omitempty" yaml:"id,omitempty"`
+	// ResumeID is the agent's own conversation ID, when the caller already
+	// knows it from argv. Setting it here rather than after the session starts
+	// keeps it from racing the first hook event.
+	ResumeID string   `json:"resume_id,omitempty" yaml:"resume_id,omitempty"`
+	Argv     []string `json:"argv" yaml:"argv"`
+	Dir      string   `json:"dir" yaml:"dir"`
+	Rows     int      `json:"rows" yaml:"rows"`
+	Cols     int      `json:"cols" yaml:"cols"`
+	Mode     string   `json:"mode" yaml:"mode"`
+	Env      []string `json:"env" yaml:"env"`
 }
 
 // SessionSummary is what a client learns about a session without attaching.

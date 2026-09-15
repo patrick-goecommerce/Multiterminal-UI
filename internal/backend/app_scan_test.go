@@ -61,8 +61,8 @@ func TestScan_TracksOSCTitleChange(t *testing.T) {
 	sess.Screen.Write([]byte("\x1b]2;my-pane\x07"))
 
 	app := &AppService{
-		sessions: map[int]*terminal.Session{7: sess},
-		queues:   map[int]*sessionQueue{},
+		host:   testHost(map[int]*terminal.Session{7: sess}),
+		queues: map[int]*sessionQueue{},
 	}
 
 	cleanupActivityTracking(7) // start from a clean tracking state
@@ -103,8 +103,8 @@ func TestScanGuard_StaleActiveHookFallsBackToScreen(t *testing.T) {
 	sess.SetLastOutputAtForTest(time.Now().Add(-2 * time.Second))
 
 	app := &AppService{
-		sessions: map[int]*terminal.Session{9: sess},
-		queues:   map[int]*sessionQueue{},
+		host:   testHost(map[int]*terminal.Session{9: sess}),
+		queues: map[int]*sessionQueue{},
 	}
 
 	cleanupActivityTracking(9)
@@ -149,8 +149,8 @@ func TestScanGuard_HookActivityNotOverwrittenByScan(t *testing.T) {
 
 	// Build a minimal AppService with this session
 	app := &AppService{
-		sessions: map[int]*terminal.Session{42: sess},
-		queues:   map[int]*sessionQueue{},
+		host:   testHost(map[int]*terminal.Session{42: sess}),
+		queues: map[int]*sessionQueue{},
 	}
 
 	// Run one scan cycle

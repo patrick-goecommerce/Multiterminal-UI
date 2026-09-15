@@ -20,7 +20,7 @@ func registerSession(a *AppService, id int, mode string, argv []string, dir stri
 	sess := terminal.NewSession(id, 24, 80)
 	sess.SetSpawnForTest(func([]string, string, []string) error { return nil })
 	a.mu.Lock()
-	a.sessions[id] = sess
+	a.host.AdoptForTest(id, sess)
 	a.sessionMode[id] = mode
 	a.launches[id] = launchSpec{argv: argv, dir: dir, mode: mode}
 	a.mu.Unlock()

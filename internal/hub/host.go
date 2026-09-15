@@ -17,6 +17,11 @@ type Host interface {
 	// Info describes this Host.
 	Info() Info
 
+	// Reserve allocates a session ID without starting anything. Use it when
+	// the environment has to name the session before the session can exist;
+	// pass the result back as CreateSpec.ID.
+	Reserve() (int, error)
+
 	// Create starts a session and returns its ID.
 	Create(spec CreateSpec) (int, error)
 
@@ -68,4 +73,11 @@ func (s *Subscription) Close() {
 	if s != nil && s.closeOnce != nil {
 		s.closeOnce()
 	}
+}
+
+// NewSubscriptionForTest wraps a channel as a Subscription so a consumer can be
+// driven with chunks a test wrote by hand, including the truncation case that
+// is otherwise hard to provoke.
+func NewSubscriptionForTest(ch <-chan Chunk) *Subscription {
+	return &Subscription{C: ch}
 }
