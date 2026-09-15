@@ -21,8 +21,9 @@ type Server struct {
 	host  Host
 	token string
 
-	mu      sync.Mutex
-	clients map[*streamClient]struct{}
+	mu       sync.Mutex
+	clients  map[*streamClient]struct{}
+	shutdown func()
 }
 
 // NewServer wraps a Host. token must be the value published in the discovery
@@ -41,8 +42,44 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/hub", s.guard(s.handleHub))
 	mux.HandleFunc("/v1/sessions", s.guard(s.handleSessions))
 	mux.HandleFunc("/v1/sessions/", s.guard(s.handleSession))
+	mux.HandleFunc("/v1/hub/shutdown", s.guard(s.handleShutdown))
 	mux.HandleFunc("/v1/stream", s.guard(s.handleStream))
 	return mux
+}
+
+// SetShutdown registers what POST /v1/hub/shutdown does. Without it the
+// endpoint answers 501: a daemon that cannot be asked to stop is better than
+// one that pretends it stopped.
+func (s *Server) SetShutdown(fn func()) {
+	s.mu.Lock()
+	s.shutdown = fn
+	s.mu.Unlock()
+}
+
+// Clients reports how many clients currently hold a stream socket. The daemon
+// uses it to decide whether anyone is still watching.
+func (s *Server) Clients() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.clients)
+}
+
+func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.mu.Lock()
+	fn := s.shutdown
+	s.mu.Unlock()
+	if fn == nil {
+		http.Error(w, "shutdown not supported", http.StatusNotImplemented)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	// Answer first: the caller asked the daemon to stop, and stopping tears
+	// down this very connection.
+	go fn()
 }
 
 // Sink returns an EventSink that fans Host events out to every connected

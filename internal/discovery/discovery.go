@@ -44,6 +44,9 @@ const (
 	ServiceFocus Service = "focus"
 	// ServiceMCP is the local agent-control MCP server.
 	ServiceMCP Service = "mcp"
+	// ServiceHub is the session daemon (cmd/mtuid), which owns the PTYs and
+	// outlives any one client.
+	ServiceHub Service = "hub"
 )
 
 // EnvDirOverride redirects the runtime directory. Set by tests; also a usable
