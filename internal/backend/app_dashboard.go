@@ -42,7 +42,8 @@ func (a *AppService) GetDashboardStats() DashboardStats {
 	var totalCost float64
 	totalSessions := 0
 
-	for _, sess := range a.sessions {
+	for _, entry := range a.sessionEntriesLocked() {
+		sess := entry.Session
 		dir := sess.Dir
 		if dir == "" {
 			continue
@@ -143,8 +144,10 @@ func (a *AppService) GetDashboardPanes() []DashboardPane {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	panes := make([]DashboardPane, 0, len(a.sessions))
-	for id, sess := range a.sessions {
+	entries := a.sessionEntriesLocked()
+	panes := make([]DashboardPane, 0, len(entries))
+	for _, entry := range entries {
+		id, sess := entry.ID, entry.Session
 		activity := activityString(sess.GetActivity())
 		running := sess.IsRunning()
 

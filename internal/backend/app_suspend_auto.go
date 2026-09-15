@@ -118,14 +118,7 @@ func (a *AppService) suspendIdleSessions(now time.Time) {
 		return
 	}
 
-	a.mu.Lock()
-	ids := make([]int, 0, len(a.sessions))
-	sessions := make([]*terminal.Session, 0, len(a.sessions))
-	for id, s := range a.sessions {
-		ids = append(ids, id)
-		sessions = append(sessions, s)
-	}
-	a.mu.Unlock()
+	ids, sessions := a.liveSessionsByID()
 
 	for i, sess := range sessions {
 		id := ids[i]

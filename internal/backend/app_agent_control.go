@@ -120,10 +120,7 @@ func (a *AppService) SpawnAgentSession(tool, dir, model, prompt string) (int, er
 
 // SendAgentInput queues text as the next prompt for a running session.
 func (a *AppService) SendAgentInput(sessionID int, text string) error {
-	a.mu.Lock()
-	_, exists := a.sessions[sessionID]
-	a.mu.Unlock()
-	if !exists {
+	if !a.hasSession(sessionID) {
 		return fmt.Errorf("session %d not found", sessionID)
 	}
 	a.AddToQueue(sessionID, text)
@@ -135,10 +132,8 @@ func (a *AppService) SendAgentInput(sessionID int, text string) error {
 // This is the only way an MCP-driven agent can see what a delegated session
 // actually produced — list_sessions only reports run state.
 func (a *AppService) ReadAgentSessionOutput(sessionID int) (string, error) {
-	a.mu.Lock()
-	sess, exists := a.sessions[sessionID]
-	a.mu.Unlock()
-	if !exists {
+	sess := a.session(sessionID)
+	if sess == nil {
 		return "", fmt.Errorf("session %d not found", sessionID)
 	}
 	return sess.Screen.PlainText(), nil
@@ -146,10 +141,7 @@ func (a *AppService) ReadAgentSessionOutput(sessionID int) (string, error) {
 
 // CloseAgentSession closes a running session. reason is logged only.
 func (a *AppService) CloseAgentSession(sessionID int, reason string) error {
-	a.mu.Lock()
-	_, exists := a.sessions[sessionID]
-	a.mu.Unlock()
-	if !exists {
+	if !a.hasSession(sessionID) {
 		return fmt.Errorf("session %d not found", sessionID)
 	}
 	log.Printf("[agent-control] closing session %d: %s", sessionID, reason)
@@ -168,7 +160,7 @@ func (a *AppService) ListAgentSessions() []AgentSessionInfo {
 	defer a.mu.Unlock()
 	result := make([]AgentSessionInfo, 0, len(a.agentSessions))
 	for id, info := range a.agentSessions {
-		if a.sessions[id] == nil {
+		if a.sessionLocked(id) == nil {
 			continue
 		}
 		info.Running = true

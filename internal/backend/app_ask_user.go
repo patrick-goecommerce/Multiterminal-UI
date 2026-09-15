@@ -20,9 +20,7 @@ type AskUserQuestion struct {
 // CheckAskUser analyzes a session's screen buffer for pending questions.
 // Called when activity transitions to waitingPermission or waitingAnswer.
 func (a *AppService) CheckAskUser(sessionID int) *AskUserQuestion {
-	a.mu.Lock()
-	sess := a.sessions[sessionID]
-	a.mu.Unlock()
+	sess := a.session(sessionID)
 
 	if sess == nil {
 		return nil
@@ -57,9 +55,7 @@ func (a *AppService) CheckAskUser(sessionID int) *AskUserQuestion {
 
 // AnswerAskUser sends a response to a session that is waiting for input.
 func (a *AppService) AnswerAskUser(sessionID int, answer string) error {
-	a.mu.Lock()
-	sess := a.sessions[sessionID]
-	a.mu.Unlock()
+	sess := a.session(sessionID)
 
 	if sess == nil {
 		return nil

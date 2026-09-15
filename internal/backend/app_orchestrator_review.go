@@ -274,9 +274,7 @@ func (a *AppService) startReviewPipeline(card *KanbanCard, dir string, state *Ka
 func (a *AppService) waitForReviewResult(sessionID int) bool {
 	for i := 0; i < 120; i++ { // max 10 minutes (120 * 5s)
 		time.Sleep(5 * time.Second)
-		a.mu.Lock()
-		sess := a.sessions[sessionID]
-		a.mu.Unlock()
+		sess := a.session(sessionID)
 		if sess == nil {
 			return false
 		}

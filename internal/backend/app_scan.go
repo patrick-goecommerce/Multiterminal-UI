@@ -35,9 +35,7 @@ var (
 // scanInterval returns the scan tick duration based on the number of active sessions.
 // More sessions → slower ticks to reduce overhead.
 func (a *AppService) scanInterval() time.Duration {
-	a.mu.Lock()
-	n := len(a.sessions)
-	a.mu.Unlock()
+	n := a.sessionCount()
 	switch {
 	case n <= 3:
 		return 500 * time.Millisecond
@@ -99,14 +97,7 @@ func cleanupActivityTracking(id int) {
 
 // scanAllSessions checks each session for activity and token updates.
 func (a *AppService) scanAllSessions() {
-	a.mu.Lock()
-	ids := make([]int, 0, len(a.sessions))
-	sessions := make([]*terminal.Session, 0, len(a.sessions))
-	for id, s := range a.sessions {
-		ids = append(ids, id)
-		sessions = append(sessions, s)
-	}
-	a.mu.Unlock()
+	ids, sessions := a.liveSessionsByID()
 
 	for i, sess := range sessions {
 		id := ids[i]

@@ -27,14 +27,12 @@ func (a *AppService) scheduleLoop(ctx context.Context) {
 // checkSchedules scans all known project directories for due scheduled tasks.
 func (a *AppService) checkSchedules() {
 	// Collect unique project directories from active sessions
-	a.mu.Lock()
 	dirs := make(map[string]bool)
-	for _, sess := range a.sessions {
-		if sess.Dir != "" {
-			dirs[sess.Dir] = true
+	for _, sess := range a.liveSessions() {
+		if dir := sess.GetDir(); dir != "" {
+			dirs[dir] = true
 		}
 	}
-	a.mu.Unlock()
 
 	now := time.Now()
 	for dir := range dirs {
@@ -133,9 +131,7 @@ func (a *AppService) executeScheduledTask(task ScheduledTask, dir string) {
 	// Send the prompt after startup delay
 	go func() {
 		time.Sleep(2 * time.Second)
-		a.mu.Lock()
-		sess := a.sessions[sessionID]
-		a.mu.Unlock()
+		sess := a.session(sessionID)
 		if sess != nil {
 			sess.Write([]byte(task.Prompt + "\r"))
 			log.Printf("[scheduler] sent prompt to session %d for task %q", sessionID, task.Name)

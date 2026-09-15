@@ -170,12 +170,7 @@ func (a *AppService) ServiceShutdown() error {
 	if a.cancelAll != nil {
 		a.cancelAll()
 	}
-	a.mu.Lock()
-	sessions := make([]*terminal.Session, 0, len(a.sessions))
-	for _, s := range a.sessions {
-		sessions = append(sessions, s)
-	}
-	a.mu.Unlock()
+	sessions := a.liveSessions()
 
 	for _, s := range sessions {
 		s.Close()
@@ -266,7 +261,7 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 	log.Printf("[CreateSession] session %d started successfully", id)
 
 	a.mu.Lock()
-	a.sessions[id] = sess
+	a.putSessionLocked(id, sess)
 	a.sessionMode[id] = mode
 	a.mu.Unlock()
 
@@ -287,9 +282,7 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 
 // WriteToSession sends raw input data (base64-encoded) to a session's PTY.
 func (a *AppService) WriteToSession(id int, b64data string) {
-	a.mu.Lock()
-	sess := a.sessions[id]
-	a.mu.Unlock()
+	sess := a.session(id)
 	if sess == nil {
 		return
 	}
@@ -312,9 +305,7 @@ func (a *AppService) WriteToSession(id int, b64data string) {
 
 // ResizeSession updates the PTY and screen buffer dimensions.
 func (a *AppService) ResizeSession(id int, rows int, cols int) {
-	a.mu.Lock()
-	sess := a.sessions[id]
-	a.mu.Unlock()
+	sess := a.session(id)
 	if sess == nil {
 		return
 	}
@@ -326,9 +317,7 @@ func (a *AppService) ResizeSession(id int, rows int, cols int) {
 // after Close() completes, ensuring streamOutput drains all buffered
 // data before the session is gone.
 func (a *AppService) CloseSession(id int) {
-	a.mu.Lock()
-	sess := a.sessions[id]
-	a.mu.Unlock()
+	sess := a.session(id)
 	if sess == nil {
 		return
 	}
@@ -351,7 +340,7 @@ func (a *AppService) CloseSession(id int) {
 		killProcessTree(sess.Pid())
 		sess.Close() // blocks until process exits and readLoop closes RawOutputCh
 		a.mu.Lock()
-		delete(a.sessions, id)
+		a.dropSessionLocked(id)
 		delete(a.launches, id)
 		delete(a.queues, id)
 		delete(a.finishStates, id)

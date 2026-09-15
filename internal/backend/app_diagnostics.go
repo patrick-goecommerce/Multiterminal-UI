@@ -43,9 +43,7 @@ const hookFileWarnThreshold = 200
 // RuntimeStats returns the current counters. Safe to call from the frontend on
 // a timer; nothing here allocates or locks anything expensive.
 func (a *AppService) RuntimeStats() RuntimeStats {
-	a.mu.Lock()
-	sessions := len(a.sessions)
-	a.mu.Unlock()
+	sessions := a.sessionCount()
 
 	return RuntimeStats{
 		Goroutines:     runtime.NumGoroutine(),

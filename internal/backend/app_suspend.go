@@ -135,7 +135,7 @@ func resumeIDFor(sess *terminal.Session) string {
 // taskkill takes 100–300 ms and must never run under a lock.
 func (a *AppService) SuspendSession(id int) error {
 	a.mu.Lock()
-	sess := a.sessions[id]
+	sess := a.sessionLocked(id)
 	mode := a.sessionMode[id]
 	a.mu.Unlock()
 	if sess == nil {
@@ -187,7 +187,7 @@ func (a *AppService) completeSuspend(id int, sess *terminal.Session) {
 // the same session object. Calling it on an awake pane is a no-op.
 func (a *AppService) ResumeSession(id int) error {
 	a.mu.Lock()
-	sess := a.sessions[id]
+	sess := a.sessionLocked(id)
 	spec := a.launches[id]
 	a.mu.Unlock()
 	if sess == nil {
@@ -225,7 +225,7 @@ func (a *AppService) ResumeSession(id int) error {
 // IsSessionSuspended reports whether a pane is currently asleep.
 func (a *AppService) IsSessionSuspended(id int) bool {
 	a.mu.Lock()
-	sess := a.sessions[id]
+	sess := a.sessionLocked(id)
 	a.mu.Unlock()
 	return sess != nil && sess.IsSuspended()
 }
@@ -239,9 +239,7 @@ func (a *AppService) IsSessionSuspended(id int) bool {
 func (a *AppService) wakeSession(id int) {
 	go func() {
 		for i := 0; i < wakeSettleAttempts; i++ {
-			a.mu.Lock()
-			sess := a.sessions[id]
-			a.mu.Unlock()
+			sess := a.session(id)
 			if sess == nil {
 				return
 			}

@@ -12,9 +12,7 @@ import (
 
 // coalesceDelay returns the scan tick delay — kept for scanLoop reuse.
 func (a *AppService) coalesceDelay() time.Duration {
-	a.mu.Lock()
-	n := len(a.sessions)
-	a.mu.Unlock()
+	n := a.sessionCount()
 	switch {
 	case n <= 2:
 		return 6 * time.Millisecond

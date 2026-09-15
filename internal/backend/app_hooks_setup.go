@@ -75,7 +75,7 @@ func (a *AppService) setupHooks(ctx context.Context) {
 		func(mtID int) *terminal.Session {
 			a.mu.Lock()
 			defer a.mu.Unlock()
-			return a.sessions[mtID]
+			return a.sessionLocked(mtID)
 		},
 		a.onHookActivity,
 	)

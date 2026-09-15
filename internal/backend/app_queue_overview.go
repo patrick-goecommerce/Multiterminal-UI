@@ -20,7 +20,7 @@ func (a *AppService) GetAllQueues() []QueueOverviewItem {
 		if q == nil || len(q.items) == 0 {
 			continue
 		}
-		sess := a.sessions[id]
+		sess := a.sessionLocked(id)
 		if sess == nil {
 			continue
 		}

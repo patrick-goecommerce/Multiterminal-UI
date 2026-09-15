@@ -145,7 +145,7 @@ func (a *AppService) FinishWorktree(sessionId int) {
 	}
 	st.Phase = "merging"
 	cp := *st
-	sess := a.sessions[sessionId]
+	sess := a.sessionLocked(sessionId)
 	a.mu.Unlock()
 
 	go func() {
@@ -197,7 +197,7 @@ func (a *AppService) FinishWorktree(sessionId int) {
 		_ = deleteFinishMarker(finishMarkerPath(), cp.WorktreePath)
 		a.mu.Lock()
 		delete(a.finishStates, sessionId)
-		delete(a.sessions, sessionId)
+		a.dropSessionLocked(sessionId)
 		delete(a.queues, sessionId)
 		a.mu.Unlock()
 		if a.app != nil {

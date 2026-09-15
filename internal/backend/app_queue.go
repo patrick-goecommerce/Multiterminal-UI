@@ -161,9 +161,7 @@ func (a *AppService) processQueue(sessionId int) {
 	// would be marked "sent" without ever being delivered. Wake it instead and
 	// leave the queue untouched — the resumed pane's next "done" transition
 	// (scanAllSessions) runs processQueue again.
-	a.mu.Lock()
-	suspendCandidate := a.sessions[sessionId]
-	a.mu.Unlock()
+	suspendCandidate := a.session(sessionId)
 	if suspendCandidate != nil && suspendCandidate.IsSuspendedOrSuspending() {
 		log.Printf("[queue] session %d: queued while asleep — waking up", sessionId)
 		a.wakeSession(sessionId)
@@ -199,7 +197,7 @@ func (a *AppService) processQueue(sessionId int) {
 		}
 	}
 
-	sess := a.sessions[sessionId]
+	sess := a.sessionLocked(sessionId)
 	a.mu.Unlock()
 
 	if doneItemID != 0 {

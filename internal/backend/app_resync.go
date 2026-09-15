@@ -17,9 +17,7 @@ import (
 // it gets overwritten, and everything arriving after it continues from a screen
 // both sides agree on.
 func (a *AppService) ResyncSession(id int) {
-	a.mu.Lock()
-	sess := a.sessions[id]
-	a.mu.Unlock()
+	sess := a.session(id)
 	if sess == nil {
 		return
 	}

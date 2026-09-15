@@ -161,9 +161,7 @@ func (a *AppService) pollRunningAgents(orch *orchestratorState, state *KanbanSta
 
 	changed := false
 	for cardID, sessionID := range running {
-		a.mu.Lock()
-		sess := a.sessions[sessionID]
-		a.mu.Unlock()
+		sess := a.session(sessionID)
 
 		if sess == nil {
 			// Session closed externally — treat as done
