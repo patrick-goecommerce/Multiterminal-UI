@@ -349,6 +349,7 @@ func (h *Embedded) emit(name string, payload any) {
 }
 
 func summarize(id int, m *managed) SessionSummary {
+	contextPct, model, _ := m.sess.StatuslineInfo()
 	return SessionSummary{
 		ID:           id,
 		Name:         m.sess.Name(),
@@ -359,7 +360,33 @@ func summarize(id int, m *managed) SessionSummary {
 		PID:          m.sess.Pid(),
 		StartedAt:    m.startedAt,
 		LastOutputAt: m.sess.GetLastOutputAt(),
+		Activity:     activityOf(m.sess.GetActivity()),
+		Title:        m.sess.GetTitle(),
+		Cost:         m.sess.GetTokens().TotalCost,
+		ContextPct:   contextPct,
+		Model:        model,
+		ResumeID:     m.sess.ResumeID(),
 		Offset:       m.ring.End(),
+	}
+}
+
+// activityOf maps the terminal package's numeric state onto the wire strings.
+// The numbers are an internal ordering; letting them cross a protocol boundary
+// would make a reordering change meaning silently.
+func activityOf(a terminal.ActivityState) Activity {
+	switch a {
+	case terminal.ActivityActive:
+		return ActivityActive
+	case terminal.ActivityDone:
+		return ActivityDone
+	case terminal.ActivityWaitingPermission:
+		return ActivityWaitingPermission
+	case terminal.ActivityWaitingAnswer:
+		return ActivityWaitingAnswer
+	case terminal.ActivityError:
+		return ActivityError
+	default:
+		return ActivityIdle
 	}
 }
 

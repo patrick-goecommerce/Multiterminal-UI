@@ -62,7 +62,25 @@ type CreateSpec struct {
 	Env      []string `json:"env" yaml:"env"`
 }
 
+// Activity is what a session is doing, as the agent-state detection sees it.
+// The strings match what the frontend already listens for, so a summary can be
+// handed to the UI without a second vocabulary in between.
+type Activity string
+
+const (
+	ActivityIdle              Activity = "idle"
+	ActivityActive            Activity = "active"
+	ActivityDone              Activity = "done"
+	ActivityWaitingPermission Activity = "waitingPermission"
+	ActivityWaitingAnswer     Activity = "waitingAnswer"
+	ActivityError             Activity = "error"
+)
+
 // SessionSummary is what a client learns about a session without attaching.
+//
+// It is deliberately everything a caller might want short of the screen
+// itself: every field here is a field nobody has to hold a *terminal.Session
+// to read, and holding one is what a remote client cannot do.
 type SessionSummary struct {
 	ID           int       `json:"id" yaml:"id"`
 	Name         string    `json:"name" yaml:"name"`
@@ -73,10 +91,28 @@ type SessionSummary struct {
 	PID          int       `json:"pid" yaml:"pid"`
 	StartedAt    time.Time `json:"started_at" yaml:"started_at"`
 	LastOutputAt time.Time `json:"last_output_at" yaml:"last_output_at"`
+	// Activity and the fields under it are the agent's state, not the
+	// process's: a shell pane simply stays idle.
+	Activity Activity `json:"activity" yaml:"activity"`
+	Title    string   `json:"title" yaml:"title"`
+	Cost     float64  `json:"cost" yaml:"cost"`
+	// ContextPct and Model come from the agent's own status line when it
+	// reports one; both are zero-valued otherwise.
+	ContextPct int    `json:"context_pct" yaml:"context_pct"`
+	Model      string `json:"model" yaml:"model"`
+	// ResumeID is the agent's own conversation ID, for waking it up again.
+	ResumeID string `json:"resume_id" yaml:"resume_id"`
 	// Offset is how many bytes this session has produced since it started.
 	// A client that reconnects passes the last offset it applied back to
 	// Attach and continues without a hole.
 	Offset int64 `json:"offset" yaml:"offset"`
+}
+
+// Asleep reports whether the session is suspended, or on its way there. A
+// sleeping pane has no process, so writing to it fails and waking it is the
+// only way to reach it.
+func (s SessionSummary) Asleep() bool {
+	return s.Status == StatusSuspended || s.Status == StatusSuspending
 }
 
 // Info describes a Host to a client that just connected.

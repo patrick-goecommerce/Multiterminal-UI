@@ -314,3 +314,64 @@ func TestRemote_ReserveComesFromTheDaemon(t *testing.T) {
 		t.Errorf("the daemon does not have session %d: %v", reserved, err)
 	}
 }
+
+// The screen and agent-state calls have to work over the wire too, or a
+// remote client is blind to everything but raw bytes.
+func TestRemote_ScreenAndAgentStateOverTheWire(t *testing.T) {
+	host := newTestHost(t, nil)
+	addr, _ := serveHost(t, host)
+	r := dialTest(t, addr, nil)
+
+	id, err := r.Create(CreateSpec{Argv: printArgv("screen-marker"), Dir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		text, err := r.PlainText(id)
+		if err != nil {
+			t.Fatalf("PlainText: %v", err)
+		}
+		if strings.Contains(text, "screen-marker") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("PlainText never showed the marker: %q", text)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	rows, err := r.PlainTextRows(id, 0, -1)
+	if err != nil {
+		t.Fatalf("PlainTextRows: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Error("PlainTextRows returned nothing")
+	}
+
+	if err := r.SetStatusline(id, 1.25, 42, "opus"); err != nil {
+		t.Fatalf("SetStatusline: %v", err)
+	}
+	if err := r.SetHookActivity(id, ActivityDone); err != nil {
+		t.Fatalf("SetHookActivity: %v", err)
+	}
+	if err := r.SetHookSessionID(id, "agent-uuid"); err != nil {
+		t.Fatalf("SetHookSessionID: %v", err)
+	}
+
+	summary, err := r.Get(id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if summary.Cost != 1.25 || summary.ContextPct != 42 || summary.Model != "opus" {
+		t.Errorf("statusline round trip = cost %v ctx %d model %q", summary.Cost, summary.ContextPct, summary.Model)
+	}
+	if summary.Activity != ActivityDone {
+		t.Errorf("activity = %q, want %q", summary.Activity, ActivityDone)
+	}
+
+	if err := r.ClearHookData(id); err != nil {
+		t.Fatalf("ClearHookData: %v", err)
+	}
+}

@@ -18,7 +18,7 @@ func (a *AppService) GetFirstClaudeSessionID() int {
 		if !claudeKeepAliveModes[mode] {
 			continue
 		}
-		if a.sessionLocked(id) == nil {
+		if !a.hasSession(id) {
 			continue
 		}
 		if best == -1 || id < best {

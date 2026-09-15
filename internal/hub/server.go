@@ -193,6 +193,20 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		s.handleInput(w, r, id)
 	case action == "resize" && r.Method == http.MethodPost:
 		s.handleResize(w, r, id)
+	case action == "text" && r.Method == http.MethodGet:
+		s.handleText(w, r, id)
+	case action == "statusline" && r.Method == http.MethodPost:
+		s.handleStatusline(w, r, id)
+	case action == "hook-activity" && r.Method == http.MethodPost:
+		s.handleHookActivity(w, r, id)
+	case action == "hook-session" && r.Method == http.MethodPost:
+		s.handleHookSession(w, r, id)
+	case action == "hook-session" && r.Method == http.MethodDelete:
+		if err := s.host.ClearHookData(id); err != nil {
+			writeHostError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	case action == "repaint" && r.Method == http.MethodGet:
 		painted, err := s.host.Repaint(id)
 		if err != nil {
@@ -235,6 +249,84 @@ func (s *Server) handleResize(w http.ResponseWriter, r *http.Request, id int) {
 		return
 	}
 	if err := s.host.Resize(id, body.Rows, body.Cols); err != nil {
+		writeHostError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleText answers either the whole screen or a row range, depending on
+// whether the caller asked for one.
+func (s *Server) handleText(w http.ResponseWriter, r *http.Request, id int) {
+	q := r.URL.Query()
+	if !q.Has("start") && !q.Has("end") {
+		text, err := s.host.PlainText(id)
+		if err != nil {
+			writeHostError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"text": text})
+		return
+	}
+	start, err := strconv.Atoi(q.Get("start"))
+	if err != nil {
+		http.Error(w, "bad start row", http.StatusBadRequest)
+		return
+	}
+	end, err := strconv.Atoi(q.Get("end"))
+	if err != nil {
+		http.Error(w, "bad end row", http.StatusBadRequest)
+		return
+	}
+	rows, hostErr := s.host.PlainTextRows(id, start, end)
+	if hostErr != nil {
+		writeHostError(w, hostErr)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"rows": rows})
+}
+
+func (s *Server) handleStatusline(w http.ResponseWriter, r *http.Request, id int) {
+	var body struct {
+		Cost       float64 `json:"cost"`
+		ContextPct int     `json:"context_pct"`
+		Model      string  `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.host.SetStatusline(id, body.Cost, body.ContextPct, body.Model); err != nil {
+		writeHostError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleHookActivity(w http.ResponseWriter, r *http.Request, id int) {
+	var body struct {
+		Activity Activity `json:"activity"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.host.SetHookActivity(id, body.Activity); err != nil {
+		writeHostError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleHookSession(w http.ResponseWriter, r *http.Request, id int) {
+	var body struct {
+		AgentSessionID string `json:"agent_session_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.host.SetHookSessionID(id, body.AgentSessionID); err != nil {
 		writeHostError(w, err)
 		return
 	}

@@ -39,19 +39,17 @@ func (a *AppService) handleStatusline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := a.session(p.SessionID)
-	if sess != nil {
-		// int(UsedPercentage) intentionally truncates: 40.9 → 40. Exact decimal
-		// precision is not required for the progress-bar display.
-		sess.SetStatuslineData(
-			p.Payload.Cost.TotalCostUSD,
-			int(p.Payload.ContextWindow.UsedPercentage),
-			p.Payload.Model.DisplayName,
-		)
-	}
+	// int(UsedPercentage) intentionally truncates: 40.9 → 40. Exact decimal
+	// precision is not required for the progress-bar display.
+	err := a.host.SetStatusline(
+		p.SessionID,
+		p.Payload.Cost.TotalCostUSD,
+		int(p.Payload.ContextWindow.UsedPercentage),
+		p.Payload.Model.DisplayName,
+	)
 	log.Printf("[statusline] session %d cost=%.4f ctx=%d%% model=%q found=%t",
 		p.SessionID, p.Payload.Cost.TotalCostUSD,
-		int(p.Payload.ContextWindow.UsedPercentage), p.Payload.Model.DisplayName, sess != nil)
+		int(p.Payload.ContextWindow.UsedPercentage), p.Payload.Model.DisplayName, err == nil)
 
 	w.WriteHeader(http.StatusOK)
 }

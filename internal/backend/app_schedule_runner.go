@@ -28,9 +28,9 @@ func (a *AppService) scheduleLoop(ctx context.Context) {
 func (a *AppService) checkSchedules() {
 	// Collect unique project directories from active sessions
 	dirs := make(map[string]bool)
-	for _, sess := range a.liveSessions() {
-		if dir := sess.GetDir(); dir != "" {
-			dirs[dir] = true
+	for _, s := range a.sessionSummaries() {
+		if s.Dir != "" {
+			dirs[s.Dir] = true
 		}
 	}
 
@@ -131,10 +131,10 @@ func (a *AppService) executeScheduledTask(task ScheduledTask, dir string) {
 	// Send the prompt after startup delay
 	go func() {
 		time.Sleep(2 * time.Second)
-		sess := a.session(sessionID)
-		if sess != nil {
-			sess.Write([]byte(task.Prompt + "\r"))
-			log.Printf("[scheduler] sent prompt to session %d for task %q", sessionID, task.Name)
+		if err := a.host.Write(sessionID, []byte(task.Prompt+"\r")); err != nil {
+			log.Printf("[scheduler] session %d: %v", sessionID, err)
+			return
 		}
+		log.Printf("[scheduler] sent prompt to session %d for task %q", sessionID, task.Name)
 	}()
 }

@@ -132,11 +132,11 @@ func (a *AppService) SendAgentInput(sessionID int, text string) error {
 // This is the only way an MCP-driven agent can see what a delegated session
 // actually produced — list_sessions only reports run state.
 func (a *AppService) ReadAgentSessionOutput(sessionID int) (string, error) {
-	sess := a.session(sessionID)
-	if sess == nil {
+	text, err := a.host.PlainText(sessionID)
+	if err != nil {
 		return "", fmt.Errorf("session %d not found", sessionID)
 	}
-	return sess.Screen.PlainText(), nil
+	return text, nil
 }
 
 // CloseAgentSession closes a running session. reason is logged only.
@@ -160,7 +160,7 @@ func (a *AppService) ListAgentSessions() []AgentSessionInfo {
 	defer a.mu.Unlock()
 	result := make([]AgentSessionInfo, 0, len(a.agentSessions))
 	for id, info := range a.agentSessions {
-		if a.sessionLocked(id) == nil {
+		if !a.hasSession(id) {
 			continue
 		}
 		info.Running = true

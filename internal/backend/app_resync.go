@@ -17,12 +17,15 @@ import (
 // it gets overwritten, and everything arriving after it continues from a screen
 // both sides agree on.
 func (a *AppService) ResyncSession(id int) {
-	sess := a.session(id)
-	if sess == nil {
+	if !a.hasSession(id) {
 		return
 	}
 	a.outputBatch().replaceWith(id, func() []byte {
-		return []byte(screenRepaint(sess.Screen))
+		painted, err := a.host.Repaint(id)
+		if err != nil {
+			return nil
+		}
+		return painted
 	})
 }
 

@@ -285,8 +285,8 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 
 // WriteToSession sends raw input data (base64-encoded) to a session's PTY.
 func (a *AppService) WriteToSession(id int, b64data string) {
-	sess := a.session(id)
-	if sess == nil {
+	summary, err := a.host.Get(id)
+	if err != nil {
 		return
 	}
 	data, err := base64.StdEncoding.DecodeString(b64data)
@@ -298,21 +298,17 @@ func (a *AppService) WriteToSession(id int, b64data string) {
 	// the user gesture that means "I want this back" (design D7). The keystroke
 	// that triggered the wake is dropped on purpose; replaying it into a Claude
 	// TUI that is still replaying its transcript would land somewhere random.
-	if sess.IsSuspended() {
+	if summary.Asleep() {
 		log.Printf("[suspend] session %d: input received while asleep — waking up", id)
 		a.wakeSession(id)
 		return
 	}
-	sess.Write(data)
+	_ = a.host.Write(id, data)
 }
 
 // ResizeSession updates the PTY and screen buffer dimensions.
 func (a *AppService) ResizeSession(id int, rows int, cols int) {
-	sess := a.session(id)
-	if sess == nil {
-		return
-	}
-	sess.Resize(rows, cols)
+	_ = a.host.Resize(id, rows, cols)
 }
 
 // CloseSession terminates a session and removes it.

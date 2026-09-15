@@ -45,6 +45,29 @@ type Host interface {
 	// sequence. It is what a client applies when its stream has a hole.
 	Repaint(id int) ([]byte, error)
 
+	// PlainText returns the screen as text, without escape sequences.
+	PlainText(id int) (string, error)
+
+	// PlainTextRows returns a row range of the screen as text. endRow may be
+	// -1 for "to the bottom".
+	PlainTextRows(id, startRow, endRow int) ([]string, error)
+
+	// SetStatusline records what the agent's own status line reported.
+	SetStatusline(id int, cost float64, contextPct int, model string) error
+
+	// SetHookActivity records an agent state reported by a lifecycle hook.
+	// Hook events are authoritative: once one has arrived for a session, the
+	// screen-pattern detection no longer overrides it.
+	SetHookActivity(id int, activity Activity) error
+
+	// SetHookSessionID records the agent's own session ID as the hook reported
+	// it, which is what resuming the conversation needs.
+	SetHookSessionID(id int, agentSessionID string) error
+
+	// ClearHookData forgets what the hooks reported, returning the session to
+	// screen-pattern detection.
+	ClearHookData(id int) error
+
 	// Attach subscribes to a session's output starting at from, which may be
 	// ReplayAll. The caller must Close the subscription.
 	Attach(id int, from int64) (*Subscription, error)

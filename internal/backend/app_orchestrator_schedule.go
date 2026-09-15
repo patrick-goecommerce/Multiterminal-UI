@@ -4,6 +4,7 @@ package backend
 
 import (
 	"fmt"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"log"
 	"time"
 )
@@ -161,9 +162,8 @@ func (a *AppService) pollRunningAgents(orch *orchestratorState, state *KanbanSta
 
 	changed := false
 	for cardID, sessionID := range running {
-		sess := a.session(sessionID)
-
-		if sess == nil {
+		summary, err := a.host.Get(sessionID)
+		if err != nil {
 			// Session closed externally — treat as done
 			orch.mu.Lock()
 			delete(orch.running, cardID)
@@ -175,8 +175,11 @@ func (a *AppService) pollRunningAgents(orch *orchestratorState, state *KanbanSta
 			continue
 		}
 
-		activity := activityString(sess.DetectActivity())
-		if activity == "done" {
+		// The stored state, not a fresh DetectActivity: the scan loop is the
+		// one place that decides what a session is doing (see the note in
+		// terminal.noteOutput), and a second writer polling from here was only
+		// ever reading its own scan a tick early.
+		if summary.Activity == hub.ActivityDone {
 			orch.mu.Lock()
 			// Only transition if not already handled by notifyOrchestratorDone
 			if _, stillRunning := orch.running[cardID]; stillRunning {

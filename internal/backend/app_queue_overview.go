@@ -20,8 +20,8 @@ func (a *AppService) GetAllQueues() []QueueOverviewItem {
 		if q == nil || len(q.items) == 0 {
 			continue
 		}
-		sess := a.sessionLocked(id)
-		if sess == nil {
+		summary, err := a.host.Get(id)
+		if err != nil {
 			continue
 		}
 
@@ -30,9 +30,9 @@ func (a *AppService) GetAllQueues() []QueueOverviewItem {
 
 		oi := QueueOverviewItem{
 			SessionID:   id,
-			SessionName: sess.Name(),
-			Dir:         sess.Dir,
-			Activity:    activityString(sess.GetActivity()),
+			SessionName: summary.Name,
+			Dir:         summary.Dir,
+			Activity:    string(summary.Activity),
 			Items:       items,
 		}
 		result = append(result, oi)
