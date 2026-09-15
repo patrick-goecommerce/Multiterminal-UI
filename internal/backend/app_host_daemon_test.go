@@ -1,9 +1,11 @@
 package backend
 
 import (
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/discovery"
@@ -140,5 +142,71 @@ func TestAttachSession_RecoversTheModeFromTheHost(t *testing.T) {
 	a.mu.Unlock()
 	if mode != "claude" {
 		t.Errorf("mode after attach = %q, want %q", mode, "claude")
+	}
+}
+
+// The whole chain, end to end: AppService creates a session on a host in
+// another process, the bytes come back over the socket, and closing the
+// client leaves the session running for the next window.
+//
+// Every layer in between is real here (the HTTP server, the WebSocket, the
+// ring, the PTY); only the process boundary is simulated, which is the one
+// part cmd/mtuid's own tests cover.
+func TestAppService_AgainstARemoteHost(t *testing.T) {
+	daemon := hub.NewEmbedded(hub.Options{Version: "test"})
+	t.Cleanup(daemon.Release)
+	server := hub.NewServer(daemon, "e2e-token")
+	ts := httptest.NewServer(server.Handler())
+	t.Cleanup(ts.Close)
+
+	remote, err := hub.Dial(strings.TrimPrefix(ts.URL, "http://"), "e2e-token", hub.DialOptions{})
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if !remote.WaitReady(10 * time.Second) {
+		t.Fatal("stream socket never came up")
+	}
+
+	a := newTestApp()
+	a.host = remote
+
+	id := a.CreateSession(printArgv("remote-marker"), t.TempDir(), 24, 80, "shell")
+	if id <= 0 {
+		t.Fatalf("CreateSession returned %d", id)
+	}
+	if got := drainBatcher(t, a, id, "remote-marker"); !strings.Contains(got, "remote-marker") {
+		t.Errorf("batched output = %q, want the marker", got)
+	}
+
+	// Closing the window: the client lets go, the daemon keeps the session.
+	a.host.Release()
+	if _, err := daemon.Get(id); err != nil {
+		t.Fatalf("the session died with the client: %v", err)
+	}
+
+	// The next window finds it and attaches.
+	next, err := hub.Dial(strings.TrimPrefix(ts.URL, "http://"), "e2e-token", hub.DialOptions{})
+	if err != nil {
+		t.Fatalf("second Dial: %v", err)
+	}
+	t.Cleanup(next.Release)
+	if !next.WaitReady(10 * time.Second) {
+		t.Fatal("second stream socket never came up")
+	}
+
+	b := newTestApp()
+	b.host = next
+	if !b.UsesSessionDaemon() {
+		t.Error("a remote host did not report that sessions outlive the window")
+	}
+	live := b.ListLiveSessions()
+	if len(live) != 1 || live[0].ID != id {
+		t.Fatalf("second window sees %+v, want session %d", live, id)
+	}
+	if !b.AttachSession(id, 24, 80) {
+		t.Fatal("AttachSession refused the surviving session")
+	}
+	if got := drainBatcher(t, b, id, "remote-marker"); !strings.Contains(got, "remote-marker") {
+		t.Errorf("re-attached output = %q, want the replayed marker", got)
 	}
 }
