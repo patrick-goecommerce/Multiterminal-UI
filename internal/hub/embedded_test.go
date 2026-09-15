@@ -10,26 +10,29 @@ import (
 	"time"
 )
 
+func isWindows() bool { return runtime.GOOS == "windows" }
+
+// comspec is the Windows shell, resolved the way the rest of MTUI resolves it:
+// never a bare cmd.exe, which Go would look for next to the binary.
+func comspec() string {
+	if c := os.Getenv("COMSPEC"); c != "" {
+		return c
+	}
+	return "cmd.exe"
+}
+
 // printArgv returns a command that writes text to the terminal and exits.
 func printArgv(text string) []string {
-	if runtime.GOOS == "windows" {
-		comspec := os.Getenv("COMSPEC")
-		if comspec == "" {
-			comspec = "cmd.exe"
-		}
-		return []string{comspec, "/c", "echo " + text}
+	if isWindows() {
+		return []string{comspec(), "/c", "echo " + text}
 	}
 	return []string{"/bin/sh", "-c", "printf '%s' " + text}
 }
 
 // sleepArgv returns a command that stays alive without producing output.
 func sleepArgv() []string {
-	if runtime.GOOS == "windows" {
-		comspec := os.Getenv("COMSPEC")
-		if comspec == "" {
-			comspec = "cmd.exe"
-		}
-		return []string{comspec, "/c", "ping -n 60 127.0.0.1 > nul"}
+	if isWindows() {
+		return []string{comspec(), "/c", "ping -n 60 127.0.0.1 > nul"}
 	}
 	return []string{"/bin/sh", "-c", "sleep 60"}
 }
@@ -95,7 +98,7 @@ func collect(t *testing.T, sub *Subscription, want string) (text string, truncat
 func newTestHost(t *testing.T, sink EventSink) *Embedded {
 	t.Helper()
 	h := NewEmbedded(Options{Version: "test", Sink: sink})
-	t.Cleanup(h.Shutdown)
+	t.Cleanup(h.Release)
 	return h
 }
 
@@ -115,7 +118,7 @@ func TestEmbedded_InfoCarriesProtocolAndIdentity(t *testing.T) {
 
 func TestEmbedded_HubIDIsStableAcrossRestartsWhenPassedIn(t *testing.T) {
 	h := NewEmbedded(Options{HubID: "persisted-id"})
-	defer h.Shutdown()
+	defer h.Release()
 	if h.HubID() != "persisted-id" {
 		t.Errorf("HubID = %q, want %q", h.HubID(), "persisted-id")
 	}
@@ -134,11 +137,11 @@ func TestEmbedded_UnknownSessionIsReported(t *testing.T) {
 	}
 }
 
-func TestEmbedded_CreateAfterShutdownIsRefused(t *testing.T) {
+func TestEmbedded_CreateAfterReleaseIsRefused(t *testing.T) {
 	h := NewEmbedded(Options{})
-	h.Shutdown()
+	h.Release()
 	if _, err := h.Create(CreateSpec{Argv: sleepArgv()}); !errors.Is(err, ErrClosed) {
-		t.Errorf("Create after Shutdown = %v, want ErrClosed", err)
+		t.Errorf("Create after Release = %v, want ErrClosed", err)
 	}
 }
 

@@ -145,10 +145,15 @@ func (h *Embedded) Create(spec CreateSpec) (int, error) {
 	h.sessions[id] = m
 	h.mu.Unlock()
 
+	// Report the session before starting its watchers. A process that exits
+	// at once (a typo in argv, a one-line script) would otherwise race its own
+	// creation, and a client that receives an exit for a session it has never
+	// heard of has no way to make sense of it. Output is not at risk from the
+	// later start: RawOutputCh buffers, and nothing is read from it elsewhere.
+	h.emit(EventSessionCreated, SessionCreated{Session: summarize(id, m)})
+
 	go h.pump(m)
 	go h.watchExit(id, sess)
-
-	h.emit(EventSessionCreated, SessionCreated{Session: summarize(id, m)})
 	return id, nil
 }
 
@@ -226,9 +231,10 @@ func (h *Embedded) Repaint(id int) ([]byte, error) {
 	return []byte(m.sess.Screen.Repaint()), nil
 }
 
-// Shutdown implements Host. Sessions are closed concurrently: each one waits
-// for its process, and eight panes should not take eight timeouts in a row.
-func (h *Embedded) Shutdown() {
+// Release implements Host. An Embedded owns its sessions, so releasing it ends
+// them. They are closed concurrently: each one waits for its process, and
+// eight panes should not take eight timeouts in a row.
+func (h *Embedded) Release() {
 	h.mu.Lock()
 	if h.closed {
 		h.mu.Unlock()

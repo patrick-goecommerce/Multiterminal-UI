@@ -44,8 +44,14 @@ type Host interface {
 	// ReplayAll. The caller must Close the subscription.
 	Attach(id int, from int64) (*Subscription, error)
 
-	// Shutdown closes every session and releases the Host.
-	Shutdown()
+	// Release lets go of this handle.
+	//
+	// What that costs depends on who owns the sessions, and the difference is
+	// the point of this whole package: an Embedded owns them and therefore
+	// ends them, while a Remote only drops the connection and leaves the
+	// daemon's sessions running. A caller that means "end these agents" closes
+	// them by ID; Release is for shutting down the handle.
+	Release()
 }
 
 // Subscription delivers one session's output to one reader.

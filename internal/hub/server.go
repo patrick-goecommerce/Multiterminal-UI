@@ -1,0 +1,206 @@
+package hub
+
+import (
+	"crypto/subtle"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+)
+
+// Server exposes a Host over loopback HTTP.
+//
+// Control is plain JSON over HTTP/1.1; terminal output and input ride a
+// WebSocket at /v1/stream. The transport is deliberately the one the rest of
+// MTUI already uses for its loopback listeners: bind port 0, publish the port
+// and a token through internal/discovery, and check the token on every
+// request. Reachability is not identity, so the token is not optional.
+type Server struct {
+	host  Host
+	token string
+
+	mu      sync.Mutex
+	clients map[*streamClient]struct{}
+}
+
+// NewServer wraps a Host. token must be the value published in the discovery
+// record; an empty token is refused by every request, which fails closed.
+func NewServer(host Host, token string) *Server {
+	return &Server{
+		host:    host,
+		token:   token,
+		clients: make(map[*streamClient]struct{}),
+	}
+}
+
+// Handler returns the HTTP handler to serve.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/hub", s.guard(s.handleHub))
+	mux.HandleFunc("/v1/sessions", s.guard(s.handleSessions))
+	mux.HandleFunc("/v1/sessions/", s.guard(s.handleSession))
+	mux.HandleFunc("/v1/stream", s.guard(s.handleStream))
+	return mux
+}
+
+// Sink returns an EventSink that fans Host events out to every connected
+// client. Pass it to the Host so its events reach the clients.
+func (s *Server) Sink() EventSink {
+	return SinkFunc(func(name string, payload any) {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return
+		}
+		s.broadcast(control{Op: opEvent, Name: name, Payload: raw})
+	})
+}
+
+func (s *Server) broadcast(msg control) {
+	s.mu.Lock()
+	targets := make([]*streamClient, 0, len(s.clients))
+	for c := range s.clients {
+		targets = append(targets, c)
+	}
+	s.mu.Unlock()
+	for _, c := range targets {
+		c.sendControl(msg)
+	}
+}
+
+// guard rejects any request that does not present the discovery token.
+func (s *Server) guard(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if s.token == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) handleHub(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.host.Info())
+}
+
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]any{"sessions": s.host.List()})
+	case http.MethodPost:
+		var spec CreateSpec
+		if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
+			http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		id, err := s.host.Create(spec)
+		if err != nil {
+			writeHostError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"id": id})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleSession routes /v1/sessions/{id} and /v1/sessions/{id}/{action}.
+func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
+	rest := strings.TrimPrefix(r.URL.Path, "/v1/sessions/")
+	idPart, action, _ := strings.Cut(rest, "/")
+	id, err := strconv.Atoi(idPart)
+	if err != nil {
+		http.Error(w, "bad session id", http.StatusBadRequest)
+		return
+	}
+
+	switch {
+	case action == "" && r.Method == http.MethodGet:
+		summary, err := s.host.Get(id)
+		if err != nil {
+			writeHostError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, summary)
+	case action == "" && r.Method == http.MethodDelete:
+		if err := s.host.Close(id); err != nil {
+			writeHostError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	case action == "input" && r.Method == http.MethodPost:
+		s.handleInput(w, r, id)
+	case action == "resize" && r.Method == http.MethodPost:
+		s.handleResize(w, r, id)
+	case action == "repaint" && r.Method == http.MethodGet:
+		painted, err := s.host.Repaint(id)
+		if err != nil {
+			writeHostError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(painted)
+	default:
+		http.Error(w, "not found", http.StatusNotFound)
+	}
+}
+
+// handleInput takes keystrokes over HTTP. The stream socket carries them as
+// binary frames instead; this exists for scripted clients that do not want to
+// open a socket for a single line of input.
+func (s *Server) handleInput(w http.ResponseWriter, r *http.Request, id int) {
+	var body struct {
+		Data []byte `json:"data"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.host.Write(id, body.Data); err != nil {
+		writeHostError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleResize(w http.ResponseWriter, r *http.Request, id int) {
+	var body struct {
+		Rows int `json:"rows"`
+		Cols int `json:"cols"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.host.Resize(id, body.Rows, body.Cols); err != nil {
+		writeHostError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// writeHostError maps a Host error onto a status a client can act on: a gone
+// session is a 404 and not worth retrying, a closed host is a 503 and is.
+func writeHostError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrNoSession):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case errors.Is(err, ErrClosed):
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+	default:
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
