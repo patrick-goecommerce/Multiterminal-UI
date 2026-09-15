@@ -274,6 +274,9 @@ max_panes_per_tab: 12
 sidebar_width: 30
 claude_command: claude
 commit_reminder_minutes: 30
+# Opt-in: hand the sessions to the mtuid daemon so they survive closing
+# the app. Anything other than "daemon" keeps them in this process.
+session_host: embedded
 claude_models:
   - label: Default
     id: ""

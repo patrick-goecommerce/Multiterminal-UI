@@ -1,6 +1,6 @@
 # mtuid: Sessions überleben die GUI (Daemon-Architektur) — Design
 
-**Status:** In Umsetzung (1a und 1b fertig)
+**Status:** Phase 1 umgesetzt, Standard bleibt `embedded` bis zur Durchsatzmessung
 **Branch:** `claude/mtui-herdr-dev-migration-lz2rze`
 **Vorbild:** [herdr](https://herdr.dev/) 0.9, Rust, Apache-2.0
 **Betrifft:** `internal/backend/app.go`, `internal/terminal`, `internal/discovery`, neu `internal/hub` und `cmd/mtuid`
@@ -314,38 +314,55 @@ wo seine Sessions liegen.
 |---|---|---|---|
 | 1a | `internal/hub`: Protokolltypen, `Host`, `Embedded`, Ringpuffer mit Offsets | nichts sichtbar | **fertig** |
 | 1b | `cmd/mtuid`: Daemon mit HTTP und WebSocket, Discovery, Sperre, Idle-Shutdown; `hub.Remote` mit Reconnect | Daemon läuft, noch ungenutzt | **fertig** |
-| 1c | Sessionbesitz im Backend auf `hub.Embedded` umstellen: eine Zugriffsstelle statt `a.sessions`, `collectOutput`/`watchExit` gegen Pump und Ringpuffer tauschen | unverändertes Verhalten, ein Besitzer | offen |
-| 1d | Scan, Hooks, Statusline, Suspend, Keepalive, Queue in den Host ziehen; `AppService` fasst `*terminal.Session` nicht mehr an | unverändertes Verhalten, GUI ohne Sessionwissen | offen |
-| 1e | `session_host: daemon`: GUI startet den Daemon und verbindet sich, Reattach mit Replay | **GUI schließen und öffnen, Agents laufen weiter** | offen |
-| 2 | tmux-API und MCP-Server in den Daemon | Agent-gestartete Sessions überleben den GUI-Neustart | offen |
+| 1c | Sessionbesitz im Backend auf `hub.Embedded`; Output über Ring und Subscription statt `collectOutput` | unverändertes Verhalten, ein Besitzer | **fertig** |
+| 1d | Scan, Hooks, Statusline, Suspend, Keepalive, Queue über den Host; `internal/backend` importiert `internal/terminal` nicht mehr | unverändertes Verhalten, GUI ohne Sessionwissen | **fertig** |
+| 1e | `session_host: daemon`: GUI startet den Daemon, verbindet sich, Restore hängt wieder an statt neu zu starten | **App schließen und öffnen, Agents laufen weiter** | **fertig** |
+| 2 | Scan, Hook-Leser und Statusline-Empfang im Daemon ticken lassen; tmux-API und MCP-Server dorthin | Status und agentgestartete Sessions leben ohne GUI weiter | offen |
 | 3 | `mtui` als CLI-Client (`ls`, `attach`, `send`, `kill`) | Sessions ohne GUI bedienbar | offen |
 | 4 | Remote-Hubs über SSH | Laptop und Server in einer Oberfläche | offen |
 | 5 | Kanban-Orchestrator headless, weitere Agent-CLIs, Plugin-Hooks | Boards laufen ohne offenes Fenster | offen |
 
-Umgestellt wird erst, wenn 1e steht und die Durchsatzmessung passt. Bis dahin bleibt
-`session_host: embedded` der Standard, und `daemon` ist ein Schalter für den, der es
-ausprobieren will.
+`session_host: embedded` bleibt der Standard, bis die Durchsatzmessung aus dem
+Risiko-Abschnitt auf einer echten Maschine gemacht ist. `daemon` ist der Schalter für
+den, der es ausprobieren will; schlägt irgendetwas daran fehl (kein `mtuid` neben der
+App, kein Record, falsche Protokollversion), fällt die App auf den eingebetteten Host
+zurück und schreibt eine Warnung, die über `CheckHealth` in der Oberfläche landet.
 
-## Stand nach 1a und 1b
+**Was im Daemon-Modus heute noch an der offenen GUI hängt:** der Aktivitäts-Scan, der
+Hook-Leser und der Statusline-Empfang laufen im Fensterprozess und fragen den Host nur
+ab. Die Agents arbeiten also weiter, wenn die App zu ist, aber ihr Zustand wird in
+dieser Zeit nicht fortgeschrieben, und die Queue schiebt nichts nach. Das ist Phase 2
+und ist bewusst nicht Teil von Phase 1: erst muss der Prozesswechsel selbst stabil sein.
+
+## Stand nach Phase 1
+
+Phase 1 ist umgesetzt: mit `session_host: daemon` überleben die Agents das Schließen der
+App, und der Restore hängt sich wieder an sie an, statt daneben neue zu starten.
 
 Was steht:
 
-- `internal/hub` mit `Host`, `Embedded`, `Ring`, `Server` und `Remote`. Der Daemon und die
-  GUI benutzen dieselbe `Embedded`-Implementierung; `Remote` ist reiner Transport.
-- `cmd/mtuid`, lauffähig: Dateisperre als Einzelinstanz-Garantie, Discovery-Record mit
-  Token, HTTP für Steuerung, WebSocket für Terminalbytes, Idle-Abschaltung, Logdatei,
-  GUI-Subsystem auf Windows.
-- `internal/procs` mit `HideConsole` und `KillProcessTree`, die vorher drei- bis viermal
-  im Baum standen.
+- `internal/hub` mit `Host`, `Embedded`, `Ring`, `Server` und `Remote`. Daemon und GUI
+  benutzen dieselbe `Embedded`-Implementierung; `Remote` ist reiner Transport.
+- `cmd/mtuid`: Dateisperre als Einzelinstanz-Garantie, Discovery-Record mit Token, HTTP
+  für Steuerung, WebSocket für Terminalbytes, Idle-Abschaltung, Logdatei, GUI-Subsystem
+  auf Windows. Wird vom Installer und vom Alpha-Release neben die App gelegt.
+- `internal/backend` importiert `internal/terminal` nicht mehr. Alles, was es über eine
+  Session weiß, fragt es über den Host, und jede dieser Fragen ist auch über einen Socket
+  beantwortbar.
+- `internal/procs` mit `HideConsole`, `KillProcessTree` und `Detach`, die vorher drei- bis
+  viermal im Baum standen oder gar nicht existierten.
 
-Zwei Fehler, die beim Testen aufgefallen sind und mitbehoben wurden:
+Drei Fehler, die beim Bauen aufgefallen sind und mitbehoben wurden:
 
 1. **`terminal.readLoop` hat Ausgabe verworfen.** Das `select` über den Sendevorgang und
    den Prozessende-Guard stand in einer Anweisung. Ein Kind, das mehr schreibt als der
    Leser abholt, hält die Schleife über sein Ende hinaus am Lesen, und ab da sind beide
    Fälle bereit: Go wählt zufällig, also ging ungefähr die Hälfte der restlichen Chunks
    verloren. Betroffen war das Ende der Ausgabe, also genau der Teil, den man liest.
-2. **`hub.Embedded` konnte das Ende einer Session vor ihrer Entstehung melden**, bei einem
+2. **`CheckAskUser` ist beim Aufruf abgestürzt.** Es fragt `PlainTextRows(0, -1)` für „den
+   ganzen Bildschirm" ab, und daraus wurde `make([]string, 0, -1)`, was paniced. Ein
+   negatives Ende heißt jetzt „bis unten".
+3. **`hub.Embedded` konnte das Ende einer Session vor ihrer Entstehung melden**, bei einem
    Prozess, der sofort endet.
 
 Offen und bewusst nicht entschieden: ob der Kanban-Orchestrator langfristig in den Daemon

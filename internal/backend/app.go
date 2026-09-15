@@ -172,10 +172,11 @@ func (a *AppService) ServiceShutdown() error {
 	if a.cancelAll != nil {
 		a.cancelAll()
 	}
-	// The host owns the sessions, so releasing it ends them. It also kills
-	// each process tree first, which the old shutdown loop did not: Close only
-	// ends the root process, and the descendants it leaves behind hold handles
-	// inside worktrees (#185).
+	// Releasing the host means different things by design: the embedded host
+	// owns its sessions and ends them (killing each process tree first, which
+	// the old shutdown loop did not, leaving descendants holding handles
+	// inside worktrees, #185), while a daemon host is merely disconnected and
+	// keeps every agent running for the next window.
 	a.host.Release()
 
 	// Withdraw the published loopback ports so no helper process dials a port

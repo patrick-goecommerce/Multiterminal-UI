@@ -1076,6 +1076,7 @@ export namespace config {
 	    mcp_profile?: string;
 	    activity_since?: number;
 	    activity_state?: string;
+	    session_id?: number;
 
 	    static createFrom(source: any = {}) {
 	        return new SavedPane(source);
@@ -1095,6 +1096,7 @@ export namespace config {
 	        this.mcp_profile = source["mcp_profile"];
 	        this.activity_since = source["activity_since"];
 	        this.activity_state = source["activity_state"];
+	        this.session_id = source["session_id"];
 	    }
 	}
 	export class SavedTab {
