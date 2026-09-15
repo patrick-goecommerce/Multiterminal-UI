@@ -1,6 +1,6 @@
 # mtuid: Sessions überleben die GUI (Daemon-Architektur) — Design
 
-**Status:** Entwurf
+**Status:** In Umsetzung (1a und 1b fertig)
 **Branch:** `claude/mtui-herdr-dev-migration-lz2rze`
 **Vorbild:** [herdr](https://herdr.dev/) 0.9, Rust, Apache-2.0
 **Betrifft:** `internal/backend/app.go`, `internal/terminal`, `internal/discovery`, neu `internal/hub` und `cmd/mtuid`
@@ -297,17 +297,57 @@ Sessionbesitz. Sie dürfen nicht auseinanderlaufen. Deshalb liegt die Logik in
 
 ## Phasen
 
-| Phase | Inhalt | Ergebnis für den Nutzer |
-|---|---|---|
-| 1a | `internal/hub`: Protokolltypen, `Host`-Interface, `Embedded` | nichts sichtbar, Verhalten identisch |
-| 1b | `cmd/mtuid`: Daemon mit HTTP und WebSocket, Discovery, Sperre | Daemon läuft, noch ohne Nutzung |
-| 1c | `hub.Remote`, GUI startet und verbindet den Daemon, `session_host: daemon` | GUI schließen und öffnen, Agents laufen weiter |
-| 1d | Reattach mit Replay, Offsets, Reconnect nach Abbruch | Panes kommen mit Verlauf zurück |
-| 2 | Scan, Hooks, Statusline, Queue, Keepalive, Suspend und Sessionstatus in den Daemon | Status und Queue laufen ohne GUI weiter |
-| 3 | `mtui` als CLI-Client (`ls`, `attach`, `send`, `kill`) | Sessions ohne GUI bedienbar |
-| 4 | Remote-Hubs über SSH | Laptop und Server in einer Oberfläche |
-| 5 | Kanban-Orchestrator headless, weitere Agent-CLIs, Plugin-Hooks | Boards laufen ohne offenes Fenster |
+Die erste Fassung dieser Spec hatte die Reihenfolge falsch. Sie sah vor, die GUI in
+Phase 1c auf den Daemon umzuschalten und Scan, Hooks, Queue, Keepalive und Suspend erst
+danach umzuziehen. Das geht nicht: 44 Stellen in 20 Backend-Dateien greifen direkt auf
+`*terminal.Session` zu. Sobald die Sessions im Daemon liegen, hat der Scan-Loop in der GUI
+keinen Screen mehr zu lesen, der Suspend keinen Prozess zu töten und die Queue keinen
+Zustand, an dem sie sich ausrichtet. Zwischen "alles lokal" und "alles im Daemon" gibt es
+bei diesen Schleifen keinen halben Schritt.
 
-Umgestellt wird erst, wenn 1d steht und die Durchsatzmessung passt. Bis dahin bleibt
+Die Reihenfolge ist deshalb umgedreht: **erst umziehen, solange alles noch im selben
+Prozess läuft, dann den Transport umschalten.** Jeder Zwischenstand bleibt lauffähig, und
+der riskante Schritt (Prozesswechsel) trifft am Ende auf Code, der schon nicht mehr weiß,
+wo seine Sessions liegen.
+
+| Phase | Inhalt | Ergebnis | Stand |
+|---|---|---|---|
+| 1a | `internal/hub`: Protokolltypen, `Host`, `Embedded`, Ringpuffer mit Offsets | nichts sichtbar | **fertig** |
+| 1b | `cmd/mtuid`: Daemon mit HTTP und WebSocket, Discovery, Sperre, Idle-Shutdown; `hub.Remote` mit Reconnect | Daemon läuft, noch ungenutzt | **fertig** |
+| 1c | Sessionbesitz im Backend auf `hub.Embedded` umstellen: eine Zugriffsstelle statt `a.sessions`, `collectOutput`/`watchExit` gegen Pump und Ringpuffer tauschen | unverändertes Verhalten, ein Besitzer | offen |
+| 1d | Scan, Hooks, Statusline, Suspend, Keepalive, Queue in den Host ziehen; `AppService` fasst `*terminal.Session` nicht mehr an | unverändertes Verhalten, GUI ohne Sessionwissen | offen |
+| 1e | `session_host: daemon`: GUI startet den Daemon und verbindet sich, Reattach mit Replay | **GUI schließen und öffnen, Agents laufen weiter** | offen |
+| 2 | tmux-API und MCP-Server in den Daemon | Agent-gestartete Sessions überleben den GUI-Neustart | offen |
+| 3 | `mtui` als CLI-Client (`ls`, `attach`, `send`, `kill`) | Sessions ohne GUI bedienbar | offen |
+| 4 | Remote-Hubs über SSH | Laptop und Server in einer Oberfläche | offen |
+| 5 | Kanban-Orchestrator headless, weitere Agent-CLIs, Plugin-Hooks | Boards laufen ohne offenes Fenster | offen |
+
+Umgestellt wird erst, wenn 1e steht und die Durchsatzmessung passt. Bis dahin bleibt
 `session_host: embedded` der Standard, und `daemon` ist ein Schalter für den, der es
 ausprobieren will.
+
+## Stand nach 1a und 1b
+
+Was steht:
+
+- `internal/hub` mit `Host`, `Embedded`, `Ring`, `Server` und `Remote`. Der Daemon und die
+  GUI benutzen dieselbe `Embedded`-Implementierung; `Remote` ist reiner Transport.
+- `cmd/mtuid`, lauffähig: Dateisperre als Einzelinstanz-Garantie, Discovery-Record mit
+  Token, HTTP für Steuerung, WebSocket für Terminalbytes, Idle-Abschaltung, Logdatei,
+  GUI-Subsystem auf Windows.
+- `internal/procs` mit `HideConsole` und `KillProcessTree`, die vorher drei- bis viermal
+  im Baum standen.
+
+Zwei Fehler, die beim Testen aufgefallen sind und mitbehoben wurden:
+
+1. **`terminal.readLoop` hat Ausgabe verworfen.** Das `select` über den Sendevorgang und
+   den Prozessende-Guard stand in einer Anweisung. Ein Kind, das mehr schreibt als der
+   Leser abholt, hält die Schleife über sein Ende hinaus am Lesen, und ab da sind beide
+   Fälle bereit: Go wählt zufällig, also ging ungefähr die Hälfte der restlichen Chunks
+   verloren. Betroffen war das Ende der Ausgabe, also genau der Teil, den man liest.
+2. **`hub.Embedded` konnte das Ende einer Session vor ihrer Entstehung melden**, bei einem
+   Prozess, der sofort endet.
+
+Offen und bewusst nicht entschieden: ob der Kanban-Orchestrator langfristig in den Daemon
+gehört. Er steuert Sessions, aber er stellt auch Rückfragen. Wer die beantwortet, wenn
+kein Fenster offen ist, ist eine Produktfrage und keine Architekturfrage.
