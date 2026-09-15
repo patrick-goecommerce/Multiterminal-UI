@@ -93,16 +93,25 @@ Fork: dieselbe Codebasis fährt beides.
 ```go
 // internal/hub
 type Host interface {
-    Create(spec CreateSpec) (SessionRef, error)
-    Write(ref SessionRef, data []byte) error
-    Resize(ref SessionRef, rows, cols int) error
-    Close(ref SessionRef) error
-    List() ([]SessionSummary, error)
-    Screen(ref SessionRef) ([]byte, error)   // ANSI-Repaint, heute ResyncSession
-    Attach(ref SessionRef, from int64) (Stream, error)
-    Events() <-chan Event
+    Info() Info
+    Create(spec CreateSpec) (int, error)
+    Write(id int, data []byte) error
+    Resize(id, rows, cols int) error
+    Close(id int) error
+    List() []SessionSummary
+    Get(id int) (SessionSummary, error)
+    Repaint(id int) ([]byte, error)          // ANSI-Repaint, heute ResyncSession
+    Attach(id int, from int64) (*Subscription, error)
+    Shutdown()
 }
 ```
+
+IDs sind lokal zu einem Host. Die Hub-Kennung kommt erst an der Leitungsgrenze dazu
+(`Ref{Hub, ID}`), damit ein Client, der später mehrere Hubs sieht, zwei Sessions mit der
+Nummer 3 auseinanderhalten kann. Ereignisse laufen nicht über einen Kanal am Interface,
+sondern über einen `EventSink`, den der Host bei der Konstruktion bekommt: der Daemon
+fächert damit an alle Clients auf, die GUI schiebt sie in Wails weiter, und kein Aufrufer
+muss einen Kanal leerlesen, den er nicht braucht.
 
 Zwei Implementierungen:
 

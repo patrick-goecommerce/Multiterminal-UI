@@ -1,15 +1,8 @@
 package backend
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
-
-// resyncPrefix drops any pending SGR state and clears the screen so the repaint
-// that follows cannot inherit colours or leftover glyphs from what was there.
-const resyncPrefix = "\x1b[0m\x1b[2J"
 
 // ResyncSession repaints a pane from the backend's VT100 mirror.
 //
@@ -36,20 +29,8 @@ func (a *AppService) ResyncSession(id int) {
 }
 
 // screenRepaint renders a screen as a self-contained repaint sequence.
-// Rows are positioned absolutely rather than separated by newlines: a row filled
-// to the right margin would otherwise wrap and push every following row down by
-// one. The cursor is restored last so the app's input line lands where it was.
+// The rendering itself lives on Screen so the session daemon (internal/hub)
+// can produce the identical bytes without importing the GUI backend.
 func screenRepaint(scr *terminal.Screen) string {
-	rows, cols := scr.Rows(), scr.Cols()
-
-	var b strings.Builder
-	b.Grow(len(resyncPrefix) + rows*(cols+24))
-	b.WriteString(resyncPrefix)
-	for r := 0; r < rows; r++ {
-		fmt.Fprintf(&b, "\x1b[%d;1H", r+1)
-		b.WriteString(scr.RenderRegion(r, 0, r, cols-1))
-	}
-	curRow, curCol := scr.Cursor()
-	fmt.Fprintf(&b, "\x1b[%d;%dH", curRow+1, curCol+1)
-	return b.String()
+	return scr.Repaint()
 }
