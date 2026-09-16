@@ -47,6 +47,11 @@ type Options struct {
 	// copy of it. Nil skips the step, which leaves the same orphans the
 	// ordinary close path used to leave (#185).
 	KillTree func(pid int)
+	// Launcher lets this host start an agent from a tool name, working out
+	// argv and environment itself. Without one, only a caller that already
+	// knows both can create a session, which is what kept every client but
+	// the window from starting anything. See CreateSpec.Launch.
+	Launcher Launcher
 }
 
 var _ Host = (*Embedded)(nil)
@@ -63,6 +68,7 @@ type Embedded struct {
 	ringBytes int
 	sink      EventSink
 	killTree  func(pid int)
+	launcher  Launcher
 	startedAt time.Time
 
 	// stop ends the background loops this host runs (the scan, the hook
@@ -101,6 +107,7 @@ func NewEmbedded(opts Options) *Embedded {
 		ringBytes: ring,
 		sink:      opts.Sink,
 		killTree:  opts.KillTree,
+		launcher:  opts.Launcher,
 		startedAt: time.Now(),
 		stop:      make(chan struct{}),
 	}
@@ -158,6 +165,12 @@ func (h *Embedded) Reserve() (int, error) {
 
 // Create implements Host.
 func (h *Embedded) Create(spec CreateSpec) (int, error) {
+	if spec.Launch != nil {
+		var err error
+		if spec, err = h.resolveLaunch(spec); err != nil {
+			return 0, err
+		}
+	}
 	if spec.Rows < 5 {
 		spec.Rows = 24
 	}
@@ -221,6 +234,39 @@ func (h *Embedded) Create(spec CreateSpec) (int, error) {
 	go h.pump(m)
 	go h.watchExit(id, sess)
 	return id, nil
+}
+
+// resolveLaunch turns a launch request into a concrete spec.
+//
+// The ID is reserved first, because the environment names the session it
+// belongs to: MULTITERMINAL_SESSION_ID is what the lifecycle hook and the
+// statusline shim report back with, so it has to exist before Env can be
+// built. That ordering is why CreateSpec has both ID and Launch rather than a
+// callback, which would not survive the wire.
+func (h *Embedded) resolveLaunch(spec CreateSpec) (CreateSpec, error) {
+	if h.launcher == nil {
+		return spec, fmt.Errorf(
+			"hub: this host cannot launch %q by name; it was built without a launcher",
+			spec.Launch.Tool)
+	}
+	argv, err := h.launcher.Argv(spec.Launch.Tool, spec.Launch.Model)
+	if err != nil {
+		return spec, fmt.Errorf("hub: %w", err)
+	}
+	if spec.ID == 0 {
+		if spec.ID, err = h.Reserve(); err != nil {
+			return spec, err
+		}
+	}
+	if spec.Mode == "" {
+		spec.Mode = spec.Launch.Tool
+	}
+	if spec.Dir == "" {
+		spec.Dir, _ = os.Getwd()
+	}
+	spec.Argv = argv
+	spec.Env = h.launcher.Env(spec.ID, spec.Dir, spec.Mode)
+	return spec, nil
 }
 
 // Write implements Host.

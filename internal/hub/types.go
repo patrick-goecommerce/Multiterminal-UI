@@ -63,6 +63,40 @@ type CreateSpec struct {
 	Cols     int      `json:"cols" yaml:"cols"`
 	Mode     string   `json:"mode" yaml:"mode"`
 	Env      []string `json:"env" yaml:"env"`
+	// Launch asks the host to work out Argv and Env itself, from the tool
+	// name. It is how a caller with no access to the configuration (the CLI,
+	// an agent over MCP, anything on the far side of the socket) starts a
+	// session at all: it names what it wants, not how to run it.
+	//
+	// When it is set, Argv and Env are ignored. A host without a Launcher
+	// rejects it rather than starting something half-configured: a pane
+	// launched without MULTITERMINAL_SESSION_ID looks fine and silently has
+	// no hook wiring.
+	Launch *LaunchRequest `json:"launch,omitempty" yaml:"launch,omitempty"`
+}
+
+// LaunchRequest names an agent to start, in the caller's terms.
+type LaunchRequest struct {
+	// Tool is the agent CLI: "claude", "codex", "gemini".
+	Tool string `json:"tool" yaml:"tool"`
+	// Model is passed to the CLI when set, otherwise its own default applies.
+	Model string `json:"model,omitempty" yaml:"model,omitempty"`
+}
+
+// Launcher turns a launch request into a command and an environment.
+//
+// It is an interface rather than a concrete type because deciding what a
+// session's environment contains is policy, and this package owns sessions,
+// not policy. internal/launch implements it; a host that is handed one can
+// start an agent by name, and a host without one cannot. That is the whole
+// difference between a daemon an agent can delegate to and a daemon that can
+// only hold what a window gave it.
+type Launcher interface {
+	// Argv builds the command line for a tool, optionally pinning a model.
+	Argv(tool, model string) ([]string, error)
+	// Env builds the PTY environment for a session that has already been
+	// assigned an ID.
+	Env(sessionID int, dir, mode string) []string
 }
 
 // Activity is what a session is doing, as the agent-state detection sees it.

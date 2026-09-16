@@ -54,5 +54,6 @@ func (a *AppService) launchPolicy() launch.Policy {
 	return launch.Policy{
 		ShimPort:       a.GetTmuxAPIPort(),
 		ForceWorktrees: a.cfg.ShouldForceWorktrees(),
+		Commands:       a.launchCommands(),
 	}
 }

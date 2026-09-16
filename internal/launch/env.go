@@ -19,6 +19,9 @@ type Policy struct {
 	// ForceWorktrees is the GLOBAL worktree-mandatory setting. The
 	// per-project override in .mtui/config.json is read here, per directory.
 	ForceWorktrees bool
+	// Commands names the binary for each agent CLI. Empty entries fall back to
+	// the tool's own name, resolved against the session's PATH.
+	Commands Commands
 }
 
 // IsClaudeMode reports whether the mode is backed by the claude CLI.

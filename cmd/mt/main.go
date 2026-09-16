@@ -13,10 +13,12 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/discovery"
@@ -55,6 +57,7 @@ type command struct {
 
 func commands() []command {
 	return []command{
+		{"new", "Agenten im Daemon starten", true, cmdNew},
 		{"ls", "Sessions auflisten", true, cmdList},
 		{"read", "Bildschirm einer Session als Text", true, cmdRead},
 		{"send", "Text plus Enter an eine Session schicken", true, cmdSend},
@@ -120,6 +123,23 @@ type env struct {
 	hub    *hub.Remote
 	stdout io.Writer
 	stderr io.Writer
+}
+
+// ctx is the context a long call runs under. Ctrl+C cancels the call, never
+// the session: somebody who stops watching has not asked the agent to stop.
+func (e *env) ctx() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+	go func() {
+		defer signal.Stop(interrupt)
+		select {
+		case <-interrupt:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx
 }
 
 // fail prints an error the way every subcommand should and returns exitError.

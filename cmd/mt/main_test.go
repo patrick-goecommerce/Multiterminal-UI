@@ -22,12 +22,18 @@ import (
 
 // testDaemon starts a hub server and publishes it where the CLI will look.
 func testDaemon(t *testing.T) hub.Host {
+	return testDaemonWith(t, hub.Options{Version: "test"})
+}
+
+// testDaemonWith is testDaemon with the host configured, for the tests that
+// care what the host can do rather than only that it is there.
+func testDaemonWith(t *testing.T, opts hub.Options) hub.Host {
 	t.Helper()
 	// Per-test runtime directory, so a developer's own daemon is neither
 	// found by the test nor disturbed by it.
 	t.Setenv(discovery.EnvDirOverride, t.TempDir())
 
-	host := hub.NewEmbedded(hub.Options{Version: "test"})
+	host := hub.NewEmbedded(opts)
 	t.Cleanup(host.Release)
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -303,5 +309,24 @@ func TestWantsHelp(t *testing.T) {
 		if got := wantsHelp(tc.args); got != tc.want {
 			t.Errorf("wantsHelp(%v) = %v, want %v", tc.args, got, tc.want)
 		}
+	}
+}
+
+// waitForScreen polls a session's screen until it contains want, or fails.
+// Polling rather than sleeping: a loaded CI box is slower than a laptop, and a
+// fixed sleep is either flaky there or wasted here.
+func waitForScreen(t *testing.T, host hub.Host, id int, want string) string {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	var screen string
+	for {
+		screen, _ = host.PlainText(id)
+		if strings.Contains(screen, want) {
+			return screen
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%q never appeared on session %d's screen:\n%s", want, id, screen)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }

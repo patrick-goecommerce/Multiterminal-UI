@@ -28,7 +28,7 @@ func TestBuildAgentArgv(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := a.buildAgentArgv(tc.tool, tc.model)
+			got := a.agentArgv(tc.tool, tc.model)
 			if len(got) != len(tc.want) {
 				t.Fatalf("buildAgentArgv(%q, %q) = %v, want %v", tc.tool, tc.model, got, tc.want)
 			}

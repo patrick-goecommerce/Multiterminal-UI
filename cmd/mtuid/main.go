@@ -97,10 +97,12 @@ func run(args []string) int {
 		log.Printf("[mtuid] hub id: %v (continuing with a fresh one)", err)
 	}
 
-	// The host reports into the server's sink, and the server needs the host:
-	// the indirection through the variable is what breaks that circle.
+	// The host reports into the server's sink, the server needs the host, and
+	// the launcher needs the host's own shim port. Declaring both up front is
+	// what breaks that circle; every reference below runs after construction.
 	var srv *hub.Server
-	host := hub.NewEmbedded(hub.Options{
+	var host *hub.Embedded
+	host = hub.NewEmbedded(hub.Options{
 		HubID:     hubID,
 		Version:   Version,
 		RingBytes: *ring,
@@ -116,6 +118,15 @@ func run(args []string) int {
 		// agent keeps reporting through it while no window is open.
 		HooksDir: config.HooksDir(),
 		KillTree: procs.KillProcessTree,
+		// Being able to start a session, not just hold one, is what makes the
+		// daemon usable without a window: the CLI and an agent over MCP name a
+		// tool, and the daemon works out the rest from the config.
+		Launcher: daemonLauncher{shimPort: func() int {
+			if host == nil {
+				return 0
+			}
+			return host.Info().ShimPort
+		}},
 		Sink: hub.SinkFunc(func(name string, payload any) {
 			srv.Sink().Emit(name, payload)
 		}),

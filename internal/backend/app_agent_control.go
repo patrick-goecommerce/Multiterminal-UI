@@ -3,7 +3,10 @@ package backend
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/launch"
 )
 
 // AgentSessionInfo describes a session that was spawned via SpawnAgentSession
@@ -27,69 +30,48 @@ type AgentSessionSpawnedEvent struct {
 	Name  string `json:"name" yaml:"name"`
 }
 
-var agentTools = map[string]bool{"claude": true, "codex": true, "gemini": true}
+// The agent table is internal/launch: the daemon starts the same three CLIs
+// without a window, and two tables would be two answers to "what is claude".
+// What stays here is the resolved path, which only this process works out by
+// searching the well-known install locations at startup.
 
-// buildAgentArgv builds a plain (non-yolo/non-auto) launch command for one of
-// the three supported CLI tools. Mirrors the relevant cases of
-// frontend/src/lib/claude.ts's buildClaudeArgv, ported to Go since agent
-// -control sessions are spawned without any frontend involvement.
-func (a *AppService) buildAgentArgv(tool, model string) []string {
-	var cmd string
-	switch tool {
-	case "claude":
-		cmd = a.resolvedClaudePath
-		if cmd == "" {
-			cmd = a.cfg.ClaudeCommand
-		}
-	case "codex":
-		cmd = a.resolvedCodexPath
-		if cmd == "" {
-			cmd = a.cfg.CodexCommand
-		}
-	case "gemini":
-		cmd = a.resolvedGeminiPath
-		if cmd == "" {
-			cmd = a.cfg.GeminiCommand
-		}
-	default:
+// agentArgv builds a plain (non-yolo, non-auto) launch command for one of the
+// supported CLIs, preferring the path this process resolved over the bare
+// command from the config.
+func (a *AppService) agentArgv(tool, model string) []string {
+	argv, err := a.launchPolicy().Argv(tool, model)
+	if err != nil {
 		return nil
 	}
-	if cmd == "" {
-		cmd = tool
-	}
-	if model != "" {
-		return []string{cmd, "--model", model}
-	}
-	return []string{cmd}
+	return argv
 }
 
-func agentToolDisplayName(tool string) string {
-	switch tool {
-	case "claude":
-		return "Claude"
-	case "codex":
-		return "Codex"
-	case "gemini":
-		return "Gemini"
-	default:
-		return tool
+// launchCommands maps each tool to the command to start it with: the resolved
+// absolute path when startup found one, the configured command otherwise.
+func (a *AppService) launchCommands() launch.Commands {
+	pick := func(resolved, configured string) string {
+		if resolved != "" {
+			return resolved
+		}
+		return configured
+	}
+	return launch.Commands{
+		"claude": pick(a.resolvedClaudePath, a.cfg.ClaudeCommand),
+		"codex":  pick(a.resolvedCodexPath, a.cfg.CodexCommand),
+		"gemini": pick(a.resolvedGeminiPath, a.cfg.GeminiCommand),
 	}
 }
 
-// SpawnAgentSession opens a new session running claude, codex, or gemini in
-// dir, optionally queuing prompt once the CLI has started. It is the
-// Go-native entry point the local MCP server (app_mcp_server.go) calls on
-// behalf of an agent delegating a task to another tool; the frontend attaches
-// a visible pane in response to the emitted "mtui:session-spawned" event.
 func (a *AppService) SpawnAgentSession(tool, dir, model, prompt string) (int, error) {
-	if !agentTools[tool] {
-		return -1, fmt.Errorf("unsupported tool %q (must be claude, codex, or gemini)", tool)
+	if !launch.IsAgentTool(tool) {
+		return -1, fmt.Errorf("unsupported tool %q (must be %s)", tool,
+			strings.Join(launch.KnownAgents(), ", "))
 	}
 	if dir == "" {
 		dir = a.GetWorkingDir()
 	}
 
-	argv := a.buildAgentArgv(tool, model)
+	argv := a.agentArgv(tool, model)
 	id := a.CreateSession(argv, dir, 24, 80, tool)
 	if id < 0 {
 		return -1, fmt.Errorf("failed to start %s session in %q", tool, dir)
@@ -99,7 +81,7 @@ func (a *AppService) SpawnAgentSession(tool, dir, model, prompt string) (int, er
 	a.agentSessions[id] = AgentSessionInfo{ID: id, Tool: tool, Dir: dir, Model: model, Running: true}
 	a.mu.Unlock()
 
-	name := agentToolDisplayName(tool)
+	name := launch.AgentDisplayName(tool)
 	if model != "" {
 		name = fmt.Sprintf("%s (%s)", name, model)
 	}
