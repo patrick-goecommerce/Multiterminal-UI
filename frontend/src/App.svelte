@@ -514,7 +514,7 @@
   $: if ($activeTab) pollActiveTab($activeTab);
 
   function pollActiveTab(tab: { id: string; dir: string }) {
-    const key = `${tab.id} ${tab.dir}`;
+    const key = `${tab.id}\0${tab.dir}`;
     if (key === lastActiveTabKey) return;
     lastActiveTabKey = key;
     updateBranch();
