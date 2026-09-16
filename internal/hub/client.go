@@ -203,6 +203,19 @@ func (r *Remote) Repaint(id int) ([]byte, error) {
 // Release implements Host: it drops the connection and leaves every session
 // running on the daemon. That asymmetry with Embedded.Release is the point of
 // the daemon.
+// Shutdown asks the daemon to stop.
+//
+// It is not part of Host on purpose: an Embedded host is stopped by releasing
+// it, while a daemon is a separate process somebody has to decide to end. The
+// daemon answers before it stops, so a nil error means the request was taken,
+// not that the process is already gone.
+//
+// Stopping the daemon ends every session it holds. That is the whole point of
+// it being an explicit call.
+func (r *Remote) Shutdown() error {
+	return r.call(http.MethodPost, "/v1/hub/shutdown", nil, nil)
+}
+
 func (r *Remote) Release() {
 	r.mu.Lock()
 	if r.closed {
