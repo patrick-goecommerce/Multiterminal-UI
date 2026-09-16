@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/json"
 	"os"
 	"runtime"
 	"strings"
@@ -154,5 +155,45 @@ func TestPumpToBatcher_TruncationTriggersARepaint(t *testing.T) {
 	}
 	if !strings.Contains(got, "after the gap") {
 		t.Errorf("batched output = %q, want the chunk itself as well", got)
+	}
+}
+
+// An exit or a suspend reported by the daemon arrives as JSON, not as a
+// struct. The handler used to type-assert, so in daemon mode none of these
+// events reached the UI at all.
+func TestOnHostEvent_HandlesAJSONPayloadFromTheDaemon(t *testing.T) {
+	const id = 5
+	cleanupActivityTracking(id)
+	a := newTestApp()
+	t.Cleanup(a.host.Release)
+
+	raw, err := json.Marshal(hub.SessionSuspended{ID: id, ResumeID: "uuid"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	a.onHostEvent(hub.EventSessionSuspended, json.RawMessage(raw))
+
+	prevActivityMu.Lock()
+	state := prevActivity[id]
+	prevActivityMu.Unlock()
+	if state != "sleeping" {
+		t.Errorf("activity after a JSON suspend event = %q, want %q", state, "sleeping")
+	}
+}
+
+// The in-process host hands over the struct itself; both shapes must work.
+func TestOnHostEvent_HandlesAStructPayloadFromTheEmbeddedHost(t *testing.T) {
+	const id = 6
+	cleanupActivityTracking(id)
+	a := newTestApp()
+	t.Cleanup(a.host.Release)
+
+	a.onHostEvent(hub.EventSessionResumed, hub.SessionResumed{ID: id, ResumeID: "uuid"})
+
+	prevActivityMu.Lock()
+	state := prevActivity[id]
+	prevActivityMu.Unlock()
+	if state != "resuming" {
+		t.Errorf("activity after a struct resume event = %q, want %q", state, "resuming")
 	}
 }

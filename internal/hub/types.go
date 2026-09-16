@@ -1,6 +1,9 @@
 package hub
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Protocol is the wire version a client and a daemon must agree on. It is
 // bumped whenever a change would make an older client misread a newer daemon.
@@ -206,3 +209,33 @@ type SinkFunc func(name string, payload any)
 
 // Emit implements EventSink.
 func (f SinkFunc) Emit(name string, payload any) { f(name, payload) }
+
+// DecodePayload reads an event payload as T.
+//
+// The same event arrives in two shapes depending on where the host is: an
+// in-process host hands the payload struct straight to the sink, while a
+// remote one delivers the JSON the daemon sent. A handler that only type-
+// asserts works against one of them and silently ignores the other, which is
+// how a client can end up never hearing about an exit at all.
+func DecodePayload[T any](payload any) (T, bool) {
+	if typed, ok := payload.(T); ok {
+		return typed, true
+	}
+	var out T
+	switch raw := payload.(type) {
+	case json.RawMessage:
+		if json.Unmarshal(raw, &out) == nil {
+			return out, true
+		}
+	case []byte:
+		if json.Unmarshal(raw, &out) == nil {
+			return out, true
+		}
+	case string:
+		if json.Unmarshal([]byte(raw), &out) == nil {
+			return out, true
+		}
+	}
+	var zero T
+	return zero, false
+}

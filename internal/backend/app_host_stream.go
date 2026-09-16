@@ -55,23 +55,27 @@ func (a *AppService) pumpToBatcher(id int, sub *hub.Subscription) {
 // frontend already listens for. Keeping the translation here is what lets the
 // frontend stay unchanged when the host moves into another process.
 func (a *AppService) onHostEvent(name string, payload any) {
+	// The payload arrives as a struct from an in-process host and as JSON from
+	// the daemon, so every case decodes rather than asserts. Asserting worked
+	// against the embedded host only, which meant an exit reported by the
+	// daemon reached nobody.
 	switch name {
 	case hub.EventSessionExited:
-		ev, ok := payload.(hub.SessionExited)
+		ev, ok := hub.DecodePayload[hub.SessionExited](payload)
 		if !ok || a.app == nil {
 			return // no frontend to notify (before ServiceStartup, and in tests)
 		}
 		a.app.Event.Emit("terminal:exit", TerminalExitEvent{ID: ev.ID, ExitCode: ev.ExitCode})
 
 	case hub.EventSessionSuspended:
-		ev, ok := payload.(hub.SessionSuspended)
+		ev, ok := hub.DecodePayload[hub.SessionSuspended](payload)
 		if !ok {
 			return
 		}
 		a.emitLifecycleActivity(ev.ID, "sleeping")
 
 	case hub.EventSessionResumed:
-		ev, ok := payload.(hub.SessionResumed)
+		ev, ok := hub.DecodePayload[hub.SessionResumed](payload)
 		if !ok {
 			return
 		}
