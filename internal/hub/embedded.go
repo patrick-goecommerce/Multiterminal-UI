@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
+	"net"
 	"os"
 	"sort"
 	"sync"
@@ -30,6 +32,10 @@ type Options struct {
 	// client finds yesterday's picture. Off by default so a caller that
 	// drives the scan itself (or a test) is not surprised by a ticker.
 	Scan bool
+	// Shim turns on the loopback endpoints MTUI's helper binaries post to.
+	// It belongs wherever the sessions are, because a session's environment
+	// names that port for as long as the session lives.
+	Shim bool
 	// HooksDir turns on the lifecycle-hook reader over that directory. Like
 	// Scan, it belongs wherever the sessions are: the hook events are how an
 	// agent says what it is doing, and they keep arriving while no client is
@@ -63,6 +69,9 @@ type Embedded struct {
 	// reader). Closed exactly once, by Release.
 	stop     chan struct{}
 	stopOnce sync.Once
+
+	shimPort     int
+	shimListener net.Listener
 }
 
 type managed struct {
@@ -98,6 +107,13 @@ func NewEmbedded(opts Options) *Embedded {
 	if opts.Scan {
 		go h.scanLoop()
 	}
+	if opts.Shim {
+		if err := h.startShim(); err != nil {
+			// Not fatal: without it an agent loses its cost readout and the
+			// tmux shim logs nowhere, but its pane runs.
+			log.Printf("[hub] shim endpoints unavailable: %v", err)
+		}
+	}
 	if opts.HooksDir != "" {
 		h.startHookReader(opts.HooksDir)
 	}
@@ -121,6 +137,7 @@ func (h *Embedded) HubID() string { return h.hubID }
 func (h *Embedded) Info() Info {
 	return Info{
 		HubID:     h.hubID,
+		ShimPort:  h.shimPort,
 		Protocol:  Protocol,
 		Version:   h.version,
 		PID:       os.Getpid(),
@@ -291,6 +308,9 @@ func (h *Embedded) Release() {
 	}
 	h.closed = true
 	h.stopOnce.Do(func() { close(h.stop) })
+	if h.shimListener != nil {
+		_ = h.shimListener.Close()
+	}
 	ids := make([]int, 0, len(h.sessions))
 	for id := range h.sessions {
 		ids = append(ids, id)

@@ -144,7 +144,12 @@ type ScanResult struct {
 
 // Info describes a Host to a client that just connected.
 type Info struct {
-	HubID     string    `json:"hub_id" yaml:"hub_id"`
+	HubID string `json:"hub_id" yaml:"hub_id"`
+	// ShimPort is where MTUI's helper binaries post (MTUI_PORT in a session's
+	// environment), or 0 when this host serves no shim endpoints. It has to
+	// come from the host because the value is baked into a session at launch
+	// and outlives any one window.
+	ShimPort  int       `json:"shim_port" yaml:"shim_port"`
 	Protocol  int       `json:"protocol" yaml:"protocol"`
 	Version   string    `json:"version" yaml:"version"`
 	PID       int       `json:"pid" yaml:"pid"`
@@ -171,6 +176,10 @@ const (
 	// sessions rather than one per session because the consumer's own work
 	// (debouncing, advancing a queue) is per tick, not per session.
 	EventSessionScan = "session.scan"
+	// EventTmuxCommand reports what the tmux shim was asked to run. It is
+	// informational: MTUI has no tmux, and the shim exists so an agent that
+	// reaches for one gets an answer instead of an error.
+	EventTmuxCommand = "tmux.command"
 	// EventSessionHook carries one lifecycle event the agent reported, after
 	// the host has recorded what it said about the session's state.
 	EventSessionHook      = "session.hook"
@@ -194,6 +203,13 @@ type SessionExited struct {
 // ScanReport is the payload of EventSessionScan.
 type ScanReport struct {
 	Results []ScanResult `json:"results" yaml:"results"`
+}
+
+// TmuxCommand is the payload of EventTmuxCommand.
+type TmuxCommand struct {
+	Args []string `json:"args" yaml:"args"`
+	Dir  string   `json:"dir" yaml:"dir"`
+	Env  string   `json:"env" yaml:"env"`
 }
 
 // HookReport is the payload of EventSessionHook: one lifecycle event, plus

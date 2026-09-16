@@ -67,6 +67,13 @@ func (a *AppService) onHostEvent(name string, payload any) {
 		}
 		a.applyScanResults(report.Results)
 
+	case hub.EventTmuxCommand:
+		entry, ok := hub.DecodePayload[hub.TmuxCommand](payload)
+		if !ok || a.app == nil {
+			return
+		}
+		a.app.Event.Emit("tmux:command", entry)
+
 	case hub.EventSessionHook:
 		report, ok := hub.DecodePayload[hub.HookReport](payload)
 		if !ok {

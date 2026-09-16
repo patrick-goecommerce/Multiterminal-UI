@@ -36,6 +36,7 @@ func (a *AppService) newSessionHost() hub.Host {
 		return hub.NewEmbedded(hub.Options{
 			Version:  Version,
 			Scan:     true,
+			Shim:     true,
 			HooksDir: config.HooksDir(),
 			KillTree: killProcessTree,
 			Sink:     hub.SinkFunc(a.onHostEvent),

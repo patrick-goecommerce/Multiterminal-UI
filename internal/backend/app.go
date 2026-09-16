@@ -61,7 +61,6 @@ type AppService struct {
 	codexDetected      bool
 	resolvedGeminiPath string
 	geminiDetected     bool
-	tmuxAPIPort        int           // port for the tmux shim HTTP API
 	mcpServerPort      int           // port for the agent-control MCP server
 	focusToken         string        // token a focus request must present (see app_notify.go)
 	bindWarnings       []BindWarning // listeners that failed to start, surfaced via CheckHealth
@@ -162,13 +161,6 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	// loopback listeners (focus signal, agent-control MCP server).
 	registerProtocol()
 	a.startLocalListeners()
-
-	// Start tmux shim API server
-	if port, err := a.startTmuxAPI(); err != nil {
-		log.Printf("[tmux-api] failed to start: %v", err)
-	} else {
-		a.tmuxAPIPort = port
-	}
 
 	return nil
 }

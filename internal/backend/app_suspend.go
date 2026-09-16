@@ -43,8 +43,8 @@ func isClaudeMode(mode string) bool {
 // cmd/mtui-hook. Both failures are invisible until something goes wrong.
 func (a *AppService) sessionEnv(id int, dir, mode string) []string {
 	var env []string
-	if a.tmuxAPIPort > 0 {
-		env = append(env, fmt.Sprintf("MTUI_PORT=%d", a.tmuxAPIPort))
+	if port := a.GetTmuxAPIPort(); port > 0 {
+		env = append(env, fmt.Sprintf("MTUI_PORT=%d", port))
 	}
 	if isClaudeMode(mode) {
 		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))

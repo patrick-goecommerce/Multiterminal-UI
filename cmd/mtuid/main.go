@@ -108,6 +108,10 @@ func run(args []string) int {
 		// existing is the stretch of time when no window is open, and an
 		// agent's state has to keep being written down through it.
 		Scan: true,
+		// The helper endpoints go with the sessions too: MTUI_PORT is baked
+		// into a session's environment and has to stay reachable for its whole
+		// life, not just for this window's.
+		Shim: true,
 		// The hook reader moves with the sessions for the same reason: the
 		// agent keeps reporting through it while no window is open.
 		HooksDir: config.HooksDir(),
