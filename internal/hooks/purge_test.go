@@ -1,4 +1,4 @@
-package backend
+package hooks
 
 import (
 	"os"
@@ -7,16 +7,11 @@ import (
 	"time"
 )
 
-// newPurgeTestManager builds a HookManager over a temp dir whose host owns no
-// sessions: dispatch then finds nothing and stops, which is what these
-// directory-level tests want; leaving it unset would panic instead.
-func newPurgeTestManager(t *testing.T) *HookManager {
+// newPurgeTestManager builds a Watcher over a temp dir with no callback:
+// these tests are about the directory, not about what an event does.
+func newPurgeTestManager(t *testing.T) *Watcher {
 	t.Helper()
-	return &HookManager{
-		dir:      t.TempDir(),
-		offsets:  make(map[string]int64),
-		sessions: testHost(nil),
-	}
+	return NewWatcher(t.TempDir(), nil)
 }
 
 // writeHookFile creates a hook file and back-dates it, so age-based behaviour
@@ -35,21 +30,21 @@ func writeHookFile(t *testing.T, dir, name, body string, age time.Duration) stri
 }
 
 func TestPurgeStaleFiles_RemovesOnlyOldOnes(t *testing.T) {
-	hm := newPurgeTestManager(t)
-	writeHookFile(t, hm.dir, "old.jsonl", "{}\n", 10*24*time.Hour)
-	writeHookFile(t, hm.dir, "fresh.jsonl", "{}\n", time.Minute)
-	writeHookFile(t, hm.dir, "keep.txt", "not a hook file", 30*24*time.Hour)
+	w := newPurgeTestManager(t)
+	writeHookFile(t, w.dir, "old.jsonl", "{}\n", 10*24*time.Hour)
+	writeHookFile(t, w.dir, "fresh.jsonl", "{}\n", time.Minute)
+	writeHookFile(t, w.dir, "keep.txt", "not a hook file", 30*24*time.Hour)
 
-	if got := hm.purgeStaleFiles(7 * 24 * time.Hour); got != 1 {
+	if got := w.purgeStaleFiles(7 * 24 * time.Hour); got != 1 {
 		t.Fatalf("purged %d files, want 1", got)
 	}
-	if _, err := os.Stat(filepath.Join(hm.dir, "old.jsonl")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(w.dir, "old.jsonl")); !os.IsNotExist(err) {
 		t.Error("the stale file survived")
 	}
-	if _, err := os.Stat(filepath.Join(hm.dir, "fresh.jsonl")); err != nil {
+	if _, err := os.Stat(filepath.Join(w.dir, "fresh.jsonl")); err != nil {
 		t.Error("a fresh file was removed")
 	}
-	if _, err := os.Stat(filepath.Join(hm.dir, "keep.txt")); err != nil {
+	if _, err := os.Stat(filepath.Join(w.dir, "keep.txt")); err != nil {
 		t.Error("a non-hook file was removed")
 	}
 }
@@ -58,23 +53,23 @@ func TestPurgeStaleFiles_RemovesOnlyOldOnes(t *testing.T) {
 // back, a stale offset would seek past the end of the new file and swallow
 // every event it carries.
 func TestPurgeStaleFiles_DropsTheOffsetToo(t *testing.T) {
-	hm := newPurgeTestManager(t)
-	writeHookFile(t, hm.dir, "gone.jsonl", "{}\n{}\n", 10*24*time.Hour)
-	hm.offsets["gone.jsonl"] = 6
+	w := newPurgeTestManager(t)
+	writeHookFile(t, w.dir, "gone.jsonl", "{}\n{}\n", 10*24*time.Hour)
+	w.offsets["gone.jsonl"] = 6
 
-	hm.purgeStaleFiles(7 * 24 * time.Hour)
+	w.purgeStaleFiles(7 * 24 * time.Hour)
 
-	hm.mu.Lock()
-	_, still := hm.offsets["gone.jsonl"]
-	hm.mu.Unlock()
+	w.mu.Lock()
+	_, still := w.offsets["gone.jsonl"]
+	w.mu.Unlock()
 	if still {
 		t.Error("the offset entry outlived the file it described")
 	}
 }
 
 func TestPurgeStaleFiles_MissingDirIsNotAnError(t *testing.T) {
-	hm := &HookManager{dir: filepath.Join(t.TempDir(), "does-not-exist"), offsets: map[string]int64{}}
-	if got := hm.purgeStaleFiles(time.Hour); got != 0 {
+	w := NewWatcher(filepath.Join(t.TempDir(), "does-not-exist"), nil)
+	if got := w.purgeStaleFiles(time.Hour); got != 0 {
 		t.Errorf("purged %d from a missing directory, want 0", got)
 	}
 }
@@ -102,18 +97,18 @@ func TestNeedsRead(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hm := newPurgeTestManager(t)
+			w := newPurgeTestManager(t)
 			if tt.seen {
-				hm.offsets["s.jsonl"] = tt.offset
+				w.offsets["s.jsonl"] = tt.offset
 			}
 
-			if got := hm.needsRead("s.jsonl", tt.size); got != tt.want {
+			if got := w.needsRead("s.jsonl", tt.size); got != tt.want {
 				t.Errorf("needsRead(size=%d, offset=%d, seen=%v) = %v, want %v", tt.size, tt.offset, tt.seen, got, tt.want)
 			}
 
-			hm.mu.Lock()
-			gotOffset := hm.offsets["s.jsonl"]
-			hm.mu.Unlock()
+			w.mu.Lock()
+			gotOffset := w.offsets["s.jsonl"]
+			w.mu.Unlock()
 			if tt.seen && gotOffset != tt.wantOffset {
 				t.Errorf("offset = %d after the check, want %d", gotOffset, tt.wantOffset)
 			}
@@ -124,33 +119,33 @@ func TestNeedsRead(t *testing.T) {
 // The point of the whole change: a directory full of untouched files must not
 // be opened on every tick.
 func TestProcessDirectory_SkipsUnchangedFiles(t *testing.T) {
-	hm := newPurgeTestManager(t)
+	w := newPurgeTestManager(t)
 	for _, n := range []string{"a.jsonl", "b.jsonl", "c.jsonl"} {
-		writeHookFile(t, hm.dir, n, "{\"event\":\"Stop\",\"mt_id\":1}\n", time.Minute)
+		writeHookFile(t, w.dir, n, "{\"event\":\"Stop\",\"mt_id\":1}\n", time.Minute)
 	}
 
 	// First pass records every offset.
-	hm.processDirectory()
-	hm.mu.Lock()
-	after := len(hm.offsets)
-	hm.mu.Unlock()
+	w.processDirectory()
+	w.mu.Lock()
+	after := len(w.offsets)
+	w.mu.Unlock()
 	if after != 3 {
 		t.Fatalf("recorded %d offsets after the first pass, want 3", after)
 	}
 
 	// Nothing changed on disk, so a second pass must find nothing to read.
 	for _, n := range []string{"a.jsonl", "b.jsonl", "c.jsonl"} {
-		info, err := os.Stat(filepath.Join(hm.dir, n))
+		info, err := os.Stat(filepath.Join(w.dir, n))
 		if err != nil {
 			t.Fatalf("stat %s: %v", n, err)
 		}
-		if hm.needsRead(n, info.Size()) {
+		if w.needsRead(n, info.Size()) {
 			t.Errorf("%s would be re-opened although it did not change", n)
 		}
 	}
 
 	// Appending to one file brings exactly that one back.
-	path := filepath.Join(hm.dir, "b.jsonl")
+	path := filepath.Join(w.dir, "b.jsonl")
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatalf("open for append: %v", err)
@@ -164,7 +159,7 @@ func TestProcessDirectory_SkipsUnchangedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat: %v", err)
 	}
-	if !hm.needsRead("b.jsonl", info.Size()) {
+	if !w.needsRead("b.jsonl", info.Size()) {
 		t.Error("the appended file was not picked up")
 	}
 }

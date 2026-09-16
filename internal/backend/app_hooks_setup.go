@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"fmt"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"log"
 	"os"
 	"path/filepath"
@@ -25,16 +26,19 @@ func (a *AppService) resolveHookBinary(name string, embedded []byte) string {
 	return exe
 }
 
-// setupHooks deploys the hook script, registers hooks in ~/.claude/settings.json,
-// and starts the HookManager polling loop.
+// setupHooks deploys the hook binary and registers it in
+// ~/.claude/settings.json.
+//
+// It no longer reads the resulting files: that is the session host's job
+// (internal/hub), because the events keep arriving while no window is open.
+// What stays here is the registration, which only a running app can do.
 func (a *AppService) setupHooks(ctx context.Context) {
-	appDataDir := os.Getenv("APPDATA")
-	if appDataDir == "" {
+	hooksDir := config.HooksDir()
+	if hooksDir == "" {
 		log.Println("[hooks] APPDATA not set — hook integration skipped")
 		return
 	}
-
-	hooksDir := filepath.Join(appDataDir, "Multiterminal", "hooks")
+	appDataDir := filepath.Dir(hooksDir)
 
 	if err := os.MkdirAll(hooksDir, 0755); err != nil {
 		log.Printf("[hooks] could not create app dir: %v", err)
@@ -68,12 +72,7 @@ func (a *AppService) setupHooks(ctx context.Context) {
 		log.Println("[hooks] hooks registered in ~/.claude/settings.json")
 	}
 
-	// Start the HookManager
-	a.hookMgr = newHookManager(hooksDir, a.host, a.onHookActivity)
-	a.hookMgr.onPrompt = a.maybeGeneratePaneName
-	a.hookMgr.onWorktreeChange = a.onWorktreeChange
-	a.hookMgr.onPathBlocked = a.onWorktreePathBlocked
-	a.hookMgr.Start(ctx)
+	a.hooksDir = hooksDir
 }
 
 // onHookActivity is the HookManager's activity callback. It repaints the badge
@@ -83,7 +82,7 @@ func (a *AppService) setupHooks(ctx context.Context) {
 //
 // It deliberately triggers *no* side effects. Queue advance, orchestrator
 // notification and issue reporting all hang off the one confirmed change in
-// scanAllSessions (see confirmActivity). Firing them here as well meant every
+// applyScanResults (see confirmActivity). Firing them here as well meant every
 // hook-driven completion ran them twice about two seconds apart, and
 // reportIssueProgress has no deduplication: with auto_comment_on_done that was
 // two GitHub comments per completion, with auto_close_issue two close attempts

@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/discovery"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/procs"
@@ -103,7 +104,14 @@ func run(args []string) int {
 		HubID:     hubID,
 		Version:   Version,
 		RingBytes: *ring,
-		KillTree:  procs.KillProcessTree,
+		// The daemon scans on its own: nobody else can. Its whole reason for
+		// existing is the stretch of time when no window is open, and an
+		// agent's state has to keep being written down through it.
+		Scan: true,
+		// The hook reader moves with the sessions for the same reason: the
+		// agent keeps reporting through it while no window is open.
+		HooksDir: config.HooksDir(),
+		KillTree: procs.KillProcessTree,
 		Sink: hub.SinkFunc(func(name string, payload any) {
 			srv.Sink().Emit(name, payload)
 		}),

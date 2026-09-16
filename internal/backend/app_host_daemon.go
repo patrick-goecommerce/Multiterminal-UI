@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/discovery"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/procs"
@@ -34,6 +35,8 @@ func (a *AppService) newSessionHost() hub.Host {
 	embedded := func() hub.Host {
 		return hub.NewEmbedded(hub.Options{
 			Version:  Version,
+			Scan:     true,
+			HooksDir: config.HooksDir(),
 			KillTree: killProcessTree,
 			Sink:     hub.SinkFunc(a.onHostEvent),
 		})

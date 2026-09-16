@@ -167,6 +167,13 @@ type Chunk struct {
 // Event names emitted by a Host. They are deliberately not the Wails event
 // names: a client translates them into whatever its UI listens for.
 const (
+	// EventSessionScan carries a whole scan tick. It is one event for all
+	// sessions rather than one per session because the consumer's own work
+	// (debouncing, advancing a queue) is per tick, not per session.
+	EventSessionScan = "session.scan"
+	// EventSessionHook carries one lifecycle event the agent reported, after
+	// the host has recorded what it said about the session's state.
+	EventSessionHook      = "session.hook"
 	EventSessionCreated   = "session.created"
 	EventSessionExited    = "session.exited"
 	EventSessionSuspended = "session.suspended"
@@ -182,6 +189,29 @@ type SessionCreated struct {
 type SessionExited struct {
 	ID       int `json:"id" yaml:"id"`
 	ExitCode int `json:"exit_code" yaml:"exit_code"`
+}
+
+// ScanReport is the payload of EventSessionScan.
+type ScanReport struct {
+	Results []ScanResult `json:"results" yaml:"results"`
+}
+
+// HookReport is the payload of EventSessionHook: one lifecycle event, plus
+// what the host made of it.
+type HookReport struct {
+	Session        int    `json:"session" yaml:"session"`
+	Event          string `json:"event" yaml:"event"`
+	AgentSessionID string `json:"agent_session_id" yaml:"agent_session_id"`
+	Tool           string `json:"tool" yaml:"tool"`
+	Message        string `json:"message" yaml:"message"`
+	Cwd            string `json:"cwd" yaml:"cwd"`
+	WorktreePath   string `json:"worktree_path" yaml:"worktree_path"`
+	WorktreeBranch string `json:"worktree_branch" yaml:"worktree_branch"`
+	BlockedPath    string `json:"blocked_path" yaml:"blocked_path"`
+	BlockReason    string `json:"block_reason" yaml:"block_reason"`
+	// Activity is what this event said about the session's state, empty when
+	// it said nothing. The host has already applied it.
+	Activity Activity `json:"activity,omitempty" yaml:"activity,omitempty"`
 }
 
 // SessionSuspended is the payload of EventSessionSuspended: the pane's process

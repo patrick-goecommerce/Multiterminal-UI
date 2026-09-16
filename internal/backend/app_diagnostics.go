@@ -57,10 +57,10 @@ func (a *AppService) RuntimeStats() RuntimeStats {
 // directory is unknown or unreadable — -1 rather than 0 so the UI can tell
 // "nothing there" from "could not look".
 func (a *AppService) countHookFiles() int {
-	if a.hookMgr == nil || a.hookMgr.dir == "" {
+	if a.hooksDir == "" {
 		return -1
 	}
-	entries, err := os.ReadDir(a.hookMgr.dir)
+	entries, err := os.ReadDir(a.hooksDir)
 	if err != nil {
 		return -1
 	}

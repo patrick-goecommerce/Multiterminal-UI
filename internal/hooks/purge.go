@@ -1,4 +1,4 @@
-package backend
+package hooks
 
 import (
 	"log"
@@ -8,16 +8,16 @@ import (
 	"time"
 )
 
-// hookFileMaxAge is how long an untouched hook file is kept before it is
+// FileMaxAge is how long an untouched hook file is kept before it is
 // removed. Generous on purpose: a pane can sit idle for days, and the only cost
 // of keeping a file too long is one directory entry.
-const hookFileMaxAge = 7 * 24 * time.Hour
+const FileMaxAge = 7 * 24 * time.Hour
 
-// hookPurgeInterval is how often stale files are swept while the app runs.
-const hookPurgeInterval = time.Hour
+// purgeInterval is how often stale files are swept while the app runs.
+const purgeInterval = time.Hour
 
 // purgeStaleFiles removes hook files that have not been written to in
-// hookFileMaxAge and returns how many it deleted.
+// FileMaxAge and returns how many it deleted.
 //
 // Without this the directory only ever grows. A file is deleted on a SessionEnd
 // event and nowhere else, so every Claude process that dies without one — crash,
@@ -28,8 +28,8 @@ const hookPurgeInterval = time.Hour
 // Deleting a file whose session later revives is safe: the offset entry goes
 // with it, so the recreated file is read from the start rather than seeked past
 // its end.
-func (hm *HookManager) purgeStaleFiles(maxAge time.Duration) int {
-	entries, err := os.ReadDir(hm.dir)
+func (w *Watcher) purgeStaleFiles(maxAge time.Duration) int {
+	entries, err := os.ReadDir(w.dir)
 	if err != nil {
 		return 0
 	}
@@ -43,12 +43,12 @@ func (hm *HookManager) purgeStaleFiles(maxAge time.Duration) int {
 		if err != nil || info.ModTime().After(cutoff) {
 			continue
 		}
-		if err := os.Remove(filepath.Join(hm.dir, entry.Name())); err != nil {
+		if err := os.Remove(filepath.Join(w.dir, entry.Name())); err != nil {
 			continue
 		}
-		hm.mu.Lock()
-		delete(hm.offsets, entry.Name())
-		hm.mu.Unlock()
+		w.mu.Lock()
+		delete(w.offsets, entry.Name())
+		w.mu.Unlock()
 		removed++
 	}
 	return removed
@@ -56,7 +56,7 @@ func (hm *HookManager) purgeStaleFiles(maxAge time.Duration) int {
 
 // logPurge reports a sweep, but only when it actually removed something — a
 // line per hour saying "removed 0" is noise.
-func (hm *HookManager) logPurge(removed int, when string) {
+func (w *Watcher) logPurge(removed int, when string) {
 	if removed > 0 {
 		log.Printf("[hooks] purged %d stale hook file(s) %s", removed, when)
 	}
@@ -69,17 +69,17 @@ func (hm *HookManager) logPurge(removed int, when string) {
 // offset points past its end, and seeking there would silently swallow every
 // event until the next app start. Resetting to 0 costs one re-read of a small
 // file and keeps the pane's hook events flowing.
-func (hm *HookManager) needsRead(name string, size int64) bool {
-	hm.mu.Lock()
-	defer hm.mu.Unlock()
-	offset, seen := hm.offsets[name]
+func (w *Watcher) needsRead(name string, size int64) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	offset, seen := w.offsets[name]
 	switch {
 	case !seen:
 		return true
 	case size > offset:
 		return true
 	case size < offset:
-		hm.offsets[name] = 0
+		w.offsets[name] = 0
 		return true
 	default:
 		return false

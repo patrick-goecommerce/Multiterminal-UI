@@ -8,21 +8,6 @@ import (
 	"time"
 )
 
-// coalesceDelay returns the scan tick delay — kept for scanLoop reuse.
-func (a *AppService) coalesceDelay() time.Duration {
-	n := a.sessionCount()
-	switch {
-	case n <= 2:
-		return 6 * time.Millisecond
-	case n <= 4:
-		return 10 * time.Millisecond
-	case n <= 6:
-		return 14 * time.Millisecond
-	default:
-		return 18 * time.Millisecond
-	}
-}
-
 // outputBatcher accumulates raw PTY bytes from all sessions and emits
 // them as a single batched Wails event per frame (≤16 ms).
 //

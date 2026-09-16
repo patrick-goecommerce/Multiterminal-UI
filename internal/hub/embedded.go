@@ -24,6 +24,17 @@ type Options struct {
 	RingBytes int
 	// Sink receives session events. Nil discards them.
 	Sink EventSink
+	// Scan turns on the host's own activity scan. It has to be on wherever
+	// the sessions are: a host whose client has gone away still has agents
+	// working, and their state has to keep being written down or the next
+	// client finds yesterday's picture. Off by default so a caller that
+	// drives the scan itself (or a test) is not surprised by a ticker.
+	Scan bool
+	// HooksDir turns on the lifecycle-hook reader over that directory. Like
+	// Scan, it belongs wherever the sessions are: the hook events are how an
+	// agent says what it is doing, and they keep arriving while no client is
+	// connected. Empty leaves the reader off.
+	HooksDir string
 	// KillTree ends a process subtree before the session is closed. It is
 	// injected rather than implemented here because it is platform code that
 	// lives in the backend (killProcessTree); the hub must not grow a second
@@ -47,6 +58,11 @@ type Embedded struct {
 	sink      EventSink
 	killTree  func(pid int)
 	startedAt time.Time
+
+	// stop ends the background loops this host runs (the scan, the hook
+	// reader). Closed exactly once, by Release.
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 type managed struct {
@@ -69,7 +85,7 @@ func NewEmbedded(opts Options) *Embedded {
 	if id == "" {
 		id = newHubID()
 	}
-	return &Embedded{
+	h := &Embedded{
 		sessions:  make(map[int]*managed),
 		hubID:     id,
 		version:   opts.Version,
@@ -77,7 +93,15 @@ func NewEmbedded(opts Options) *Embedded {
 		sink:      opts.Sink,
 		killTree:  opts.KillTree,
 		startedAt: time.Now(),
+		stop:      make(chan struct{}),
 	}
+	if opts.Scan {
+		go h.scanLoop()
+	}
+	if opts.HooksDir != "" {
+		h.startHookReader(opts.HooksDir)
+	}
+	return h
 }
 
 // newHubID returns a random identifier. It is not a secret and not a token:
@@ -266,6 +290,7 @@ func (h *Embedded) Release() {
 		return
 	}
 	h.closed = true
+	h.stopOnce.Do(func() { close(h.stop) })
 	ids := make([]int, 0, len(h.sessions))
 	for id := range h.sessions {
 		ids = append(ids, id)

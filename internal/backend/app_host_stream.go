@@ -60,6 +60,20 @@ func (a *AppService) onHostEvent(name string, payload any) {
 	// against the embedded host only, which meant an exit reported by the
 	// daemon reached nobody.
 	switch name {
+	case hub.EventSessionScan:
+		report, ok := hub.DecodePayload[hub.ScanReport](payload)
+		if !ok {
+			return
+		}
+		a.applyScanResults(report.Results)
+
+	case hub.EventSessionHook:
+		report, ok := hub.DecodePayload[hub.HookReport](payload)
+		if !ok {
+			return
+		}
+		a.onHookReport(report)
+
 	case hub.EventSessionExited:
 		ev, ok := hub.DecodePayload[hub.SessionExited](payload)
 		if !ok || a.app == nil {

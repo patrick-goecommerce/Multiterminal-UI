@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
@@ -25,7 +26,6 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	const sessID = 17
 	cleanupActivityTracking(sessID) // isolate from any prior test using this ID
 
-	dir := t.TempDir()
 	sess := terminal.NewSession(sessID, 24, 80)
 	sess.Screen.Write([]byte("$ "))
 
@@ -34,10 +34,14 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 		queues: map[int]*sessionQueue{},
 	}
 
-	// The real wiring from app_hooks_setup.go: the hook callback only repaints
-	// the badge. The queue advances on the confirmed change in the scan loop,
-	// which is what the scan ticks at the end of this test exercise.
-	hm := newHookManager(dir, app.host, app.onHookActivity)
+	// The real wiring: the host records what a hook event said and hands the
+	// report on; the window's reaction only repaints the badge. The queue
+	// advances on the confirmed change in the scan, which the ticks at the end
+	// of this test exercise. Reading the files is tested in internal/hooks.
+	hook := func(event string, activity hub.Activity) {
+		sess.SetHookActivity(terminalActivityForTest(activity))
+		app.onHookReport(hub.HookReport{Session: sessID, Event: event, Activity: activity})
+	}
 
 	// User queues a prompt; the session is idle, so it is sent immediately.
 	app.AddToQueue(sessID, "test")
@@ -46,10 +50,7 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	}
 
 	// Claude Code's UserPromptSubmit hook fires for the queued prompt.
-	writeTestHookEvent(t, dir, "claude-sess-17", testHookEvent{
-		Ts: time.Now().Unix(), Event: "UserPromptSubmit", SessionID: "claude-sess-17", MtID: sessID, Message: "test",
-	})
-	hm.processDirectory()
+	hook("UserPromptSubmit", hub.ActivityActive)
 	if got := sess.GetActivity(); got != terminal.ActivityActive {
 		t.Fatalf("after UserPromptSubmit: activity = %d, want ActivityActive", got)
 	}
@@ -61,10 +62,7 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	sess.LastOutputAt = time.Now()
 
 	// Claude finishes: the Stop hook fires.
-	writeTestHookEvent(t, dir, "claude-sess-17", testHookEvent{
-		Ts: time.Now().Unix(), Event: "Stop", SessionID: "claude-sess-17", MtID: sessID,
-	})
-	hm.processDirectory()
+	hook("Stop", hub.ActivityDone)
 	if got := sess.GetActivity(); got != terminal.ActivityDone {
 		t.Fatalf("after Stop: activity = %d, want ActivityDone", got)
 	}
@@ -82,7 +80,7 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	// issue #188) — it takes debounceWindow of a stable state to confirm. Back-
 	// date the pending timestamp instead of sleeping the test, then tick again
 	// so the candidate confirms.
-	app.scanAllSessions()
+	app.applyScanResults(app.host.ScanActivity())
 	prevActivityMu.Lock()
 	since, armed := pendingSince[sessID]
 	if armed {
@@ -94,10 +92,10 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 		// assertions below would pass on an unarmed candidate.
 		t.Fatal("first scan armed no debounce candidate — the scan never observed 'done'")
 	}
-	app.scanAllSessions()
+	app.applyScanResults(app.host.ScanActivity())
 
 	if got := sess.GetActivity(); got != terminal.ActivityDone {
-		t.Fatalf("after scanAllSessions: activity = %q, want %q — pane would be stuck on 'läuft'", got, "done")
+		t.Fatalf("after applyScanResults: activity = %q, want %q — pane would be stuck on 'läuft'", got, "done")
 	}
 	prevActivityMu.Lock()
 	gotPrev := prevActivity[sessID]

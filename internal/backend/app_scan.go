@@ -1,8 +1,8 @@
 package backend
 
 import (
-	"context"
 	"fmt"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"log"
 	"sync"
 	"time"
@@ -30,42 +30,6 @@ var (
 	prevTitle      = make(map[int]string)
 )
 
-// scanInterval returns the scan tick duration based on the number of active sessions.
-// More sessions → slower ticks to reduce overhead.
-func (a *AppService) scanInterval() time.Duration {
-	n := a.sessionCount()
-	switch {
-	case n <= 3:
-		return 500 * time.Millisecond
-	case n <= 6:
-		return 600 * time.Millisecond
-	default:
-		return 750 * time.Millisecond
-	}
-}
-
-// scanLoop periodically scans all sessions for activity changes and token info.
-// The interval adapts to the number of active sessions.
-func (a *AppService) scanLoop(ctx context.Context) {
-	interval := a.scanInterval()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			a.scanAllSessions()
-			// Re-check if interval should change
-			if newInterval := a.scanInterval(); newInterval != interval {
-				interval = newInterval
-				ticker.Reset(interval)
-			}
-		}
-	}
-}
-
 // cleanupActivityTracking removes stale tracking data for a closed session.
 func cleanupActivityTracking(id int) {
 	prevActivityMu.Lock()
@@ -76,11 +40,14 @@ func cleanupActivityTracking(id int) {
 	prevActivityMu.Unlock()
 }
 
-// scanAllSessions checks each session for activity and token updates.
-func (a *AppService) scanAllSessions() {
-	// The host decides what each session is doing; everything below decides
-	// what follows from a change. See hub.Embedded.ScanActivity.
-	for _, r := range a.host.ScanActivity() {
+// applyScanResults turns one scan tick into what the UI, the queue and the
+// issue reporting do about it.
+//
+// The host decides what each session is doing and ticks on its own; this is
+// the other half, and it runs wherever the window is. See
+// hub.Embedded.scanLoop.
+func (a *AppService) applyScanResults(results []hub.ScanResult) {
+	for _, r := range results {
 		id := r.ID
 		if r.Asleep {
 			continue

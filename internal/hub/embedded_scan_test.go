@@ -2,6 +2,7 @@ package hub
 
 import (
 	"testing"
+	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
@@ -105,5 +106,61 @@ func TestScanActivity_HookStateSurvivesAScanWithNoOutput(t *testing.T) {
 	}
 	if results[0].Activity != ActivityWaitingPermission {
 		t.Errorf("activity = %q, want %q", results[0].Activity, ActivityWaitingPermission)
+	}
+}
+
+// The host scans on its own so a daemon nobody is watching still knows what
+// its agents are doing.
+func TestScanLoop_ReportsWithoutBeingAsked(t *testing.T) {
+	sink := newSink()
+	h := NewEmbedded(Options{Scan: true, Sink: sink})
+	t.Cleanup(h.Release)
+
+	if _, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	sink.await(t, EventSessionScan)
+}
+
+// Without a session there is nothing to report, and a tick that emits an
+// empty report every half second would be noise on every client's socket.
+func TestScanLoop_SaysNothingWithNoSessions(t *testing.T) {
+	sink := newSink()
+	h := NewEmbedded(Options{Scan: true, Sink: sink})
+	t.Cleanup(h.Release)
+
+	select {
+	case name := <-sink.got:
+		t.Errorf("an idle host emitted %q", name)
+	case <-time.After(1500 * time.Millisecond):
+	}
+}
+
+// The tick slows down as panes pile up: the scan reads every screen.
+func TestScanTick_SlowsDownWithMoreSessions(t *testing.T) {
+	if scanTick(1) >= scanTick(5) || scanTick(5) >= scanTick(20) {
+		t.Errorf("ticks do not increase: %v, %v, %v", scanTick(1), scanTick(5), scanTick(20))
+	}
+}
+
+// Release stops the loop; a ticker left running would keep a released host
+// alive and keep reading screens nobody owns any more.
+func TestScanLoop_StopsOnRelease(t *testing.T) {
+	sink := newSink()
+	h := NewEmbedded(Options{Scan: true, Sink: sink})
+	if _, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	sink.await(t, EventSessionScan)
+
+	h.Release()
+	// Drain whatever was already queued, then require silence.
+	for len(sink.got) > 0 {
+		<-sink.got
+	}
+	select {
+	case name := <-sink.got:
+		t.Errorf("a released host emitted %q", name)
+	case <-time.After(1500 * time.Millisecond):
 	}
 }

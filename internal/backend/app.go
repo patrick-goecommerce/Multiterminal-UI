@@ -51,7 +51,12 @@ type AppService struct {
 	detachCount        int            // monotonic counter for detached window IDs
 	safeMode           bool
 	sessionBackup      *config.SessionState // populated in safe-mode; restored on shutdown
-	hookMgr            *HookManager
+	hooksDir           string               // where mtui-hook writes; the host reads it
+	// Seams for the UI reactions to a lifecycle hook event; nil means the real
+	// handler (see onHookReport).
+	hookPrompt         func(id int, prompt string)
+	hookWorktree       func(id int, worktreePath, worktreeBranch, cwd string)
+	hookPathBlocked    func(id int, path, reason string)
 	resolvedCodexPath  string
 	codexDetected      bool
 	resolvedGeminiPath string
@@ -143,11 +148,12 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	// Enable Claude voice dictation by default (settings.json only — no CLI flag exists)
 	go a.setupVoice()
 
-	// Start periodic scanner for activity and token detection
+	// The activity scan is not started here: it runs on the host, which is
+	// where the sessions are. With the daemon that means it keeps going while
+	// no window is open; the results arrive as EventSessionScan.
 	scanCtx, cancel := context.WithCancel(ctx)
 	a.cancelAll = cancel
 	a.outputBatch() // ensure the batcher is initialized before batchLoop starts
-	go a.scanLoop(scanCtx)
 	go a.batchLoop(scanCtx)
 	go a.scheduleLoop(scanCtx)
 	go a.idleSuspendLoop(scanCtx)

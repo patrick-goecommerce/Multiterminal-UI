@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
@@ -21,7 +22,6 @@ func TestHookDrivenCompletion_ReportsIssueProgressExactlyOnce(t *testing.T) {
 	const sessID = 71
 	cleanupActivityTracking(sessID) // isolate from any prior test using this ID
 
-	dir := t.TempDir()
 	sess := terminal.NewSession(sessID, 24, 80)
 	sess.Screen.Write([]byte("$ "))
 
@@ -34,26 +34,23 @@ func TestHookDrivenCompletion_ReportsIssueProgressExactlyOnce(t *testing.T) {
 		reports = append(reports, ev)
 	}
 
-	hm := newHookManager(dir, app.host, app.onHookActivity)
+	hook := func(event string, activity hub.Activity) {
+		sess.SetHookActivity(terminalActivityForTest(activity))
+		app.onHookReport(hub.HookReport{Session: sessID, Event: event, Activity: activity})
+	}
 
 	// Claude starts working.
-	writeTestHookEvent(t, dir, "claude-sess-71", testHookEvent{
-		Ts: time.Now().Unix(), Event: "UserPromptSubmit", SessionID: "claude-sess-71", MtID: sessID, Message: "los",
-	})
-	hm.processDirectory()
+	hook("UserPromptSubmit", hub.ActivityActive)
 	confirmViaScan(t, app, sessID)
 
 	// Claude finishes: exactly one Stop event, one real completion.
 	sess.LastOutputAt = time.Now()
-	writeTestHookEvent(t, dir, "claude-sess-71", testHookEvent{
-		Ts: time.Now().Unix(), Event: "Stop", SessionID: "claude-sess-71", MtID: sessID,
-	})
-	hm.processDirectory()
+	hook("Stop", hub.ActivityDone)
 	confirmViaScan(t, app, sessID)
 
 	// Further ticks on the settled state must add nothing.
-	app.scanAllSessions()
-	app.scanAllSessions()
+	app.applyScanResults(app.host.ScanActivity())
+	app.applyScanResults(app.host.ScanActivity())
 
 	if len(reports) != 1 || reports[0] != progressDone {
 		t.Fatalf("reportIssueProgress calls = %v, want exactly one %q — a single completion must report once", reports, progressDone)
@@ -62,7 +59,7 @@ func TestHookDrivenCompletion_ReportsIssueProgressExactlyOnce(t *testing.T) {
 
 // The hook callback exists for latency: it repaints the badge a debounce window
 // before the scan loop confirms. That is all it may do — every side effect
-// belongs to the one confirmed change in scanAllSessions.
+// belongs to the one confirmed change in applyScanResults.
 func TestOnHookActivity_TriggersNoSideEffects(t *testing.T) {
 	const sessID = 72
 	cleanupActivityTracking(sessID)
@@ -97,7 +94,7 @@ func TestOnHookActivity_TriggersNoSideEffects(t *testing.T) {
 // tick confirms it.
 func confirmViaScan(t *testing.T, app *AppService, sessID int) {
 	t.Helper()
-	app.scanAllSessions()
+	app.applyScanResults(app.host.ScanActivity())
 	prevActivityMu.Lock()
 	since, ok := pendingSince[sessID]
 	if ok {
@@ -107,5 +104,5 @@ func confirmViaScan(t *testing.T, app *AppService, sessID int) {
 	if !ok {
 		t.Fatalf("no debounce candidate armed for session %d — the scan never saw the new state", sessID)
 	}
-	app.scanAllSessions()
+	app.applyScanResults(app.host.ScanActivity())
 }

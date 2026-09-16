@@ -81,3 +81,46 @@ func classifyForScan(sess *terminal.Session) terminal.ActivityState {
 	}
 	return activity
 }
+
+// scanTick returns how long to wait before looking again.
+//
+// More sessions means a slower tick: the scan reads every screen, and past a
+// handful of panes the cost of looking often outweighs the latency it saves.
+func scanTick(sessions int) time.Duration {
+	switch {
+	case sessions <= 3:
+		return 500 * time.Millisecond
+	case sessions <= 6:
+		return 600 * time.Millisecond
+	default:
+		return 750 * time.Millisecond
+	}
+}
+
+// scanLoop keeps every session's state current for as long as the host lives.
+//
+// It runs where the sessions are, which is the point: a daemon whose last
+// window closed still has agents working, and their activity, tokens and cost
+// have to keep being written down. A scan driven by the client would stop the
+// moment the client did.
+func (h *Embedded) scanLoop() {
+	interval := scanTick(0)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-h.stop:
+			return
+		case <-ticker.C:
+			results := h.ScanActivity()
+			if len(results) > 0 {
+				h.emit(EventSessionScan, ScanReport{Results: results})
+			}
+			if next := scanTick(len(results)); next != interval {
+				interval = next
+				ticker.Reset(interval)
+			}
+		}
+	}
+}

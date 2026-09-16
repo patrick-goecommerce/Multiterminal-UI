@@ -42,3 +42,23 @@ func adopt(t *testing.T, a *AppService, id int, sess *terminal.Session) {
 	}
 	h.AdoptForTest(id, sess)
 }
+
+// terminalActivityForTest is the hub's activity vocabulary in the terminal
+// package's terms, for tests that set a session's hook state by hand where
+// production would have the host do it.
+func terminalActivityForTest(a hub.Activity) terminal.ActivityState {
+	switch a {
+	case hub.ActivityActive:
+		return terminal.ActivityActive
+	case hub.ActivityDone:
+		return terminal.ActivityDone
+	case hub.ActivityWaitingPermission:
+		return terminal.ActivityWaitingPermission
+	case hub.ActivityWaitingAnswer:
+		return terminal.ActivityWaitingAnswer
+	case hub.ActivityError:
+		return terminal.ActivityError
+	default:
+		return terminal.ActivityIdle
+	}
+}

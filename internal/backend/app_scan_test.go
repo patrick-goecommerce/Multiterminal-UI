@@ -31,7 +31,7 @@ func TestScan_TracksOSCTitleChange(t *testing.T) {
 	}
 
 	cleanupActivityTracking(7) // start from a clean tracking state
-	app.scanAllSessions()
+	app.applyScanResults(app.host.ScanActivity())
 
 	prevActivityMu.Lock()
 	got := prevTitle[7]
@@ -77,7 +77,7 @@ func TestScanGuard_StaleActiveHookFallsBackToScreen(t *testing.T) {
 	// issue #188) — it takes debounceWindow of a stable state to confirm. Back-
 	// date the pending timestamp instead of sleeping the test, then tick again
 	// so the candidate confirms.
-	app.scanAllSessions()
+	app.applyScanResults(app.host.ScanActivity())
 	prevActivityMu.Lock()
 	since, armed := pendingSince[9]
 	if armed {
@@ -89,10 +89,10 @@ func TestScanGuard_StaleActiveHookFallsBackToScreen(t *testing.T) {
 		// assertion below would pass on an unarmed candidate.
 		t.Fatal("first scan armed no debounce candidate — the fallback never observed 'done'")
 	}
-	app.scanAllSessions()
+	app.applyScanResults(app.host.ScanActivity())
 
 	raw := sess.GetActivity()
-	// scanAllSessions doesn't persist the fallback into sess.Activity (same as
+	// applyScanResults doesn't persist the fallback into sess.Activity (same as
 	// the existing done→waitingAnswer cross-check), so assert on the emitted
 	// state via prevActivity instead of GetActivity().
 	prevActivityMu.Lock()
@@ -119,7 +119,7 @@ func TestScanGuard_HookActivityNotOverwrittenByScan(t *testing.T) {
 	}
 
 	// Run one scan cycle
-	app.scanAllSessions()
+	app.applyScanResults(app.host.ScanActivity())
 
 	// After scanning, the activity must still be WaitingPermission
 	// (the hook guard must have prevented DetectActivity() from resetting it)
