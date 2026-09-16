@@ -33,11 +33,15 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **`.gitignore` entries for built binaries must be anchored** (`/mtui`, not `mtui`). A bare
   name matches directories at every level, and a bare `mtui` once made the whole `cmd/mtui`
   source package invisible to git.
-- **Wails bindings (`models.ts`) must be kept in sync manually.** Wails v3 does NOT auto-regenerate `frontend/wailsjs/go/models.ts`. Whenever a new field is added to a Go struct that is returned to the frontend (especially `config.Config`), you **must** also:
-  1. Add the corresponding class (if new nested struct) to `models.ts`.
-  2. Add the field declaration to the class in `models.ts`.
-  3. Add `this.field = this.convertValues(source["field"], FieldClass)` (or `source["field"]` for primitives) to the constructor.
-  Failure to do this causes the field to be silently stripped when Wails deserializes the response — the frontend will always see `undefined`, making settings for that field impossible to read or save. This is a **recurring bug** (affected `status_line`, could affect any future field).
+- **Wails bindings (`models.ts`) must be kept in sync manually, and `go test ./internal/tsmodels/` checks it.** Wails v3 does NOT regenerate `frontend/wailsjs/go/models.ts`. When a Go struct that reaches the frontend gains a field:
+  1. Add the class (if it is a new nested struct) to `models.ts`.
+  2. Add the field declaration to the class.
+  3. Add `this.field = this.convertValues(source["field"], FieldClass)`, or `source["field"]` for primitives, to the constructor.
+
+  The drift test fails with the exact lines to add, so run it rather than remembering this.
+
+  **What the old version of this rule got wrong:** it said the field is "silently stripped when Wails deserializes". That was true under v2. Under v3 as wired here, `createFrom` is never called — `App.js` returns the raw JSON — so `models.ts` is **types only** and nothing is stripped at runtime. The real cost of drift is that `App.d.ts` types every binding from these classes, so a missing field makes correct code a type error and pushes people into `as any`, which is how the SettingsDialog bugs keep getting through. Twenty-four fields had drifted before the check existed.
+- **`frontend/src/stores/config.ts` is a second, hand-written mirror of `config.Config`**, and it is the one the app actually reads for settings; `models.ts` covers the bindings. It is not checked yet and is currently missing eleven fields (`session_host`, `mcp_server`, `stt`, `idle_suspend`, …), which is why settings code casts. Adding a config field means touching both.
 - **SettingsDialog: NEVER put variable assignments directly inside a `$:` reactive block.** Svelte tracks all variable references (including writes like `x = value` and reads like `saved = x`) as dependencies. If ANY referenced variable changes (e.g. user toggles a checkbox), the entire block re-runs and **resets all values back to config defaults**, making controls appear frozen/unresponsive. This is a **recurring bug** (broke checkboxes/toggles 3× already).
   - **Correct:** `$: if (visible) initDialog();` — call a function. Svelte only tracks `visible`, not variables inside the function body.
   - **Wrong:** `$: if (visible) { myVar = config.value; savedVar = myVar; }` — Svelte tracks `myVar` as a dependency because it's read in `savedVar = myVar`, causing re-triggers on any change.
@@ -226,6 +230,7 @@ go test ./internal/config/...     # Config, session persistence
 go test ./internal/backend/...    # Scan, queue, git, issues
 go test ./internal/hub/...        # Host, ring buffer, wire protocol, agent wait
 go test ./cmd/mt/...              # CLI, end to end against a real daemon
+go test ./internal/tsmodels/...   # models.ts vs the Go structs (drift check)
 go vet ./...                      # Static analysis
 ```
 

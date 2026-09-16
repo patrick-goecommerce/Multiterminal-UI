@@ -12,6 +12,34 @@ export namespace board {
 	// Event enum values
 	export type Event = "start_triage" | "complexity_trivial" | "complexity_non_trivial" | "plan_ready" | "approved" | "rejected" | "step_stuck" | "model_escalated" | "replan_completed" | "scope_expansion_required" | "max_escalations" | "all_steps_done" | "qa_passed" | "qa_failed" | "merge_success" | "merge_conflict" | "user_resolved_executing" | "user_resolved_done" | "user_resolved_backlog";
 
+	export class ArtifactRequirement {
+	    path: string;
+	    min_lines: number;
+
+	    static createFrom(source: any = {}) {
+	        return new ArtifactRequirement(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.min_lines = source["min_lines"];
+	    }
+	}
+	export class MustHaves {
+	    truths: string[];
+	    artifacts: ArtifactRequirement[];
+
+	    static createFrom(source: any = {}) {
+	        return new MustHaves(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.truths = source["truths"];
+	        this.artifacts = this.convertValues(source["artifacts"], ArtifactRequirement);
+	    }
+	}
 	export class TaskCard {
 	    id: string;
 	    title: string;
@@ -59,6 +87,7 @@ export namespace board {
 	    files_create: string[];
 	    status: string;
 
+	    must_haves: MustHaves;
 	    static createFrom(source: any = {}) {
 	        return new PlanStep(source);
 	    }
@@ -74,6 +103,7 @@ export namespace board {
 	        this.files_modify = source["files_modify"];
 	        this.files_create = source["files_create"];
 	        this.status = source["status"];
+	        this.must_haves = this.convertValues(source["must_haves"], MustHaves);
 	    }
 	}
 	export class Plan {
@@ -209,6 +239,8 @@ export namespace backend {
 	    error: string;
 	    binary: boolean;
 	
+	    created_at: string;
+	    modified_at: string;
 	    static createFrom(source: any = {}) {
 	        return new FileContent(source);
 	    }
@@ -221,6 +253,8 @@ export namespace backend {
 	        this.size = source["size"];
 	        this.error = source["error"];
 	        this.binary = source["binary"];
+	        this.created_at = source["created_at"];
+	        this.modified_at = source["modified_at"];
 	    }
 	}
 	export class FileEntry {
@@ -701,6 +735,8 @@ export namespace backend {
 	    branch: string;
 	    issue: number;
 
+	    category: string;
+	    name: string;
 	    static createFrom(source: any = {}) {
 	        return new WorktreeInfo(source);
 	    }
@@ -710,6 +746,8 @@ export namespace backend {
 	        this.path = source["path"];
 	        this.branch = source["branch"];
 	        this.issue = source["issue"];
+	        this.category = source["category"];
+	        this.name = source["name"];
 	    }
 	}
 	export class WorktreeFileChange {
@@ -806,6 +844,104 @@ export namespace backend {
 
 export namespace config {
 	
+	export class KeepAliveSettings {
+	    enabled: boolean;
+	    interval_minutes: number;
+	    message: string;
+
+	    static createFrom(source: any = {}) {
+	        return new KeepAliveSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.interval_minutes = source["interval_minutes"];
+	        this.message = source["message"];
+	    }
+	}
+	export class StatusLineSettings {
+	    enabled: boolean;
+	    template: string;
+	    show_model: boolean;
+	    show_context: boolean;
+	    show_cost: boolean;
+	    show_git_branch: boolean;
+	    show_duration: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new StatusLineSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.template = source["template"];
+	        this.show_model = source["show_model"];
+	        this.show_context = source["show_context"];
+	        this.show_cost = source["show_cost"];
+	        this.show_git_branch = source["show_git_branch"];
+	        this.show_duration = source["show_duration"];
+	    }
+	}
+	export class BackgroundAgents {
+	    review_enabled: boolean;
+	    review_tool: string;
+	    review_model: string;
+	    review_prompt: string;
+	    test_enabled: boolean;
+	    test_command: string;
+
+	    static createFrom(source: any = {}) {
+	        return new BackgroundAgents(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.review_enabled = source["review_enabled"];
+	        this.review_tool = source["review_tool"];
+	        this.review_model = source["review_model"];
+	        this.review_prompt = source["review_prompt"];
+	        this.test_enabled = source["test_enabled"];
+	        this.test_command = source["test_command"];
+	    }
+	}
+	export class OrchestratorSettings {
+	    max_parallel_agents: number;
+	    default_auto_merge: boolean;
+	    default_auto_start: boolean;
+	    max_retries: number;
+	    review_command: string;
+	    sync_subtasks_to_github: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new OrchestratorSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.max_parallel_agents = source["max_parallel_agents"];
+	        this.default_auto_merge = source["default_auto_merge"];
+	        this.default_auto_start = source["default_auto_start"];
+	        this.max_retries = source["max_retries"];
+	        this.review_command = source["review_command"];
+	        this.sync_subtasks_to_github = source["sync_subtasks_to_github"];
+	    }
+	}
+	export class MCPServerSettings {
+	    enabled: boolean;
+	    port: number;
+
+	    static createFrom(source: any = {}) {
+	        return new MCPServerSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.port = source["port"];
+	    }
+	}
 	export class AudioSettings {
 	    enabled?: boolean;
 	    volume: number;
@@ -1002,6 +1138,21 @@ export namespace config {
 	    mcp_profiles: MCPProfile[];
 	    default_mcp_profile: string;
 
+	    last_opened_dir: string;
+	    claude_enabled?: boolean;
+	    codex_command: string;
+	    codex_models: ModelEntry[];
+	    codex_enabled?: boolean;
+	    gemini_command: string;
+	    gemini_models: ModelEntry[];
+	    gemini_enabled?: boolean;
+	    keep_alive: KeepAliveSettings;
+	    status_line: StatusLineSettings;
+	    background_agents: BackgroundAgents;
+	    orchestrator: OrchestratorSettings;
+	    language: string;
+	    setup_done: boolean;
+	    mcp_server: MCPServerSettings;
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }
@@ -1041,6 +1192,21 @@ export namespace config {
 	        this.session_host = source["session_host"];
 	        this.mcp_profiles = this.convertValues(source["mcp_profiles"], MCPProfile);
 	        this.default_mcp_profile = source["default_mcp_profile"];
+	        this.last_opened_dir = source["last_opened_dir"];
+	        this.claude_enabled = source["claude_enabled"];
+	        this.codex_command = source["codex_command"];
+	        this.codex_models = this.convertValues(source["codex_models"], ModelEntry);
+	        this.codex_enabled = source["codex_enabled"];
+	        this.gemini_command = source["gemini_command"];
+	        this.gemini_models = this.convertValues(source["gemini_models"], ModelEntry);
+	        this.gemini_enabled = source["gemini_enabled"];
+	        this.keep_alive = this.convertValues(source["keep_alive"], KeepAliveSettings);
+	        this.status_line = this.convertValues(source["status_line"], StatusLineSettings);
+	        this.background_agents = this.convertValues(source["background_agents"], BackgroundAgents);
+	        this.orchestrator = this.convertValues(source["orchestrator"], OrchestratorSettings);
+	        this.language = source["language"];
+	        this.setup_done = source["setup_done"];
+	        this.mcp_server = this.convertValues(source["mcp_server"], MCPServerSettings);
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1078,6 +1244,10 @@ export namespace config {
 	    activity_state?: string;
 	    session_id?: number;
 
+	    display?: string;
+	    conversation_id?: string;
+	    claude_session_id?: string;
+	    user_renamed?: boolean;
 	    static createFrom(source: any = {}) {
 	        return new SavedPane(source);
 	    }
@@ -1097,6 +1267,10 @@ export namespace config {
 	        this.activity_since = source["activity_since"];
 	        this.activity_state = source["activity_state"];
 	        this.session_id = source["session_id"];
+	        this.display = source["display"];
+	        this.conversation_id = source["conversation_id"];
+	        this.claude_session_id = source["claude_session_id"];
+	        this.user_renamed = source["user_renamed"];
 	    }
 	}
 	export class SavedTab {
