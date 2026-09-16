@@ -4,6 +4,7 @@ import (
 	"os/exec"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/gitx"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/launch"
 )
 
@@ -47,6 +48,12 @@ func isClaudeMode(mode string) bool { return launch.IsClaudeMode(mode) }
 
 func worktreeEnvVars(dir string) []string { return launch.WorktreeEnvVars(dir) }
 
+func resumeArgv(argv []string, resumeID string) []string {
+	return launch.ResumeArgv(argv, resumeID)
+}
+
+func claudeSessionIDFromArgv(argv []string) string { return launch.SessionIDFromArgv(argv) }
+
 // launchPolicy is the config this window would launch a session with. The
 // shim port comes from the host rather than from this process, because a
 // session outliving the window keeps reporting to whatever port it was told.
@@ -57,3 +64,25 @@ func (a *AppService) launchPolicy() launch.Policy {
 		Commands:       a.launchCommands(),
 	}
 }
+
+// windowLauncher lets this window's host start and wake a session by name,
+// exactly as the daemon's does.
+//
+// The policy is read per call rather than captured once: the shim port only
+// exists after the host does, and a setting the user changes in the settings
+// dialog has to apply to the next session without restarting anything.
+type windowLauncher struct{ app *AppService }
+
+func (l windowLauncher) Argv(tool, model string) ([]string, error) {
+	return l.app.launchPolicy().Argv(tool, model)
+}
+
+func (l windowLauncher) Env(sessionID int, dir, mode string) []string {
+	return l.app.launchPolicy().Env(sessionID, dir, mode)
+}
+
+func (l windowLauncher) ResumeArgv(argv []string, resumeID string) []string {
+	return launch.ResumeArgv(argv, resumeID)
+}
+
+var _ hub.Launcher = windowLauncher{}

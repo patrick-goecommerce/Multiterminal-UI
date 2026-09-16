@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
@@ -50,52 +49,9 @@ func (a *AppService) rememberLaunch(id int, argv []string, dir, mode string) {
 	a.mu.Unlock()
 }
 
-// claudeSessionIDFromArgv extracts the Claude session UUID from a launch argv.
-// The frontend generates it (claude.ts) and passes it as --session-id, or as
-// --resume when a conversation is continued; the backend never saw it before.
-//
-// sess.HookSessionID() stays authoritative — it is also right when Claude picks
-// a different UUID internally — this is only the value known at launch time.
-// A bare `--resume` (the interactive picker) has no value and yields "".
-func claudeSessionIDFromArgv(argv []string) string {
-	for i, arg := range argv {
-		switch {
-		case arg == "--session-id", arg == "--resume":
-			if i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "-") {
-				return argv[i+1]
-			}
-		case strings.HasPrefix(arg, "--session-id="):
-			return strings.TrimPrefix(arg, "--session-id=")
-		case strings.HasPrefix(arg, "--resume="):
-			return strings.TrimPrefix(arg, "--resume=")
-		}
-	}
-	return ""
-}
-
-// resumeArgv rewrites a launch argv into a resume argv: every existing
-// --session-id/--resume is dropped (they are mutually exclusive) and a single
-// `--resume <id>` is appended.
-func resumeArgv(argv []string, resumeID string) []string {
-	out := make([]string, 0, len(argv)+2)
-	for i := 0; i < len(argv); i++ {
-		arg := argv[i]
-		if arg == "--session-id" || arg == "--resume" {
-			if i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "-") {
-				i++ // skip the value too
-			}
-			continue
-		}
-		if strings.HasPrefix(arg, "--session-id=") || strings.HasPrefix(arg, "--resume=") {
-			continue
-		}
-		out = append(out, arg)
-	}
-	if resumeID != "" {
-		out = append(out, "--resume", resumeID)
-	}
-	return out
-}
+// claudeSessionIDFromArgv and resumeArgv moved to internal/launch: building a
+// command line is launch policy, and the daemon has to be able to wake a pane
+// without a window. See launch_delegate.go.
 
 // SuspendSession puts a finished Claude pane to sleep. Returns an error when
 // the pane is not eligible; the kill itself runs asynchronously because

@@ -104,6 +104,11 @@ func (r *Remote) Suspend(id int) error {
 	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/suspend", id), nil, nil)
 }
 
+// Wake implements Host. The daemon works out the command line; this only asks.
+func (r *Remote) Wake(id int) error {
+	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/wake", id), nil, nil)
+}
+
 // Resume implements Host.
 func (r *Remote) Resume(id int, argv []string, dir string, env []string) error {
 	body := struct {

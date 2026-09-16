@@ -234,6 +234,12 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
+	case action == "wake" && r.Method == http.MethodPost:
+		if err := s.host.Wake(id); err != nil {
+			writeHostError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
 	case action == "resume" && r.Method == http.MethodPost:
 		s.handleResume(w, r, id)
 	case action == "text" && r.Method == http.MethodGet:

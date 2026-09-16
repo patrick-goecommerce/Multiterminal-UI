@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -254,5 +255,103 @@ func TestEmbedded_ActivityWritesNeedASession(t *testing.T) {
 	}
 	if err := host.SeedActivity(4242, ActivityDone, time.Now()); err == nil {
 		t.Error("SeedActivity on an unknown session succeeded")
+	}
+}
+
+// Waking is the counterpart to Suspend, and the reason a daemon can pick up a
+// pane nobody is watching: Resume needs a caller that remembers how the
+// session was launched, and with no window open there is no such caller. The
+// host has the CreateSpec and a Launcher, so it can work both out itself.
+func TestEmbedded_WakeResumesASleepingSession(t *testing.T) {
+	h := NewEmbedded(Options{Version: "test", Launcher: stubLauncher{}})
+	t.Cleanup(h.Release)
+	id := suspendedSession(t, h, "conversation-uuid")
+
+	if err := h.Wake(id); err != nil {
+		t.Fatalf("Wake: %v", err)
+	}
+	waitFor(t, func() bool {
+		s, err := h.Get(id)
+		return err == nil && !s.Asleep()
+	}, "the session never woke up")
+
+	if s, _ := h.Get(id); s.Status != StatusRunning {
+		t.Errorf("status after Wake = %q, want %q", s.Status, StatusRunning)
+	}
+}
+
+// suspendedSession returns a session that is asleep, with the given
+// conversation ID recorded.
+func suspendedSession(t *testing.T, h *Embedded, resumeID string) int {
+	t.Helper()
+	id, err := h.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := h.SetHookActivity(id, ActivityDone); err != nil {
+		t.Fatalf("SetHookActivity: %v", err)
+	}
+	if err := h.SetHookSessionID(id, resumeID); err != nil {
+		t.Fatalf("SetHookSessionID: %v", err)
+	}
+	if err := h.Suspend(id); err != nil {
+		t.Fatalf("Suspend: %v", err)
+	}
+	waitFor(t, func() bool {
+		s, err := h.Get(id)
+		return err == nil && s.Status == StatusSuspended
+	}, "the session never reached suspended")
+	return id
+}
+
+// A host with no launcher cannot rebuild the environment, and a pane woken
+// without one has no hook wiring at all. Saying so beats waking it broken.
+func TestEmbedded_WakeRefusesWithoutALauncher(t *testing.T) {
+	h := newTestHost(t, nil)
+	id := suspendedSession(t, h, "conversation-uuid")
+
+	err := h.Wake(id)
+	if err == nil {
+		t.Fatal("Wake without a launcher succeeded")
+	}
+	if !strings.Contains(err.Error(), "launcher") {
+		t.Errorf("error = %q, want it to say why", err)
+	}
+}
+
+// An awake session is not an error to wake: two callers racing a wake should
+// not both have to work out which one won.
+func TestEmbedded_WakeIsANoopWhenAwake(t *testing.T) {
+	h := NewEmbedded(Options{Version: "test", Launcher: stubLauncher{}})
+	t.Cleanup(h.Release)
+	id, err := h.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := h.Wake(id); err != nil {
+		t.Errorf("Wake on an awake session = %v, want nil", err)
+	}
+}
+
+// stubLauncher is a Launcher that answers without reading any configuration.
+type stubLauncher struct{}
+
+func (stubLauncher) Argv(tool, model string) ([]string, error) { return []string{tool}, nil }
+func (stubLauncher) Env(int, string, string) []string          { return nil }
+func (stubLauncher) ResumeArgv(argv []string, resumeID string) []string {
+	return append(append([]string{}, argv...), "--resume", resumeID)
+}
+
+// waitFor polls until cond holds, or fails. A suspend is armed asynchronously
+// (the kill takes long enough that no caller should block on it), so a test
+// that asserts straight after Suspend would be asserting on a race.
+func waitFor(t *testing.T, cond func() bool, msg string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal(msg)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

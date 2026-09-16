@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // settleDelay is how long send waits between the text and the Enter that
@@ -91,19 +93,47 @@ func cmdKeys(e *env, args []string) int {
 	return writeTo(e, id, seq)
 }
 
-// writeTo sends bytes to a session and turns the host's errors into messages a
-// user can act on.
+// writeTo sends bytes to a session, waking it first when it is asleep.
+//
+// A sleeping pane has no process to write to. Refusing would be correct and
+// useless: somebody sending a prompt to a pane that was put to sleep while
+// idle means the prompt, not a lecture about the pane's state. The daemon
+// knows how the session was launched, so it can wake it on its own.
 func writeTo(e *env, id int, data []byte) int {
-	if err := e.hub.Write(id, data); err != nil {
-		// A sleeping pane has no process to write to, and that is the one
-		// failure here with an obvious next step.
-		if summary, getErr := e.hub.Get(id); getErr == nil && summary.Asleep() {
-			return e.fail("Session %d schläft; sie muss erst geweckt werden", id)
+	if summary, err := e.hub.Get(id); err == nil && summary.Asleep() {
+		if code := wakeAndWait(e, id); code != exitOK {
+			return code
 		}
+	}
+	if err := e.hub.Write(id, data); err != nil {
 		return e.fail("an Session %d schreiben: %v", id, err)
 	}
 	return exitOK
 }
+
+// wakeAndWait resumes a sleeping pane and waits for its agent to be ready.
+//
+// Waking relaunches the CLI and replays the conversation, which takes long
+// enough that typing into it straight away lands on a splash screen. Waiting
+// for a state the agent reports is the honest way to know it is listening.
+func wakeAndWait(e *env, id int) int {
+	fmt.Fprintf(e.stderr, "mt: Session %d schläft, wird geweckt …\n", id)
+	if err := e.hub.Wake(id); err != nil {
+		if errors.Is(err, hub.ErrNoResumeID) {
+			return e.fail("Session %d kann nicht geweckt werden: "+
+				"es ist keine Agent-Session-ID bekannt, mit der sich das Gespräch fortsetzen ließe", id)
+		}
+		return e.fail("Session %d wecken: %v", id, err)
+	}
+	if _, err := hub.WaitForAgent(e.ctx(), e.hub, id, []string{"idle", "done", "blocked"}, wakeWait); err != nil {
+		return e.fail("Session %d wacht nicht auf: %v", id, err)
+	}
+	return exitOK
+}
+
+// wakeWait bounds the wait for a woken agent. Replaying a long conversation is
+// the slow part and takes tens of seconds; past this something is wrong.
+const wakeWait = 2 * time.Minute
 
 // gatherText joins the arguments, or reads stdin when the caller passed "-".
 //

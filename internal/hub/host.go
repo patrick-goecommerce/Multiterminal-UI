@@ -117,6 +117,16 @@ type Host interface {
 	// agent needs in its environment is the caller's policy.
 	Resume(id int, argv []string, dir string, env []string) error
 
+	// Wake resumes a sleeping session, working out the command line and the
+	// environment from what the host already knows. It is the counterpart to
+	// Suspend and the reason a daemon can pick up a pane nobody is watching:
+	// Resume needs a caller that remembers how the session was launched, and
+	// with no window open there is no such caller.
+	//
+	// It returns nil for a session that is already awake, so two callers
+	// racing a wake do not both have to care which one won.
+	Wake(id int) error
+
 	// Attach subscribes to a session's output starting at from, which may be
 	// ReplayAll. The caller must Close the subscription.
 	Attach(id int, from int64) (*Subscription, error)

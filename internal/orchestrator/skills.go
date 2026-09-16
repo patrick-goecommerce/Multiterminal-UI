@@ -11,7 +11,7 @@ import (
 // Skill represents a loadable skill with detection rules and policies.
 type Skill struct {
 	Name       string      `json:"name"`
-	Detect     []string    `json:"detect"`      // file patterns to detect (e.g. "go.mod")
+	Detect     []string    `json:"detect"` // file patterns to detect (e.g. "go.mod")
 	Priority   int         `json:"priority"`
 	Stackable  bool        `json:"stackable"`
 	PromptFile string      `json:"prompt_file"`
@@ -20,10 +20,10 @@ type Skill struct {
 
 // SkillPolicy defines the policies a skill contributes.
 type SkillPolicy struct {
-	PreferredModel string               `json:"preferred_model,omitempty"`
-	Verify         []VerifyStep         `json:"verify,omitempty"`
+	PreferredModel string                `json:"preferred_model,omitempty"`
+	Verify         []VerifyStep          `json:"verify,omitempty"`
 	ScopeLimits    map[string]ScopeLimit `json:"scope_limits,omitempty"`
-	QARules        []string             `json:"qa_rules,omitempty"`
+	QARules        []string              `json:"qa_rules,omitempty"`
 }
 
 // ScopeLimit defines maximum change thresholds per card type.

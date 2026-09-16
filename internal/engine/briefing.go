@@ -20,7 +20,7 @@ type DecisionBriefing struct {
 
 	LoopHistory []string `json:"loop_history"` // summary of detected loops
 
-	ConflictRisk   string   `json:"conflict_risk"`   // "low" | "medium" | "high"
+	ConflictRisk   string   `json:"conflict_risk"` // "low" | "medium" | "high"
 	CriticalFiles  []string `json:"critical_files"`
 	SharedSurfaces []string `json:"shared_surfaces"`
 

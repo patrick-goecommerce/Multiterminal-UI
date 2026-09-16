@@ -47,4 +47,10 @@ func (l daemonLauncher) Env(sessionID int, dir, mode string) []string {
 	return l.policy().Env(sessionID, dir, mode)
 }
 
+func (l daemonLauncher) ResumeArgv(argv []string, resumeID string) []string {
+	// No config is involved in rewriting a command line, so this does not pay
+	// for a config read the way Argv and Env do.
+	return launch.ResumeArgv(argv, resumeID)
+}
+
 var _ hub.Launcher = daemonLauncher{}

@@ -63,7 +63,7 @@ func TestRealistic_CursorPositioning_ThenPrompt(t *testing.T) {
 	// Simulate a program that uses cursor positioning (like a TUI)
 	// then leaves a prompt at a specific position
 	sess.Screen.Write([]byte(
-		"\x1b[2J" +       // clear screen
+		"\x1b[2J" + // clear screen
 			"\x1b[1;1H" + // cursor to (1,1)
 			"Welcome to the app\r\n" +
 			"\x1b[10;1H" + // jump to row 10

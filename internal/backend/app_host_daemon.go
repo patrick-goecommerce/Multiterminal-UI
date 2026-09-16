@@ -39,6 +39,9 @@ func (a *AppService) newSessionHost() hub.Host {
 			Shim:     true,
 			HooksDir: config.HooksDir(),
 			KillTree: killProcessTree,
+			// The same launcher the daemon gets, so a session started or woken
+			// through the CLI or MCP behaves identically in both modes.
+			Launcher: windowLauncher{app: a},
 			Sink:     hub.SinkFunc(a.onHostEvent),
 		})
 	}

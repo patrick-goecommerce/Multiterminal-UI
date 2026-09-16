@@ -70,16 +70,16 @@ type MustHaves struct {
 
 // PlanStep represents one step in an execution plan.
 type PlanStep struct {
-	ID          string   `yaml:"id" json:"id"`
-	Title       string   `yaml:"title" json:"title"`
-	Wave        int      `yaml:"wave" json:"wave"`
-	DependsOn   []string `yaml:"depends_on" json:"depends_on"`
-	ParallelOk  bool     `yaml:"parallel_ok" json:"parallel_ok"`
-	Model       string   `yaml:"model" json:"model"`
-	FilesModify []string `yaml:"files_modify" json:"files_modify"`
-	FilesCreate []string `yaml:"files_create" json:"files_create"`
+	ID          string    `yaml:"id" json:"id"`
+	Title       string    `yaml:"title" json:"title"`
+	Wave        int       `yaml:"wave" json:"wave"`
+	DependsOn   []string  `yaml:"depends_on" json:"depends_on"`
+	ParallelOk  bool      `yaml:"parallel_ok" json:"parallel_ok"`
+	Model       string    `yaml:"model" json:"model"`
+	FilesModify []string  `yaml:"files_modify" json:"files_modify"`
+	FilesCreate []string  `yaml:"files_create" json:"files_create"`
 	MustHaves   MustHaves `yaml:"must_haves" json:"must_haves"`
-	Status      string   `yaml:"status" json:"status"`
+	Status      string    `yaml:"status" json:"status"`
 }
 
 // Plan is the execution plan stored in refs/mtui/tasks/<id>/plan.

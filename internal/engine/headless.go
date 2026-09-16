@@ -232,4 +232,3 @@ func countDiffLines(ctx context.Context, workDir string) int {
 	// Just count output lines as an approximation.
 	return len(lines)
 }
-

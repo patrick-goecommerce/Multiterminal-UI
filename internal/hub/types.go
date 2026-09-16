@@ -97,6 +97,12 @@ type Launcher interface {
 	// Env builds the PTY environment for a session that has already been
 	// assigned an ID.
 	Env(sessionID int, dir, mode string) []string
+	// ResumeArgv rewrites a launch command line into one that continues the
+	// agent's existing conversation. It is part of this interface rather than
+	// something the host does with a string append, because --session-id and
+	// --resume are mutually exclusive and a command line carrying both is
+	// rejected by the CLI.
+	ResumeArgv(argv []string, resumeID string) []string
 }
 
 // Activity is what a session is doing, as the agent-state detection sees it.

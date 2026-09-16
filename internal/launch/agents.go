@@ -109,4 +109,5 @@ func (p Policy) Argv(tool, model string) ([]string, error) {
 var _ interface {
 	Argv(tool, model string) ([]string, error)
 	Env(sessionID int, dir, mode string) []string
+	ResumeArgv(argv []string, resumeID string) []string
 } = Policy{}

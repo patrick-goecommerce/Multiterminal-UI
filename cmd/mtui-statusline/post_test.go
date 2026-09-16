@@ -28,5 +28,5 @@ func TestPostCaptureSendsSessionAndPayload(t *testing.T) {
 	}
 }
 
-func TestPostCaptureNoEnvIsNoop(t *testing.T) { postCapture([]byte(`{}`), "", "") }
+func TestPostCaptureNoEnvIsNoop(t *testing.T)      { postCapture([]byte(`{}`), "", "") }
 func TestPostCaptureDeadPortIsSilent(t *testing.T) { postCapture([]byte(`{}`), "1", "7") }
