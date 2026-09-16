@@ -46,6 +46,9 @@ Source: "build\bin\mtui-portable.exe"; DestDir: "{app}"; DestName: "{#MyAppExeNa
 ; The session daemon. Only started when session_host: daemon is configured, but
 ; it has to sit next to the app for that switch to have anything to start.
 Source: "build\bin\mtuid.exe"; DestDir: "{app}"; Flags: ignoreversion
+; The command-line client. It is "mt", not "mtui", because mtui.exe is the GUI
+; and {app} is on the PATH: one name cannot be both a window and a shell tool.
+Source: "build\bin\mt.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

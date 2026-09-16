@@ -1,4 +1,4 @@
-// Command mtui is the command-line client for MTUI's session daemon.
+// Command mt is the command-line client for MTUI's session daemon.
 //
 // It is the third face of the same API: the Wails window drives sessions
 // through internal/hub, an agent drives them through the MCP server, and this
@@ -6,7 +6,7 @@
 // none of them can know something the others cannot ask for.
 //
 // It deliberately does not start a daemon. Sessions come from MTUI; a daemon
-// started by `mtui ls` would only ever report an empty list, and would then
+// started by `mt ls` would only ever report an empty list, and would then
 // sit there. If nothing is running, that is the answer.
 //
 // Design: docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md
@@ -87,23 +87,25 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if cmd == nil {
-		fmt.Fprintf(stderr, "mtui: unbekanntes Kommando %q\n\n", args[0])
+		fmt.Fprintf(stderr, "mt: unbekanntes Kommando %q\n\n", args[0])
 		usage(stderr)
 		return exitUsage
 	}
 
 	e := &env{stdout: stdout, stderr: stderr}
-	if cmd.needsHub {
+	// A subcommand's --help must work on a machine with no daemon: somebody
+	// reading the help is exactly somebody who has not set it up yet.
+	if cmd.needsHub && !wantsHelp(args[1:]) {
 		client, err := connect()
 		if err != nil {
 			if errors.Is(err, errNoHub) {
-				fmt.Fprintf(stderr, "mtui: %v\n", err)
-				fmt.Fprintln(stderr, "Hinweis: mtui spricht mit dem Daemon. "+
+				fmt.Fprintf(stderr, "mt: %v\n", err)
+				fmt.Fprintln(stderr, "Hinweis: mt spricht mit dem Daemon. "+
 					"Dafür muss in ~/.multiterminal.yaml session_host: daemon stehen "+
 					"und MTUI mindestens einmal gestartet worden sein.")
 				return exitNoHub
 			}
-			fmt.Fprintf(stderr, "mtui: %v\n", err)
+			fmt.Fprintf(stderr, "mt: %v\n", err)
 			return exitError
 		}
 		defer client.Release()
@@ -122,7 +124,7 @@ type env struct {
 
 // fail prints an error the way every subcommand should and returns exitError.
 func (e *env) fail(format string, args ...any) int {
-	fmt.Fprintf(e.stderr, "mtui: "+format+"\n", args...)
+	fmt.Fprintf(e.stderr, "mt: "+format+"\n", args...)
 	return exitError
 }
 
@@ -139,18 +141,32 @@ func connect() (*hub.Remote, error) {
 	client, err := hub.Dial(rec.Addr(), rec.Token, hub.DialOptions{Timeout: dialTimeout})
 	if err != nil {
 		if errors.Is(err, hub.ErrProtocol) {
-			return nil, fmt.Errorf("%w; mtui und mtuid stammen aus verschiedenen Builds", err)
+			return nil, fmt.Errorf("%w; mt und mtuid stammen aus verschiedenen Builds", err)
 		}
 		return nil, err
 	}
 	return client, nil
 }
 
+// wantsHelp reports whether the arguments are a request for the help text
+// rather than for work. It stops at "--", after which a "-h" is payload.
+func wantsHelp(args []string) bool {
+	for _, a := range args {
+		if a == "--" {
+			return false
+		}
+		if a == "-h" || a == "--help" || a == "-help" {
+			return true
+		}
+	}
+	return false
+}
+
 func usage(w io.Writer) {
-	fmt.Fprintf(w, `mtui %s — Kommandozeile für MTUI-Sessions
+	fmt.Fprintf(w, `mt %s — Kommandozeile für MTUI-Sessions
 
 Verwendung:
-  mtui <kommando> [argumente]
+  mt <kommando> [argumente]
 
 Kommandos:
 `, Version)

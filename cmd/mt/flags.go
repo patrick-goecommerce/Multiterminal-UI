@@ -18,7 +18,7 @@ var errUsage = errors.New("usage")
 // newFlags builds a flag set that prints its help to the command's own stderr
 // rather than to the process-wide default, so tests can read it.
 func (e *env) newFlags(name, usageLine, notes string) *flag.FlagSet {
-	fs := flag.NewFlagSet("mtui "+name, flag.ContinueOnError)
+	fs := flag.NewFlagSet("mt "+name, flag.ContinueOnError)
 	fs.SetOutput(e.stderr)
 	fs.Usage = func() {
 		fmt.Fprintf(e.stderr, "Verwendung: %s\n", usageLine)
@@ -31,10 +31,22 @@ func (e *env) newFlags(name, usageLine, notes string) *flag.FlagSet {
 	return fs
 }
 
+// exitForParse turns a flag-parsing failure into an exit code.
+//
+// An explicit --help is not a failure: the caller asked a question and got its
+// answer, so it exits 0. Everything else the flag package rejects is a usage
+// error, and it has already said what was wrong.
+func exitForParse(err error) int {
+	if errors.Is(err, flag.ErrHelp) {
+		return exitOK
+	}
+	return exitUsage
+}
+
 // parseArgs parses a command's flags and returns its positional arguments.
 //
 // It exists because flag.Parse stops at the first non-flag argument, which
-// would make `mtui wait 3 --timeout 30s` silently ignore the timeout: the flag
+// would make `mt wait 3 --timeout 30s` silently ignore the timeout: the flag
 // sits behind the ID, so it never gets read, and the caller waits five minutes
 // having asked for thirty seconds. Silently is the problem. Parsing in rounds,
 // peeling one positional off each time, lets flags stand on either side while
@@ -74,7 +86,7 @@ func sessionID(fs *flag.FlagSet, positional []string) (int, error) {
 func parseSessionID(raw string) (int, error) {
 	id, err := strconv.Atoi(raw)
 	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("%q ist keine Session-ID; `mtui ls` zeigt die vorhandenen", raw)
+		return 0, fmt.Errorf("%q ist keine Session-ID; `mt ls` zeigt die vorhandenen", raw)
 	}
 	return id, nil
 }

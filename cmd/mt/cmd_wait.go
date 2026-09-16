@@ -14,14 +14,14 @@ import (
 // cmdWait blocks until a session reaches a state worth coming back for.
 //
 // This is the command that makes the CLI more than a remote control. Without
-// it a script polls `mtui read` in a loop and guesses; with it, chaining two
+// it a script polls `mt read` in a loop and guesses; with it, chaining two
 // agents is three lines of shell:
 //
-//	mtui send 1 "refactor the parser"
-//	mtui wait 1
-//	mtui send 2 "review what pane 1 just did"
+//	mt send 1 "refactor the parser"
+//	mt wait 1
+//	mt send 2 "review what pane 1 just did"
 func cmdWait(e *env, args []string) int {
-	fs := e.newFlags("wait", "mtui wait <id> [--until <liste>] [--timeout <dauer>] [--json]",
+	fs := e.newFlags("wait", "mt wait <id> [--until <liste>] [--timeout <dauer>] [--json]",
 		"Wartet, bis die Session einen der genannten Zustände erreicht, und gibt ihn aus.\n"+
 			"Ohne --until: done oder blocked, also fertig oder wartet auf einen Menschen.\n"+
 			"Zustände: "+hub.KnownAgentStates()+".")
@@ -31,7 +31,7 @@ func cmdWait(e *env, args []string) int {
 	asJSON := fs.Bool("json", false, "Ausgabe als JSON")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
-		return exitUsage
+		return exitForParse(err)
 	}
 	id, err := sessionID(fs, positional)
 	if err != nil {
@@ -63,7 +63,7 @@ func cmdWait(e *env, args []string) int {
 	switch {
 	case err == nil:
 	case errors.Is(err, context.Canceled):
-		fmt.Fprintln(e.stderr, "\nmtui: Warten abgebrochen; die Session läuft weiter.")
+		fmt.Fprintln(e.stderr, "\nmt: Warten abgebrochen; die Session läuft weiter.")
 		return exitError
 	case errors.Is(err, hub.ErrWaitTimeout):
 		// A distinct code, because "still working after ten minutes" is a
@@ -72,7 +72,7 @@ func cmdWait(e *env, args []string) int {
 			e.writeJSON(waitResult{ID: id, State: hub.AgentStateOf(e.hub, id),
 				TimedOut: true, WaitedSeconds: waited.Seconds()})
 		} else {
-			fmt.Fprintf(e.stderr, "mtui: %v\n", err)
+			fmt.Fprintf(e.stderr, "mt: %v\n", err)
 		}
 		return exitTimeout
 	default:

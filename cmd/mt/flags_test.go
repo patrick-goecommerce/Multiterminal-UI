@@ -9,7 +9,7 @@ import (
 
 // The silent-flag bug.
 //
-// flag.Parse stops at the first non-flag argument, so `mtui wait 3 --timeout
+// flag.Parse stops at the first non-flag argument, so `mt wait 3 --timeout
 // 30s` parsed the ID and then ignored the timeout without a word: the caller
 // asked for thirty seconds and waited five minutes. Nothing about it was
 // visible, which is what makes it worth a test rather than a comment.

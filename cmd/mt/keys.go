@@ -11,7 +11,7 @@ import (
 //
 // It is deliberately a table of names a person would type rather than a
 // pass-through for escape sequences: a caller who knows the bytes can use
-// `mtui send --no-enter`, and everybody else wants to write "ctrl-c".
+// `mt send --no-enter`, and everybody else wants to write "ctrl-c".
 //
 // The names match what the MCP tool already accepts, so a prompt that works
 // for an agent works in a shell.

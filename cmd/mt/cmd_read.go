@@ -20,7 +20,7 @@ const followReadyTimeout = 5 * time.Second
 // grepping for a line. --follow switches to the raw stream, escape sequences
 // included, because at that point the caller is a terminal.
 func cmdRead(e *env, args []string) int {
-	fs := e.newFlags("read", "mtui read <id> [--lines N] [--follow] [--json]",
+	fs := e.newFlags("read", "mt read <id> [--lines N] [--follow] [--json]",
 		"Gibt den Bildschirm einer Session aus.\n"+
 			"Ohne --follow den aktuellen Stand als Text, mit --follow den laufenden Strom.")
 	lines := fs.Int("lines", 0, "nur die letzten N nicht-leeren Zeilen (0 = ganzer Bildschirm)")
@@ -28,7 +28,7 @@ func cmdRead(e *env, args []string) int {
 	asJSON := fs.Bool("json", false, "Ausgabe als JSON (nicht mit --follow)")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
-		return exitUsage
+		return exitForParse(err)
 	}
 	id, err := sessionID(fs, positional)
 	if err != nil {
@@ -107,7 +107,7 @@ func followSession(e *env, id int) int {
 		select {
 		case chunk, ok := <-sub.C:
 			if !ok {
-				fmt.Fprintf(e.stderr, "\nmtui: Session %d liefert nichts mehr.\n", id)
+				fmt.Fprintf(e.stderr, "\nmt: Session %d liefert nichts mehr.\n", id)
 				return exitOK
 			}
 			if chunk.Truncated {

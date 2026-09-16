@@ -10,7 +10,7 @@ import (
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
-// `mtui wait` is the command that makes the CLI more than a remote control:
+// `mt wait` is the command that makes the CLI more than a remote control:
 // it is what lets a shell script chain two agents. These tests are about the
 // contract a script depends on, which is the exit code and the one word on
 // stdout, not the prose.

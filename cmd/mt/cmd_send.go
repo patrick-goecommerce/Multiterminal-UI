@@ -19,7 +19,7 @@ const settleDelay = 30 * time.Millisecond
 // cmdSend types a prompt into a session and submits it. This is the call an
 // orchestrating script makes most.
 func cmdSend(e *env, args []string) int {
-	fs := e.newFlags("send", "mtui send [--no-enter] <id> <text...>",
+	fs := e.newFlags("send", "mt send [--no-enter] <id> <text...>",
 		"Schickt Text an eine Session und drückt Enter.\n"+
 			"Mehrere Argumente werden mit Leerzeichen verbunden; \"-\" liest von stdin.\n"+
 			"Alles hinter der ID ist Text, Optionen stehen deshalb davor.")
@@ -27,7 +27,7 @@ func cmdSend(e *env, args []string) int {
 	// Plain parsing, not parseArgs: everything after the ID is the prompt, and
 	// a prompt that starts with a dash is still a prompt.
 	if err := fs.Parse(args); err != nil {
-		return exitUsage
+		return exitForParse(err)
 	}
 	id, err := sessionID(fs, fs.Args())
 	if err != nil {
@@ -59,11 +59,11 @@ func cmdSend(e *env, args []string) int {
 // cmdKeys sends key names rather than text: the way to answer a permission
 // prompt, interrupt a run, or drive a menu.
 func cmdKeys(e *env, args []string) int {
-	fs := e.newFlags("keys", "mtui keys <id> <taste...>",
-		"Schickt Tasten an eine Session, etwa `mtui keys 3 ctrl-c` oder `mtui keys 3 down enter`.\n"+
+	fs := e.newFlags("keys", "mt keys <id> <taste...>",
+		"Schickt Tasten an eine Session, etwa `mt keys 3 ctrl-c` oder `mt keys 3 down enter`.\n"+
 			"Bekannt: "+knownKeyNames())
 	if err := fs.Parse(args); err != nil {
-		return exitUsage
+		return exitForParse(err)
 	}
 	id, err := sessionID(fs, fs.Args())
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 
 // These tests drive the real command against a real daemon: a real Embedded
 // host behind a real listener, found through a real discovery record. The
-// point is that nothing about the path from `mtui ls` to a PTY is stubbed,
+// point is that nothing about the path from `mt ls` to a PTY is stubbed,
 // because every bug this CLI can have lives in that path.
 
 // testDaemon starts a hub server and publishes it where the CLI will look.
@@ -123,7 +123,7 @@ func TestLs_EmptyHubIsNotAnError(t *testing.T) {
 	}
 }
 
-// A script doing `mtui ls --json | jq '.[]'` must not break on a quiet hub, so
+// A script doing `mt ls --json | jq '.[]'` must not break on a quiet hub, so
 // an empty list is [] and never null.
 func TestLs_EmptyJSONIsAnArray(t *testing.T) {
 	testDaemon(t)
@@ -157,7 +157,7 @@ func TestSendAndRead_GoThroughToThePTY(t *testing.T) {
 	host := testDaemon(t)
 	id := startSession(t, host)
 
-	if code, _, stderr := cli(t, "send", strconv.Itoa(id), "echo", "mtui-cli-marker"); code != exitOK {
+	if code, _, stderr := cli(t, "send", strconv.Itoa(id), "echo", "mt-cli-marker"); code != exitOK {
 		t.Fatalf("send exit = %d, stderr = %s", code, stderr)
 	}
 
@@ -169,7 +169,7 @@ func TestSendAndRead_GoThroughToThePTY(t *testing.T) {
 		// The echoed command line also contains the marker, so look for the
 		// output line: the marker on a line of its own.
 		for _, line := range strings.Split(stdout, "\n") {
-			if strings.TrimSpace(line) == "mtui-cli-marker" {
+			if strings.TrimSpace(line) == "mt-cli-marker" {
 				return
 			}
 		}
@@ -199,8 +199,8 @@ func TestRead_RejectsSomethingThatIsNotAnID(t *testing.T) {
 	if code != exitError {
 		t.Errorf("exit = %d, want %d", code, exitError)
 	}
-	if !strings.Contains(stderr, "mtui ls") {
-		t.Errorf("stderr = %q, want it to point at `mtui ls`", stderr)
+	if !strings.Contains(stderr, "mt ls") {
+		t.Errorf("stderr = %q, want it to point at `mt ls`", stderr)
 	}
 }
 
@@ -267,5 +267,41 @@ func TestKill_ChecksEveryIDBeforeKillingAny(t *testing.T) {
 	}
 	if _, err := host.Get(id); err != nil {
 		t.Error("the valid session was killed before the bad argument was noticed")
+	}
+}
+
+// A subcommand's --help must work on a machine with no daemon: somebody
+// reading the help is exactly somebody who has not set one up yet.
+func TestRun_SubcommandHelpWorksWithoutADaemon(t *testing.T) {
+	t.Setenv(discovery.EnvDirOverride, t.TempDir())
+
+	for _, name := range []string{"ls", "read", "send", "keys", "wait", "kill", "hub"} {
+		code, _, stderr := cli(t, name, "--help")
+		if code != exitOK {
+			t.Errorf("%s --help: exit = %d, want %d (stderr: %s)", name, code, exitOK, stderr)
+		}
+		if !strings.Contains(stderr, "Verwendung") {
+			t.Errorf("%s --help printed no usage: %s", name, stderr)
+		}
+	}
+}
+
+// "--" ends the flags, so a "-h" behind it is an argument and not a question.
+func TestWantsHelp(t *testing.T) {
+	cases := []struct {
+		args []string
+		want bool
+	}{
+		{[]string{"--help"}, true},
+		{[]string{"-h"}, true},
+		{[]string{"3", "--help"}, true},
+		{[]string{"3", "hallo"}, false},
+		{nil, false},
+		{[]string{"--", "-h"}, false},
+	}
+	for _, tc := range cases {
+		if got := wantsHelp(tc.args); got != tc.want {
+			t.Errorf("wantsHelp(%v) = %v, want %v", tc.args, got, tc.want)
+		}
 	}
 }

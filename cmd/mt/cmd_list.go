@@ -13,12 +13,12 @@ import (
 // cmdList prints what the daemon is holding. It is the command everything else
 // starts from, because every other command needs an ID.
 func cmdList(e *env, args []string) int {
-	fs := e.newFlags("ls", "mtui ls [--json] [--state <liste>]",
+	fs := e.newFlags("ls", "mt ls [--json] [--state <liste>]",
 		"Zeigt die Sessions, die der Daemon hält, mit ihrem Agent-Zustand.")
 	asJSON := fs.Bool("json", false, "Ausgabe als JSON")
 	state := fs.String("state", "", "nur diese Zustände, kommagetrennt ("+hub.KnownAgentStates()+", asleep)")
 	if _, err := parseArgs(fs, args); err != nil {
-		return exitUsage
+		return exitForParse(err)
 	}
 
 	sessions := e.hub.List()
@@ -38,7 +38,7 @@ func cmdList(e *env, args []string) int {
 	sort.Slice(sessions, func(i, j int) bool { return sessions[i].ID < sessions[j].ID })
 
 	if *asJSON {
-		// Never null: a script doing `mtui ls --json | jq '.[]'` should get an
+		// Never null: a script doing `mt ls --json | jq '.[]'` should get an
 		// empty list rather than an error when nothing is running.
 		if sessions == nil {
 			sessions = []hub.SessionSummary{}
@@ -64,11 +64,11 @@ func cmdList(e *env, args []string) int {
 // cmdKill ends sessions. It takes several IDs because killing panes one call
 // at a time is the usual reason somebody writes a loop around a CLI.
 func cmdKill(e *env, args []string) int {
-	fs := e.newFlags("kill", "mtui kill <id> [<id>...]",
+	fs := e.newFlags("kill", "mt kill <id> [<id>...]",
 		"Beendet die genannten Sessions. Das killt den Prozessbaum; laufende Arbeit ist weg.")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
-		return exitUsage
+		return exitForParse(err)
 	}
 	if len(positional) == 0 {
 		fs.Usage()

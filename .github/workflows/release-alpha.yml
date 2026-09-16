@@ -75,14 +75,29 @@ jobs:
           go build \
             -ldflags "-s -w -H windowsgui -X github.com/patrick-goecommerce/Multiterminal-UI/internal/backend.Version=$VERSION" \
             -o build/bin/mtuid.exe ./cmd/mtuid
+          # The CLI is the opposite case: it must stay console subsystem, or it
+          # would write its output nowhere when run from a terminal. Named "mt"
+          # because the GUI already owns mtui.exe on the PATH.
+          go build \
+            -ldflags "-s -w -X main.Version=$VERSION" \
+            -o build/bin/mt.exe ./cmd/mt
 
-      - name: Assert helper binaries are GUI subsystem (no console flash)
+      - name: Assert each binary has the subsystem it needs
         shell: bash
         run: |
+          # 2 = GUI, 3 = console. Both directions are load-bearing: a console
+          # subsystem on a helper flashes a window on every spawn, and a GUI
+          # subsystem on the CLI swallows its own output.
+          subsystem() {
+            python -c "import struct,sys;d=open(sys.argv[1],'rb').read();pe=struct.unpack_from('<I',d,0x3c)[0];print(struct.unpack_from('<H',d,pe+0x5c)[0])" "$1"
+          }
           for exe in internal/backend/mtui-statusline.exe internal/backend/mtui-hook.exe build/bin/mtuid.exe; do
-            sub=$(python -c "import struct,sys;d=open(sys.argv[1],'rb').read();pe=struct.unpack_from('<I',d,0x3c)[0];print(struct.unpack_from('<H',d,pe+0x5c)[0])" "$exe")
+            sub=$(subsystem "$exe")
             echo "$exe subsystem=$sub"; [ "$sub" = "2" ] || { echo "ERROR: $exe is not GUI subsystem (2)"; exit 1; }
           done
+          sub=$(subsystem build/bin/mt.exe)
+          echo "build/bin/mt.exe subsystem=$sub"
+          [ "$sub" = "3" ] || { echo "ERROR: mt.exe is not console subsystem (3); it would print nothing"; exit 1; }
 
       - name: Build Go binary
         shell: bash
@@ -110,6 +125,7 @@ jobs:
         run: |
           mv build/bin/mtui-portable.exe "mtui-portable-${{ steps.version.outputs.version }}.exe"
           cp build/bin/mtuid.exe "mtuid-${{ steps.version.outputs.version }}.exe"
+          cp build/bin/mt.exe "mt-${{ steps.version.outputs.version }}.exe"
 
       - name: Stage installer artifact
         shell: bash
@@ -123,6 +139,7 @@ jobs:
           sha256sum "mtui-portable-${{ steps.version.outputs.version }}.exe" > "mtui-portable-${{ steps.version.outputs.version }}.exe.sha256"
           sha256sum "mtui-setup-${{ steps.version.outputs.version }}.exe" > "mtui-setup-${{ steps.version.outputs.version }}.exe.sha256"
           sha256sum "mtuid-${{ steps.version.outputs.version }}.exe" > "mtuid-${{ steps.version.outputs.version }}.exe.sha256"
+          sha256sum "mt-${{ steps.version.outputs.version }}.exe" > "mt-${{ steps.version.outputs.version }}.exe.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -131,6 +148,7 @@ jobs:
             mtui-portable-*.exe
             mtui-setup-*.exe
             mtuid-*.exe
+            mt-*.exe
             *.sha256
 
   release:
@@ -151,4 +169,5 @@ jobs:
             artifacts/mtui-portable-*.exe
             artifacts/mtui-setup-*.exe
             artifacts/mtuid-*.exe
+            artifacts/mt-*.exe
             artifacts/*.sha256

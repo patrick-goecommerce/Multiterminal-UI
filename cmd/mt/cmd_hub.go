@@ -13,14 +13,14 @@ import (
 // about the daemon a user ever has to do by hand, and because putting it
 // behind a flag on an informational command makes it harder to do by accident.
 func cmdHub(e *env, args []string) int {
-	fs := e.newFlags("hub", "mtui hub [--json] [--stop]",
+	fs := e.newFlags("hub", "mt hub [--json] [--stop]",
 		"Zeigt den laufenden Session-Daemon.\n"+
 			"--stop beendet ihn und damit jede Session, die er hält.")
 	asJSON := fs.Bool("json", false, "Ausgabe als JSON")
 	stop := fs.Bool("stop", false, "den Daemon beenden (beendet alle Sessions)")
 	force := fs.Bool("force", false, "auch mit laufenden Sessions beenden")
 	if _, err := parseArgs(fs, args); err != nil {
-		return exitUsage
+		return exitForParse(err)
 	}
 
 	info := e.hub.Info()
@@ -32,7 +32,7 @@ func cmdHub(e *env, args []string) int {
 		// undoes that for all of them at once.
 		if live := countLive(sessions); live > 0 && !*force {
 			return e.fail("der Daemon hält noch %d Session(s); "+
-				"mit --force trotzdem beenden, oder erst `mtui ls` ansehen", live)
+				"mit --force trotzdem beenden, oder erst `mt ls` ansehen", live)
 		}
 		if err := e.hub.Shutdown(); err != nil {
 			return e.fail("Daemon beenden: %v", err)
