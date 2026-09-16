@@ -61,7 +61,7 @@
   // Whether the sessions belong to the mtuid daemon rather than to this
   // window. sessionDaemonLive is what the backend actually ended up using,
   // which can differ from the setting until the app is restarted.
-  let sessionDaemonWanted = ($config as any).session_host === 'daemon';
+  let sessionDaemonWanted = $config.session_host === 'daemon';
   let sessionDaemonLive = false;
 
   let idleSuspendEnabled = ($config as any).idle_suspend?.enabled ?? false;
@@ -143,7 +143,7 @@
     audioDoneSound = $config.audio?.done_sound || '';
     audioInputSound = $config.audio?.input_sound || '';
     audioErrorSound = $config.audio?.error_sound || '';
-    sessionDaemonWanted = ($config as any).session_host === 'daemon';
+    sessionDaemonWanted = $config.session_host === 'daemon';
     App.UsesSessionDaemon().then((v: boolean) => { sessionDaemonLive = v; }).catch(() => {});
     idleSuspendEnabled = ($config as any).idle_suspend?.enabled ?? false;
     idleSuspendMinutes = ($config as any).idle_suspend?.timeout_minutes || 30;

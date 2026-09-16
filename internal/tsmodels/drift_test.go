@@ -122,3 +122,52 @@ func TestParseGoPackage_ReadsJSONNames(t *testing.T) {
 		t.Error("theme was not read from the json tag")
 	}
 }
+
+// storePath is the second hand-written mirror of config.Config, and the one
+// the settings UI actually reads. models.ts covers the Wails bindings; this
+// covers the store.
+const storePath = "frontend/src/stores/config.ts"
+
+// The store drifted eleven fields before this existed, session_host among
+// them, and the settings code reached for `as any` to get at it. That cast is
+// the real damage: it silences the compiler for every later field too.
+func TestAppConfigHasEveryGoField(t *testing.T) {
+	root := repoRoot(t)
+	props, err := ParseInterface(filepath.Join(root, storePath), "AppConfig")
+	if err != nil {
+		t.Fatalf("parsing %s: %v", storePath, err)
+	}
+	structs, err := ParseGoPackage(filepath.Join(root, "internal/config"))
+	if err != nil {
+		t.Fatalf("parsing internal/config: %v", err)
+	}
+	fields, ok := structs["Config"]
+	if !ok {
+		t.Fatal("config.Config was not found")
+	}
+	for _, f := range MissingFromInterface(fields, props) {
+		t.Errorf("%s: AppConfig is missing %q (Go field %s). Add it to the interface "+
+			"and to the store's default object, or the settings code will need a cast.",
+			storePath, f.Name, f.GoName)
+	}
+}
+
+// A regex that stopped matching would make the check above pass by finding
+// nothing, which is the one way a check like this fails quietly.
+func TestParseInterface_ActuallyFindsTheProperties(t *testing.T) {
+	props, err := ParseInterface(filepath.Join(repoRoot(t), storePath), "AppConfig")
+	if err != nil {
+		t.Fatalf("ParseInterface: %v", err)
+	}
+	if len(props) < 30 {
+		t.Errorf("AppConfig parsed with only %d properties", len(props))
+	}
+	for _, want := range []string{"theme", "session_host", "claude_models"} {
+		if !props[want] {
+			t.Errorf("AppConfig parsed without %q", want)
+		}
+	}
+	if _, err := ParseInterface(filepath.Join(repoRoot(t), storePath), "NichtDa"); err == nil {
+		t.Error("an interface that does not exist parsed without an error")
+	}
+}
