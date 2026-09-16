@@ -27,21 +27,19 @@ Branching, Conventional Commits, PRs, Code Review
 A GUI terminal multiplexer built for Claude Code power users.
 
 ## Code Rules
-- **Max 300 lines per Go file.** Split into logically grouped files (e.g. `app_scan.go`, `app_stream.go`).
+- **Max 300 lines per Go production file.** Split into logically grouped files (e.g. `app_scan.go`, `app_stream.go`). Tests are exempt in practice (16 are over it). Eight production files are over it for historical reasons — `config.go`, `hub/embedded.go`, `hub/server.go`, `backend/app.go`, `orchestrator_exec.go`, `hub/types.go`, `app_kanban.go`, `stt_install.go` — treat those as a debt not to grow, not as permission.
 - **Go structs** exposed to frontend need both `yaml` and `json` tags.
 - **UI text is German**, code/comments are English.
 - **`.gitignore` entries for built binaries must be anchored** (`/mtui`, not `mtui`). A bare
   name matches directories at every level, and a bare `mtui` once made the whole `cmd/mtui`
   source package invisible to git.
-- **Wails bindings (`models.ts`) must be kept in sync manually, and `go test ./internal/tsmodels/` checks it.** Wails v3 does NOT regenerate `frontend/wailsjs/go/models.ts`. When a Go struct that reaches the frontend gains a field:
-  1. Add the class (if it is a new nested struct) to `models.ts`.
-  2. Add the field declaration to the class.
-  3. Add `this.field = this.convertValues(source["field"], FieldClass)`, or `source["field"]` for primitives, to the constructor.
+- **Two hand-written mirrors of every Go struct the frontend sees. `go test ./internal/tsmodels/` checks both.** Wails v3 does not regenerate anything, so a new field has to be added by hand to:
+  1. `frontend/wailsjs/go/models.ts` — the class body AND the constructor. This types every binding through `App.d.ts`.
+  2. `frontend/src/stores/config.ts` — the `AppConfig` interface AND the store's default object, for config fields. This is what the settings UI actually reads.
 
-  The drift test fails with the exact lines to add, so run it rather than remembering this.
+  The test names the missing field and prints the lines to add, so run it instead of remembering this. It found 24 drifted fields in `models.ts` and 11 in the store when it was written.
 
-  **What the old version of this rule got wrong:** it said the field is "silently stripped when Wails deserializes". That was true under v2. Under v3 as wired here, `createFrom` is never called — `App.js` returns the raw JSON — so `models.ts` is **types only** and nothing is stripped at runtime. The real cost of drift is that `App.d.ts` types every binding from these classes, so a missing field makes correct code a type error and pushes people into `as any`, which is how the SettingsDialog bugs keep getting through. Twenty-four fields had drifted before the check existed.
-- **`frontend/src/stores/config.ts` is a second, hand-written mirror of `config.Config`**, and it is the one the settings UI actually reads; `models.ts` covers the Wails bindings. Adding a config field means touching both, plus the store's default object. The same drift test covers it, so run it instead of remembering. It had drifted eleven fields, which is why settings code was reaching for `as any` — and that cast is the real damage, because it silences the compiler for every later field too.
+  Under v3 nothing is stripped at runtime (`createFrom` is never called, `App.js` returns raw JSON), so do not go looking for a deserialization bug. The damage is a type error on correct code, which people work around with `as any` — and that cast then hides every later field too. That is how the SettingsDialog bugs keep getting through.
 - **SettingsDialog: NEVER put variable assignments directly inside a `$:` reactive block.** Svelte tracks all variable references (including writes like `x = value` and reads like `saved = x`) as dependencies. If ANY referenced variable changes (e.g. user toggles a checkbox), the entire block re-runs and **resets all values back to config defaults**, making controls appear frozen/unresponsive. This is a **recurring bug** (broke checkboxes/toggles 3× already).
   - **Correct:** `$: if (visible) initDialog();` — call a function. Svelte only tracks `visible`, not variables inside the function body.
   - **Wrong:** `$: if (visible) { myVar = config.value; savedVar = myVar; }` — Svelte tracks `myVar` as a dependency because it's read in `savedVar = myVar`, causing re-triggers on any change.
@@ -58,7 +56,7 @@ A GUI terminal multiplexer built for Claude Code power users.
   and `mtuid` build with `-H windowsgui`, or they flash a console window. `cmd/mt` must NOT:
   a GUI-subsystem CLI writes its output nowhere and looks like it did nothing. The release
   workflow asserts both directions, because neither is visible until somebody runs it.
-- **Every non-PTY child process MUST call `hideConsole(cmd)` before `Start()`/`Run()`.** MTUI is a GUI app with no console, so any `exec.Command` that launches a console-subsystem program (esp. via `cmd.exe /c …`) makes Windows allocate a **visible console window that flashes**. `hideConsole` (`internal/backend/hide_windows.go`, sets `CREATE_NO_WINDOW`; no-op on non-Windows) is applied to every git/gh/worktree spawn — apply it to any new spawn too. PTY sessions are exempt (ConPTY has no window). **Recurring bug:** the statusline forwarder shim and the chat/pane-name `claude` spawns each shipped this flash because they skipped `hideConsole`.
+- **Every non-PTY child process MUST call `procs.HideConsole(cmd)` before `Start()`/`Run()`.** MTUI is a GUI app with no console, so any `exec.Command` that launches a console-subsystem program (esp. via `cmd.exe /c …`) makes Windows allocate a **visible console window that flashes**. `internal/procs` sets `CREATE_NO_WINDOW` and is a no-op elsewhere; `internal/backend` reaches it through the `hideConsole` delegate, and `gitx.Cmd` applies it to every git spawn. Apply it to any new spawn too. PTY sessions are exempt (ConPTY has no window). **Recurring bug:** the statusline forwarder shim and the chat/pane-name `claude` spawns each shipped this flash because they skipped it.
 - `CLAUDECODE` env var must be stripped from PTY environment (see `session.go:Start`).
 - `beforeunload` does NOT fire reliably in WebView2 — use reactive auto-save (store subscription + debounce).
 
@@ -66,7 +64,10 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **`Screen.mu`** — cells, cursor, parser. All public Screen methods lock internally.
   Use batch methods (`PlainTextRows`) over loops (`PlainTextRow`×N) to minimize lock contention.
 - **`Session.mu`** — Status, Title, LastOutputAt, Activity, Tokens, PTY handle.
-- **`App.mu`** — sessions map, queues map, nextID.
+- **`AppService.mu`** — the per-window maps only: `launches`, `queues`, `sessionMode`,
+  `finishStates`, `sessionIssues`, `agentSessions`. The sessions map and the ID counter
+  moved to `hub.Embedded` and are behind `Host` now, so a window holds no session state.
+- **`Embedded.mu`** — sessions map, nextID. Held briefly and never across a PTY call.
 - **Never allocate under lock** — use pre-allocated templates (e.g. `blankLine` in scroll ops).
 
 ## Worktrees
@@ -107,7 +108,9 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **Ein Issue ist erst "done" wenn:** (1) Code implementiert, (2) Tests geschrieben UND grün, (3) E2E-getestet oder als `needs-e2e-testing` getaggt, (4) Commit mit `Closes #N` referenziert das Issue.
 - **Nie Issues manuell schließen** ohne zugehörigen Commit. Ausnahme: Duplikate, obsolete Issues.
 - **`needs-e2e-testing` Label** bedeutet: Unit Tests passen, aber der Feature-Flow wurde nie real (mit echtem Claude CLI, echtem Git-Repo, echtem UI) getestet.
-- **Spec vs. Implementation:** Die Design Spec (`docs/superpowers/specs/2026-04-01-kanban-orchestration-v3-design.md`) ist die Quelle der Wahrheit. Wenn Code von der Spec abweicht, entweder Code anpassen oder Spec updaten — nie still divergieren.
+- **Spec vs. Implementation:** Design Specs sind die Quelle der Wahrheit. Wenn Code abweicht, entweder Code anpassen oder Spec updaten — nie still divergieren. Das gilt in beide Richtungen: eine Behauptung in der Spec, die sich beim Nachmessen als falsch herausstellt, wird korrigiert und nicht stillschweigend überschrieben. Die beiden aktiven Specs:
+  - `docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md` — Daemon, Host-Seam, CLI, Phasenplan
+  - `docs/superpowers/specs/2026-04-01-kanban-orchestration-v3-design.md` — Kanban-Orchestrierung
 
 ## Branch Strategy
 - **`main`** — stable releases only. Hotfixes land here first.
@@ -127,89 +130,131 @@ A GUI terminal multiplexer built for Claude Code power users.
 - Tracking issue: https://github.com/patrick-goecommerce/Multiterminal-UI/issues/89
 
 ## Tech Stack
-- **Language:** Go 1.21+ (backend) + TypeScript/Svelte (frontend)
+- **Language:** Go 1.25 (`go.mod` pins the toolchain; see the comment there) + TypeScript/Svelte
 - **GUI framework:** Wails v3 alpha (Go ↔ WebView bridge, multi-window)
-- **Frontend:** Svelte 4 + Vite + xterm.js
+- **Frontend:** Svelte **5**, running entirely in legacy syntax. 32 files use `$:`, none use
+  runes. That is fine and not urgent, but do not assume Svelte 4 semantics when reading the
+  Svelte docs.
 - **Terminal emulation:** xterm.js (frontend) + VT100 screen buffer for activity scanning (backend)
 - **PTY management:** go-pty (cross-platform: Unix PTY + Windows ConPTY)
-- **Config:** YAML (~/.multiterminal.yaml)
+- **Config:** YAML (`~/.multiterminal.yaml`), per project `.mtui/config.json`
+- **Three binaries:** the app, `mtuid` (session daemon), `mt` (CLI client)
+- **The whole repo builds and tests on Linux.** `go test ./internal/... ./cmd/mt/ ./cmd/mtuid/`
+  is green there, and `GOOS=windows CGO_ENABLED=0 go vet ./internal/... ./cmd/...` typechecks
+  the Windows side without a Windows machine. Only `cmd/mtui-hook` has Windows-path tests that
+  fail on Linux.
+
+## Architecture
+
+Sessions are owned by a **Host**, not by the window. That seam is the single most important
+structural fact about this codebase, and everything else follows from it.
+
+```
+                   ┌──────────────┐  ┌──────────┐  ┌─────────────┐
+   three clients   │ Wails window │  │ mt (CLI) │  │ MCP (agent) │
+                   └──────┬───────┘  └────┬─────┘  └──────┬──────┘
+                          └───────────────┼───────────────┘
+                                  hub.Host (interface)
+                          ┌───────────────┴───────────────┐
+                          │                               │
+                 hub.Embedded                        hub.Remote
+          owns the PTYs in this process        pure transport, loopback
+          and ends them with it                HTTP + WebSocket + token
+                                                         │
+                                                  ┌──────┴──────┐
+                                                  │   mtuid     │
+                                                  │ hub.Embedded│
+                                                  └─────────────┘
+```
+
+- `session_host: embedded` (default) → the window holds a `hub.Embedded`; sessions die with it.
+- `session_host: daemon` (opt-in) → the window holds a `hub.Remote`; `mtuid` holds the sessions
+  and they survive closing the app. The restore re-attaches instead of launching a second agent.
+- **No production file in `internal/backend` imports `internal/terminal`.** That is the property
+  that lets `a.host` be a `Remote`: everything the window knows about a session it asked the
+  Host for, and every one of those questions is answerable over a socket. Keep it. The check is
+  the direct import, not the dependency closure — `hub` imports `terminal` legitimately, so
+  `go list -deps` gives a false positive:
+
+  ```bash
+  grep -rl internal/terminal internal/backend --include='*.go' | grep -v _test.go   # must be empty
+  ```
+- Anything that has to keep running while no window is open lives on the host, not in the
+  window: the activity scan, the lifecycle-hook reader, the shim endpoints, session creation.
+  Still window-side and therefore still needing a window: the MCP server, the prompt queue,
+  keepalive.
+- **`MTUI_PORT` is baked into a session's environment at launch** and can never be told a new
+  one. That is why the shim endpoints belong to the host and not to a window: a session that
+  outlives its window would otherwise post into a dead port for the rest of its life.
+
+Design: `docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md`
+
+**Data flow:**
+- Keyboard → xterm.js `onData` → `WriteToSession` → `Host.Write` → PTY
+- PTY output → `RawOutputCh` → the host's pump → a per-session ring buffer with absolute
+  offsets → `Host.Attach` subscription → adaptive coalescing → `terminal:output` → xterm.js.
+  A reader that fell behind gets `Chunk.Truncated` and must **repaint, not append**: a VT100
+  stream entered mid-sequence stays garbled for good (#157).
+- Activity/tokens → the host's own `scanLoop` (`internal/hub/embedded_scan.go`, adaptive
+  500/600/750 ms) → `EventSessionScan` → `applyScanResults` → `terminal:activity` → UI.
+  There is no scan loop in the backend any more.
+- Agent state → `cmd/mtui-hook` writes JSON → `internal/hooks` tails it on the host →
+  `EventSessionHook`. Hook events are authoritative; once one arrives for a session, screen
+  pattern detection stops overriding it.
 
 ## Project Structure
+
+The backend file list below is a **selection**, not an inventory: `internal/backend` holds 111
+production files. The package list above it is complete.
+
 ```
 internal/
-  backend/
-    app.go                       Wails App struct, session lifecycle, bindings
-    app_stream.go                PTY output streaming + adaptive coalescing
-    app_scan.go                  Periodic activity detection & token scanning
-    app_queue.go                 Pipeline queue (prompt batching per session)
-    app_files.go                 Filesystem API (list dir, search files)
-    app_git.go                   Git helpers (branch, commit, conflict)
-    app_git_branch.go            Branch detection & switching
-    app_issues.go                GitHub issue integration
-    app_issues_parse.go          Issue body parsing
-    app_session_issue.go         Session ↔ issue linking
-    app_issue_progress.go        Issue progress reporting
-    app_worktree.go              Git worktree management
-    app_worktree_policy.go       Worktree-mandatory policy (global + per-project resolution)
-    app_worktree_setup_memory.go Generated CLAUDE.local.md variants + ownership detection
-    app_claude_detect.go         Claude CLI path resolution
-    app_notify.go                Desktop notifications + token-checked focus listener
-    app_ports.go                 Bind warnings (→ CheckHealth) + discovery record cleanup
-    app_health.go                Crash detection & health tracking
-    app_audio.go                 Audio notification playback
-    app_version.go               Version info
-    app_window.go                Window manager, DetachTab, MergeWindowToMain
-    app_events.go                Event payload types (TerminalOutputEvent, etc.)
-  terminal/
-    session.go                   PTY session lifecycle (start, read, close)
-    session_helpers.go           Default shell, PTY console helpers
-    activity.go                  Claude activity detection & token scanning
-    screen.go                    VT100 screen buffer core
-    screen_parser.go             ANSI escape sequence byte processor
-    screen_csi.go                CSI dispatch, SGR handling, color parsing
-    screen_ops.go                Screen operations (scroll, erase, insert, delete)
-    screen_render.go             Screen rendering (Render, RenderRegion, PlainText)
-  config/
-    config.go                    YAML configuration loader
-    session.go                   Session state persistence (JSON)
-  discovery/
-    discovery.go                 Per-user runtime port records (publish/resolve/stale check)
-  hub/
-    host.go                      Host interface (Embedded owns sessions, Remote is transport)
-    agent_wait.go                Agent state vocabulary + WaitForAgent (CLI and MCP share it)
+  hub/          Session ownership. Host interface, Embedded (owns PTYs), Remote (transport),
+                ring buffer with absolute offsets, wire protocol, agent-wait vocabulary,
+                Launcher (start a session by tool name, implemented by internal/launch).
+  terminal/     PTY session + VT100 screen buffer. Imported by hub, NOT by backend.
+  launch/       What a session's environment must contain: Policy.Env, the worktree-mandatory
+                resolution, the per-project override file, the agent CLI table. Depends only
+                on config and git, which is what lets the daemon start a session.
+  gitx/         Git plumbing both processes need: Cmd (no locks, no prompt, no console flash),
+                MainRepoRoot, Toplevel, IsLinkedWorktree.
+  procs/        Platform process helpers: HideConsole, KillProcessTree, Detach.
+  hooks/        Lifecycle-hook file tailer (size guard #192, Windows read-before-delete).
+  discovery/    Per-user runtime port records (publish/resolve/stale check) + the single-
+                instance file lock.
+  config/       YAML config, session persistence, per-project paths.
+  tsmodels/     Drift check: models.ts and stores/config.ts against the Go structs.
+  board/        Kanban card and plan types, state machine.
+  engine/       Headless execution engine (briefing, checkpoints, manifest).
+  orchestrator/ Kanban orchestration: waves, QA, escalation.
+  skills/       Project skill files.
+  backend/      The Wails service. Owns no sessions; talks to a Host.
+    app.go                       AppService, lifecycle, bindings
+    app_host_daemon.go           Picks Embedded vs Remote, starts mtuid, re-attach
+    app_host_stream.go           Host events → UI events
+    app_stream.go                Output batching and coalescing toward the WebView
+    app_scan.go                  applyScanResults: host scan results → UI (no loop here)
+    app_queue.go                 Prompt queue per session (still window-side)
+    app_agent_wait.go            WaitForAgent binding over hub.WaitForAgent
+    app_mcp_server.go            Agent-control MCP server (still window-side)
+    launch_delegate.go           Delegates to internal/gitx and internal/launch
+    app_worktree*.go             Worktree creation, policy, finish flow, generated memory
+    app_git*.go app_issues*.go   Git and GitHub integration
+    app_notify.go app_ports.go   Focus listener, bind warnings → CheckHealth
 cmd/
-  mtuid/                         Session daemon: owns the PTYs, outlives the window
-  mt/                            CLI client (ls, read, send, keys, wait, kill, hub)
+  mtuid/            Session daemon: owns the PTYs, outlives the window
+  mt/               CLI client: new, ls, read, send, keys, wait, kill, hub
+  mtui-hook/        Claude Code lifecycle hooks + the PreToolUse worktree firewall
+  mtui-statusline/  Statusline renderer, posts to MTUI_PORT
+  tmux-shim/        tmux-compatible shim on the session PATH
 frontend/src/
-  App.svelte                     Root application component
-  main.ts                        Entry point
-  stores/
-    tabs.ts                      Tab & pane state management
-    config.ts                    App configuration store
-    theme.ts                     Theme management (5 built-in themes)
-  components/
-    TerminalPane.svelte          xterm.js terminal wrapper with titlebar
-    PaneGrid.svelte              Grid layout for terminal panes
-    TabBar.svelte                Tab bar with add/close/rename
-    Toolbar.svelte               Action toolbar
-    Sidebar.svelte               File browser with search & git status
-    Footer.svelte                Status bar (branch, cost, shortcuts)
-    LaunchDialog.svelte          Shell/Claude/YOLO launch dialog
-    QueuePanel.svelte            Pipeline queue panel
-    SettingsDialog.svelte        Settings UI
-    CommandPalette.svelte        Command palette (Ctrl+Shift+P)
-    IssueDialog.svelte           GitHub issue picker
-    SourceControlView.svelte     Git source control panel
-  lib/
-    terminal.ts                  xterm.js setup, theme config & search addon
-    clipboard.ts                 Clipboard integration (copy/paste)
-    shortcuts.ts                 Global keyboard shortcut handler
-    session.ts                   Session restore logic
-    launch.ts                    Session launch helpers (shell/claude/yolo)
-    notifications.ts             Desktop notification wrapper
-    audio.ts                     Audio playback (done/input sounds)
-    git-polling.ts               Git status polling
-    window.ts                    Window identity helpers (getWindowId, isMainWindow)
+  App.svelte        Root component
+  stores/           tabs, config, theme, chat, kanban, workspace, i18n, clock
+  components/       TerminalPane, PaneGrid, TabBar, Toolbar, Sidebar, Footer, SettingsDialog,
+                    LaunchDialog, QueuePanel, CommandPalette, IssueDialog, SourceControlView,
+                    KanbanBoard, DashboardView, …
+  lib/              terminal, session, launch, claude, shortcuts, clipboard, notifications,
+                    audio, voice, git-polling, output-buffer, markdown, mcp, window, …
 ```
 
 ## Build & Run
@@ -218,7 +263,12 @@ wails dev              # Development (hot-reload)
 wails build            # Production build
 wails build -debug     # Debug build (with devtools)
 # Binary: build/bin/mtui-portable.exe (Windows)
+
+go build -o mtuid ./cmd/mtuid   # session daemon, GUI subsystem on Windows
+go build -o mt    ./cmd/mt      # CLI client, CONSOLE subsystem on Windows
 ```
+> The installer puts all three in `{app}` and `{app}` on the PATH. The CLI is `mt`, not
+> `mtui`, because the GUI already owns `mtui.exe` there.
 > **`-tags production` requires a pre-built shim.** `internal/backend/statusline_shim_embed.go`
 > embeds `statusline-forward.exe`, which is `.gitignored` and only produced by the release
 > workflow. Plain `go build` / `wails` builds use the dev (sibling-binary) path and work fine.
@@ -233,25 +283,6 @@ go test ./cmd/mt/...              # CLI, end to end against a real daemon
 go test ./internal/tsmodels/...   # models.ts vs the Go structs (drift check)
 go vet ./...                      # Static analysis
 ```
-
-## Architecture
-
-```
-┌─ Wails Window (Native OS Window) ────────────────────────┐
-│  ┌─ Svelte Frontend ──────────────────────────────────┐  │
-│  │  Tab Bar → Toolbar → Pane Grid (xterm.js) → Footer │  │
-│  └────────────────────────────────────────────────────┘  │
-│                    ↕ Wails Bindings + Events              │
-│  ┌─ Go Backend ───────────────────────────────────────┐  │
-│  │  PTY Sessions · Activity Scanner · Config · Git    │  │
-│  └────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────┘
-```
-
-**Data flow:**
-- Keyboard input → xterm.js `onData` → Wails binding `WriteToSession` → PTY
-- PTY output → Go `RawOutputCh` (blocking, 256-buf) → `streamOutput` (adaptive coalesce) → Wails event `terminal:output` → xterm.js `write`
-- Activity/tokens → Go `scanLoop` (adaptive interval) → Wails event `terminal:activity` → UI update
 
 ## Key Shortcuts
 | Key              | Action                                        |
