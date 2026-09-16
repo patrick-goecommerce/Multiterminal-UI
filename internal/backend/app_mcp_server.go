@@ -7,6 +7,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -64,6 +66,13 @@ func (a *AppService) startMCPServer(port int) (int, error) {
 		mcp.WithNumber("session_id", mcp.Required(), mcp.Description("Session id to close")),
 		mcp.WithString("reason", mcp.Description("Optional reason, logged only")),
 	), a.handleCloseSession)
+
+	mcpSrv.AddTool(mcp.NewTool("wait_for_agent",
+		mcp.WithDescription("Block until a delegated session finishes or needs a human, then return the state it reached. Use this instead of polling read_output: it returns as soon as the other agent is done (\"done\"), is waiting for a permission or an answer (\"blocked\"), or its process is gone (\"exited\")."),
+		mcp.WithNumber("session_id", mcp.Required(), mcp.Description("Session id returned by open_session or list_sessions")),
+		mcp.WithString("until", mcp.Description("Comma-separated states to wait for: done, blocked, idle, exited. Defaults to \"done,blocked\".")),
+		mcp.WithNumber("timeout_seconds", mcp.Description("How long to wait before giving up. Defaults to 300, capped at 1800.")),
+	), a.handleWaitForAgent)
 
 	mcpSrv.AddTool(mcp.NewTool("list_sessions",
 		mcp.WithDescription("List sessions currently open in MTUI that were started via open_session."),
@@ -147,6 +156,24 @@ func (a *AppService) handleReadOutput(_ context.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	return mcp.NewToolResultText(output), nil
+}
+
+func (a *AppService) handleWaitForAgent(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	sessionID, err := req.RequireInt("session_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	var until []string
+	if raw := strings.TrimSpace(req.GetString("until", "")); raw != "" {
+		until = strings.Split(raw, ",")
+	}
+	timeout := time.Duration(req.GetInt("timeout_seconds", 0)) * time.Second
+
+	state, err := a.WaitForAgent(ctx, sessionID, until, timeout)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return mcp.NewToolResultText(state), nil
 }
 
 func (a *AppService) handleCloseSession(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
