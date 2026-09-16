@@ -1,6 +1,6 @@
 # mtuid: Sessions überleben die GUI (Daemon-Architektur) — Design
 
-**Status:** Phase 1 umgesetzt, Standard bleibt `embedded` bis zur Durchsatzmessung
+**Status:** Phase 1 und 2a umgesetzt, Standard bleibt `embedded` bis zur Durchsatzmessung
 **Branch:** `claude/mtui-herdr-dev-migration-lz2rze`
 **Vorbild:** [herdr](https://herdr.dev/) 0.9, Rust, Apache-2.0
 **Betrifft:** `internal/backend/app.go`, `internal/terminal`, `internal/discovery`, neu `internal/hub` und `cmd/mtuid`
@@ -317,7 +317,8 @@ wo seine Sessions liegen.
 | 1c | Sessionbesitz im Backend auf `hub.Embedded`; Output über Ring und Subscription statt `collectOutput` | unverändertes Verhalten, ein Besitzer | **fertig** |
 | 1d | Scan, Hooks, Statusline, Suspend, Keepalive, Queue über den Host; `internal/backend` importiert `internal/terminal` nicht mehr | unverändertes Verhalten, GUI ohne Sessionwissen | **fertig** |
 | 1e | `session_host: daemon`: GUI startet den Daemon, verbindet sich, Restore hängt wieder an statt neu zu starten | **App schließen und öffnen, Agents laufen weiter** | **fertig** |
-| 2 | Scan, Hook-Leser und Statusline-Empfang im Daemon ticken lassen; tmux-API und MCP-Server dorthin | Status und agentgestartete Sessions leben ohne GUI weiter | offen |
+| 2a | Scan, Hook-Leser und die Shim-Endpunkte (Statusline, tmux) laufen auf dem Host | Zustand wird auch ohne offenes Fenster fortgeschrieben; `MTUI_PORT` bleibt gültig | **fertig** |
+| 2b | MCP-Server in den Daemon; Queue und Keepalive dorthin | agentgestartete Sessions und die Warteschlange leben ohne GUI weiter | offen |
 | 3 | `mtui` als CLI-Client (`ls`, `attach`, `send`, `kill`) | Sessions ohne GUI bedienbar | offen |
 | 4 | Remote-Hubs über SSH | Laptop und Server in einer Oberfläche | offen |
 | 5 | Kanban-Orchestrator headless, weitere Agent-CLIs, Plugin-Hooks | Boards laufen ohne offenes Fenster | offen |
@@ -328,11 +329,15 @@ den, der es ausprobieren will; schlägt irgendetwas daran fehl (kein `mtuid` neb
 App, kein Record, falsche Protokollversion), fällt die App auf den eingebetteten Host
 zurück und schreibt eine Warnung, die über `CheckHealth` in der Oberfläche landet.
 
-**Was im Daemon-Modus heute noch an der offenen GUI hängt:** der Aktivitäts-Scan, der
-Hook-Leser und der Statusline-Empfang laufen im Fensterprozess und fragen den Host nur
-ab. Die Agents arbeiten also weiter, wenn die App zu ist, aber ihr Zustand wird in
-dieser Zeit nicht fortgeschrieben, und die Queue schiebt nichts nach. Das ist Phase 2
-und ist bewusst nicht Teil von Phase 1: erst muss der Prozesswechsel selbst stabil sein.
+**Was im Daemon-Modus heute noch an der offenen GUI hängt:** der MCP-Server (ein Agent
+kann also nur delegieren, solange ein Fenster offen ist) sowie Queue und Keepalive (eine
+eingereihte Aufgabe wartet, bis wieder ein Fenster da ist). Scan, Hook-Leser und die
+Shim-Endpunkte sind seit Phase 2a beim Host und laufen durch.
+
+Beim Shim war es keine Bequemlichkeit, sondern ein Muss: `MTUI_PORT` wird beim Start in
+die Umgebung der Session gebacken und kann ihr nie wieder anders gesagt werden. Aus dem
+Fenster bedient hätte jede Session, die das Fenster überlebt, für den Rest ihres Lebens
+in einen toten Port geschrieben.
 
 ## Stand nach Phase 1
 
@@ -368,3 +373,32 @@ Drei Fehler, die beim Bauen aufgefallen sind und mitbehoben wurden:
 Offen und bewusst nicht entschieden: ob der Kanban-Orchestrator langfristig in den Daemon
 gehört. Er steuert Sessions, aber er stellt auch Rückfragen. Wer die beantwortet, wenn
 kein Fenster offen ist, ist eine Produktfrage und keine Architekturfrage.
+
+## Was von herdr noch fehlt, nach Nutzen sortiert
+
+Der Vergleich, der diese Spec ausgelöst hat, ist damit an den entscheidenden Stellen
+abgearbeitet. Was übrig bleibt, in der Reihenfolge, in der es sich lohnt:
+
+1. **MCP-Server im Daemon** (Phase 2b). Ohne ihn kann ein Agent nur delegieren, solange
+   ein Fenster offen ist. Hängt daran, dass der Daemon die Umgebung für eine neue Session
+   selbst bauen können muss, was heute GUI-Politik ist.
+2. **CLI-Client** (Phase 3). herdrs drei Ebenen auf einer API (Agent-Skill, CLI, roher
+   Socket) sind der Grund, warum man dort nie ein Fenster braucht. Unser Protokoll kann
+   das bereits; es fehlt nur das Kommando.
+3. **Remote über SSH** (Phase 4). Ein Tunnel auf den Loopback-Port des entfernten
+   Daemons, plus eine Hub-Auswahl im Client. Das Protokoll trägt die Hub-Kennung schon.
+4. **Mehr Agent-CLIs.** herdr startet 22, wir erkennen claude, codex und gemini. Das ist
+   eine Tabelle, kein Umbau.
+5. **Plugins.** herdr lädt Verzeichnisse mit `herdr-plugin.toml`, Actions und
+   Event-Hooks, aus einem Marketplace, der GitHub-Repos mit einem Topic indiziert, ohne
+   Sandbox. Reizvoll, aber es ist auch das Stück, das ein Werkzeug von „tut eine Sache"
+   zu „ist eine Plattform" macht, mit allem, was daran hängt.
+
+Nicht übernommen, bewusst: herdrs Socket hat **keine Authentifizierung** und verlässt
+sich auf Dateirechte. Auf Windows löst das #183 nicht, deshalb bleibt es bei Port 0 plus
+Token im Discovery-Record.
+
+Dazu eine Fähigkeit, die es bei uns vorher nicht gab und die von herdr abgeschaut ist:
+`wait_for_agent` (herdrs `agent.wait`). Ein Agent kann jetzt auf einen anderen warten,
+statt `read_output` in einer Schleife zu pollen. Das ist die Primitive, aus der sich eine
+Pipeline bauen lässt, ohne das Kanban-Board zu bemühen.
