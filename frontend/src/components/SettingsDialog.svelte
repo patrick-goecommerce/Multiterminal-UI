@@ -695,7 +695,7 @@
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
         <label class="setting-label">Ruhende Panes schlafen legen</label>
-        <p class="setting-desc">Ein Claude-Pane, das seit lÃ¤ngerem fertig und unberÃ¼hrt ist, gibt seinen Prozessbaum frei &mdash; rund 860&nbsp;MB pro Pane. Beim Reinklicken kommt die Sitzung per <code>--resume</code> zurÃ¼ck, Verlauf und Position bleiben erhalten. Panes, die arbeiten, auf eine Antwort warten oder etwas in der Warteschlange haben, werden nie schlafen gelegt.</p>
+        <p class="setting-desc">Ein Claude-Pane, das seit längerem fertig und unberührt ist, gibt seinen Prozessbaum frei &mdash; rund 860&nbsp;MB pro Pane. Beim Reinklicken kommt die Sitzung per <code>--resume</code> zurück, Verlauf und Position bleiben erhalten. Panes, die arbeiten, auf eine Antwort warten oder etwas in der Warteschlange haben, werden nie schlafen gelegt.</p>
         <div class="toggle-row" style="margin-bottom: 12px;">
           <button class="toggle-btn" class:toggle-on={idleSuspendEnabled} on:click={() => idleSuspendEnabled = !idleSuspendEnabled}>
             <span class="toggle-knob"></span>
@@ -703,13 +703,13 @@
           <span class="toggle-label">{idleSuspendEnabled ? 'Aktiv' : 'Inaktiv'}</span>
         </div>
         {#if idleSuspendEnabled}
-          <label class="setting-label" for="idle-suspend-minutes">Nach Minuten ohne AktivitÃ¤t</label>
+          <label class="setting-label" for="idle-suspend-minutes">Nach Minuten ohne Aktivität</label>
           <select id="idle-suspend-minutes" class="theme-select" bind:value={idleSuspendMinutes}>
             {#each [5, 10, 15, 30, 60, 120] as m}
               <option value={m}>{m} Minuten</option>
             {/each}
           </select>
-          <p class="setting-desc" style="margin-top: 6px;">Das Aufwachen dauert etwa 12&ndash;15&nbsp;Sekunden, weil Claude neu startet und den GesprÃ¤chsverlauf lÃ¤dt.</p>
+          <p class="setting-desc" style="margin-top: 6px;">Das Aufwachen dauert etwa 12&ndash;15&nbsp;Sekunden, weil Claude neu startet und den Gesprächsverlauf lädt.</p>
         {/if}
       </div>
 
