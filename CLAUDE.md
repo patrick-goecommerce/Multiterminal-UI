@@ -30,6 +30,9 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **Max 300 lines per Go file.** Split into logically grouped files (e.g. `app_scan.go`, `app_stream.go`).
 - **Go structs** exposed to frontend need both `yaml` and `json` tags.
 - **UI text is German**, code/comments are English.
+- **`.gitignore` entries for built binaries must be anchored** (`/mtui`, not `mtui`). A bare
+  name matches directories at every level, and a bare `mtui` once made the whole `cmd/mtui`
+  source package invisible to git.
 - **Wails bindings (`models.ts`) must be kept in sync manually.** Wails v3 does NOT auto-regenerate `frontend/wailsjs/go/models.ts`. Whenever a new field is added to a Go struct that is returned to the frontend (especially `config.Config`), you **must** also:
   1. Add the corresponding class (if new nested struct) to `models.ts`.
   2. Add the field declaration to the class in `models.ts`.
@@ -47,6 +50,10 @@ A GUI terminal multiplexer built for Claude Code power users.
   with argv[0] replaced by the resolved absolute path — go-pty resolves a bare name against `Cmd.Dir`,
   not PATH, so an unresolved name would not be found. Everything else (shims, failed lookup) keeps the
   COMSPEC wrapper. Non-PTY spawns still wrap unconditionally.
+- **GUI subsystem for helpers, console subsystem for the CLI.** `mtui-hook`, `mtui-statusline`
+  and `mtuid` build with `-H windowsgui`, or they flash a console window. `cmd/mt` must NOT:
+  a GUI-subsystem CLI writes its output nowhere and looks like it did nothing. The release
+  workflow asserts both directions, because neither is visible until somebody runs it.
 - **Every non-PTY child process MUST call `hideConsole(cmd)` before `Start()`/`Run()`.** MTUI is a GUI app with no console, so any `exec.Command` that launches a console-subsystem program (esp. via `cmd.exe /c …`) makes Windows allocate a **visible console window that flashes**. `hideConsole` (`internal/backend/hide_windows.go`, sets `CREATE_NO_WINDOW`; no-op on non-Windows) is applied to every git/gh/worktree spawn — apply it to any new spawn too. PTY sessions are exempt (ConPTY has no window). **Recurring bug:** the statusline forwarder shim and the chat/pane-name `claude` spawns each shipped this flash because they skipped `hideConsole`.
 - `CLAUDECODE` env var must be stripped from PTY environment (see `session.go:Start`).
 - `beforeunload` does NOT fire reliably in WebView2 — use reactive auto-save (store subscription + debounce).
@@ -163,6 +170,12 @@ internal/
     session.go                   Session state persistence (JSON)
   discovery/
     discovery.go                 Per-user runtime port records (publish/resolve/stale check)
+  hub/
+    host.go                      Host interface (Embedded owns sessions, Remote is transport)
+    agent_wait.go                Agent state vocabulary + WaitForAgent (CLI and MCP share it)
+cmd/
+  mtuid/                         Session daemon: owns the PTYs, outlives the window
+  mt/                            CLI client (ls, read, send, keys, wait, kill, hub)
 frontend/src/
   App.svelte                     Root application component
   main.ts                        Entry point
@@ -211,6 +224,8 @@ wails build -debug     # Debug build (with devtools)
 go test ./internal/terminal/...   # Screen buffer, activity, session
 go test ./internal/config/...     # Config, session persistence
 go test ./internal/backend/...    # Scan, queue, git, issues
+go test ./internal/hub/...        # Host, ring buffer, wire protocol, agent wait
+go test ./cmd/mt/...              # CLI, end to end against a real daemon
 go vet ./...                      # Static analysis
 ```
 

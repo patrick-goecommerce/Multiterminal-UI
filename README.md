@@ -145,6 +145,44 @@ Die Oberfläche ist verfügbar in: **Deutsch**, Englisch, Italienisch, Spanisch,
 | **Ctrl+Scroll** | Schriftgröße pro Terminal |
 | **Esc** | Dialoge schließen |
 
+## Kommandozeile (`mt`)
+
+Mit `session_host: daemon` gehören die Sessions dem Hintergrunddienst `mtuid` und nicht mehr dem Fenster. Damit lassen sie sich auch aus einer Shell steuern, ohne dass MTUI offen sein muss.
+
+```bash
+mt ls                          # Sessions mit Zustand, Verzeichnis und Kosten
+mt read 3                      # Bildschirm von Pane 3 als Text
+mt read 3 --lines 20           # nur die letzten 20 Zeilen mit Inhalt
+mt read 3 --follow             # am laufenden Strom bleiben
+mt send 3 "schreib die Tests"  # Prompt tippen und abschicken
+mt send 3 - < prompt.txt       # langer Prompt von stdin
+mt keys 3 ctrl-c               # unterbrechen
+mt keys 3 down enter           # Auswahl bestätigen
+mt wait 3                      # blockiert, bis fertig oder Rückfrage
+mt kill 3                      # Session beenden
+mt hub                         # welcher Daemon läuft gerade
+```
+
+Damit lassen sich zwei Agents in drei Zeilen verketten, statt in einer Schleife zu pollen:
+
+```bash
+mt send 1 "refactor den Parser"
+mt wait 1
+mt send 2 "review, was Pane 1 gerade gemacht hat"
+```
+
+`mt ls --json` und `mt wait --json` geben maschinenlesbare Ausgabe. Die Exit-Codes unterscheiden die Fälle, die ein Skript auseinanderhalten muss:
+
+| Code | Bedeutung |
+|------|-----------|
+| `0` | ok |
+| `1` | Fehler |
+| `2` | falsche Verwendung |
+| `3` | kein Daemon erreichbar |
+| `4` | Timeout beim Warten, die Session arbeitet weiter |
+
+`mt` startet selbst keinen Daemon. Sessions entstehen in MTUI; ein Daemon, den ein vertipptes `mt ls` hochfährt, hätte nichts zu zeigen und bliebe trotzdem stehen.
+
 ## Voraussetzungen
 
 - Mindestens eines der KI-CLI-Tools: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), oder [Gemini CLI](https://github.com/google-gemini/gemini-cli)
@@ -287,6 +325,44 @@ The UI is available in: German, **English**, Italian, Spanish, French.
 | **Ctrl+C** | Copy (when text selected) |
 | **Ctrl+Scroll** | Font size per terminal |
 | **Esc** | Close dialogs |
+
+## Command line (`mt`)
+
+With `session_host: daemon` the sessions belong to the `mtuid` background service rather than to the window, so they can also be driven from a shell with MTUI closed.
+
+```bash
+mt ls                          # sessions with state, directory and cost
+mt read 3                      # pane 3's screen as text
+mt read 3 --lines 20           # just the last 20 non-empty lines
+mt read 3 --follow             # stay on the live stream
+mt send 3 "write the tests"    # type a prompt and submit it
+mt send 3 - < prompt.txt       # a long prompt from stdin
+mt keys 3 ctrl-c               # interrupt
+mt keys 3 down enter           # confirm a selection
+mt wait 3                      # block until done or blocked
+mt kill 3                      # end a session
+mt hub                         # which daemon is running
+```
+
+Chaining two agents is three lines rather than a poll loop:
+
+```bash
+mt send 1 "refactor the parser"
+mt wait 1
+mt send 2 "review what pane 1 just did"
+```
+
+`mt ls --json` and `mt wait --json` produce machine-readable output. The exit codes carry the distinctions a script needs:
+
+| Code | Meaning |
+|------|---------|
+| `0` | ok |
+| `1` | error |
+| `2` | wrong usage |
+| `3` | no daemon reachable |
+| `4` | the wait timed out, the session keeps working |
+
+`mt` never starts a daemon of its own. Sessions come from MTUI; one started by a mistyped `mt ls` would have nothing to show and would stay running anyway.
 
 ## Prerequisites
 

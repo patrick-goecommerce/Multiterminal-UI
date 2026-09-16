@@ -1,6 +1,6 @@
 # mtuid: Sessions überleben die GUI (Daemon-Architektur) — Design
 
-**Status:** Phase 1 und 2a umgesetzt, Standard bleibt `embedded` bis zur Durchsatzmessung
+**Status:** Phase 1, 2a und 3 umgesetzt, Standard bleibt `embedded` bis zur Durchsatzmessung
 **Branch:** `claude/mtui-herdr-dev-migration-lz2rze`
 **Vorbild:** [herdr](https://herdr.dev/) 0.9, Rust, Apache-2.0
 **Betrifft:** `internal/backend/app.go`, `internal/terminal`, `internal/discovery`, neu `internal/hub` und `cmd/mtuid`
@@ -319,7 +319,7 @@ wo seine Sessions liegen.
 | 1e | `session_host: daemon`: GUI startet den Daemon, verbindet sich, Restore hängt wieder an statt neu zu starten | **App schließen und öffnen, Agents laufen weiter** | **fertig** |
 | 2a | Scan, Hook-Leser und die Shim-Endpunkte (Statusline, tmux) laufen auf dem Host | Zustand wird auch ohne offenes Fenster fortgeschrieben; `MTUI_PORT` bleibt gültig | **fertig** |
 | 2b | MCP-Server in den Daemon; Queue und Keepalive dorthin | agentgestartete Sessions und die Warteschlange leben ohne GUI weiter | offen |
-| 3 | `mtui` als CLI-Client (`ls`, `attach`, `send`, `kill`) | Sessions ohne GUI bedienbar | offen |
+| 3 | `mt` als CLI-Client (`ls`, `read`, `send`, `keys`, `wait`, `kill`, `hub`) | Sessions ohne GUI bedienbar | **fertig** |
 | 4 | Remote-Hubs über SSH | Laptop und Server in einer Oberfläche | offen |
 | 5 | Kanban-Orchestrator headless, weitere Agent-CLIs, Plugin-Hooks | Boards laufen ohne offenes Fenster | offen |
 
@@ -381,24 +381,70 @@ abgearbeitet. Was übrig bleibt, in der Reihenfolge, in der es sich lohnt:
 
 1. **MCP-Server im Daemon** (Phase 2b). Ohne ihn kann ein Agent nur delegieren, solange
    ein Fenster offen ist. Hängt daran, dass der Daemon die Umgebung für eine neue Session
-   selbst bauen können muss, was heute GUI-Politik ist.
-2. **CLI-Client** (Phase 3). herdrs drei Ebenen auf einer API (Agent-Skill, CLI, roher
-   Socket) sind der Grund, warum man dort nie ein Fenster braucht. Unser Protokoll kann
-   das bereits; es fehlt nur das Kommando.
-3. **Remote über SSH** (Phase 4). Ein Tunnel auf den Loopback-Port des entfernten
-   Daemons, plus eine Hub-Auswahl im Client. Das Protokoll trägt die Hub-Kennung schon.
-4. **Mehr Agent-CLIs.** herdr startet 22, wir erkennen claude, codex und gemini. Das ist
+   selbst bauen können muss, was heute GUI-Politik ist. Dasselbe blockiert `mt new`:
+   die CLI kann jede Session bedienen, aber keine anlegen.
+2. **Remote über SSH** (Phase 4). Ein Tunnel auf den Loopback-Port des entfernten
+   Daemons, plus eine Hub-Auswahl im Client. Das Protokoll trägt die Hub-Kennung schon,
+   und `mt --hub <name>` ist die Stelle, an der es sichtbar würde.
+3. **Mehr Agent-CLIs.** herdr startet 22, wir erkennen claude, codex und gemini. Das ist
    eine Tabelle, kein Umbau.
-5. **Plugins.** herdr lädt Verzeichnisse mit `herdr-plugin.toml`, Actions und
+4. **Plugins.** herdr lädt Verzeichnisse mit `herdr-plugin.toml`, Actions und
    Event-Hooks, aus einem Marketplace, der GitHub-Repos mit einem Topic indiziert, ohne
-   Sandbox. Reizvoll, aber es ist auch das Stück, das ein Werkzeug von „tut eine Sache"
-   zu „ist eine Plattform" macht, mit allem, was daran hängt.
+   Sandbox. Reizvoll, aber es ist auch das Stück, das ein Werkzeug von "tut eine Sache"
+   zu "ist eine Plattform" macht, mit allem, was daran hängt.
 
 Nicht übernommen, bewusst: herdrs Socket hat **keine Authentifizierung** und verlässt
 sich auf Dateirechte. Auf Windows löst das #183 nicht, deshalb bleibt es bei Port 0 plus
 Token im Discovery-Record.
 
-Dazu eine Fähigkeit, die es bei uns vorher nicht gab und die von herdr abgeschaut ist:
-`wait_for_agent` (herdrs `agent.wait`). Ein Agent kann jetzt auf einen anderen warten,
-statt `read_output` in einer Schleife zu pollen. Das ist die Primitive, aus der sich eine
-Pipeline bauen lässt, ohne das Kanban-Board zu bemühen.
+## Stand nach Phase 3: die CLI
+
+herdrs eigentliches Alleinstellungsmerkmal ist nicht der Daemon, sondern dass derselbe
+Daemon drei Gesichter hat: ein Agent-Skill, eine CLI und der rohe Socket. MTUI hatte das
+Fenster und den MCP-Server. `cmd/mt` ist das dritte.
+
+```
+mt ls                     was der Daemon hält, mit Agent-Zustand
+mt read <id> [--follow]   Bildschirm als Text oder als laufender Strom
+mt send <id> <text...>    Prompt tippen und abschicken ("-" liest stdin)
+mt keys <id> <taste...>   ctrl-c, enter, down, yes, …
+mt wait <id>              blockiert bis done oder blocked
+mt kill <id>              Sessions beenden
+mt hub [--stop]           welcher Daemon läuft, und ihn beenden
+```
+
+Zwei Entscheidungen, die nicht offensichtlich sind:
+
+**Die CLI heißt `mt`, nicht `mtui`.** Der Installer legt die GUI als `mtui.exe` ab und
+setzt `{app}` auf den PATH. Ein `mtui ls` in der Shell hätte ein Fenster geöffnet. `mt`
+passt außerdem zum `.mt-worktrees`-Präfix, das es im Repo schon gibt.
+
+**Die CLI startet keinen Daemon.** Die GUI tut das, weil sie Sessions anlegt; ein Daemon,
+den ein vertipptes `mt ls` hochfährt, hätte nichts zu zeigen und bliebe trotzdem stehen.
+Stattdessen sagt sie es und beendet sich mit Code 3, den ein Skript abfragen kann.
+
+Die Exit-Codes sind Teil der Schnittstelle: 3 heißt "kein Daemon", 4 heißt "der Agent
+arbeitet noch". Ein Skript muss "läuft weiter" von "kaputt" unterscheiden können, und mit
+Code 1 für beides ginge das nicht.
+
+Das Warte-Vokabular liegt seit Phase 3 in `internal/hub` statt in `internal/backend`. Die
+CLI und das MCP-Tool stellen dieselbe Frage an denselben Host; zwei Implementierungen
+wären zwei Definitionen von "fertig".
+
+Drei Fehler, die beim Bauen aufgefallen sind:
+
+1. **`flag.Parse` hört beim ersten Positional auf.** `mt wait 3 --timeout 30s` hat die ID
+   gelesen und den Timeout danach kommentarlos ignoriert: gefragt waren 30 Sekunden,
+   gewartet wurden fünf Minuten. `parseArgs` schält pro Runde ein Positional ab, damit
+   Optionen auf beiden Seiten stehen dürfen.
+2. **`.gitignore` Zeile 3 war ein blankes `mtui`.** Das trifft nicht nur die gebaute
+   Binary, sondern auch das Quellverzeichnis. Das ganze CLI-Paket war für git unsichtbar.
+   Die Root-Binaries sind jetzt mit führendem Slash verankert.
+3. **`--help` eines Unterkommandos hat erst den Daemon gewählt.** Es ist damit genau auf
+   der Maschine gescheitert, deren Besitzer die Hilfe liest, weil er noch nichts
+   eingerichtet hat.
+
+Was die CLI **nicht** kann: Sessions anlegen. Dafür müsste der Daemon die Umgebung einer
+Session selbst bauen können (Hook-Verdrahtung, Worktree-Firewall, Session-ID), und das
+ist heute GUI-Politik. Es ist derselbe Block, an dem Phase 2b hängt, und deshalb löst man
+beides zusammen oder gar nicht.
