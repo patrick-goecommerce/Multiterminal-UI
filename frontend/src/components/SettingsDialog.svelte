@@ -58,6 +58,12 @@
   let audioInputSound = $config.audio?.input_sound || '';
   let audioErrorSound = $config.audio?.error_sound || '';
 
+  // Whether the sessions belong to the mtuid daemon rather than to this
+  // window. sessionDaemonLive is what the backend actually ended up using,
+  // which can differ from the setting until the app is restarted.
+  let sessionDaemonWanted = ($config as any).session_host === 'daemon';
+  let sessionDaemonLive = false;
+
   let idleSuspendEnabled = ($config as any).idle_suspend?.enabled ?? false;
   let idleSuspendMinutes = ($config as any).idle_suspend?.timeout_minutes || 30;
   let autoNamingEnabled = $config.auto_naming?.enabled ?? true;
@@ -137,6 +143,8 @@
     audioDoneSound = $config.audio?.done_sound || '';
     audioInputSound = $config.audio?.input_sound || '';
     audioErrorSound = $config.audio?.error_sound || '';
+    sessionDaemonWanted = ($config as any).session_host === 'daemon';
+    App.UsesSessionDaemon().then((v: boolean) => { sessionDaemonLive = v; }).catch(() => {});
     idleSuspendEnabled = ($config as any).idle_suspend?.enabled ?? false;
     idleSuspendMinutes = ($config as any).idle_suspend?.timeout_minutes || 30;
     autoNamingEnabled = $config.auto_naming?.enabled ?? true;
@@ -362,6 +370,7 @@
         language: sttLanguage,
         cloud: { base_url: sttBaseUrl, model: sttModel, api_key: sttApiKey },
       },
+      session_host: sessionDaemonWanted ? 'daemon' : 'embedded',
       idle_suspend: {
         enabled: idleSuspendEnabled,
         timeout_minutes: idleSuspendMinutes,
@@ -690,6 +699,27 @@
           <label class="orch-label" for="orch-review-cmd">Review-Befehl</label>
           <input id="orch-review-cmd" type="text" class="claude-input" bind:value={orchReviewCommand} placeholder="go test ./... && go vet ./..." />
         </div>
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Sitzungen im Hintergrunddienst halten</label>
+        <p class="setting-desc">Die Agents laufen dann in einem eigenen Prozess (<code>mtuid</code>) statt in diesem Fenster. MTUI schließen, ein Update einspielen oder abstürzen beendet sie nicht mehr; beim nächsten Start hängen sich die Panes wieder an dieselben Agents an, mit Bildschirminhalt. Greift erst nach einem Neustart von MTUI.</p>
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <button class="toggle-btn" class:toggle-on={sessionDaemonWanted} on:click={() => sessionDaemonWanted = !sessionDaemonWanted}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{sessionDaemonWanted ? 'Aktiv' : 'Inaktiv'}</span>
+        </div>
+        <p class="setting-desc">
+          {#if sessionDaemonLive}
+            Läuft: die Sitzungen dieses Fensters gehören dem Dienst.
+          {:else if sessionDaemonWanted}
+            Noch nicht aktiv &mdash; dieses Fenster hält seine Sitzungen selbst. Nach dem Neustart übernimmt der Dienst. Ist er nicht erreichbar, bleibt MTUI bei den lokalen Sitzungen und sagt es in der Diagnose.
+          {:else}
+            Die Sitzungen gehören diesem Fenster und enden mit ihm.
+          {/if}
+        </p>
       </div>
 
       <div class="setting-group">
