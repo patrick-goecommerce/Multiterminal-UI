@@ -225,7 +225,7 @@ func TestSuspendSession_SuspendsDonePane(t *testing.T) {
 		t.Fatalf("SuspendSession: %v", err)
 	}
 	waitFor(t, func() bool { return sess.IsSuspended() }, "session did not reach the suspended state")
-	waitFor(t, func() bool { return lastActivity(1) == "sleeping" },
+	waitFor(t, func() bool { return lastActivity(a, 1) == "sleeping" },
 		"prevActivity never became \"sleeping\" — the scan loop would re-emit the old state")
 	if !a.IsSessionSuspended(1) {
 		t.Fatal("IsSessionSuspended must report true")
@@ -315,16 +315,15 @@ func TestResumeSession_UsesResumeArgvAndIdenticalEnv(t *testing.T) {
 	if sess.IsSuspended() {
 		t.Fatal("pane must be awake after ResumeSession")
 	}
-	if act := lastActivity(1); act != "resuming" {
+	if act := lastActivity(a, 1); act != "resuming" {
 		t.Fatalf("prevActivity = %q, want \"resuming\"", act)
 	}
 }
 
-// lastActivity returns the state the scan loop last saw for a session.
-func lastActivity(id int) string {
-	prevActivityMu.Lock()
-	defer prevActivityMu.Unlock()
-	return prevActivity[id]
+// lastActivity returns the state the host has confirmed for a session.
+func lastActivity(a *AppService, id int) string {
+	state, _ := confirmedOf(a, id)
+	return state
 }
 
 func TestResumeSession_HookSessionIDWinsOverArgv(t *testing.T) {

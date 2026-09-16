@@ -2,6 +2,8 @@ package backend
 
 import (
 	"testing"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // ---------------------------------------------------------------------------
@@ -9,33 +11,30 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestCleanupActivityTracking_RemovesEntries(t *testing.T) {
-	// Set up some tracking data
-	prevActivityMu.Lock()
-	prevActivity[100] = "active"
+	// This only covers the emit mirrors now. The activity half of the old
+	// tracking moved to the host with the debounce, and the host forgets a
+	// session in Close; TestCloseForgetsTheDebounceState in internal/hub
+	// covers that side.
+	prevEmitMu.Lock()
 	prevCost[100] = "$1.23"
-	prevActivity[200] = "done"
+	prevTitle[100] = "eins"
 	prevCost[200] = "$4.56"
-	prevActivityMu.Unlock()
+	prevTitle[200] = "zwei"
+	prevEmitMu.Unlock()
 
-	// Clean up session 100
 	cleanupActivityTracking(100)
 
-	prevActivityMu.Lock()
-	defer prevActivityMu.Unlock()
+	prevEmitMu.Lock()
+	defer prevEmitMu.Unlock()
 
-	if _, exists := prevActivity[100]; exists {
-		t.Fatal("activity entry for session 100 should be removed")
-	}
 	if _, exists := prevCost[100]; exists {
 		t.Fatal("cost entry for session 100 should be removed")
 	}
-
-	// Session 200 should still exist
-	if prevActivity[200] != "done" {
-		t.Fatal("session 200 activity should be untouched")
+	if _, exists := prevTitle[100]; exists {
+		t.Fatal("title entry for session 100 should be removed")
 	}
-	if prevCost[200] != "$4.56" {
-		t.Fatal("session 200 cost should be untouched")
+	if prevCost[200] != "$4.56" || prevTitle[200] != "zwei" {
+		t.Fatal("session 200 should be untouched")
 	}
 }
 
@@ -69,32 +68,36 @@ func TestActivityInfo_Fields(t *testing.T) {
 // Prev activity tracking state isolation
 // ---------------------------------------------------------------------------
 
-func TestPrevActivityTracking_IsolatedPerSession(t *testing.T) {
-	// Clean state
-	prevActivityMu.Lock()
-	prevActivity[301] = "active"
-	prevActivity[302] = "done"
+func TestActivityTracking_IsolatedPerSession(t *testing.T) {
+	a := newTestApp()
+	t.Cleanup(a.host.Release)
+	adopt(t, a, 301, terminal.NewSession(301, 24, 80))
+	adopt(t, a, 302, terminal.NewSession(302, 24, 80))
+
+	setConfirmed(t, a, 301, "active")
+	setConfirmed(t, a, 302, "done")
+	prevEmitMu.Lock()
 	prevCost[301] = "$0.10"
 	prevCost[302] = "$0.20"
-	prevActivityMu.Unlock()
+	prevEmitMu.Unlock()
 
-	// Cleanup only 301
 	cleanupActivityTracking(301)
-
-	prevActivityMu.Lock()
-	defer prevActivityMu.Unlock()
-
-	if _, exists := prevActivity[301]; exists {
-		t.Fatal("session 301 should be cleaned up")
+	if err := a.host.Close(301); err != nil {
+		t.Fatalf("Close: %v", err)
 	}
-	if prevActivity[302] != "done" {
-		t.Fatal("session 302 should be untouched")
+
+	if state, _ := confirmedOf(a, 301); state != "" {
+		t.Fatalf("session 301 kept its confirmed state %q after closing", state)
+	}
+	if state, _ := confirmedOf(a, 302); state != "done" {
+		t.Fatalf("session 302 activity = %q, want done", state)
+	}
+	prevEmitMu.Lock()
+	defer prevEmitMu.Unlock()
+	if _, exists := prevCost[301]; exists {
+		t.Fatal("session 301 cost should be cleaned up")
 	}
 	if prevCost[302] != "$0.20" {
 		t.Fatal("session 302 cost should be untouched")
 	}
-
-	// Clean up 302 to avoid test pollution
-	delete(prevActivity, 302)
-	delete(prevCost, 302)
 }

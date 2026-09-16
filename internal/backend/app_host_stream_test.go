@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // printArgv is a command that writes a marker to the terminal and exits.
@@ -166,6 +167,7 @@ func TestOnHostEvent_HandlesAJSONPayloadFromTheDaemon(t *testing.T) {
 	cleanupActivityTracking(id)
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
+	adopt(t, a, id, terminal.NewSession(id, 24, 80))
 
 	raw, err := json.Marshal(hub.SessionSuspended{ID: id, ResumeID: "uuid"})
 	if err != nil {
@@ -173,9 +175,7 @@ func TestOnHostEvent_HandlesAJSONPayloadFromTheDaemon(t *testing.T) {
 	}
 	a.onHostEvent(hub.EventSessionSuspended, json.RawMessage(raw))
 
-	prevActivityMu.Lock()
-	state := prevActivity[id]
-	prevActivityMu.Unlock()
+	state, _ := confirmedOf(a, id)
 	if state != "sleeping" {
 		t.Errorf("activity after a JSON suspend event = %q, want %q", state, "sleeping")
 	}
@@ -187,12 +187,11 @@ func TestOnHostEvent_HandlesAStructPayloadFromTheEmbeddedHost(t *testing.T) {
 	cleanupActivityTracking(id)
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
+	adopt(t, a, id, terminal.NewSession(id, 24, 80))
 
 	a.onHostEvent(hub.EventSessionResumed, hub.SessionResumed{ID: id, ResumeID: "uuid"})
 
-	prevActivityMu.Lock()
-	state := prevActivity[id]
-	prevActivityMu.Unlock()
+	state, _ := confirmedOf(a, id)
 	if state != "resuming" {
 		t.Errorf("activity after a struct resume event = %q, want %q", state, "resuming")
 	}

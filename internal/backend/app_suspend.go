@@ -195,18 +195,15 @@ const (
 
 // emitLifecycleActivity publishes a suspend/resume state to the frontend.
 //
-// prevActivity is updated in the same step so the scan loop treats the next
-// real state as a change (and, for "sleeping", does not immediately re-emit the
-// state it saw before the pane fell asleep). forceActivity also stamps
-// activitySince to now and clears any armed debounce candidate — a bare
-// prevActivity write would leave the badge's timestamp on the state the pane
-// had before sleeping, and let a stale candidate confirm on the next tick
-// (issue #188).
+// The host's confirmed state is updated in the same step so the scan treats
+// the next real state as a change, and so a waking pane does not immediately
+// re-emit what it was doing before it fell asleep. ForceActivity also stamps
+// the start and clears any armed candidate: setting the state alone would
+// leave the badge's timestamp on the pre-sleep state and let a stale candidate
+// confirm on the next tick (#188).
 func (a *AppService) emitLifecycleActivity(id int, state string) {
 	now := time.Now()
-	prevActivityMu.Lock()
-	forceActivity(id, state, now)
-	prevActivityMu.Unlock()
+	_ = a.host.ForceActivity(id, hub.Activity(state), now)
 	if a.app == nil {
 		return
 	}

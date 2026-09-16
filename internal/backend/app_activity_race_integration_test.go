@@ -76,32 +76,19 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 
 	// The periodic scan tick must also observe "done" — this is what actually
 	// drives the pane badge and re-triggers the pipeline queue in production.
-	// A single tick only arms the debounce candidate (confirmActivity, task 3 /
+	// A single tick only arms the debounce candidate (the host's debouncer,
 	// issue #188) — it takes debounceWindow of a stable state to confirm. Back-
 	// date the pending timestamp instead of sleeping the test, then tick again
 	// so the candidate confirms.
 	app.applyScanResults(app.host.ScanActivity())
-	prevActivityMu.Lock()
-	since, armed := pendingSince[sessID]
-	if armed {
-		pendingSince[sessID] = since.Add(-debounceWindow)
-	}
-	prevActivityMu.Unlock()
-	if !armed {
-		// Without this the back-dating would silently do nothing and the
-		// assertions below would pass on an unarmed candidate.
-		t.Fatal("first scan armed no debounce candidate — the scan never observed 'done'")
-	}
+	backdateCandidate(t, app, sessID)
 	app.applyScanResults(app.host.ScanActivity())
 
 	if got := sess.GetActivity(); got != terminal.ActivityDone {
 		t.Fatalf("after applyScanResults: activity = %q, want %q — pane would be stuck on 'läuft'", got, "done")
 	}
-	prevActivityMu.Lock()
-	gotPrev := prevActivity[sessID]
-	prevActivityMu.Unlock()
-	if gotPrev != "done" {
-		t.Errorf("prevActivity[%d] = %q, want %q", sessID, gotPrev, "done")
+	if gotPrev, _ := confirmedOf(app, sessID); gotPrev != "done" {
+		t.Errorf("confirmed activity of session %d = %q, want %q", sessID, gotPrev, "done")
 	}
 
 	// The queue item itself must have advanced to "done", not be stuck as "sent".

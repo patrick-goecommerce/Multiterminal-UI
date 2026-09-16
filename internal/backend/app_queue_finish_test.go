@@ -3,31 +3,32 @@ package backend
 import (
 	"testing"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // pinPrevActivity keeps AddToQueue's pre-existing auto-dispatch
 // (tryProcessQueue) from firing during test setup. Unit tests have no real
-// session, so prevActivity[sessionId] defaults to "" on first read, which
-// tryProcessQueue treats as idle and immediately flips a freshly enqueued
-// prep item from "pending" to "sent" — before the test can exercise it. A
-// real session mid-turn would report a busy activity here instead, so this
-// mirrors production. Also guards against state leaking to other tests via
-// the shared prevActivity map (session ID 1 is reused across this file).
-func pinPrevActivity(t *testing.T, sessionId int, activity string) {
+// session, so its confirmed activity defaults to "" on first read, which
+// tryProcessQueue treats as idle and immediately flips a freshly enqueued prep
+// item from "pending" to "sent", before the test can exercise it. A real
+// session mid-turn would report a busy activity here instead, so this mirrors
+// production.
+//
+// The session has to exist on the host: the confirmed state belongs to a
+// session now, and setting it for an ID nothing knows about is refused rather
+// than quietly kept in a map forever. No cleanup any more either, because the
+// state goes away with this app's host.
+func pinPrevActivity(t *testing.T, a *AppService, sessionId int, activity string) {
 	t.Helper()
-	prevActivityMu.Lock()
-	prevActivity[sessionId] = activity
-	prevActivityMu.Unlock()
-	t.Cleanup(func() {
-		prevActivityMu.Lock()
-		delete(prevActivity, sessionId)
-		prevActivityMu.Unlock()
-	})
+	adopt(t, a, sessionId, terminal.NewSession(sessionId, 24, 80))
+	setConfirmed(t, a, sessionId, activity)
 }
 
 func TestProcessQueue_ReportsItemDone(t *testing.T) {
 	a := newTestApp()
-	pinPrevActivity(t, 1, "generating")
+	t.Cleanup(a.host.Release)
+	pinPrevActivity(t, a, 1, "generating")
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	prepID := a.getFinishState(1).PrepItemID
 	// Simulate the scan loop: first done sends the item, second done completes it.
@@ -56,7 +57,8 @@ func TestProcessQueue_ReportsItemDone(t *testing.T) {
 
 func TestRemovePrepItem_ResetsFinish(t *testing.T) {
 	a := newTestApp()
-	pinPrevActivity(t, 1, "generating")
+	t.Cleanup(a.host.Release)
+	pinPrevActivity(t, a, 1, "generating")
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	prepID := a.getFinishState(1).PrepItemID
 	a.RemoveFromQueue(1, prepID)
@@ -67,7 +69,8 @@ func TestRemovePrepItem_ResetsFinish(t *testing.T) {
 
 func TestClearQueue_ResetsFinish(t *testing.T) {
 	a := newTestApp()
-	pinPrevActivity(t, 1, "generating")
+	t.Cleanup(a.host.Release)
+	pinPrevActivity(t, a, 1, "generating")
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	a.ClearQueue(1)
 	if st := a.getFinishState(1); st != nil {
@@ -77,7 +80,8 @@ func TestClearQueue_ResetsFinish(t *testing.T) {
 
 func TestAddToQueue_LockedDuringFinish(t *testing.T) {
 	a := newTestApp()
-	pinPrevActivity(t, 1, "generating")
+	t.Cleanup(a.host.Release)
+	pinPrevActivity(t, a, 1, "generating")
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	item := a.AddToQueue(1, "sollte abgelehnt werden")
 	if item.ID != 0 {

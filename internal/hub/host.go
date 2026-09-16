@@ -1,6 +1,9 @@
 package hub
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 var (
 	// ErrNoSession means the ID does not name a session this Host owns.
@@ -79,6 +82,24 @@ type Host interface {
 	// how often to look, and because what follows from a change (debouncing,
 	// advancing a queue, reporting progress) is the caller's business.
 	ScanActivity() []ScanResult
+
+	// ConfirmedActivity returns the session's debounced state and when it
+	// began, zero values while it has never confirmed one.
+	ConfirmedActivity(id int) (Activity, time.Time)
+
+	// ForceActivity sets the confirmed state and its start together, for a
+	// transition that does not come from the screen: a queue reset, a suspend,
+	// a resume. Setting the state alone would leave the start pointing at the
+	// previous one and leave an armed candidate that can confirm on a single
+	// unrelated tick (#188 follow-up).
+	ForceActivity(id int, state Activity, at time.Time) error
+
+	// SeedActivity restores a state's start timestamp after a restart, so a
+	// pane keeps its duration instead of starting over. The state is part of
+	// it: the seed is honoured only if the pane confirms that same state
+	// first, because a restored pane's CLI boot reads as "active" for longer
+	// than a debounce window and would otherwise swallow it (#189).
+	SeedActivity(id int, state Activity, at time.Time) error
 
 	// ResetActivity puts the session back to idle. A caller that has just sent
 	// it work uses this so the next "done" reads as a change rather than as

@@ -9,16 +9,58 @@ import (
 // ScanActivity implements Host.
 //
 // This is the half of the old scan loop that has to be next to the screens:
-// deciding what each session is doing. The other half, deciding what the UI
-// and the queue do about a change, stays with the caller, because debouncing,
-// reporting progress and advancing a queue are not properties of a terminal.
+// deciding what each session is doing, and whether that is a real change or a
+// repaint. An earlier version of this comment said debouncing belonged to the
+// caller. It does not: the classifier is a snapshot without hysteresis, so
+// "did it change" is a question about the screen, and a queue that advances on
+// a flickered "done" is broken rather than merely jumpy (#188).
+//
+// What stays with the caller is what to DO about a confirmed change.
 func (h *Embedded) ScanActivity() []ScanResult {
 	ids, sessions := h.sessionObjects()
+	now := time.Now()
 	out := make([]ScanResult, 0, len(ids))
 	for i, sess := range sessions {
-		out = append(out, scanOne(ids[i], sess))
+		r := scanOne(ids[i], sess)
+		if r.Asleep {
+			out = append(out, r)
+			continue
+		}
+		changed, confirmed, began := h.activity.confirm(r.ID, r.Activity, now)
+		r.Changed = changed
+		r.Since = began
+		if confirmed != "" {
+			// Report the confirmed state; fall back to the raw reading only
+			// while the session has never confirmed one, so a caller never
+			// sees an activity outside the documented set.
+			r.Activity = confirmed
+		}
+		out = append(out, r)
 	}
 	return out
+}
+
+// ConfirmedActivity implements Host.
+func (h *Embedded) ConfirmedActivity(id int) (Activity, time.Time) {
+	return h.activity.state(id)
+}
+
+// ForceActivity implements Host.
+func (h *Embedded) ForceActivity(id int, state Activity, at time.Time) error {
+	if _, err := h.lookup(id); err != nil {
+		return err
+	}
+	h.activity.force(id, state, at)
+	return nil
+}
+
+// SeedActivity implements Host.
+func (h *Embedded) SeedActivity(id int, state Activity, at time.Time) error {
+	if _, err := h.lookup(id); err != nil {
+		return err
+	}
+	h.activity.seed(id, state, at)
+	return nil
 }
 
 func scanOne(id int, sess *terminal.Session) ScanResult {
@@ -123,4 +165,13 @@ func (h *Embedded) scanLoop() {
 			}
 		}
 	}
+}
+
+// BackdateActivityForTest moves a session's armed debounce candidate back by
+// the full debounce window, so a caller can confirm a state change on the next
+// scan instead of sleeping. It reports whether a candidate was armed at all:
+// a test that back-dates nothing and then asserts a confirmation would
+// otherwise pass without having tested the debounce.
+func (h *Embedded) BackdateActivityForTest(id int) bool {
+	return h.activity.backdateCandidate(id, debounceWindow)
 }

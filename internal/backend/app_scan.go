@@ -22,22 +22,25 @@ type ActivityInfo struct {
 	ActivitySince int64 `json:"activitySince"`
 }
 
-// prevActivity tracks the last emitted state per session to avoid spamming.
+// The last values emitted per session, so an unchanged tick stays silent.
+//
+// Only cost and title live here now. Whether the ACTIVITY changed is decided
+// by the host (hub.ScanResult.Changed): the debounce that answers it belongs
+// next to the screen classifier it corrects for, and a queue that has to
+// advance with no window open cannot ask a window whether the state moved.
 var (
-	prevActivityMu sync.Mutex
-	prevActivity   = make(map[int]string)
-	prevCost       = make(map[int]string)
-	prevTitle      = make(map[int]string)
+	prevEmitMu sync.Mutex
+	prevCost   = make(map[int]string)
+	prevTitle  = make(map[int]string)
 )
 
 // cleanupActivityTracking removes stale tracking data for a closed session.
+// The host forgets its own half when the session goes.
 func cleanupActivityTracking(id int) {
-	prevActivityMu.Lock()
-	delete(prevActivity, id)
+	prevEmitMu.Lock()
 	delete(prevCost, id)
 	delete(prevTitle, id)
-	cleanupActivityDebounce(id)
-	prevActivityMu.Unlock()
+	prevEmitMu.Unlock()
 }
 
 // applyScanResults turns one scan tick into what the UI, the queue and the
@@ -65,9 +68,13 @@ func (a *AppService) applyScanResults(results []hub.ScanResult) {
 		// half runs through confirmActivity, so a one-tick flicker never
 		// reaches the UI — nor the queue, orchestrator and issue reporting
 		// below, which all key off activityChanged.
-		now := time.Now()
-		prevActivityMu.Lock()
-		activityChanged := confirmActivity(id, actStr, now)
+		// The host already applied the debounce: r.Activity is the confirmed
+		// state and r.Changed says whether this tick is the transition. Every
+		// side effect below keys off r.Changed and never off comparing the
+		// activity, which would react to a repaint (#188).
+		activityChanged := r.Changed
+		confirmedActivity := actStr
+		prevEmitMu.Lock()
 		costChanged := prevCost[id] != costStr
 		titleChanged := prevTitle[id] != title
 		changed := activityChanged || costChanged || titleChanged
@@ -77,18 +84,7 @@ func (a *AppService) applyScanResults(results []hub.ScanResult) {
 		if titleChanged {
 			prevTitle[id] = title
 		}
-		confirmedActivity := prevActivity[id]
-		if confirmedActivity == "" {
-			// No confirmed state yet (session just started, still on its
-			// first candidate). Fall back to the raw observation instead of
-			// emitting "" — outside the documented enum — when only cost or
-			// title changed on this tick. The host never reports an empty
-			// activity, so this is always a valid value; it does not weaken the
-			// debounce guarantee because activityChanged is false here, so
-			// none of the confirmed-transition side effects below fire.
-			confirmedActivity = actStr
-		}
-		prevActivityMu.Unlock()
+		prevEmitMu.Unlock()
 
 		if changed && a.app != nil {
 			log.Printf("[scan] session %d: activity=%s cost=%s title=%q", id, confirmedActivity, costStr, title)
@@ -99,7 +95,7 @@ func (a *AppService) applyScanResults(results []hub.ScanResult) {
 				Title:         title,
 				ContextPct:    ctxPct,
 				Model:         model,
-				ActivitySince: activitySinceUnix(id),
+				ActivitySince: unixOrZero(r.Since),
 			})
 		}
 
@@ -147,4 +143,13 @@ func (a *AppService) onActivityChangeForIssue(sessionID int, newActivity string,
 	if newActivity == "done" {
 		a.reportIssueProgress(sessionID, progressDone, cost)
 	}
+}
+
+// unixOrZero renders a timestamp for the frontend, which reads 0 as "show the
+// state without a duration" rather than rendering an epoch date.
+func unixOrZero(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
 }

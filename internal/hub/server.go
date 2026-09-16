@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Server exposes a Host over loopback HTTP.
@@ -209,6 +210,24 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	case action == "activity" && r.Method == http.MethodGet:
+		state, began := s.host.ConfirmedActivity(id)
+		writeJSON(w, http.StatusOK, confirmedActivity{Activity: state, Since: began})
+	case action == "activity" && r.Method == http.MethodPost:
+		var body activityWrite
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		fn := s.host.ForceActivity
+		if body.Seed {
+			fn = s.host.SeedActivity
+		}
+		if err := fn(id, body.Activity, body.At); err != nil {
+			writeHostError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	case action == "suspend" && r.Method == http.MethodPost:
 		if err := s.host.Suspend(id); err != nil {
 			writeHostError(w, err)
@@ -394,4 +413,19 @@ func writeHostError(w http.ResponseWriter, err error) {
 	default:
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// confirmedActivity is the wire shape of a debounced state.
+type confirmedActivity struct {
+	Activity Activity  `json:"activity"`
+	Since    time.Time `json:"since"`
+}
+
+// activityWrite carries both ways of setting a confirmed state. Seed picks
+// which: a seed is refused once the session has confirmed something, a force
+// always wins, and they are one endpoint because they write the same field.
+type activityWrite struct {
+	Activity Activity  `json:"activity"`
+	At       time.Time `json:"at"`
+	Seed     bool      `json:"seed,omitempty"`
 }

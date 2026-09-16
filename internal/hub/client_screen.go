@@ -3,6 +3,7 @@ package hub
 import (
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // The screen and agent-state half of the client. All of it is control traffic,
@@ -62,6 +63,29 @@ func (r *Remote) ClearHookData(id int) error {
 // ResetActivity implements Host.
 func (r *Remote) ResetActivity(id int) error {
 	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/reset-activity", id), nil, nil)
+}
+
+// ConfirmedActivity implements Host. A failure reads as "no confirmed state
+// yet", which is the same thing a fresh session reports and therefore the
+// answer a caller already handles.
+func (r *Remote) ConfirmedActivity(id int) (Activity, time.Time) {
+	var out confirmedActivity
+	if err := r.call(http.MethodGet, fmt.Sprintf("/v1/sessions/%d/activity", id), nil, &out); err != nil {
+		return "", time.Time{}
+	}
+	return out.Activity, out.Since
+}
+
+// ForceActivity implements Host.
+func (r *Remote) ForceActivity(id int, state Activity, at time.Time) error {
+	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/activity", id),
+		activityWrite{Activity: state, At: at}, nil)
+}
+
+// SeedActivity implements Host.
+func (r *Remote) SeedActivity(id int, state Activity, at time.Time) error {
+	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/activity", id),
+		activityWrite{Activity: state, At: at, Seed: true}, nil)
 }
 
 // ScanActivity implements Host.

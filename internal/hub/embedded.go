@@ -69,6 +69,7 @@ type Embedded struct {
 	sink      EventSink
 	killTree  func(pid int)
 	launcher  Launcher
+	activity  *activityDebouncer
 	startedAt time.Time
 
 	// stop ends the background loops this host runs (the scan, the hook
@@ -108,6 +109,7 @@ func NewEmbedded(opts Options) *Embedded {
 		sink:      opts.Sink,
 		killTree:  opts.KillTree,
 		launcher:  opts.Launcher,
+		activity:  newActivityDebouncer(),
 		startedAt: time.Now(),
 		stop:      make(chan struct{}),
 	}
@@ -204,6 +206,10 @@ func (h *Embedded) Close(id int) error {
 	h.mu.Lock()
 	delete(h.sessions, id)
 	h.mu.Unlock()
+	// The debounce state goes with the session. Without this every closed pane
+	// leaves five map entries behind for the life of the process, and a reused
+	// ID would inherit a stranger's confirmed state.
+	h.activity.forget(id)
 	return nil
 }
 

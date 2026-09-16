@@ -95,14 +95,6 @@ func TestOnHookActivity_TriggersNoSideEffects(t *testing.T) {
 func confirmViaScan(t *testing.T, app *AppService, sessID int) {
 	t.Helper()
 	app.applyScanResults(app.host.ScanActivity())
-	prevActivityMu.Lock()
-	since, ok := pendingSince[sessID]
-	if ok {
-		pendingSince[sessID] = since.Add(-debounceWindow)
-	}
-	prevActivityMu.Unlock()
-	if !ok {
-		t.Fatalf("no debounce candidate armed for session %d — the scan never saw the new state", sessID)
-	}
+	backdateCandidate(t, app, sessID)
 	app.applyScanResults(app.host.ScanActivity())
 }

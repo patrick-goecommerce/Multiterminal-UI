@@ -101,6 +101,22 @@ func (a *AppService) onHookActivity(sessionID int, activity string, cost string)
 		// confirmed state already *is* this one. Sending it anyway would pair
 		// a fresh label with a stale start time and make the duration jump
 		// backwards a moment later.
-		ActivitySince: activitySinceUnixIfState(sessionID, activity),
+		ActivitySince: a.activitySinceIfState(sessionID, activity),
 	})
+}
+
+// activitySinceIfState returns the confirmed state's start as unix seconds,
+// but only when that confirmed state is already the one being announced.
+//
+// The hook path runs a debounce window ahead of the scan's confirmation, so at
+// that moment the recorded start still belongs to the PREVIOUS state. Pairing
+// it with the fresh label would render e.g. "fertig · 3 Std 20" for a second
+// or two and then snap to "fertig · gerade eben". Zero means "show the state
+// without a duration", which never jumps backwards.
+func (a *AppService) activitySinceIfState(sessionID int, activity string) int64 {
+	state, since := a.host.ConfirmedActivity(sessionID)
+	if string(state) != activity {
+		return 0
+	}
+	return unixOrZero(since)
 }

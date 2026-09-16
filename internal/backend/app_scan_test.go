@@ -33,18 +33,18 @@ func TestScan_TracksOSCTitleChange(t *testing.T) {
 	cleanupActivityTracking(7) // start from a clean tracking state
 	app.applyScanResults(app.host.ScanActivity())
 
-	prevActivityMu.Lock()
+	prevEmitMu.Lock()
 	got := prevTitle[7]
-	prevActivityMu.Unlock()
+	prevEmitMu.Unlock()
 
 	if got != "my-pane" {
 		t.Fatalf("after scan, prevTitle[7] = %q, want %q", got, "my-pane")
 	}
 
 	cleanupActivityTracking(7)
-	prevActivityMu.Lock()
+	prevEmitMu.Lock()
 	_, exists := prevTitle[7]
-	prevActivityMu.Unlock()
+	prevEmitMu.Unlock()
 	if exists {
 		t.Fatal("cleanupActivityTracking should remove the prevTitle entry")
 	}
@@ -73,31 +73,18 @@ func TestScanGuard_StaleActiveHookFallsBackToScreen(t *testing.T) {
 	}
 
 	cleanupActivityTracking(9)
-	// A single tick only arms the debounce candidate (confirmActivity, task 3 /
-	// issue #188) — it takes debounceWindow of a stable state to confirm. Back-
-	// date the pending timestamp instead of sleeping the test, then tick again
-	// so the candidate confirms.
+	// A single tick only arms the debounce candidate (#188): the state has to
+	// hold for a window before it confirms. Back-date the candidate instead of
+	// sleeping the test, then tick again so it confirms.
 	app.applyScanResults(app.host.ScanActivity())
-	prevActivityMu.Lock()
-	since, armed := pendingSince[9]
-	if armed {
-		pendingSince[9] = since.Add(-debounceWindow)
-	}
-	prevActivityMu.Unlock()
-	if !armed {
-		// Without this the back-dating would silently do nothing and the
-		// assertion below would pass on an unarmed candidate.
-		t.Fatal("first scan armed no debounce candidate — the fallback never observed 'done'")
-	}
+	backdateCandidate(t, app, 9)
 	app.applyScanResults(app.host.ScanActivity())
 
 	raw := sess.GetActivity()
-	// applyScanResults doesn't persist the fallback into sess.Activity (same as
-	// the existing done→waitingAnswer cross-check), so assert on the emitted
-	// state via prevActivity instead of GetActivity().
-	prevActivityMu.Lock()
-	emitted := prevActivity[9]
-	prevActivityMu.Unlock()
+	// The fallback is not persisted into sess.Activity (same as the existing
+	// done→waitingAnswer cross-check), so assert on the state the host
+	// confirmed rather than on GetActivity().
+	emitted, _ := confirmedOf(app, 9)
 	if emitted != "done" {
 		t.Fatalf("after scan with stale active hook + completed-prompt screen, emitted activity = %q (raw hook state %d), want %q — Stop-event-lost fallback not working", emitted, raw, "done")
 	}

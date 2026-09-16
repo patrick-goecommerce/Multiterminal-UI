@@ -13,7 +13,6 @@ import (
 // test can break exactly one condition and see it caught.
 func readyToSuspend(t *testing.T) (*AppService, *terminal.Session, int, time.Time) {
 	t.Helper()
-	resetActivityDebounceForTest()
 
 	a := newTestApp()
 	enabled := true
@@ -30,10 +29,7 @@ func readyToSuspend(t *testing.T) (*AppService, *terminal.Session, int, time.Tim
 	a.mu.Unlock()
 
 	now := time.Now()
-	prevActivityMu.Lock()
-	prevActivity[id] = "done"
-	activitySince[id] = now.Add(-45 * time.Minute)
-	prevActivityMu.Unlock()
+	setConfirmedSince(t, a, id, "done", now.Add(-45*time.Minute))
 
 	return a, sess, id, now
 }
@@ -127,19 +123,15 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 		},
 		{
 			name: "a working pane must never be touched",
-			break_: func(_ *AppService, _ *terminal.Session, id int) {
-				prevActivityMu.Lock()
-				prevActivity[id] = "active"
-				prevActivityMu.Unlock()
+			break_: func(a *AppService, _ *terminal.Session, id int) {
+				setConfirmed(t, a, id, "active")
 			},
 			want: "state is active",
 		},
 		{
 			name: "a pane waiting for the user is deliberately left open",
-			break_: func(_ *AppService, _ *terminal.Session, id int) {
-				prevActivityMu.Lock()
-				prevActivity[id] = "waitingPermission"
-				prevActivityMu.Unlock()
+			break_: func(a *AppService, _ *terminal.Session, id int) {
+				setConfirmed(t, a, id, "waitingPermission")
 			},
 			want: "state is waitingPermission",
 		},
@@ -148,28 +140,22 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 			// a TUI, a running npm script (issue #188). Killing that is the worst
 			// case this gate exists for.
 			name: "an unrecognised screen is not a finished one",
-			break_: func(_ *AppService, _ *terminal.Session, id int) {
-				prevActivityMu.Lock()
-				prevActivity[id] = "idle"
-				prevActivityMu.Unlock()
+			break_: func(a *AppService, _ *terminal.Session, id int) {
+				setConfirmed(t, a, id, "idle")
 			},
 			want: "state is idle",
 		},
 		{
 			name: "an error state still needs the user's eyes",
-			break_: func(_ *AppService, _ *terminal.Session, id int) {
-				prevActivityMu.Lock()
-				prevActivity[id] = "error"
-				prevActivityMu.Unlock()
+			break_: func(a *AppService, _ *terminal.Session, id int) {
+				setConfirmed(t, a, id, "error")
 			},
 			want: "state is error",
 		},
 		{
 			name: "a pane that finished a minute ago is not idle",
-			break_: func(_ *AppService, _ *terminal.Session, id int) {
-				prevActivityMu.Lock()
-				activitySince[id] = time.Now().Add(-time.Minute)
-				prevActivityMu.Unlock()
+			break_: func(a *AppService, _ *terminal.Session, id int) {
+				setConfirmedSince(t, a, id, currentStateForTest(a, id), time.Now().Add(-time.Minute))
 			},
 			want: "idle for",
 		},

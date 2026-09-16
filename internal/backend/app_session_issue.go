@@ -18,8 +18,8 @@ func (a *AppService) LinkSessionIssue(sessionID int, number int, title string, b
 
 // getSessionCost returns the current cost string for a session from the scan tracking.
 func (a *AppService) getSessionCost(sessionID int) string {
-	prevActivityMu.Lock()
-	defer prevActivityMu.Unlock()
+	prevEmitMu.Lock()
+	defer prevEmitMu.Unlock()
 	return prevCost[sessionID]
 }
 

@@ -81,13 +81,10 @@ func (a *AppService) suspendBlocker(id int, s hub.SessionSummary, timeout time.D
 		return "orchestrator is using this pane"
 	}
 
-	prevActivityMu.Lock()
-	state := prevActivity[id]
-	since := activitySince[id]
-	prevActivityMu.Unlock()
+	state, since := a.host.ConfirmedActivity(id)
 
-	if state != "done" {
-		return "state is " + stateOrUnknown(state)
+	if state != hub.ActivityDone {
+		return "state is " + stateOrUnknown(string(state))
 	}
 	if since.IsZero() {
 		return "no confirmed state yet"

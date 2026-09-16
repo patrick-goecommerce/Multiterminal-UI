@@ -3,6 +3,8 @@ package backend
 import (
 	"log"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // QueueItem represents a single prompt in a session's pipeline queue.
@@ -141,15 +143,18 @@ func (a *AppService) ClearQueue(sessionId int) {
 
 // tryProcessQueue sends the next pending item if the session is ready.
 //
-// "sleeping" must be in this set: a sleeping pane emits no further activity of
-// its own, so without it AddToQueue would enqueue an item that nothing ever
-// picks up — a silent hang. processQueue turns the attempt into a wake-up.
+// A sleeping pane has to be in this set: it emits no further activity of its
+// own, so without it AddToQueue would enqueue an item that nothing ever picks
+// up, which is a silent hang. processQueue turns the attempt into a wake-up.
+// Asleep is read from the summary rather than from the activity, because the
+// status is where that fact actually lives.
 func (a *AppService) tryProcessQueue(sessionId int) {
-	prevActivityMu.Lock()
-	act := prevActivity[sessionId]
-	prevActivityMu.Unlock()
-
-	if act == "done" || act == "idle" || act == "" || act == "sleeping" {
+	if summary, err := a.host.Get(sessionId); err == nil && summary.Asleep() {
+		a.processQueue(sessionId)
+		return
+	}
+	act, _ := a.host.ConfirmedActivity(sessionId)
+	if act == hub.ActivityDone || act == hub.ActivityIdle || act == "" {
 		a.processQueue(sessionId)
 	}
 }
@@ -219,16 +224,14 @@ func (a *AppService) processQueue(sessionId int) {
 				log.Printf("[queue] session %d: sent item %d: %q", sessionId, next.ID, truncateStr(next.Prompt, 60))
 			}
 		}
-		// Reset activity so the next "done" transition is detected as a change.
-		// Without this, prevActivity might already be "done" from the previous
-		// item, causing the scan loop to miss the transition. forceActivity also
-		// stamps activitySince to now and clears any armed debounce candidate —
-		// a bare prevActivity write would leave the timestamp on the previous
-		// state and let a stale candidate confirm on the next tick (issue #188).
+		// Reset activity so the next "done" transition reads as a change.
+		// Without it the confirmed state might already be "done" from the
+		// previous item and the scan would miss the transition. ForceActivity
+		// also stamps the state's start and clears any armed candidate: setting
+		// the state alone would leave the timestamp on the previous one and let
+		// a stale candidate confirm on the next tick (#188).
 		_ = a.host.ResetActivity(sessionId)
-		prevActivityMu.Lock()
-		forceActivity(sessionId, "idle", time.Now())
-		prevActivityMu.Unlock()
+		_ = a.host.ForceActivity(sessionId, hub.ActivityIdle, time.Now())
 	}
 
 	a.emitQueueUpdate(sessionId)

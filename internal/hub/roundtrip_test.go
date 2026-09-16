@@ -375,3 +375,69 @@ func TestRemote_ScreenAndAgentStateOverTheWire(t *testing.T) {
 		t.Fatalf("ClearHookData: %v", err)
 	}
 }
+
+// The confirmed state has to survive the socket: with session_host: daemon the
+// window, the CLI and the queue all read it through a Remote, and a debounce
+// that only worked in-process would mean the daemon's agents look like they
+// never settle.
+func TestRemote_ConfirmedActivityCrossesTheWire(t *testing.T) {
+	host := newTestHost(t, nil)
+	addr, _ := serveHost(t, host)
+	client := dialTest(t, addr, nil)
+
+	id, err := host.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	began := time.Now().Add(-90 * time.Minute).Truncate(time.Second)
+	if err := client.ForceActivity(id, ActivityDone, began); err != nil {
+		t.Fatalf("ForceActivity over the wire: %v", err)
+	}
+
+	state, got := client.ConfirmedActivity(id)
+	if state != ActivityDone {
+		t.Errorf("state = %q, want %q", state, ActivityDone)
+	}
+	if !got.Equal(began) {
+		t.Errorf("began = %s, want %s", got, began)
+	}
+	// And the host itself agrees, so the client is not just echoing itself.
+	if local, _ := host.ConfirmedActivity(id); local != ActivityDone {
+		t.Errorf("the host has %q, want %q", local, ActivityDone)
+	}
+}
+
+// A seed is refused once a state is confirmed, and that rule has to hold over
+// the wire too, or a restore racing the scan would mis-stamp a later change.
+func TestRemote_SeedActivityKeepsItsRules(t *testing.T) {
+	host := newTestHost(t, nil)
+	addr, _ := serveHost(t, host)
+	client := dialTest(t, addr, nil)
+
+	id, err := host.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	seeded := time.Now().Add(-3 * time.Hour).Truncate(time.Second)
+	if err := client.SeedActivity(id, ActivityDone, seeded); err != nil {
+		t.Fatalf("SeedActivity: %v", err)
+	}
+	// Nothing is confirmed yet, so the seed is held rather than applied.
+	if state, _ := client.ConfirmedActivity(id); state != "" {
+		t.Errorf("a seed confirmed a state on its own: %q", state)
+	}
+
+	now := time.Now()
+	if err := client.ForceActivity(id, ActivityActive, now); err != nil {
+		t.Fatalf("ForceActivity: %v", err)
+	}
+	// Now that a state is confirmed, a second seed must be refused.
+	if err := client.SeedActivity(id, ActivityDone, seeded); err != nil {
+		t.Fatalf("SeedActivity: %v", err)
+	}
+	if _, began := client.ConfirmedActivity(id); began.Equal(seeded) {
+		t.Error("a seed overwrote a state that was already confirmed")
+	}
+}

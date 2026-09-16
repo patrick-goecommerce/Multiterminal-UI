@@ -111,6 +111,14 @@ const (
 	ActivityWaitingPermission Activity = "waitingPermission"
 	ActivityWaitingAnswer     Activity = "waitingAnswer"
 	ActivityError             Activity = "error"
+	// ActivitySleeping and ActivityResuming are lifecycle labels, not screen
+	// classifications: a suspended pane has a frozen screen and nothing to
+	// classify. A scan never produces them. A caller writes one with
+	// ForceActivity so the badge shows it and so the next real state reads as
+	// a change instead of re-confirming what the pane was doing before it
+	// fell asleep.
+	ActivitySleeping Activity = "sleeping"
+	ActivityResuming Activity = "resuming"
 )
 
 // SessionSummary is what a client learns about a session without attaching.
@@ -168,12 +176,26 @@ type ScanResult struct {
 	ID int `json:"id" yaml:"id"`
 	// Asleep marks a suspended pane: its screen is frozen, so there is nothing
 	// to classify and the other fields are not filled in.
-	Asleep     bool     `json:"asleep" yaml:"asleep"`
-	Activity   Activity `json:"activity" yaml:"activity"`
-	Cost       float64  `json:"cost" yaml:"cost"`
-	Title      string   `json:"title" yaml:"title"`
-	ContextPct int      `json:"context_pct" yaml:"context_pct"`
-	Model      string   `json:"model" yaml:"model"`
+	Asleep bool `json:"asleep" yaml:"asleep"`
+	// Activity is the CONFIRMED state, not this tick's raw observation: a
+	// state has to hold for a debounce window before it is reported as the
+	// session's. Until the first confirmation it is the raw reading, because
+	// an empty activity is outside the documented set and a caller has to be
+	// able to show something.
+	Activity Activity `json:"activity" yaml:"activity"`
+	// Changed reports that Activity is a confirmed transition on this tick.
+	// Everything a caller does about a change (emit an event, report progress,
+	// advance a queue) keys off this and not off comparing Activity itself,
+	// which would react to a repaint (#188).
+	Changed bool `json:"changed" yaml:"changed"`
+	// Since is when the confirmed state began, zero while unknown. It is the
+	// first observation of that state, not the moment it survived the window,
+	// or every duration would be short by up to one window.
+	Since      time.Time `json:"since" yaml:"since"`
+	Cost       float64   `json:"cost" yaml:"cost"`
+	Title      string    `json:"title" yaml:"title"`
+	ContextPct int       `json:"context_pct" yaml:"context_pct"`
+	Model      string    `json:"model" yaml:"model"`
 }
 
 // Info describes a Host to a client that just connected.
