@@ -150,6 +150,8 @@ Die Oberfläche ist verfügbar in: **Deutsch**, Englisch, Italienisch, Spanisch,
 Mit `session_host: daemon` gehören die Sessions dem Hintergrunddienst `mtuid` und nicht mehr dem Fenster. Damit lassen sie sich auch aus einer Shell steuern, ohne dass MTUI offen sein muss.
 
 ```bash
+mt new claude                  # Agenten im Daemon starten, gibt die ID aus
+mt new claude --dir ~/projekt --model opus-5 --prompt "räum die Tests auf"
 mt ls                          # Sessions mit Zustand, Verzeichnis und Kosten
 mt read 3                      # Bildschirm von Pane 3 als Text
 mt read 3 --lines 20           # nur die letzten 20 Zeilen mit Inhalt
@@ -331,6 +333,8 @@ The UI is available in: German, **English**, Italian, Spanish, French.
 With `session_host: daemon` the sessions belong to the `mtuid` background service rather than to the window, so they can also be driven from a shell with MTUI closed.
 
 ```bash
+mt new claude                  # start an agent in the daemon, prints its ID
+mt new claude --dir ~/project --model opus-5 --prompt "clean up the tests"
 mt ls                          # sessions with state, directory and cost
 mt read 3                      # pane 3's screen as text
 mt read 3 --lines 20           # just the last 20 non-empty lines

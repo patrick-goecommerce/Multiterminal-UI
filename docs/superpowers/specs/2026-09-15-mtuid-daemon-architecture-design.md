@@ -1,6 +1,6 @@
 # mtuid: Sessions überleben die GUI (Daemon-Architektur) — Design
 
-**Status:** Phase 1, 2a und 3 umgesetzt, Standard bleibt `embedded` bis zur Durchsatzmessung
+**Status:** Phase 1, 2a, 2b und 3 umgesetzt, Standard bleibt `embedded` bis zur Durchsatzmessung
 **Branch:** `claude/mtui-herdr-dev-migration-lz2rze`
 **Vorbild:** [herdr](https://herdr.dev/) 0.9, Rust, Apache-2.0
 **Betrifft:** `internal/backend/app.go`, `internal/terminal`, `internal/discovery`, neu `internal/hub` und `cmd/mtuid`
@@ -318,7 +318,8 @@ wo seine Sessions liegen.
 | 1d | Scan, Hooks, Statusline, Suspend, Keepalive, Queue über den Host; `internal/backend` importiert `internal/terminal` nicht mehr | unverändertes Verhalten, GUI ohne Sessionwissen | **fertig** |
 | 1e | `session_host: daemon`: GUI startet den Daemon, verbindet sich, Restore hängt wieder an statt neu zu starten | **App schließen und öffnen, Agents laufen weiter** | **fertig** |
 | 2a | Scan, Hook-Leser und die Shim-Endpunkte (Statusline, tmux) laufen auf dem Host | Zustand wird auch ohne offenes Fenster fortgeschrieben; `MTUI_PORT` bleibt gültig | **fertig** |
-| 2b | MCP-Server in den Daemon; Queue und Keepalive dorthin | agentgestartete Sessions und die Warteschlange leben ohne GUI weiter | offen |
+| 2b | Sessions im Daemon anlegen (`CreateSpec.Launch`, `hub.Launcher`, `internal/launch`) | der Daemon startet Agents selbst, `mt new` | **fertig** |
+| 2c | MCP-Server, Queue und Keepalive in den Daemon | agentgestartete Sessions und die Warteschlange leben ohne GUI weiter | offen |
 | 3 | `mt` als CLI-Client (`ls`, `read`, `send`, `keys`, `wait`, `kill`, `hub`) | Sessions ohne GUI bedienbar | **fertig** |
 | 4 | Remote-Hubs über SSH | Laptop und Server in einer Oberfläche | offen |
 | 5 | Kanban-Orchestrator headless, weitere Agent-CLIs, Plugin-Hooks | Boards laufen ohne offenes Fenster | offen |
@@ -332,7 +333,21 @@ zurück und schreibt eine Warnung, die über `CheckHealth` in der Oberfläche la
 **Was im Daemon-Modus heute noch an der offenen GUI hängt:** der MCP-Server (ein Agent
 kann also nur delegieren, solange ein Fenster offen ist) sowie Queue und Keepalive (eine
 eingereihte Aufgabe wartet, bis wieder ein Fenster da ist). Scan, Hook-Leser und die
-Shim-Endpunkte sind seit Phase 2a beim Host und laufen durch.
+Shim-Endpunkte sind seit Phase 2a beim Host und laufen durch; Sessions anlegen kann der
+Daemon seit Phase 2b selbst.
+
+**Korrektur zu einer früheren Fassung dieser Spec.** Hier stand, Phase 2b hänge daran,
+dass der Daemon die Umgebung einer Session nicht bauen könne, das sei "GUI-Politik". Das
+war falsch, und die Messung hat es widerlegt. `sessionEnv` waren zwanzig Zeilen, und was
+sie brauchten, war: der Shim-Port (kam schon vom Host), ein Stringvergleich auf den Modus,
+zwei Git-Aufrufe und ein Config-Feld. Kein Fensterzustand, nirgends. Blockiert hat nicht
+die Architektur, sondern dass der Code in einem Paket lag, das der Daemon nicht
+importieren kann. Der Schnitt war entsprechend klein: `internal/gitx` für die
+Git-Plumbing, `internal/launch` für die Policy, und im Backend bleiben Delegate-Namen
+stehen, damit fünfzehn Aufrufstellen unberührt bleiben.
+
+Die Lehre daraus ist keine über Daemons: bevor man einen Blocker in eine Spec schreibt,
+zählt man nach, woran er wirklich hängt.
 
 Beim Shim war es keine Bequemlichkeit, sondern ein Muss: `MTUI_PORT` wird beim Start in
 die Umgebung der Session gebacken und kann ihr nie wieder anders gesagt werden. Aus dem
@@ -376,18 +391,17 @@ kein Fenster offen ist, ist eine Produktfrage und keine Architekturfrage.
 
 ## Was von herdr noch fehlt, nach Nutzen sortiert
 
-Der Vergleich, der diese Spec ausgelöst hat, ist damit an den entscheidenden Stellen
-abgearbeitet. Was übrig bleibt, in der Reihenfolge, in der es sich lohnt:
-
-1. **MCP-Server im Daemon** (Phase 2b). Ohne ihn kann ein Agent nur delegieren, solange
-   ein Fenster offen ist. Hängt daran, dass der Daemon die Umgebung für eine neue Session
-   selbst bauen können muss, was heute GUI-Politik ist. Dasselbe blockiert `mt new`:
-   die CLI kann jede Session bedienen, aber keine anlegen.
+1. **MCP-Server, Queue und Keepalive in den Daemon** (Phase 2c). Der Daemon kann seit
+   Phase 2b Sessions anlegen; was fehlt, ist der Server, über den ein Agent das anfragt,
+   ohne dass ein Fenster offen ist, und die Warteschlange, die eine eingereihte Aufgabe
+   weitertreibt.
 2. **Remote über SSH** (Phase 4). Ein Tunnel auf den Loopback-Port des entfernten
    Daemons, plus eine Hub-Auswahl im Client. Das Protokoll trägt die Hub-Kennung schon,
-   und `mt --hub <name>` ist die Stelle, an der es sichtbar würde.
-3. **Mehr Agent-CLIs.** herdr startet 22, wir erkennen claude, codex und gemini. Das ist
-   eine Tabelle, kein Umbau.
+   und `mt --hub <name>` ist die Stelle, an der es sichtbar würde. Vorher fällig: die
+   Session-Identität von `int` auf `hub:id` umstellen, 166 Fundstellen im Frontend und
+   120 in Go. Danach wird es teurer, vorher ist es reine Kosten.
+3. **Mehr Agent-CLIs.** herdr startet 22, wir kennen drei. Seit Phase 2b ist das eine
+   Tabelle in `internal/launch/agents.go` und ein Kommando in der Config, sonst nichts.
 4. **Plugins.** herdr lädt Verzeichnisse mit `herdr-plugin.toml`, Actions und
    Event-Hooks, aus einem Marketplace, der GitHub-Repos mit einem Topic indiziert, ohne
    Sandbox. Reizvoll, aber es ist auch das Stück, das ein Werkzeug von "tut eine Sache"
@@ -448,3 +462,45 @@ Was die CLI **nicht** kann: Sessions anlegen. Dafür müsste der Daemon die Umge
 Session selbst bauen können (Hook-Verdrahtung, Worktree-Firewall, Session-ID), und das
 ist heute GUI-Politik. Es ist derselbe Block, an dem Phase 2b hängt, und deshalb löst man
 beides zusammen oder gar nicht.
+
+## Stand nach Phase 2b: der Daemon startet selbst
+
+Bis hierher konnte eine Session nur ein Prozess anlegen, der schon wusste, was "claude"
+auf dieser Maschine ist und welche Variablen ein Pane braucht, und das war das Fenster.
+Ein Daemon, der Agents hält, aber keinen machen kann, ist ein halber Daemon: delegieren
+ging nur bei offenem Fenster, und `mt` konnte jede Session bedienen, aber keine starten.
+
+```
+CreateSpec.Launch   nennt ein Tool statt einer Kommandozeile
+hub.Launcher        Argv(tool, model) und Env(id, dir, mode)
+launch.Policy       implementiert das, aus Config und Git
+mt new <tool>       startet eine und gibt die ID aus
+```
+
+`hub.Launcher` ist eine Schnittstelle und kein Import von `internal/launch`, weil dieses
+Paket Sessions besitzt und jenes Policy; der Pfeil zeigt in eine Richtung. Ein Host ohne
+Launcher lehnt eine Launch-Anfrage ab, statt etwas halb konfiguriert zu starten. Das
+klingt pedantisch und ist es nicht: ein Pane ohne `MULTITERMINAL_SESSION_ID` startet
+tadellos und hat überhaupt keine Hook-Verdrahtung.
+
+Die ID wird vor der Umgebung reserviert, weil ein Teil dieser Umgebung die Session
+benennt. Genau deshalb trägt `CreateSpec` beides, `ID` und `Launch`, statt einen Callback
+zu nehmen, der den Socket nicht überlebt hätte.
+
+Der Daemon liest die Config pro Start, nicht einmal beim Hochfahren. Eine YAML-Datei ist
+nichts neben den zwei Git-Subprozessen, die ein Start ohnehin kostet, und dafür gilt eine
+Einstellung, die jemand in der laufenden App ändert, für die nächste Session, ohne einen
+Daemon neu zu starten, der lebende Agents hält.
+
+Gegengeprüft gegen einen echten `mtuid`, mit Stub-`claude` und `force_worktrees: true`:
+
+```
+$ mt new claude --dir ~/Multiterminal-UI
+1
+$ mt read 1
+session=1 port=44727
+worktree_root=/home/user/Multiterminal-UI
+```
+
+Session-ID, der eigene Shim-Port des Daemons und die Worktree-Firewall, aufgelöst aus
+Config und Repo. Ohne Fenster.
