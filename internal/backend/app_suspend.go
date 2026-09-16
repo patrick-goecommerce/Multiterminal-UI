@@ -28,35 +28,11 @@ type launchSpec struct {
 	mode string
 }
 
-// isClaudeMode reports whether the mode is backed by the claude CLI. Only those
-// understand --resume; codex/gemini have no verified resume path (design D6).
-func isClaudeMode(mode string) bool {
-	return mode == "claude" || mode == "claude-auto" || mode == "claude-yolo"
-}
-
-// sessionEnv builds the PTY environment for a session.
-//
-// CreateSession and ResumeSession MUST both use it: a woken pane that loses
-// MULTITERMINAL_SESSION_ID drops its hook and statusline wiring (the whole
-// activity detection goes back to screen scraping), and one that loses
-// MULTITERMINAL_FORCE_WORKTREE_ROOT silently loses the worktree firewall in
-// cmd/mtui-hook. Both failures are invisible until something goes wrong.
+// sessionEnv builds the PTY environment for a session. The policy itself is
+// internal/launch, because the daemon has to build the same environment and
+// cannot import this package.
 func (a *AppService) sessionEnv(id int, dir, mode string) []string {
-	var env []string
-	if port := a.GetTmuxAPIPort(); port > 0 {
-		env = append(env, fmt.Sprintf("MTUI_PORT=%d", port))
-	}
-	if isClaudeMode(mode) {
-		env = append(env, fmt.Sprintf("MULTITERMINAL_SESSION_ID=%d", id))
-		env = append(env, worktreeEnvVars(dir)...)
-		// Worktree-mandatory policy, resolved once here (global setting +
-		// per-project override) so mtui-hook only has to read one env var.
-		// Empty when the policy is off or dir is not a git repo.
-		if root := a.forceWorktreeRoot(dir); root != "" {
-			env = append(env, "MULTITERMINAL_FORCE_WORKTREE_ROOT="+root)
-		}
-	}
-	return env
+	return a.launchPolicy().Env(id, dir, mode)
 }
 
 // rememberLaunch stores how a session was launched (for ResumeSession).

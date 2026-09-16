@@ -20,48 +20,17 @@ const (
 )
 
 // EffectiveForceWorktrees reports whether worktree isolation is mandatory for
-// the project containing dir. The per-project override wins over the global
-// setting; absent an override the global setting applies.
-//
-// The override is keyed on the MAIN repo root, so a session running in a
-// linked worktree or a subdirectory resolves to the same project as one
-// running in the checkout root.
+// the project containing dir. The resolution (global setting plus per-project
+// override, keyed on the main repo root) is internal/launch, so the daemon
+// resolves it identically.
 func (a *AppService) EffectiveForceWorktrees(dir string) bool {
-	global := a.cfg.ShouldForceWorktrees()
-	if dir == "" {
-		return global
-	}
-	root, err := mainRepoRoot(dir)
-	if err != nil {
-		return global
-	}
-	if override := loadProjectConfig(root).ForceWorktrees; override != nil {
-		return *override
-	}
-	return global
+	return a.launchPolicy().EffectiveForceWorktrees(dir)
 }
 
 // forceWorktreeRoot returns the main repo root to hand the PreToolUse firewall
-// via MULTITERMINAL_FORCE_WORKTREE_ROOT, or "" when the policy is off for this
-// project or dir is not inside a git repo (nothing to protect then).
+// via MULTITERMINAL_FORCE_WORKTREE_ROOT, or "" when the policy is off here.
 func (a *AppService) forceWorktreeRoot(dir string) string {
-	if dir == "" {
-		return ""
-	}
-	root, err := mainRepoRoot(dir)
-	if err != nil {
-		return ""
-	}
-	if override := loadProjectConfig(root).ForceWorktrees; override != nil {
-		if !*override {
-			return ""
-		}
-		return root
-	}
-	if !a.cfg.ShouldForceWorktrees() {
-		return ""
-	}
-	return root
+	return a.launchPolicy().ForceWorktreeRoot(dir)
 }
 
 // GetProjectForceWorktrees returns the project's override mode for dir:
