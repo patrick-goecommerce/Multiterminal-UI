@@ -143,8 +143,14 @@ type Host interface {
 
 // Subscription delivers one session's output to one reader.
 type Subscription struct {
-	// C carries chunks in order. It is closed when the session's output ends
-	// or the subscription is closed.
+	// C carries chunks in order. It is closed when the SESSION is closed, or
+	// when the subscription is.
+	//
+	// Not when the session's process exits. A session outlives its process: a
+	// suspend kills the process on purpose and a resume starts a new one into
+	// the same session, so a channel that closed on exit would end every
+	// subscription the first time a pane went to sleep. A reader that wants to
+	// stop when the process ends watches EventSessionExited instead.
 	C <-chan Chunk
 
 	closeOnce func()

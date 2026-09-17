@@ -325,7 +325,25 @@ wo seine Sessions liegen.
 | 5 | Kanban-Orchestrator headless, weitere Agent-CLIs, Plugin-Hooks | Boards laufen ohne offenes Fenster | offen |
 
 `session_host: embedded` bleibt der Standard, bis die Durchsatzmessung aus dem
-Risiko-Abschnitt auf einer echten Maschine gemacht ist. `daemon` ist der Schalter für
+Risiko-Abschnitt auf einer echten Windows-Maschine gemacht ist. Die Messung selbst gibt es
+jetzt als Benchmark:
+
+```
+go test ./internal/hub/ -run '^$' -bench Throughput -benchtime 5x
+```
+
+Acht Panes, jedes 4 MiB Ausgabe, gemessen wird, was beim Leser ankommt. Auf Linux:
+
+```
+BenchmarkThroughput_Embedded   24.73 MB/s
+BenchmarkThroughput_Remote     23.64 MB/s
+```
+
+Also **4,4 % Kosten für den Socket**. Das ist wenig genug, dass der Standardwechsel eine
+Frage der Windows-Zahl und der GUI-CPU ist, nicht mehr eine des Protokolls. Was der
+Benchmark nicht beantwortet: die CPU der Oberfläche. Der Verbraucher ist dort eine
+Goroutine, nicht ein WebView, der in xterm.js schreibt, und das Coalescing dazwischen liegt
+in `internal/backend`. Dafür braucht es die App mit acht beschäftigten Panes. `daemon` ist der Schalter für
 den, der es ausprobieren will; schlägt irgendetwas daran fehl (kein `mtuid` neben der
 App, kein Record, falsche Protokollversion), fällt die App auf den eingebetteten Host
 zurück und schreibt eine Warnung, die über `CheckHealth` in der Oberfläche landet.

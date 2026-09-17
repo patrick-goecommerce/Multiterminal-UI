@@ -9,6 +9,7 @@ import (
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/launch"
+	"time"
 )
 
 // `mt new` is the point of Phase 2b: before it, only a process with a window
@@ -159,5 +160,87 @@ func TestNew_WithoutAToolIsAUsageError(t *testing.T) {
 
 	if code, _, _ := cli(t, "new"); code != exitUsage {
 		t.Errorf("exit = %d, want %d", code, exitUsage)
+	}
+}
+
+// `mt read --follow` has to end when the agent's process ends.
+//
+// It used to wait for the subscription channel to close, which never happens
+// on a process exit: a session outlives its process across a suspend, so the
+// channel closes only when the SESSION is closed. Following a finished agent
+// hung forever, and the only way out was Ctrl+C.
+func TestRead_FollowEndsWhenTheProcessExits(t *testing.T) {
+	host := testDaemon(t)
+	if isWindows() {
+		t.Skip("the short-lived producer is a shell script")
+	}
+	// A command that prints and exits at once, so the follow has both output
+	// to show and an exit to notice.
+	id, err := host.Create(hub.CreateSpec{
+		Argv: []string{"/bin/sh", "-c", "echo follow-marker"},
+		Dir:  t.TempDir(), Rows: 24, Cols: 80,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { _ = host.Close(id) })
+
+	done := make(chan int, 1)
+	go func() {
+		code, _, _ := cli(t, "read", strconv.Itoa(id), "--follow")
+		done <- code
+	}()
+
+	select {
+	case code := <-done:
+		if code != exitOK {
+			t.Errorf("exit = %d, want %d", code, exitOK)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("--follow never returned after the process exited")
+	}
+}
+
+// A session that had already finished before the follow started sends no exit
+// event at all, so the status has to decide that case.
+func TestRead_FollowEndsOnAnAlreadyFinishedSession(t *testing.T) {
+	host := testDaemon(t)
+	if isWindows() {
+		t.Skip("the short-lived producer is a shell script")
+	}
+	id, err := host.Create(hub.CreateSpec{
+		Argv: []string{"/bin/sh", "-c", "echo schon-fertig"},
+		Dir:  t.TempDir(), Rows: 24, Cols: 80,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { _ = host.Close(id) })
+
+	// Wait until the host has seen the exit, so the event is long gone.
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		s, err := host.Get(id)
+		if err == nil && s.Status == hub.StatusExited {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the producer never exited")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	done := make(chan int, 1)
+	go func() {
+		code, _, _ := cli(t, "read", strconv.Itoa(id), "--follow")
+		done <- code
+	}()
+	select {
+	case code := <-done:
+		if code != exitOK {
+			t.Errorf("exit = %d, want %d", code, exitOK)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("--follow hung on a session that had already exited")
 	}
 }

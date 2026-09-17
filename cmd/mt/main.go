@@ -19,6 +19,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/discovery"
@@ -99,7 +100,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// A subcommand's --help must work on a machine with no daemon: somebody
 	// reading the help is exactly somebody who has not set it up yet.
 	if cmd.needsHub && !wantsHelp(args[1:]) {
-		client, err := connect()
+		client, err := connect(e)
 		if err != nil {
 			if errors.Is(err, errNoHub) {
 				fmt.Fprintf(stderr, "mt: %v\n", err)
@@ -123,6 +124,28 @@ type env struct {
 	hub    *hub.Remote
 	stdout io.Writer
 	stderr io.Writer
+
+	mu      sync.Mutex
+	onEvent func(name string, payload any)
+}
+
+// watchEvents registers a handler for the daemon's events, replacing any
+// previous one. Only one command runs per process, so one slot is enough.
+func (e *env) watchEvents(fn func(name string, payload any)) {
+	e.mu.Lock()
+	e.onEvent = fn
+	e.mu.Unlock()
+}
+
+// dispatch is the sink handed to Dial. It reads the handler under the lock so
+// a command can install one after the connection is already up.
+func (e *env) dispatch(name string, payload any) {
+	e.mu.Lock()
+	fn := e.onEvent
+	e.mu.Unlock()
+	if fn != nil {
+		fn(name, payload)
+	}
 }
 
 // ctx is the context a long call runs under. Ctrl+C cancels the call, never
@@ -153,12 +176,19 @@ func (e *env) fail(format string, args ...any) int {
 const dialTimeout = 10 * time.Second
 
 // connect resolves the published daemon and dials it.
-func connect() (*hub.Remote, error) {
+func connect(e *env) (*hub.Remote, error) {
 	rec, err := discovery.Resolve(discovery.ServiceHub)
 	if err != nil {
 		return nil, errNoHub
 	}
-	client, err := hub.Dial(rec.Addr(), rec.Token, hub.DialOptions{Timeout: dialTimeout})
+	client, err := hub.Dial(rec.Addr(), rec.Token, hub.DialOptions{
+		Timeout: dialTimeout,
+		// Every command gets the event stream, and the ones that care install
+		// a handler. `read --follow` needs it: a subscription is closed when
+		// the SESSION is, not when its process exits, so nothing else tells a
+		// follower that the agent is gone.
+		Sink: hub.SinkFunc(e.dispatch),
+	})
 	if err != nil {
 		if errors.Is(err, hub.ErrProtocol) {
 			return nil, fmt.Errorf("%w; mt und mtuid stammen aus verschiedenen Builds", err)

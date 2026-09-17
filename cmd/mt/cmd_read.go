@@ -6,7 +6,10 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // followReadyTimeout bounds the wait for the output socket before a --follow
@@ -71,13 +74,19 @@ func cmdRead(e *env, args []string) int {
 	return exitOK
 }
 
-// followSession streams a session to stdout until the session ends or the user
-// interrupts.
+// followSession streams a session to stdout until the session's process ends
+// or the user interrupts.
 //
 // It starts with a repaint rather than with the ring's history: the ring holds
 // raw bytes from an arbitrary point, and a VT100 stream entered mid-sequence
 // stays garbled (#157). The repaint puts a known screen on the terminal, and
 // everything after it appends cleanly.
+//
+// Ending is the part that is not obvious. A subscription's channel closes when
+// the SESSION is closed, not when its process exits, because a session
+// outlives its process across a suspend. Waiting for the channel would
+// therefore hang forever on a finished agent, so the exit event is what ends
+// this instead.
 func followSession(e *env, id int) int {
 	summary, err := e.hub.Get(id)
 	if err != nil {
@@ -85,6 +94,23 @@ func followSession(e *env, id int) int {
 	}
 	if !e.hub.WaitReady(followReadyTimeout) {
 		return e.fail("der Daemon öffnet den Ausgabe-Socket nicht")
+	}
+
+	exited := make(chan struct{})
+	var once sync.Once
+	stop := func() { once.Do(func() { close(exited) }) }
+	e.watchEvents(func(name string, payload any) {
+		if name != hub.EventSessionExited {
+			return
+		}
+		if ev, ok := hub.DecodePayload[hub.SessionExited](payload); ok && ev.ID == id {
+			stop()
+		}
+	})
+	// A session that was already finished before the follow started never
+	// sends the event, so the status decides that case.
+	if summary.Status == hub.StatusExited || summary.Status == hub.StatusError {
+		stop()
 	}
 
 	painted, err := e.hub.Repaint(id)
@@ -107,7 +133,8 @@ func followSession(e *env, id int) int {
 		select {
 		case chunk, ok := <-sub.C:
 			if !ok {
-				fmt.Fprintf(e.stderr, "\nmt: Session %d liefert nichts mehr.\n", id)
+				// The session itself is gone, not just its process.
+				fmt.Fprintf(e.stderr, "\nmt: Session %d gibt es nicht mehr.\n", id)
 				return exitOK
 			}
 			if chunk.Truncated {
@@ -120,11 +147,32 @@ func followSession(e *env, id int) int {
 			if _, err := e.stdout.Write(chunk.Data); err != nil {
 				return e.fail("schreiben: %v", err)
 			}
+		case <-exited:
+			// Drain whatever is already buffered before leaving: the last
+			// lines of a command's output are the ones somebody is reading.
+			drainSubscription(e, sub)
+			fmt.Fprintf(e.stderr, "\nmt: Session %d ist beendet.\n", id)
+			return exitOK
 		case <-interrupt:
 			// A newline so the shell prompt does not land mid-line on
 			// whatever the pane was drawing.
 			fmt.Fprintln(e.stdout)
 			return exitOK
+		}
+	}
+}
+
+// drainSubscription writes what is already queued, without waiting for more.
+func drainSubscription(e *env, sub *hub.Subscription) {
+	for {
+		select {
+		case chunk, ok := <-sub.C:
+			if !ok {
+				return
+			}
+			_, _ = e.stdout.Write(chunk.Data)
+		default:
+			return
 		}
 	}
 }
