@@ -165,6 +165,9 @@ mt kill 3                      # Session beenden
 mt hub                         # welcher Daemon läuft gerade
 ```
 
+Ein `mt new` im Terminal legt auch dann einen Pane an, wenn MTUI gerade offen ist: die
+Session meldet sich beim Fenster, statt bis zum nächsten Start unsichtbar zu bleiben.
+
 Damit lassen sich zwei Agents in drei Zeilen verketten, statt in einer Schleife zu pollen:
 
 ```bash
@@ -347,6 +350,9 @@ mt wait 3                      # block until done or blocked
 mt kill 3                      # end a session
 mt hub                         # which daemon is running
 ```
+
+An `mt new` in a terminal also puts a pane in a running MTUI window, rather than staying
+invisible there until the next restart.
 
 Chaining two agents is three lines rather than a poll loop:
 

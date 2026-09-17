@@ -72,6 +72,12 @@ func TestNew_StartsAnAgentTheDaemonResolvesItself(t *testing.T) {
 	if summary.Dir != workdir {
 		t.Errorf("dir = %q, want %q", summary.Dir, workdir)
 	}
+	// An open window draws a pane for a session it did not start, and this is
+	// how it knows. Without it, a session started from a terminal stays
+	// invisible in the running app until the next restart.
+	if summary.Origin != hub.OriginCLI {
+		t.Errorf("origin = %q, want %q", summary.Origin, hub.OriginCLI)
+	}
 }
 
 // The environment is the whole reason this could not be done client-side. A

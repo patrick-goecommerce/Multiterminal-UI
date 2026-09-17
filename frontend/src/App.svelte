@@ -413,13 +413,17 @@
       const info = event.data; // PaneNameEvent { id, name }
       if (info?.name) tabStore.setAutoName(info.id, info.name, 'llm');
     });
-    // An agent (e.g. Claude Code in a pane) delegated a task via the local
-    // MCP server — attach the already-running session as a visible pane so the
-    // delegation is visible in MTUI. The session may have been created by the
-    // daemon rather than by this window, so the event is what we go by.
+    // A session was created outside this window's UI: an agent delegated a task
+    // through the local MCP server, or somebody ran `mt new` in a terminal.
+    // Attach it as a visible pane so it is where the user looks for it. The
+    // session may live in the daemon rather than in this process, so the
+    // host's event is what we go by and not a call we made ourselves.
+    //
+    // Main window only: every window receives the event, and without this each
+    // one would draw its own pane for the same session.
     EventsOn('mtui:session-spawned', (event: any) => {
-      const info = event.data; // AgentSessionSpawnedEvent { id, tool, model, dir, name }
-      if (!info?.id) return;
+      const info = event.data; // SessionSpawnedEvent { id, tool, model, dir, name, origin }
+      if (!info?.id || !isMainWindow()) return;
       let tab = get(activeTab);
       if (!tab) {
         const dirName = String(info.dir || '').replace(/\\/g, '/').split('/').pop() || 'Agent';

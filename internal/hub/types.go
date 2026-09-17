@@ -77,11 +77,17 @@ type CreateSpec struct {
 	Origin string `json:"origin,omitempty" yaml:"origin,omitempty"`
 }
 
-// OriginAgent marks a session another agent opened through the MCP server
-// rather than a person through the UI. Two things key off it: the window puts
-// a pane in front of such a session when it appears, and the idle-suspend gate
-// leaves it alone, because the agent that opened it is about to write to it.
-const OriginAgent = "agent"
+// Origins. An empty origin is a window's own UI, and every other value means
+// some other client asked for the session: a window that sees one draws a pane
+// for it, because nobody else is going to.
+const (
+	// OriginAgent is another agent, through the MCP server. The idle-suspend
+	// gate also keys off this one: the agent that opened the session is about
+	// to write to it.
+	OriginAgent = "agent"
+	// OriginCLI is a person at a terminal, through mt new.
+	OriginCLI = "cli"
+)
 
 // LaunchRequest names an agent to start, in the caller's terms.
 type LaunchRequest struct {

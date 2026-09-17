@@ -186,9 +186,11 @@ structural fact about this codebase, and everything else follows from it.
   touch a tab (the worktree-finish flow, creating a pane when the keep-alive finds none,
   drawing a pane for a session an agent delegated).
 - **A session carries who asked for it** (`CreateSpec.Origin`, back out in `SessionSummary`).
-  `OriginAgent` is how a window recognises a session it did not create — it draws a pane for
-  it and the idle-suspend gate leaves it alone. A map in the window cannot answer that any
-  more: in daemon mode the delegation may have happened before this window started.
+  Empty is a window's own UI, `OriginAgent` is the MCP server, `OriginCLI` is `mt new`. A
+  window draws a pane for every session with an origin, because nobody else will, and skips
+  the empty ones, whose pane the frontend already drew. A map in the window cannot answer
+  that any more: in daemon mode the session may predate this window. The idle-suspend gate
+  keys off `OriginAgent` alone.
 - **`MTUI_PORT` is baked into a session's environment at launch** and can never be told a new
   one. That is why the shim endpoints belong to the host and not to a window: a session that
   outlives its window would otherwise post into a dead port for the rest of its life.
@@ -245,7 +247,7 @@ internal/
     app_queue.go                 Finish-flow guards around the host's queue
     app_agent_wait.go            WaitForAgent binding over hub.WaitForAgent
     app_mcp_server.go            Where the MCP server is (internal/mcpsrv serves it)
-    app_agent_panes.go           A pane for a session an agent delegated
+    app_agent_panes.go           A pane for a session this window did not open
     launch_delegate.go           Delegates to internal/gitx and internal/launch
     app_worktree*.go             Worktree creation, policy, finish flow, generated memory
     app_git*.go app_issues*.go   Git and GitHub integration

@@ -48,9 +48,13 @@ func cmdNew(e *env, args []string) int {
 	}
 
 	id, err := e.hub.Create(hub.CreateSpec{
-		Dir:    workdir,
-		Rows:   *rows,
-		Cols:   *cols,
+		Dir:  workdir,
+		Rows: *rows,
+		Cols: *cols,
+		// Saying who asked is what makes the session visible: an open window
+		// draws a pane for a session it did not start itself, so `mt new` in a
+		// terminal shows up in the app instead of waiting for a restart.
+		Origin: hub.OriginCLI,
 		Launch: &hub.LaunchRequest{Tool: tool, Model: *model},
 	})
 	if err != nil {

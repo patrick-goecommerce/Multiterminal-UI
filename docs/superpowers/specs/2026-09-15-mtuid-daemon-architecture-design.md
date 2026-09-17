@@ -357,8 +357,10 @@ Session, die ein Agent delegiert hat.
 
 Dieses Zeichnen läuft über das Ereignis des Hosts, nicht über einen Aufruf im Fenster. Eine
 Session trägt seit 2c, wer sie angefragt hat (`CreateSpec.Origin`, zurück in
-`SessionSummary`); `EventSessionCreated` mit `OriginAgent` ist für das Fenster das Signal,
-einen Pane dafür anzulegen. Eine Map im Fenster konnte das nicht beantworten: im
+`SessionSummary`): leer ist die Oberfläche eines Fensters, `OriginAgent` der MCP-Server,
+`OriginCLI` ein `mt new`. `EventSessionCreated` mit einer gesetzten Herkunft ist für das
+Fenster das Signal, einen Pane anzulegen. Damit taucht auch eine im Terminal gestartete
+Session sofort in der laufenden App auf statt erst beim nächsten Start. Eine Map im Fenster konnte das nicht beantworten: im
 Daemon-Modus kann die Delegation passiert sein, bevor dieses Fenster überhaupt lief. An
 derselben Markierung hängt die Idle-Suspend-Sperre, die eine delegierte Session in Ruhe
 lässt.
