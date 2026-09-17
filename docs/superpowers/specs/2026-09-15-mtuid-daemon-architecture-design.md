@@ -428,6 +428,14 @@ Drei Fehler, die beim Bauen aufgefallen sind und mitbehoben wurden:
 3. **`hub.Embedded` konnte das Ende einer Session vor ihrer Entstehung melden**, bei einem
    Prozess, der sofort endet.
 
+Offen, seit der MCP-Server nicht mehr im Fenster läuft: die Sperre, die während eines
+Worktree-Finish keine neuen Queue-Einträge annimmt, liegt im Fenster (`AddToQueue`). Ein
+Agent über MCP geht jetzt direkt an den Host und damit an ihr vorbei, genau wie `mt send`
+es immer schon getan hat. Kaputt geht dabei nichts, der Finish-Flow verfolgt seinen eigenen
+Eintrag über die ID, aber der Pane bekommt einen Prompt zu einem ungünstigen Zeitpunkt. Die
+saubere Lösung ist ein Halt auf der Queue des Hosts statt einer Prüfung im Fenster, denn
+die Queue gehört dem Host und "gerade geschlossen" ist eine Eigenschaft der Queue.
+
 Offen und bewusst nicht entschieden: ob der Kanban-Orchestrator langfristig in den Daemon
 gehört. Er steuert Sessions, aber er stellt auch Rückfragen. Wer die beantwortet, wenn
 kein Fenster offen ist, ist eine Produktfrage und keine Architekturfrage.
