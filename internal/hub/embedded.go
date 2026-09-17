@@ -52,6 +52,11 @@ type Options struct {
 	// knows both can create a session, which is what kept every client but
 	// the window from starting anything. See CreateSpec.Launch.
 	Launcher Launcher
+	// KeepAlive supplies the keep-alive policy. It is a function rather than a
+	// value because the policy comes from the config and the user can change
+	// it while the host runs; it is read per tick. Nil leaves the keep-alive
+	// off, and so does a policy that returns a zero interval or no message.
+	KeepAlive func() KeepAlive
 }
 
 var _ Host = (*Embedded)(nil)
@@ -63,16 +68,17 @@ type Embedded struct {
 	nextID   int
 	closed   bool
 
-	hubID     string
-	version   string
-	ringBytes int
-	sink      EventSink
-	killTree  func(pid int)
-	launcher  Launcher
-	activity  *activityDebouncer
-	queueMu   sync.Mutex
-	queues    map[int]*sessionQueue
-	startedAt time.Time
+	hubID       string
+	version     string
+	ringBytes   int
+	sink        EventSink
+	killTree    func(pid int)
+	launcher    Launcher
+	activity    *activityDebouncer
+	queueMu     sync.Mutex
+	queues      map[int]*sessionQueue
+	keepAliveFn func() KeepAlive
+	startedAt   time.Time
 
 	// stop ends the background loops this host runs (the scan, the hook
 	// reader). Closed exactly once, by Release.
@@ -104,20 +110,24 @@ func NewEmbedded(opts Options) *Embedded {
 		id = newHubID()
 	}
 	h := &Embedded{
-		sessions:  make(map[int]*managed),
-		hubID:     id,
-		version:   opts.Version,
-		ringBytes: ring,
-		sink:      opts.Sink,
-		killTree:  opts.KillTree,
-		launcher:  opts.Launcher,
-		activity:  newActivityDebouncer(),
-		queues:    make(map[int]*sessionQueue),
-		startedAt: time.Now(),
-		stop:      make(chan struct{}),
+		sessions:    make(map[int]*managed),
+		hubID:       id,
+		version:     opts.Version,
+		ringBytes:   ring,
+		sink:        opts.Sink,
+		killTree:    opts.KillTree,
+		launcher:    opts.Launcher,
+		activity:    newActivityDebouncer(),
+		queues:      make(map[int]*sessionQueue),
+		keepAliveFn: opts.KeepAlive,
+		startedAt:   time.Now(),
+		stop:        make(chan struct{}),
 	}
 	if opts.Scan {
 		go h.scanLoop()
+	}
+	if opts.KeepAlive != nil {
+		go h.keepAliveLoop()
 	}
 	if opts.Shim {
 		if err := h.startShim(); err != nil {

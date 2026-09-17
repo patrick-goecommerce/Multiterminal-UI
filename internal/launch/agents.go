@@ -102,6 +102,15 @@ func (p Policy) Argv(tool, model string) ([]string, error) {
 	return []string{cmd, agent.ModelFlag, model}, nil
 }
 
+// KeepAliveModes are the session modes a keep-alive may type into.
+//
+// The launch modes of the CLIs that understand a conversation, which today is
+// Claude in its three flavours. A shell pane must never be typed into: the
+// message would land in whatever the user left running there.
+func KeepAliveModes() []string {
+	return []string{"claude", "claude-auto", "claude-yolo"}
+}
+
 // Policy satisfies hub.Launcher. The assertion is written as a function rather
 // than an import of internal/hub, because launch must not depend on the
 // package that will depend on it: the hub owns sessions, this owns policy, and

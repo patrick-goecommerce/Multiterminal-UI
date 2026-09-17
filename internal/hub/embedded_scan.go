@@ -184,3 +184,11 @@ func (h *Embedded) scanLoop() {
 func (h *Embedded) BackdateActivityForTest(id int) bool {
 	return h.activity.backdateCandidate(id, debounceWindow)
 }
+
+// setLastOutputForTest backdates a session's last-output time, so a test can
+// reach a keep-alive threshold without sleeping for hours.
+func (h *Embedded) setLastOutputForTest(id int, at time.Time) {
+	if m, err := h.lookup(id); err == nil {
+		m.sess.SetLastOutputAtForTest(at)
+	}
+}

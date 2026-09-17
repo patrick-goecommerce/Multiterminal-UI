@@ -180,9 +180,10 @@ structural fact about this codebase, and everything else follows from it.
   grep -rl internal/terminal internal/backend --include='*.go' | grep -v _test.go   # must be empty
   ```
 - Anything that has to keep running while no window is open lives on the host, not in the
-  window: the activity scan, the lifecycle-hook reader, the shim endpoints, session creation.
-  Still window-side and therefore still needing a window: the MCP server, the prompt queue,
-  keepalive.
+  window: the activity scan, the lifecycle-hook reader, the shim endpoints, session creation,
+  waking a sleeping pane, the prompt queue, the keep-alive. Still window-side and therefore
+  still needing a window: the MCP server, and the parts of a feature that touch a tab (the
+  worktree-finish flow, creating a pane when the keep-alive finds none).
 - **`MTUI_PORT` is baked into a session's environment at launch** and can never be told a new
   one. That is why the shim endpoints belong to the host and not to a window: a session that
   outlives its window would otherwise post into a dead port for the rest of its life.
@@ -234,7 +235,7 @@ internal/
     app_host_stream.go           Host events → UI events
     app_stream.go                Output batching and coalescing toward the WebView
     app_scan.go                  applyScanResults: host scan results → UI (no loop here)
-    app_queue.go                 Prompt queue per session (still window-side)
+    app_queue.go                 Finish-flow guards around the host's queue
     app_agent_wait.go            WaitForAgent binding over hub.WaitForAgent
     app_mcp_server.go            Agent-control MCP server (still window-side)
     launch_delegate.go           Delegates to internal/gitx and internal/launch

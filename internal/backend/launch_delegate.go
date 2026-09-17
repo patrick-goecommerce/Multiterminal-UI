@@ -2,6 +2,7 @@ package backend
 
 import (
 	"os/exec"
+	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/gitx"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
@@ -86,3 +87,22 @@ func (l windowLauncher) ResumeArgv(argv []string, resumeID string) []string {
 }
 
 var _ hub.Launcher = windowLauncher{}
+
+// keepAlivePolicy reads the keep-alive settings for one tick of the host's
+// loop. Read per tick rather than captured, so a change in the settings dialog
+// applies without restarting anything.
+//
+// The window's host gets the same policy the daemon's does. Without it the
+// keep-alive would work in one mode and not the other, which is the kind of
+// difference nobody notices until a session has gone cold overnight.
+func (a *AppService) keepAlivePolicy() hub.KeepAlive {
+	cfg := a.cfg
+	if !cfg.ShouldKeepAlive() || cfg.KeepAlive.IntervalMinutes <= 0 {
+		return hub.KeepAlive{}
+	}
+	return hub.KeepAlive{
+		Every:   time.Duration(cfg.KeepAlive.IntervalMinutes) * time.Minute,
+		Message: cfg.KeepAlive.Message,
+		Modes:   launch.KeepAliveModes(),
+	}
+}

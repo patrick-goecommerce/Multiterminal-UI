@@ -42,7 +42,10 @@ func (a *AppService) newSessionHost() hub.Host {
 			// The same launcher the daemon gets, so a session started or woken
 			// through the CLI or MCP behaves identically in both modes.
 			Launcher: windowLauncher{app: a},
-			Sink:     hub.SinkFunc(a.onHostEvent),
+			// The same keep-alive the daemon runs, so the feature does not
+			// depend on which host this window happens to be using.
+			KeepAlive: a.keepAlivePolicy,
+			Sink:      hub.SinkFunc(a.onHostEvent),
 		})
 	}
 

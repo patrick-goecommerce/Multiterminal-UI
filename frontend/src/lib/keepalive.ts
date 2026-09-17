@@ -9,22 +9,22 @@ export interface KeepAliveConfig {
   message: string;
 }
 
-// How often we poll for idle time, independent of the configured threshold —
-// keeps the actual ping within ~1 minute of crossing the threshold instead of
-// only being checked once per (potentially multi-hour) interval.
-const POLL_MS = 60_000;
-
 /**
- * Start the keep-alive loop after session restore.
- * Returns a cleanup function to stop the loop (call in onDestroy).
+ * Start the keep-alive's window half after session restore.
+ * Returns a cleanup function (call in onDestroy).
  *
- * Behaviour:
- * 1. If no Claude session exists anywhere (any window) after restore →
- *    create one in the first tab of the main window.
- * 2. Every minute: if no activity in any session for `interval_minutes`,
- *    write the keep-alive message to the oldest running Claude session,
- *    wherever it lives (main window or a detached one) — the target is
- *    resolved via the backend, which tracks all sessions process-wide.
+ * The periodic nudge is NOT here any more. It runs on the session host
+ * (internal/hub/keepalive.go), because in a window it stops the moment the
+ * window closes, and that is exactly the stretch in which a session goes cold
+ * unnoticed. The host also sees every session rather than one window's.
+ *
+ * What is left is the half that needs a window:
+ *
+ * 1. If no Claude session exists anywhere after restore, create one in the
+ *    first tab. That adds a pane to a tab, which only a window can do.
+ * 2. Ping once at startup, after Claude's own boot output has settled. This
+ *    is about *this app starting*, not about a stretch of silence, so it has
+ *    no counterpart on the host.
  */
 export async function startKeepAliveLoop(
   cfg: KeepAliveConfig,
@@ -51,32 +51,16 @@ export async function startKeepAliveLoop(
     }
   }
 
-  const thresholdSec = cfg.interval_minutes * 60;
-  let lastPingAtSec = 0;
+  // Set by the returned cleanup, so a window that closes mid-wait stops
+  // polling instead of finishing its minute on a host nobody is watching.
+  let cancelled = false;
 
   async function sendPing(sessionId: number) {
-    // Send message text and Enter as separate writes (mimics real typing)
+    // Message text and Enter as separate writes: an agent's redraw can swallow
+    // a Return that arrives in the same chunk as the text.
     await App.WriteToSession(sessionId, encodeForPty(cfg.message));
     await new Promise(r => setTimeout(r, 100));
     await App.WriteToSession(sessionId, encodeForPty('\r'));
-    lastPingAtSec = Math.floor(Date.now() / 1000);
-  }
-
-  async function tick() {
-    try {
-      const sessionId = await App.GetFirstClaudeSessionID();
-      if (sessionId < 0) return;
-
-      const nowSec = Math.floor(Date.now() / 1000);
-      if (nowSec - lastPingAtSec < thresholdSec) return; // already pinged recently
-
-      const lastActivity = await App.GetGlobalLastActivityUnix();
-      if (lastActivity > 0 && nowSec - lastActivity < thresholdSec) return; // still active
-
-      await sendPing(sessionId);
-    } catch (err) {
-      console.error('[keepalive] tick failed:', err);
-    }
   }
 
   // Send once at startup — wait until Claude's startup output has settled
@@ -89,7 +73,7 @@ export async function startKeepAliveLoop(
     let lastSeen = await App.GetGlobalLastActivityUnix();
     let lastChangeAt = Date.now();
 
-    while (Date.now() - start < timeoutMs) {
+    while (!cancelled && Date.now() - start < timeoutMs) {
       await new Promise(r => setTimeout(r, pollMs));
       const cur = await App.GetGlobalLastActivityUnix();
       if (cur !== lastSeen) {
@@ -104,8 +88,7 @@ export async function startKeepAliveLoop(
   }
   startupPing().catch(err => console.error('[keepalive] startup ping failed:', err));
 
-  // Poll frequently; tick() itself gates on the configured threshold.
-  const timer = setInterval(tick, POLL_MS);
-
-  return () => clearInterval(timer);
+  return () => {
+    cancelled = true;
+  };
 }

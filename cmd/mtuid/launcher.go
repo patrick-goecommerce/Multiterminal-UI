@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/launch"
@@ -54,3 +56,21 @@ func (l daemonLauncher) ResumeArgv(argv []string, resumeID string) []string {
 }
 
 var _ hub.Launcher = daemonLauncher{}
+
+// keepAlivePolicy reads the keep-alive settings for one tick.
+//
+// Per tick and not once at startup, for the same reason Argv and Env are: the
+// user changes this in the settings dialog of an app that may well be running
+// against a daemon holding live agents, and restarting the daemon to pick it
+// up would end them.
+func keepAlivePolicy() hub.KeepAlive {
+	cfg := config.Load()
+	if !cfg.ShouldKeepAlive() || cfg.KeepAlive.IntervalMinutes <= 0 {
+		return hub.KeepAlive{}
+	}
+	return hub.KeepAlive{
+		Every:   time.Duration(cfg.KeepAlive.IntervalMinutes) * time.Minute,
+		Message: cfg.KeepAlive.Message,
+		Modes:   launch.KeepAliveModes(),
+	}
+}
