@@ -77,7 +77,6 @@ func newTestApp() *AppService {
 		chatSessions:  make(map[string]*ChatSession),
 		chatBuffers:   make(map[string]*strings.Builder),
 		finishStates:  make(map[int]*finishState),
-		agentSessions: make(map[int]AgentSessionInfo),
 		worktreeState: make(map[int]worktreeState),
 		lastProbedCwd: make(map[int]string),
 	}

@@ -294,13 +294,28 @@ func suspendedSession(t *testing.T, h *Embedded, resumeID string) int {
 	if err := h.SetHookSessionID(id, resumeID); err != nil {
 		t.Fatalf("SetHookSessionID: %v", err)
 	}
-	if err := h.Suspend(id); err != nil {
-		t.Fatalf("Suspend: %v", err)
+	// Arm again if the first attempt was cancelled. A shell prints its prompt
+	// shortly after starting, and output arriving after the suspend is armed
+	// aborts it on purpose, so that work in flight is never killed. Under load
+	// that prompt lands after the arming, and waiting out a suspend that was
+	// already cancelled is a 45 second failure for no reason.
+	suspended := false
+	for attempt := 0; attempt < 10 && !suspended; attempt++ {
+		if err := h.Suspend(id); err != nil {
+			t.Fatalf("Suspend: %v", err)
+		}
+		deadline := time.Now().Add(2 * time.Second)
+		for !suspended && time.Now().Before(deadline) {
+			if s, err := h.Get(id); err == nil && s.Status == StatusSuspended {
+				suspended = true
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
-	waitFor(t, func() bool {
-		s, err := h.Get(id)
-		return err == nil && s.Status == StatusSuspended
-	}, "the session never reached suspended")
+	if !suspended {
+		t.Fatal("the session never reached suspended")
+	}
 	return id
 }
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
@@ -108,9 +109,7 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 		{
 			name: "an agent-control session belongs to another agent",
 			break_: func(a *AppService, _ *terminal.Session, id int) {
-				a.mu.Lock()
-				a.agentSessions[id] = AgentSessionInfo{}
-				a.mu.Unlock()
+				a.host.(*hub.Embedded).SetOriginForTest(id, hub.OriginAgent)
 			},
 			want: "agent-control session",
 		},

@@ -14,51 +14,6 @@ import (
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
-// Options configures an Embedded host.
-type Options struct {
-	// HubID identifies this host to clients. Pass a persisted value so a
-	// restarted daemon keeps its identity; empty generates a fresh one.
-	HubID string
-	// Version is reported to clients, for the protocol/version check.
-	Version string
-	// RingBytes is the per-session replay buffer. Zero means DefaultRingBytes;
-	// a negative value switches replay off while still counting offsets.
-	RingBytes int
-	// Sink receives session events. Nil discards them.
-	Sink EventSink
-	// Scan turns on the host's own activity scan. It has to be on wherever
-	// the sessions are: a host whose client has gone away still has agents
-	// working, and their state has to keep being written down or the next
-	// client finds yesterday's picture. Off by default so a caller that
-	// drives the scan itself (or a test) is not surprised by a ticker.
-	Scan bool
-	// Shim turns on the loopback endpoints MTUI's helper binaries post to.
-	// It belongs wherever the sessions are, because a session's environment
-	// names that port for as long as the session lives.
-	Shim bool
-	// HooksDir turns on the lifecycle-hook reader over that directory. Like
-	// Scan, it belongs wherever the sessions are: the hook events are how an
-	// agent says what it is doing, and they keep arriving while no client is
-	// connected. Empty leaves the reader off.
-	HooksDir string
-	// KillTree ends a process subtree before the session is closed. It is
-	// injected rather than implemented here because it is platform code that
-	// lives in the backend (killProcessTree); the hub must not grow a second
-	// copy of it. Nil skips the step, which leaves the same orphans the
-	// ordinary close path used to leave (#185).
-	KillTree func(pid int)
-	// Launcher lets this host start an agent from a tool name, working out
-	// argv and environment itself. Without one, only a caller that already
-	// knows both can create a session, which is what kept every client but
-	// the window from starting anything. See CreateSpec.Launch.
-	Launcher Launcher
-	// KeepAlive supplies the keep-alive policy. It is a function rather than a
-	// value because the policy comes from the config and the user can change
-	// it while the host runs; it is read per tick. Nil leaves the keep-alive
-	// off, and so does a policy that returns a zero interval or no message.
-	KeepAlive func() KeepAlive
-}
-
 var _ Host = (*Embedded)(nil)
 
 // Embedded is a Host that runs its sessions in the calling process.
@@ -288,25 +243,6 @@ func (h *Embedded) Release() {
 	wg.Wait()
 }
 
-// AdoptForTest registers a session object the caller built itself, without
-// starting a process. It exists for tests that need a session in a known state
-// (a frozen screen, a given activity) and must not be used in production: a
-// session adopted this way has no output pump and no exit watcher.
-func (h *Embedded) AdoptForTest(id int, sess *terminal.Session) {
-	m := &managed{
-		sess:      sess,
-		ring:      NewRing(h.ringBytes),
-		spec:      CreateSpec{ID: id},
-		startedAt: time.Now(),
-	}
-	h.mu.Lock()
-	h.sessions[id] = m
-	if id > h.nextID {
-		h.nextID = id
-	}
-	h.mu.Unlock()
-}
-
 // sessions returns every session object, paired with its ID.
 //
 // It is unexported on purpose: handing out the session itself is the one thing
@@ -337,73 +273,5 @@ func (h *Embedded) lookup(id int) (*managed, error) {
 func (h *Embedded) emit(name string, payload any) {
 	if h.sink != nil {
 		h.sink.Emit(name, payload)
-	}
-}
-
-func summarize(id int, m *managed) SessionSummary {
-	contextPct, model, _ := m.sess.StatuslineInfo()
-	return SessionSummary{
-		ID:            id,
-		Name:          m.sess.Name(),
-		Dir:           m.spec.Dir,
-		Mode:          m.spec.Mode,
-		Status:        statusOf(m.sess),
-		ExitCode:      m.sess.GetExitCode(),
-		PID:           m.sess.Pid(),
-		StartedAt:     m.startedAt,
-		LastOutputAt:  m.sess.GetLastOutputAt(),
-		Activity:      activityOf(m.sess.GetActivity()),
-		Title:         m.sess.GetTitle(),
-		Cost:          m.sess.GetTokens().TotalCost,
-		ContextPct:    contextPct,
-		Model:         model,
-		ResumeID:      effectiveResumeID(m.sess),
-		HookSessionID: m.sess.HookSessionID(),
-		HasHookData:   m.sess.HasHookData(),
-		Offset:        m.ring.End(),
-	}
-}
-
-// effectiveResumeID is the ID to resume a session with: the hook-reported one
-// wins, the one parsed out of argv at launch is the fallback.
-func effectiveResumeID(s *terminal.Session) string {
-	if id := s.HookSessionID(); id != "" {
-		return id
-	}
-	return s.ResumeID()
-}
-
-// activityOf maps the terminal package's numeric state onto the wire strings.
-// The numbers are an internal ordering; letting them cross a protocol boundary
-// would make a reordering change meaning silently.
-func activityOf(a terminal.ActivityState) Activity {
-	switch a {
-	case terminal.ActivityActive:
-		return ActivityActive
-	case terminal.ActivityDone:
-		return ActivityDone
-	case terminal.ActivityWaitingPermission:
-		return ActivityWaitingPermission
-	case terminal.ActivityWaitingAnswer:
-		return ActivityWaitingAnswer
-	case terminal.ActivityError:
-		return ActivityError
-	default:
-		return ActivityIdle
-	}
-}
-
-func statusOf(s *terminal.Session) Status {
-	switch s.GetStatus() {
-	case terminal.StatusExited:
-		return StatusExited
-	case terminal.StatusError:
-		return StatusError
-	case terminal.StatusSuspending:
-		return StatusSuspending
-	case terminal.StatusSuspended:
-		return StatusSuspended
-	default:
-		return StatusRunning
 	}
 }

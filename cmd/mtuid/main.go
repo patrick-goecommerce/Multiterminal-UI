@@ -136,6 +136,9 @@ func run(args []string) int {
 	})
 	srv = hub.NewServer(host, rec.Token)
 
+	stopMCP := startMCP(host)
+	defer stopMCP()
+
 	if hubID == "" {
 		if err := saveHubID(host.HubID()); err != nil {
 			log.Printf("[mtuid] persisting hub id: %v", err)

@@ -54,14 +54,13 @@ func (a *AppService) suspendBlocker(id int, s hub.SessionSummary, timeout time.D
 
 	a.mu.Lock()
 	mode := a.sessionMode[id]
-	_, isAgent := a.agentSessions[id]
 	finish := a.finishStates[id]
 	a.mu.Unlock()
 
 	if !isClaudeMode(mode) {
 		return "not a claude pane"
 	}
-	if isAgent {
+	if s.Origin == hub.OriginAgent {
 		return "agent-control session"
 	}
 	if finish != nil {

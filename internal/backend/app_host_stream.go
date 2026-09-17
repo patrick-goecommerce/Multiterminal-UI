@@ -98,6 +98,16 @@ func (a *AppService) onHostEvent(name string, payload any) {
 		}
 		a.onHookReport(report)
 
+	case hub.EventSessionCreated:
+		// An agent delegated a task through the MCP server. The session may
+		// have been created in this process or in the daemon; either way this
+		// is where a pane for it comes from.
+		ev, ok := hub.DecodePayload[hub.SessionCreated](payload)
+		if !ok {
+			return
+		}
+		a.onSessionCreated(ev.Session)
+
 	case hub.EventSessionExited:
 		ev, ok := hub.DecodePayload[hub.SessionExited](payload)
 		if !ok || a.app == nil {

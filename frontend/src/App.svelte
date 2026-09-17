@@ -414,8 +414,9 @@
       if (info?.name) tabStore.setAutoName(info.id, info.name, 'llm');
     });
     // An agent (e.g. Claude Code in a pane) delegated a task via the local
-    // MCP server (SpawnAgentSession) — attach the already-running session as
-    // a visible pane so the delegation is visible in MTUI.
+    // MCP server — attach the already-running session as a visible pane so the
+    // delegation is visible in MTUI. The session may have been created by the
+    // daemon rather than by this window, so the event is what we go by.
     EventsOn('mtui:session-spawned', (event: any) => {
       const info = event.data; // AgentSessionSpawnedEvent { id, tool, model, dir, name }
       if (!info?.id) return;

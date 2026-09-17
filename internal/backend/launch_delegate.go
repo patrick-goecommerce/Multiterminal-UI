@@ -55,6 +55,25 @@ func resumeArgv(argv []string, resumeID string) []string {
 
 func claudeSessionIDFromArgv(argv []string) string { return launch.SessionIDFromArgv(argv) }
 
+// launchCommands maps each tool to the command to start it with: the absolute
+// path this process resolved at startup when it found one, the configured
+// command otherwise. Resolving is the one part of the launch policy that stays
+// here — it searches the well-known install locations of this machine, which
+// is work only a process with a desktop to look at does.
+func (a *AppService) launchCommands() launch.Commands {
+	pick := func(resolved, configured string) string {
+		if resolved != "" {
+			return resolved
+		}
+		return configured
+	}
+	return launch.Commands{
+		"claude": pick(a.resolvedClaudePath, a.cfg.ClaudeCommand),
+		"codex":  pick(a.resolvedCodexPath, a.cfg.CodexCommand),
+		"gemini": pick(a.resolvedGeminiPath, a.cfg.GeminiCommand),
+	}
+}
+
 // launchPolicy is the config this window would launch a session with. The
 // shim port comes from the host rather than from this process, because a
 // session outliving the window keeps reporting to whatever port it was told.

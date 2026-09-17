@@ -27,7 +27,7 @@ Branching, Conventional Commits, PRs, Code Review
 A GUI terminal multiplexer built for Claude Code power users.
 
 ## Code Rules
-- **Max 300 lines per Go production file.** Split into logically grouped files (e.g. `app_scan.go`, `app_stream.go`). Tests are exempt in practice (16 are over it). Eight production files are over it for historical reasons — `config.go`, `hub/embedded.go`, `hub/server.go`, `backend/app.go`, `orchestrator_exec.go`, `hub/types.go`, `app_kanban.go`, `stt_install.go` — treat those as a debt not to grow, not as permission.
+- **Max 300 lines per Go production file.** Split into logically grouped files (e.g. `app_scan.go`, `app_stream.go`). Tests are exempt in practice (16 are over it). Six production files are over it for historical reasons — `config.go`, `hub/server.go`, `backend/app.go`, `orchestrator_exec.go`, `app_kanban.go`, `stt_install.go` — treat those as a debt not to grow, not as permission. (`hub/embedded.go` and `hub/types.go` were on that list until the splits into `embedded_summary.go`, `options.go`, `embedded_testhooks.go` and `events.go`; that is what paying one down looks like.)
 - **Go structs** exposed to frontend need both `yaml` and `json` tags.
 - **UI text is German**, code/comments are English.
 - **`.gitignore` entries for built binaries must be anchored** (`/mtui`, not `mtui`). A bare
@@ -181,9 +181,14 @@ structural fact about this codebase, and everything else follows from it.
   ```
 - Anything that has to keep running while no window is open lives on the host, not in the
   window: the activity scan, the lifecycle-hook reader, the shim endpoints, session creation,
-  waking a sleeping pane, the prompt queue, the keep-alive. Still window-side and therefore
-  still needing a window: the MCP server, and the parts of a feature that touch a tab (the
-  worktree-finish flow, creating a pane when the keep-alive finds none).
+  waking a sleeping pane, the prompt queue, the keep-alive, the agent-control MCP server.
+  Still window-side and therefore still needing a window: only the parts of a feature that
+  touch a tab (the worktree-finish flow, creating a pane when the keep-alive finds none,
+  drawing a pane for a session an agent delegated).
+- **A session carries who asked for it** (`CreateSpec.Origin`, back out in `SessionSummary`).
+  `OriginAgent` is how a window recognises a session it did not create — it draws a pane for
+  it and the idle-suspend gate leaves it alone. A map in the window cannot answer that any
+  more: in daemon mode the delegation may have happened before this window started.
 - **`MTUI_PORT` is baked into a session's environment at launch** and can never be told a new
   one. That is why the shim endpoints belong to the host and not to a window: a session that
   outlives its window would otherwise post into a dead port for the rest of its life.
@@ -228,6 +233,8 @@ internal/
   board/        Kanban card and plan types, state machine.
   engine/       Headless execution engine (briefing, checkpoints, manifest).
   orchestrator/ Kanban orchestration: waves, QA, escalation.
+  mcpsrv/       Agent-control MCP server over hub.Host: open/send/read/close/wait/list.
+                Served by whoever owns the sessions (mtuid, or the window in embedded mode).
   skills/       Project skill files.
   backend/      The Wails service. Owns no sessions; talks to a Host.
     app.go                       AppService, lifecycle, bindings
@@ -237,7 +244,8 @@ internal/
     app_scan.go                  applyScanResults: host scan results → UI (no loop here)
     app_queue.go                 Finish-flow guards around the host's queue
     app_agent_wait.go            WaitForAgent binding over hub.WaitForAgent
-    app_mcp_server.go            Agent-control MCP server (still window-side)
+    app_mcp_server.go            Where the MCP server is (internal/mcpsrv serves it)
+    app_agent_panes.go           A pane for a session an agent delegated
     launch_delegate.go           Delegates to internal/gitx and internal/launch
     app_worktree*.go             Worktree creation, policy, finish flow, generated memory
     app_git*.go app_issues*.go   Git and GitHub integration

@@ -343,6 +343,7 @@ func TestReleaseDiscoveryRecordsRemovesBoth(t *testing.T) {
 	}
 
 	a := newTestApp()
+	a.mcpServerPort = 40101 // this window serves the MCP server
 	a.releaseDiscoveryRecords()
 
 	for _, svc := range []discovery.Service{discovery.ServiceFocus, discovery.ServiceMCP} {
@@ -352,4 +353,47 @@ func TestReleaseDiscoveryRecordsRemovesBoth(t *testing.T) {
 	}
 	// Shutdown runs on paths that may never have published anything.
 	a.releaseDiscoveryRecords()
+}
+
+// In daemon mode the MCP record belongs to mtuid. Removing it on the way out
+// would leave the daemon serving a port nobody can resolve for the rest of its
+// life, because it publishes once at startup and never again.
+func TestReleaseDiscoveryRecordsKeepsTheDaemonsMCPRecord(t *testing.T) {
+	useTempDiscoveryDir(t)
+
+	if _, err := discovery.Publish(discovery.ServiceMCP, 40102); err != nil {
+		t.Fatalf("publish mcp: %v", err)
+	}
+
+	a := newTestApp() // mcpServerPort stays 0: this window serves nothing
+	a.releaseDiscoveryRecords()
+
+	if _, err := discovery.Read(discovery.ServiceMCP); err != nil {
+		t.Fatalf("the daemon's MCP record was removed by a window: %v", err)
+	}
+}
+
+// In daemon mode this window binds no MCP port, but an agent still reaches one
+// — mtuid's. Reporting 0 would tell the settings dialog there is no MCP server
+// at all, which looks exactly like the failure case and is not one.
+func TestGetMCPServerPortFallsBackToTheRecord(t *testing.T) {
+	useTempDiscoveryDir(t)
+
+	a := newTestApp()
+	if got := a.GetMCPServerPort(); got != 0 {
+		t.Fatalf("port = %d with nothing published, want 0", got)
+	}
+
+	if _, err := discovery.Publish(discovery.ServiceMCP, 40103); err != nil {
+		t.Fatalf("publish mcp: %v", err)
+	}
+	if got := a.GetMCPServerPort(); got != 40103 {
+		t.Errorf("port = %d, want the daemon's 40103", got)
+	}
+
+	// A port of this window's own wins: it is the one it is actually serving.
+	a.mcpServerPort = 40104
+	if got := a.GetMCPServerPort(); got != 40104 {
+		t.Errorf("port = %d, want this window's 40104", got)
+	}
 }

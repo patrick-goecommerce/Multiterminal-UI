@@ -1,4 +1,4 @@
-package backend
+package mcpsrv
 
 import (
 	"context"
@@ -7,14 +7,17 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// The handlers are glue, so what is worth testing about them is that a bad
+// call comes back as a tool error a model can read, and not as a transport
+// error that reaches it as nothing at all.
+
 func toolReq(args map[string]any) mcp.CallToolRequest {
 	return mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: args}}
 }
 
 func TestHandleOpenSessionRequiresToolAndDir(t *testing.T) {
-	a := newTestAgentControlService()
-
-	res, err := a.handleOpenSession(context.Background(), toolReq(map[string]any{}))
+	s, _ := testServer(t)
+	res, err := s.handleOpenSession(context.Background(), toolReq(map[string]any{}))
 	if err != nil {
 		t.Fatalf("unexpected transport error: %v", err)
 	}
@@ -24,11 +27,10 @@ func TestHandleOpenSessionRequiresToolAndDir(t *testing.T) {
 }
 
 func TestHandleOpenSessionRejectsUnsupportedTool(t *testing.T) {
-	a := newTestAgentControlService()
-
-	res, err := a.handleOpenSession(context.Background(), toolReq(map[string]any{
+	s, _ := testServer(t)
+	res, err := s.handleOpenSession(context.Background(), toolReq(map[string]any{
 		"tool": "notreal",
-		"dir":  "C:\\tmp",
+		"dir":  t.TempDir(),
 	}))
 	if err != nil {
 		t.Fatalf("unexpected transport error: %v", err)
@@ -39,9 +41,8 @@ func TestHandleOpenSessionRejectsUnsupportedTool(t *testing.T) {
 }
 
 func TestHandleSendInputRequiresSessionID(t *testing.T) {
-	a := newTestAgentControlService()
-
-	res, err := a.handleSendInput(context.Background(), toolReq(map[string]any{"text": "hi"}))
+	s, _ := testServer(t)
+	res, err := s.handleSendInput(context.Background(), toolReq(map[string]any{"text": "hi"}))
 	if err != nil {
 		t.Fatalf("unexpected transport error: %v", err)
 	}
@@ -51,9 +52,8 @@ func TestHandleSendInputRequiresSessionID(t *testing.T) {
 }
 
 func TestHandleCloseSessionUnknownSession(t *testing.T) {
-	a := newTestAgentControlService()
-
-	res, err := a.handleCloseSession(context.Background(), toolReq(map[string]any{
+	s, _ := testServer(t)
+	res, err := s.handleCloseSession(context.Background(), toolReq(map[string]any{
 		"session_id": float64(999),
 	}))
 	if err != nil {
@@ -65,28 +65,12 @@ func TestHandleCloseSessionUnknownSession(t *testing.T) {
 }
 
 func TestHandleListSessionsEmpty(t *testing.T) {
-	a := newTestAgentControlService()
-
-	res, err := a.handleListSessions(context.Background(), toolReq(nil))
+	s, _ := testServer(t)
+	res, err := s.handleListSessions(context.Background(), toolReq(nil))
 	if err != nil {
 		t.Fatalf("unexpected transport error: %v", err)
 	}
 	if res.IsError {
 		t.Fatalf("unexpected error result: %+v", res)
-	}
-}
-
-func TestStartMCPServerBindsToLoopback(t *testing.T) {
-	// startMCPServer publishes its port; without the redirect the test would
-	// overwrite the record of the developer's own running instance.
-	useTempDiscoveryDir(t)
-	a := newTestAgentControlService()
-
-	port, err := a.startMCPServer(0)
-	if err != nil {
-		t.Fatalf("startMCPServer: %v", err)
-	}
-	if port <= 0 {
-		t.Fatalf("expected a bound port, got %d", port)
 	}
 }

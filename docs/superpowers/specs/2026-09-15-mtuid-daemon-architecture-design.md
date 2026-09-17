@@ -66,7 +66,7 @@ Der Schnitt läuft entlang der Frage „stirbt das sinnvollerweise mit dem Fenst
 | `scanLoop` (Aktivität, Tokens, Kosten) | `app_scan.go` |
 | Hook-Auswertung (tailt die JSONL-Dateien) | `app_hooks.go` |
 | Statusline-Empfang | `session_statusline.go` |
-| tmux-Shim-API, Agent-Control-MCP-Server | `app_tmux_api.go`, `app_mcp_server.go` |
+| tmux-Shim-API, Agent-Control-MCP-Server | `app_tmux_api.go`, `app_mcp_server.go` (beide inzwischen beim Host: `internal/hub/embedded_shim.go`, `internal/mcpsrv`) |
 | Suspend/Wake, Keepalive, Queue (Phase 2) | `app_suspend.go`, `app_keepalive.go`, `app_queue.go` |
 
 **GUI-Client (Wails):** Git, Issues, Kanban/Orchestrator, Chat, Worktrees, Dateibrowser,
@@ -77,9 +77,10 @@ die jetzt über den Client gehen. Dass ein Kanban-Board auch ohne offene GUI wei
 ist ein eigener Schritt (Phase 5) und braucht mehr als einen Prozesswechsel, nämlich eine
 Entscheidung darüber, wer bei einer Eskalation gefragt wird.
 
-**tmux-API und MCP-Server gehören in den Daemon, nicht in die GUI.** Sie sind heute an
-den Fensterprozess gebunden, und genau das ist der Fehler: ein Agent, der über MCP eine
-Session öffnet, verliert sie beim nächsten GUI-Neustart. Nach dem Umzug überleben sie.
+**tmux-API und MCP-Server gehören in den Daemon, nicht in die GUI.** Sie waren an den
+Fensterprozess gebunden, und genau das war der Fehler: ein Agent, der über MCP eine Session
+öffnet, verlor sie beim nächsten GUI-Neustart. Seit Phase 2a beziehungsweise 2c überleben
+sie ihn.
 
 Die Hooks brauchen keine Umleitung. `mtui-hook` schreibt JSONL-Dateien nach
 `%APPDATA%\Multiterminal\hooks` (`cmd/mtui-hook/main.go:96`), niemand postet an einen Port.
@@ -319,7 +320,7 @@ wo seine Sessions liegen.
 | 1e | `session_host: daemon`: GUI startet den Daemon, verbindet sich, Restore hängt wieder an statt neu zu starten | **App schließen und öffnen, Agents laufen weiter** | **fertig** |
 | 2a | Scan, Hook-Leser und die Shim-Endpunkte (Statusline, tmux) laufen auf dem Host | Zustand wird auch ohne offenes Fenster fortgeschrieben; `MTUI_PORT` bleibt gültig | **fertig** |
 | 2b | Sessions im Daemon anlegen (`CreateSpec.Launch`, `hub.Launcher`, `internal/launch`) | der Daemon startet Agents selbst, `mt new` | **fertig** |
-| 2c | Debounce, Queue, Wecken und Keepalive beim Host; MCP offen | eine eingereihte Aufgabe läuft ohne offenes Fenster weiter | **teilweise** |
+| 2c | Debounce, Queue, Wecken, Keepalive und der MCP-Server beim Host | eine eingereihte Aufgabe und eine delegierte Session laufen ohne offenes Fenster weiter | **fertig** |
 | 3 | `mt` als CLI-Client (`ls`, `read`, `send`, `keys`, `wait`, `kill`, `hub`) | Sessions ohne GUI bedienbar | **fertig** |
 | 4 | Remote-Hubs über SSH | Laptop und Server in einer Oberfläche | offen |
 | 5 | Kanban-Orchestrator headless, weitere Agent-CLIs, Plugin-Hooks | Boards laufen ohne offenes Fenster | offen |
@@ -348,9 +349,26 @@ den, der es ausprobieren will; schlägt irgendetwas daran fehl (kein `mtuid` neb
 App, kein Record, falsche Protokollversion), fällt die App auf den eingebetteten Host
 zurück und schreibt eine Warnung, die über `CheckHealth` in der Oberfläche landet.
 
-**Was im Daemon-Modus heute noch an der offenen GUI hängt:** nur noch der MCP-Server, ein
-Agent kann also nur delegieren, solange ein Fenster offen ist. Queue und Keepalive liegen
-seit Phase 2c beim Host und laufen ohne Fenster weiter.
+**Was im Daemon-Modus heute noch an der offenen GUI hängt:** nichts mehr, was eine Session
+am Leben hält. Scan, Hook-Leser, Shim-Endpunkte, Anlegen, Wecken, Queue, Keepalive und der
+Agent-Control-MCP-Server liegen beim Host. Im Fenster bleibt, was einen Tab braucht: der
+Worktree-Finish-Flow, das Anlegen eines Panes, und das Zeichnen eines Panes für eine
+Session, die ein Agent delegiert hat.
+
+Dieses Zeichnen läuft über das Ereignis des Hosts, nicht über einen Aufruf im Fenster. Eine
+Session trägt seit 2c, wer sie angefragt hat (`CreateSpec.Origin`, zurück in
+`SessionSummary`); `EventSessionCreated` mit `OriginAgent` ist für das Fenster das Signal,
+einen Pane dafür anzulegen. Eine Map im Fenster konnte das nicht beantworten: im
+Daemon-Modus kann die Delegation passiert sein, bevor dieses Fenster überhaupt lief. An
+derselben Markierung hängt die Idle-Suspend-Sperre, die eine delegierte Session in Ruhe
+lässt.
+
+Wer den MCP-Server serviert, entscheidet sich danach, wem die Sessions gehören: im
+Daemon-Modus `mtuid`, sonst das Fenster. Beide veröffentlichen den Port über
+`internal/discovery`, und die Registrierung bei der Claude-CLI liest ihn von dort. Das
+Fenster entfernt beim Beenden nur den Record, den es selbst geschrieben hat: der Daemon
+veröffentlicht einmal beim Start, und ein gelöschter Record wäre für den Rest seines Lebens
+nicht mehr auffindbar.
 
 Beim Keepalive ist eine Hälfte bewusst im Fenster geblieben. Der periodische Anstoß gehört
 zum Host, weil er im Fenster genau dann aufhört, wenn er gebraucht wird. Das Anlegen eines
@@ -414,18 +432,14 @@ kein Fenster offen ist, ist eine Produktfrage und keine Architekturfrage.
 
 ## Was von herdr noch fehlt, nach Nutzen sortiert
 
-1. **MCP-Server, Queue und Keepalive in den Daemon** (Phase 2c). Der Daemon kann seit
-   Phase 2b Sessions anlegen; was fehlt, ist der Server, über den ein Agent das anfragt,
-   ohne dass ein Fenster offen ist, und die Warteschlange, die eine eingereihte Aufgabe
-   weitertreibt.
-2. **Remote über SSH** (Phase 4). Ein Tunnel auf den Loopback-Port des entfernten
+1. **Remote über SSH** (Phase 4). Ein Tunnel auf den Loopback-Port des entfernten
    Daemons, plus eine Hub-Auswahl im Client. Das Protokoll trägt die Hub-Kennung schon,
    und `mt --hub <name>` ist die Stelle, an der es sichtbar würde. Vorher fällig: die
    Session-Identität von `int` auf `hub:id` umstellen, 166 Fundstellen im Frontend und
    120 in Go. Danach wird es teurer, vorher ist es reine Kosten.
-3. **Mehr Agent-CLIs.** herdr startet 22, wir kennen drei. Seit Phase 2b ist das eine
+2. **Mehr Agent-CLIs.** herdr startet 22, wir kennen drei. Seit Phase 2b ist das eine
    Tabelle in `internal/launch/agents.go` und ein Kommando in der Config, sonst nichts.
-4. **Plugins.** herdr lädt Verzeichnisse mit `herdr-plugin.toml`, Actions und
+3. **Plugins.** herdr lädt Verzeichnisse mit `herdr-plugin.toml`, Actions und
    Event-Hooks, aus einem Marketplace, der GitHub-Repos mit einem Topic indiziert, ohne
    Sandbox. Reizvoll, aber es ist auch das Stück, das ein Werkzeug von "tut eine Sache"
    zu "ist eine Plattform" macht, mit allem, was daran hängt.
@@ -438,7 +452,8 @@ Token im Discovery-Record.
 
 herdrs eigentliches Alleinstellungsmerkmal ist nicht der Daemon, sondern dass derselbe
 Daemon drei Gesichter hat: ein Agent-Skill, eine CLI und der rohe Socket. MTUI hatte das
-Fenster und den MCP-Server. `cmd/mt` ist das dritte.
+Fenster und den MCP-Server. `cmd/mt` ist das dritte, und seit Phase 2c hängt keines der
+drei an einem offenen Fenster.
 
 ```
 mt ls                     was der Daemon hält, mit Agent-Zustand

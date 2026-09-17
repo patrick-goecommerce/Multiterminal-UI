@@ -64,7 +64,6 @@ type AppService struct {
 	focusToken         string        // token a focus request must present (see app_notify.go)
 	bindWarnings       []BindWarning // listeners that failed to start, surfaced via CheckHealth
 	bindWarningsMu     sync.Mutex
-	agentSessions      map[int]AgentSessionInfo    // sessions spawned via SpawnAgentSession (agent-control)
 	sessionMode        map[int]string              // mode ("claude"/"shell"/...) each session was created with, across all windows
 	chatSessions       map[string]*ChatSession     // active chat sessions keyed by conversation ID
 	chatBuffers        map[string]*strings.Builder // buffered assistant text per conversation
@@ -99,7 +98,6 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		launches:      make(map[int]launchSpec),
 		finishStates:  make(map[int]*finishState),
 		sessionIssues: make(map[int]*sessionIssue),
-		agentSessions: make(map[int]AgentSessionInfo),
 		sessionMode:   make(map[int]string),
 		chatSessions:  make(map[string]*ChatSession),
 		chatBuffers:   make(map[string]*strings.Builder),
