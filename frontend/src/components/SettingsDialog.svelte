@@ -759,6 +759,7 @@
         <!-- svelte-ignore a11y-label-has-associated-control -->
         <label class="setting-label">Agent-Steuerung (MCP-Server)</label>
         <p class="setting-desc">Erlaubt einem Agent in einem MTUI-Pane (z.B. Claude Code), selbstständig neue Sessions zu öffnen, ihnen Prompts zu schicken und sie wieder zu schließen &mdash; z.B. um eine Aufgabe an Codex oder Gemini zu delegieren. Nur lokal erreichbar (127.0.0.1).</p>
+        <p class="setting-desc">Im Daemon-Modus läuft der Server im Session-Daemon statt in diesem Fenster. Eine delegierte Session und der Zugang zu ihr bleiben dann bestehen, auch wenn das Fenster geschlossen wird.</p>
         <p class="setting-desc">Port <strong>0</strong> (empfohlen) lässt das Betriebssystem einen freien Port vergeben. Nur so bekommt jede Instanz &mdash; auch die eines zweiten Windows-Benutzers auf derselben Maschine &mdash; ihren eigenen Server. Ein fester Port gilt maschinenweit und kann von einer fremden Instanz belegt sein.</p>
         <div class="toggle-row" style="margin-bottom: 12px;">
           <button class="toggle-btn" class:toggle-on={mcpEnabled} on:click={() => mcpEnabled = !mcpEnabled}>

@@ -1,6 +1,11 @@
 package hub
 
-import "testing"
+import (
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+)
 
 // Who asked for a session, and what it is running.
 //
@@ -82,5 +87,49 @@ func TestRemote_OriginSurvivesTheWire(t *testing.T) {
 	}
 	if s.Origin != OriginAgent {
 		t.Errorf("Origin over the wire = %q, want %q", s.Origin, OriginAgent)
+	}
+}
+
+// In daemon mode the pane for a delegated session comes from this event and
+// nothing else: the window did not create the session, and may not have been
+// running when the agent asked for it. So the marker has to be in the event's
+// payload, not only in a Get somebody thinks to make afterwards.
+func TestRemote_TheCreatedEventCarriesTheOrigin(t *testing.T) {
+	created := make(chan SessionSummary, 4)
+
+	var server *Server
+	host := NewEmbedded(Options{Version: "test", Sink: SinkFunc(func(name string, payload any) {
+		server.Sink().Emit(name, payload)
+	})})
+	t.Cleanup(host.Release)
+	server = NewServer(host, testToken)
+	ts := httptest.NewServer(server.Handler())
+	t.Cleanup(ts.Close)
+
+	r := dialTest(t, strings.TrimPrefix(ts.URL, "http://"), SinkFunc(func(name string, payload any) {
+		if name != EventSessionCreated {
+			return
+		}
+		if ev, ok := DecodePayload[SessionCreated](payload); ok {
+			created <- ev.Session
+		}
+	}))
+
+	id, err := r.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t), Origin: OriginAgent})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { _ = r.Close(id) })
+
+	select {
+	case s := <-created:
+		if s.ID != id {
+			t.Errorf("event reported session %d, want %d", s.ID, id)
+		}
+		if s.Origin != OriginAgent {
+			t.Errorf("Origin in the event = %q, want %q", s.Origin, OriginAgent)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no session.created event reached the client")
 	}
 }
