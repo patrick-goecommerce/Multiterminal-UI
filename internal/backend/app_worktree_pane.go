@@ -10,71 +10,9 @@ import (
 	"strings"
 )
 
-// mainRepoRoot returns the absolute path of the MAIN worktree for any dir
-// inside the repo (main checkout or linked worktree).
-// It relies on the git guarantee that `git worktree list --porcelain` always
-// lists the main worktree first. --show-toplevel (worktree path) and
-// --git-common-dir (relative ".git" in the main repo) are both unsuitable.
-func mainRepoRoot(dir string) (string, error) {
-	out, err := gitCmd(dir, "worktree", "list", "--porcelain").Output()
-	if err != nil {
-		return "", fmt.Errorf("not a git repo: %w", err)
-	}
-	entries := parseWorktreePorcelain(string(out))
-	if len(entries) == 0 || entries[0].Path == "" {
-		return "", fmt.Errorf("no worktrees found in %s", dir)
-	}
-	return filepath.FromSlash(entries[0].Path), nil
-}
-
-// gitToplevel returns the git top-level directory containing dir — the
-// containing worktree's own root, whether dir is that root itself, a
-// subdirectory of it, a linked worktree's root, or a subdirectory of a
-// linked worktree. Used to distinguish "dir is somewhere inside the main
-// checkout" from "dir is inside a genuinely different linked worktree",
-// which a raw dir-vs-mainRepoRoot(dir) string comparison cannot do (a
-// subdirectory of the main checkout is never equal to the main checkout's
-// own root, but is not a linked worktree either).
-func gitToplevel(dir string) (string, error) {
-	out, err := gitCmd(dir, "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return "", err
-	}
-	return filepath.FromSlash(strings.TrimSpace(string(out))), nil
-}
-
-// worktreeEnvVars returns the MULTITERMINAL_WORKTREE_PATH/MULTITERMINAL_MAIN_REPO_ROOT
-// env var pairs for a Claude pane whose dir is a linked worktree (not the main
-// checkout). Returns nil for the main checkout itself (including subdirectories
-// of it), non-git directories, or any other lookup failure — CreateSession then
-// simply launches without the restriction, exactly like before this feature
-// existed (spec 2026-07-09).
-//
-// Accepted cost: this runs one or two synchronous git subprocesses (mainRepoRoot,
-// then gitToplevel in the common case — two calls; only one if dir isn't a git
-// repo at all and the first call fails fast) on every Claude-mode CreateSession
-// call — including the orchestrator/schedule-runner call sites, not only
-// interactive pane launches — adding roughly one or two git-subprocess-spawns'
-// worth of latency (already the same order of magnitude as other one-time git
-// calls CreateSession's callers make elsewhere). Not measured; revisit if
-// session launch latency ever becomes a complaint.
-func worktreeEnvVars(dir string) []string {
-	root, err := mainRepoRoot(dir)
-	if err != nil {
-		return nil
-	}
-	topLevel, err := gitToplevel(dir)
-	if err != nil {
-		return nil
-	}
-	if strings.EqualFold(filepath.Clean(topLevel), filepath.Clean(root)) {
-		return nil
-	}
-	return []string{
-		"MULTITERMINAL_WORKTREE_PATH=" + topLevel,
-		"MULTITERMINAL_MAIN_REPO_ROOT=" + root,
-	}
-}
+// mainRepoRoot, gitToplevel and worktreeEnvVars moved to internal/gitx and
+// internal/launch, so the daemon can answer the same questions. The names in
+// this package still work; see launch_delegate.go.
 
 // paneWorktreeBase returns the directory that holds all MTUI-created pane
 // worktrees for a repo: <mainRoot>/.claude/worktrees

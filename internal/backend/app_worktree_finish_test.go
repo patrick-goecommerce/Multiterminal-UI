@@ -2,6 +2,8 @@ package backend
 
 import (
 	"testing"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // newTestApp (shared helper, initializes all maps incl. finishStates) lives
@@ -9,6 +11,8 @@ import (
 
 func TestStartFinish_QueueNotEmptyBlocks(t *testing.T) {
 	a := newTestApp()
+	t.Cleanup(a.host.Release)
+	adopt(t, a, 1, terminal.NewSession(1, 24, 80))
 	a.AddToQueue(1, "vorhandener prompt")
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	st := a.getFinishState(1)
@@ -19,6 +23,8 @@ func TestStartFinish_QueueNotEmptyBlocks(t *testing.T) {
 
 func TestStartFinish_SetsPreparingAndEnqueuesPrep(t *testing.T) {
 	a := newTestApp()
+	t.Cleanup(a.host.Release)
+	adopt(t, a, 1, terminal.NewSession(1, 24, 80))
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	st := a.getFinishState(1)
 	if st == nil || st.Phase != "preparing" || st.PrepItemID == 0 {
@@ -32,6 +38,8 @@ func TestStartFinish_SetsPreparingAndEnqueuesPrep(t *testing.T) {
 
 func TestStartFinish_DoubleClickIsNoop(t *testing.T) {
 	a := newTestApp()
+	t.Cleanup(a.host.Release)
+	adopt(t, a, 1, terminal.NewSession(1, 24, 80))
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	first := a.getFinishState(1).PrepItemID
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
@@ -45,6 +53,8 @@ func TestStartFinish_DoubleClickIsNoop(t *testing.T) {
 
 func TestCancelFinish_ResetsStateAndRemovesPrepItem(t *testing.T) {
 	a := newTestApp()
+	t.Cleanup(a.host.Release)
+	adopt(t, a, 1, terminal.NewSession(1, 24, 80))
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	a.CancelWorktreeFinish(1)
 	if st := a.getFinishState(1); st != nil {
@@ -57,6 +67,8 @@ func TestCancelFinish_ResetsStateAndRemovesPrepItem(t *testing.T) {
 
 func TestBlockedRetry_StartsNewPrepCycle(t *testing.T) {
 	a := newTestApp()
+	t.Cleanup(a.host.Release)
+	adopt(t, a, 1, terminal.NewSession(1, 24, 80))
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	a.setFinishBlocked(1, "test reason")
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
@@ -71,6 +83,8 @@ func TestBlockedRetry_StartsNewPrepCycle(t *testing.T) {
 
 func TestNotifyFinishOnActivity_WaitingKeepsPreparing(t *testing.T) {
 	a := newTestApp()
+	t.Cleanup(a.host.Release)
+	adopt(t, a, 1, terminal.NewSession(1, 24, 80))
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	a.notifyFinishOnActivity(1, "waitingAnswer")
 	if st := a.getFinishState(1); st == nil || st.Phase != "preparing" {

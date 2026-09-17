@@ -12,7 +12,10 @@ import (
 )
 
 // makePlanWithArtifacts builds a plan JSON with must_haves artifact requirements.
-func makePlanWithArtifacts(cardID string, artifacts []struct{ path string; minLines int }) string {
+func makePlanWithArtifacts(cardID string, artifacts []struct {
+	path     string
+	minLines int
+}) string {
 	var artJSON []string
 	for _, a := range artifacts {
 		artJSON = append(artJSON, fmt.Sprintf(`{"path": %q, "min_lines": %d}`, a.path, a.minLines))
@@ -41,7 +44,10 @@ func makePlanWithArtifacts(cardID string, artifacts []struct{ path string; minLi
 
 // setupCardInQA creates a card in QA state with a plan that has artifact requirements.
 // It runs through the full pipeline: backlog -> triage -> planning -> review -> executing -> qa.
-func setupCardInQA(t *testing.T, cardID string, artifacts []struct{ path string; minLines int }) (*Orchestrator, *board.Board, *testEngine, string) {
+func setupCardInQA(t *testing.T, cardID string, artifacts []struct {
+	path     string
+	minLines int
+}) (*Orchestrator, *board.Board, *testEngine, string) {
 	t.Helper()
 	orch, b, eng, dir := setupTestOrchestrator(t)
 	createBacklogCard(t, b, cardID, "Test card", "Test description")
@@ -86,7 +92,10 @@ func setupCardInQA(t *testing.T, cardID string, artifacts []struct{ path string;
 }
 
 func TestRunQA_AllArtifactsExist(t *testing.T) {
-	arts := []struct{ path string; minLines int }{
+	arts := []struct {
+		path     string
+		minLines int
+	}{
 		{"internal/backend/app_auth.go", 5},
 	}
 	orch, b, _, dir := setupCardInQA(t, "card-qa-pass", arts)
@@ -111,7 +120,10 @@ func TestRunQA_AllArtifactsExist(t *testing.T) {
 }
 
 func TestRunQA_ArtifactMissing_FixSucceeds(t *testing.T) {
-	arts := []struct{ path string; minLines int }{
+	arts := []struct {
+		path     string
+		minLines int
+	}{
 		{"internal/backend/app_auth.go", 0},
 	}
 	orch, b, eng, dir := setupCardInQA(t, "card-qa-fix", arts)
@@ -189,7 +201,10 @@ func (e *fixCreatingEngine) Execute(ctx context.Context, req ExecutionRequest) (
 }
 
 func TestRunQA_ArtifactTooFewLines(t *testing.T) {
-	arts := []struct{ path string; minLines int }{
+	arts := []struct {
+		path     string
+		minLines int
+	}{
 		{"internal/backend/app_auth.go", 30},
 	}
 	orch, b, eng, dir := setupCardInQA(t, "card-qa-lines", arts)
@@ -229,7 +244,10 @@ func TestRunQA_ArtifactTooFewLines(t *testing.T) {
 }
 
 func TestRunQA_FixLoopExhausted_Escalated(t *testing.T) {
-	arts := []struct{ path string; minLines int }{
+	arts := []struct {
+		path     string
+		minLines int
+	}{
 		{"missing_file.go", 0},
 	}
 	orch, b, eng, dir := setupCardInQA(t, "card-qa-exhaust", arts)
@@ -259,7 +277,10 @@ func TestRunQA_FixLoopExhausted_Escalated(t *testing.T) {
 }
 
 func TestRunQA_FixLoopExhausted_HumanReview(t *testing.T) {
-	arts := []struct{ path string; minLines int }{
+	arts := []struct {
+		path     string
+		minLines int
+	}{
 		{"missing_file.go", 0},
 	}
 	orch, b, eng, dir := setupCardInQA(t, "card-qa-hr", arts)
@@ -305,7 +326,10 @@ func TestRunQA_WrongState(t *testing.T) {
 }
 
 func TestRunQA_FixUsesSonnetModel(t *testing.T) {
-	arts := []struct{ path string; minLines int }{
+	arts := []struct {
+		path     string
+		minLines int
+	}{
 		{"missing_file.go", 0},
 	}
 	orch, _, eng, dir := setupCardInQA(t, "card-qa-model", arts)

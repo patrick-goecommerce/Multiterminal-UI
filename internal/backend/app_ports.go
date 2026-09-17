@@ -35,6 +35,15 @@ func (a *AppService) startLocalListeners() {
 	if !a.cfg.ShouldRunMCPServer() {
 		return
 	}
+	// It belongs wherever the sessions are: a delegating agent asks for a
+	// session and comes back to it later, and both halves have to survive this
+	// window closing. In daemon mode mtuid serves it and publishes its own
+	// port, so there is nothing to bind here and only the registration to keep
+	// pointed at the right place.
+	if a.UsesSessionDaemon() {
+		go a.ensureMCPRegisteredWithClaude()
+		return
+	}
 	port, err := a.startMCPServer(a.cfg.MCPServer.Port)
 	if err != nil {
 		a.recordBindWarning("mcp", err)
@@ -74,7 +83,15 @@ func (a *AppService) bindWarningsSnapshot() []BindWarning {
 // gone. Removing them anyway keeps the common case tidy and closes the window
 // in which a reader would dial a port nobody owns.
 func (a *AppService) releaseDiscoveryRecords() {
-	for _, svc := range []discovery.Service{discovery.ServiceFocus, discovery.ServiceMCP} {
+	services := []discovery.Service{discovery.ServiceFocus}
+	// Only the MCP record this process published. In daemon mode the record is
+	// mtuid's, and removing it on the way out would leave the daemon serving a
+	// port nobody can find — for the rest of its life, since it publishes once
+	// at startup.
+	if a.mcpServerPort != 0 {
+		services = append(services, discovery.ServiceMCP)
+	}
+	for _, svc := range services {
 		if err := discovery.Remove(svc); err != nil {
 			log.Printf("[discovery] could not remove %s record: %v", svc, err)
 		}

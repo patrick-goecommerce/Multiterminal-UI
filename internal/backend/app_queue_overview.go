@@ -12,27 +12,22 @@ type QueueOverviewItem struct {
 
 // GetAllQueues returns queue items for all sessions that have queues.
 func (a *AppService) GetAllQueues() []QueueOverviewItem {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	result := make([]QueueOverviewItem, 0)
-	for id, q := range a.queues {
-		if q == nil || len(q.items) == 0 {
+	// Ask the host which sessions exist rather than which have queues: the
+	// queues live there now, and iterating them from here would need a second
+	// round trip per session anyway.
+	for _, summary := range a.sessionSummaries() {
+		id := summary.ID
+		items := a.host.QueueList(id)
+		if len(items) == 0 {
 			continue
 		}
-		sess := a.sessions[id]
-		if sess == nil {
-			continue
-		}
-
-		items := make([]QueueItem, len(q.items))
-		copy(items, q.items)
 
 		oi := QueueOverviewItem{
 			SessionID:   id,
-			SessionName: sess.Name(),
-			Dir:         sess.Dir,
-			Activity:    activityString(sess.GetActivity()),
+			SessionName: summary.Name,
+			Dir:         summary.Dir,
+			Activity:    string(summary.Activity),
 			Items:       items,
 		}
 		result = append(result, oi)

@@ -17,4 +17,3 @@ func TestWindowManagerRegisterUnregister(t *testing.T) {
 		t.Fatalf("expected 0 windows after unregister")
 	}
 }
-

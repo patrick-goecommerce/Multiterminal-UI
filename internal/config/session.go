@@ -50,6 +50,13 @@ type SavedPane struct {
 	MCPProfile      string `json:"mcp_profile,omitempty"`       // MCP profile name chosen at launch ("" = all global servers, "none" = zero); see config.MCPProfile
 	ActivitySince   int64  `json:"activity_since,omitempty"`    // unix seconds when the current activity state began; survives a restart so the pane keeps its duration
 	ActivityState   string `json:"activity_state,omitempty"`    // the activity ActivitySince belongs to ("done", "idle", …); the seed is honoured on restore only if the pane confirms this same state first
+	// SessionID is the host's id for this pane's session. It only means
+	// anything while that session is still alive, which is the case exactly
+	// when the session daemon owns it (session_host: daemon): the restore then
+	// re-attaches to the running agent instead of launching a second one. With
+	// the in-process host the session died with the window and the id names
+	// nothing, which is why the restore checks it against ListLiveSessions.
+	SessionID int `json:"session_id,omitempty"`
 }
 
 // sessionPath returns the path to ~/.multiterminal-session.json.

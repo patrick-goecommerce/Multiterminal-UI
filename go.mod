@@ -11,6 +11,7 @@ toolchain go1.26.5
 
 require (
 	github.com/aymanbagabas/go-pty v0.2.3
+	github.com/coder/websocket v1.8.14
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4
 	github.com/mark3labs/mcp-go v0.57.0
 	github.com/wailsapp/wails/v3 v3.0.0-alpha2.117
@@ -21,7 +22,6 @@ require (
 
 require (
 	github.com/adrg/xdg v0.5.3 // indirect
-	github.com/coder/websocket v1.8.14 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect

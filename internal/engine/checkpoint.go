@@ -8,10 +8,10 @@ import (
 
 // ProgressSnapshot captures the state at a checkpoint.
 type ProgressSnapshot struct {
-	DiffHash     string    `json:"diff_hash" yaml:"diff_hash"`         // hash of git diff output
-	FailingTests int       `json:"failing_tests" yaml:"failing_tests"` // number of failing tests
-	ErrorClass   string    `json:"error_class" yaml:"error_class"`     // current error class (build/test/etc)
-	FilesExist   int       `json:"files_exist" yaml:"files_exist"`     // count of new/modified files
+	DiffHash     string    `json:"diff_hash" yaml:"diff_hash"`           // hash of git diff output
+	FailingTests int       `json:"failing_tests" yaml:"failing_tests"`   // number of failing tests
+	ErrorClass   string    `json:"error_class" yaml:"error_class"`       // current error class (build/test/etc)
+	FilesExist   int       `json:"files_exist" yaml:"files_exist"`       // count of new/modified files
 	HasNewCommit bool      `json:"has_new_commit" yaml:"has_new_commit"` // new commit since last check
 	Timestamp    time.Time `json:"timestamp" yaml:"timestamp"`
 }

@@ -11,7 +11,7 @@ import (
 func TestRuntimeStats_CountsLiveState(t *testing.T) {
 	a := newTestApp()
 	dir := t.TempDir()
-	a.hookMgr = &HookManager{dir: dir, offsets: map[string]int64{}}
+	a.hooksDir = dir
 
 	for _, n := range []string{"a.jsonl", "b.jsonl", "ignored.txt"} {
 		if err := os.WriteFile(filepath.Join(dir, n), []byte("{}\n"), 0o600); err != nil {
@@ -39,12 +39,12 @@ func TestRuntimeStats_CountsLiveState(t *testing.T) {
 func TestRuntimeStats_UnknownHookDirReportsMinusOne(t *testing.T) {
 	a := newTestApp()
 
-	a.hookMgr = nil
+	a.hooksDir = ""
 	if got := a.RuntimeStats().HookFiles; got != -1 {
 		t.Errorf("HookFiles = %d without a hook manager, want -1", got)
 	}
 
-	a.hookMgr = &HookManager{dir: filepath.Join(t.TempDir(), "missing"), offsets: map[string]int64{}}
+	a.hooksDir = filepath.Join(t.TempDir(), "missing")
 	if got := a.RuntimeStats().HookFiles; got != -1 {
 		t.Errorf("HookFiles = %d for an unreadable directory, want -1", got)
 	}
@@ -64,7 +64,7 @@ func TestHookFileWarnThreshold_TripsWellBeforeTheP0ller(t *testing.T) {
 func TestCheckHealth_CarriesRuntimeStats(t *testing.T) {
 	a := newTestApp()
 	dir := t.TempDir()
-	a.hookMgr = &HookManager{dir: dir, offsets: map[string]int64{}}
+	a.hooksDir = dir
 
 	h := a.CheckHealth()
 	if h.Runtime.Goroutines < 1 {
@@ -87,7 +87,7 @@ func TestCheckHealth_CarriesRuntimeStats(t *testing.T) {
 
 func TestWriteDiagnosticDump_WritesAProfile(t *testing.T) {
 	a := newTestApp()
-	a.hookMgr = &HookManager{dir: t.TempDir(), offsets: map[string]int64{}}
+	a.hooksDir = t.TempDir()
 
 	// logDir() resolves against the user profile; redirect it for the test.
 	home := t.TempDir()

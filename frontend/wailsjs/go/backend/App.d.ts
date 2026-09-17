@@ -39,6 +39,17 @@ export function CloseChatSession(arg1:string):Promise<void>;
 
 export function CloseSession(arg1:number):Promise<void>;
 
+// --- Session host (see docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md) ---
+
+/** Sessions the host is already holding, e.g. ones the daemon kept running. */
+export function ListLiveSessions():Promise<Array<backend.LiveSession>>;
+
+/** Puts an existing session back on screen. False when the host has no such session. */
+export function AttachSession(arg1:number,arg2:number,arg3:number):Promise<boolean>;
+
+/** True when the sessions outlive this window because a daemon owns them. */
+export function UsesSessionDaemon():Promise<boolean>;
+
 export function CreateDirectory(arg1:string):Promise<string>;
 
 export function CreateIssue(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<backend.Issue>;

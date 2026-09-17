@@ -58,6 +58,12 @@
   let audioInputSound = $config.audio?.input_sound || '';
   let audioErrorSound = $config.audio?.error_sound || '';
 
+  // Whether the sessions belong to the mtuid daemon rather than to this
+  // window. sessionDaemonLive is what the backend actually ended up using,
+  // which can differ from the setting until the app is restarted.
+  let sessionDaemonWanted = $config.session_host === 'daemon';
+  let sessionDaemonLive = false;
+
   let idleSuspendEnabled = ($config as any).idle_suspend?.enabled ?? false;
   let idleSuspendMinutes = ($config as any).idle_suspend?.timeout_minutes || 30;
   let autoNamingEnabled = $config.auto_naming?.enabled ?? true;
@@ -137,6 +143,8 @@
     audioDoneSound = $config.audio?.done_sound || '';
     audioInputSound = $config.audio?.input_sound || '';
     audioErrorSound = $config.audio?.error_sound || '';
+    sessionDaemonWanted = $config.session_host === 'daemon';
+    App.UsesSessionDaemon().then((v: boolean) => { sessionDaemonLive = v; }).catch(() => {});
     idleSuspendEnabled = ($config as any).idle_suspend?.enabled ?? false;
     idleSuspendMinutes = ($config as any).idle_suspend?.timeout_minutes || 30;
     autoNamingEnabled = $config.auto_naming?.enabled ?? true;
@@ -362,6 +370,7 @@
         language: sttLanguage,
         cloud: { base_url: sttBaseUrl, model: sttModel, api_key: sttApiKey },
       },
+      session_host: sessionDaemonWanted ? 'daemon' : 'embedded',
       idle_suspend: {
         enabled: idleSuspendEnabled,
         timeout_minutes: idleSuspendMinutes,
@@ -694,8 +703,29 @@
 
       <div class="setting-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Sitzungen im Hintergrunddienst halten</label>
+        <p class="setting-desc">Die Agents laufen dann in einem eigenen Prozess (<code>mtuid</code>) statt in diesem Fenster. MTUI schließen, ein Update einspielen oder abstürzen beendet sie nicht mehr; beim nächsten Start hängen sich die Panes wieder an dieselben Agents an, mit Bildschirminhalt. Greift erst nach einem Neustart von MTUI.</p>
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <button class="toggle-btn" class:toggle-on={sessionDaemonWanted} on:click={() => sessionDaemonWanted = !sessionDaemonWanted}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{sessionDaemonWanted ? 'Aktiv' : 'Inaktiv'}</span>
+        </div>
+        <p class="setting-desc">
+          {#if sessionDaemonLive}
+            Läuft: die Sitzungen dieses Fensters gehören dem Dienst.
+          {:else if sessionDaemonWanted}
+            Noch nicht aktiv &mdash; dieses Fenster hält seine Sitzungen selbst. Nach dem Neustart übernimmt der Dienst. Ist er nicht erreichbar, bleibt MTUI bei den lokalen Sitzungen und sagt es in der Diagnose.
+          {:else}
+            Die Sitzungen gehören diesem Fenster und enden mit ihm.
+          {/if}
+        </p>
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
         <label class="setting-label">Ruhende Panes schlafen legen</label>
-        <p class="setting-desc">Ein Claude-Pane, das seit lÃ¤ngerem fertig und unberÃ¼hrt ist, gibt seinen Prozessbaum frei &mdash; rund 860&nbsp;MB pro Pane. Beim Reinklicken kommt die Sitzung per <code>--resume</code> zurÃ¼ck, Verlauf und Position bleiben erhalten. Panes, die arbeiten, auf eine Antwort warten oder etwas in der Warteschlange haben, werden nie schlafen gelegt.</p>
+        <p class="setting-desc">Ein Claude-Pane, das seit längerem fertig und unberührt ist, gibt seinen Prozessbaum frei &mdash; rund 860&nbsp;MB pro Pane. Beim Reinklicken kommt die Sitzung per <code>--resume</code> zurück, Verlauf und Position bleiben erhalten. Panes, die arbeiten, auf eine Antwort warten oder etwas in der Warteschlange haben, werden nie schlafen gelegt.</p>
         <div class="toggle-row" style="margin-bottom: 12px;">
           <button class="toggle-btn" class:toggle-on={idleSuspendEnabled} on:click={() => idleSuspendEnabled = !idleSuspendEnabled}>
             <span class="toggle-knob"></span>
@@ -703,13 +733,13 @@
           <span class="toggle-label">{idleSuspendEnabled ? 'Aktiv' : 'Inaktiv'}</span>
         </div>
         {#if idleSuspendEnabled}
-          <label class="setting-label" for="idle-suspend-minutes">Nach Minuten ohne AktivitÃ¤t</label>
+          <label class="setting-label" for="idle-suspend-minutes">Nach Minuten ohne Aktivität</label>
           <select id="idle-suspend-minutes" class="theme-select" bind:value={idleSuspendMinutes}>
             {#each [5, 10, 15, 30, 60, 120] as m}
               <option value={m}>{m} Minuten</option>
             {/each}
           </select>
-          <p class="setting-desc" style="margin-top: 6px;">Das Aufwachen dauert etwa 12&ndash;15&nbsp;Sekunden, weil Claude neu startet und den GesprÃ¤chsverlauf lÃ¤dt.</p>
+          <p class="setting-desc" style="margin-top: 6px;">Das Aufwachen dauert etwa 12&ndash;15&nbsp;Sekunden, weil Claude neu startet und den Gesprächsverlauf lädt.</p>
         {/if}
       </div>
 
@@ -729,6 +759,7 @@
         <!-- svelte-ignore a11y-label-has-associated-control -->
         <label class="setting-label">Agent-Steuerung (MCP-Server)</label>
         <p class="setting-desc">Erlaubt einem Agent in einem MTUI-Pane (z.B. Claude Code), selbstständig neue Sessions zu öffnen, ihnen Prompts zu schicken und sie wieder zu schließen &mdash; z.B. um eine Aufgabe an Codex oder Gemini zu delegieren. Nur lokal erreichbar (127.0.0.1).</p>
+        <p class="setting-desc">Im Daemon-Modus läuft der Server im Session-Daemon statt in diesem Fenster. Eine delegierte Session und der Zugang zu ihr bleiben dann bestehen, auch wenn das Fenster geschlossen wird.</p>
         <p class="setting-desc">Port <strong>0</strong> (empfohlen) lässt das Betriebssystem einen freien Port vergeben. Nur so bekommt jede Instanz &mdash; auch die eines zweiten Windows-Benutzers auf derselben Maschine &mdash; ihren eigenen Server. Ein fester Port gilt maschinenweit und kann von einer fremden Instanz belegt sein.</p>
         <div class="toggle-row" style="margin-bottom: 12px;">
           <button class="toggle-btn" class:toggle-on={mcpEnabled} on:click={() => mcpEnabled = !mcpEnabled}>

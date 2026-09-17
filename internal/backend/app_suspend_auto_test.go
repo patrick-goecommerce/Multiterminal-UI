@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
@@ -13,7 +14,6 @@ import (
 // test can break exactly one condition and see it caught.
 func readyToSuspend(t *testing.T) (*AppService, *terminal.Session, int, time.Time) {
 	t.Helper()
-	resetActivityDebounceForTest()
 
 	a := newTestApp()
 	enabled := true
@@ -25,22 +25,31 @@ func readyToSuspend(t *testing.T) (*AppService, *terminal.Session, int, time.Tim
 	sess.SetResumeID("11111111-2222-3333-4444-555555555555")
 
 	a.mu.Lock()
-	a.sessions[id] = sess
+	adopt(t, a, id, sess)
 	a.sessionMode[id] = "claude"
 	a.mu.Unlock()
 
 	now := time.Now()
-	prevActivityMu.Lock()
-	prevActivity[id] = "done"
-	activitySince[id] = now.Add(-45 * time.Minute)
-	prevActivityMu.Unlock()
+	setConfirmedSince(t, a, id, "done", now.Add(-45*time.Minute))
 
 	return a, sess, id, now
 }
 
+// blockerFor asks the host for the session's current summary and runs the gate
+// against it, so a test can break a condition on the session object and still
+// see what the gate sees.
+func blockerFor(t *testing.T, a *AppService, id int, timeout time.Duration, now time.Time) string {
+	t.Helper()
+	summary, err := a.host.Get(id)
+	if err != nil {
+		return "no session"
+	}
+	return a.suspendBlocker(id, summary, timeout, now)
+}
+
 func TestSuspendBlocker_AllowsAnIdleFinishedPane(t *testing.T) {
-	a, sess, id, now := readyToSuspend(t)
-	if reason := a.suspendBlocker(id, sess, 30*time.Minute, now); reason != "" {
+	a, _, id, now := readyToSuspend(t)
+	if reason := blockerFor(t, a, id, 30*time.Minute, now); reason != "" {
 		t.Fatalf("a pane idle for 45 minutes was blocked: %s", reason)
 	}
 }
@@ -78,20 +87,13 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 			want: "no resume id",
 		},
 		{
-			name: "a queued prompt is about to be sent",
+			// One item is enough: the queue sends it straight away, so it is
+			// in flight, which is the state a sleeping pane must not be in.
+			name: "a queued prompt is still being worked on",
 			break_: func(a *AppService, _ *terminal.Session, id int) {
-				a.mu.Lock()
-				a.queues[id] = &sessionQueue{items: []QueueItem{{ID: 1, Prompt: "x", Status: "pending"}}}
-				a.mu.Unlock()
-			},
-			want: "queued prompts waiting",
-		},
-		{
-			name: "a prompt already sent is still being worked on",
-			break_: func(a *AppService, _ *terminal.Session, id int) {
-				a.mu.Lock()
-				a.queues[id] = &sessionQueue{items: []QueueItem{{ID: 1, Prompt: "x", Status: "sent"}}}
-				a.mu.Unlock()
+				if _, err := a.host.QueueAdd(id, "x"); err != nil {
+					t.Fatalf("QueueAdd: %v", err)
+				}
 			},
 			want: "queued prompts waiting",
 		},
@@ -107,27 +109,21 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 		{
 			name: "an agent-control session belongs to another agent",
 			break_: func(a *AppService, _ *terminal.Session, id int) {
-				a.mu.Lock()
-				a.agentSessions[id] = AgentSessionInfo{}
-				a.mu.Unlock()
+				a.host.(*hub.Embedded).SetOriginForTest(id, hub.OriginAgent)
 			},
 			want: "agent-control session",
 		},
 		{
 			name: "a working pane must never be touched",
-			break_: func(_ *AppService, _ *terminal.Session, id int) {
-				prevActivityMu.Lock()
-				prevActivity[id] = "active"
-				prevActivityMu.Unlock()
+			break_: func(a *AppService, _ *terminal.Session, id int) {
+				setConfirmed(t, a, id, "active")
 			},
 			want: "state is active",
 		},
 		{
 			name: "a pane waiting for the user is deliberately left open",
-			break_: func(_ *AppService, _ *terminal.Session, id int) {
-				prevActivityMu.Lock()
-				prevActivity[id] = "waitingPermission"
-				prevActivityMu.Unlock()
+			break_: func(a *AppService, _ *terminal.Session, id int) {
+				setConfirmed(t, a, id, "waitingPermission")
 			},
 			want: "state is waitingPermission",
 		},
@@ -136,28 +132,22 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 			// a TUI, a running npm script (issue #188). Killing that is the worst
 			// case this gate exists for.
 			name: "an unrecognised screen is not a finished one",
-			break_: func(_ *AppService, _ *terminal.Session, id int) {
-				prevActivityMu.Lock()
-				prevActivity[id] = "idle"
-				prevActivityMu.Unlock()
+			break_: func(a *AppService, _ *terminal.Session, id int) {
+				setConfirmed(t, a, id, "idle")
 			},
 			want: "state is idle",
 		},
 		{
 			name: "an error state still needs the user's eyes",
-			break_: func(_ *AppService, _ *terminal.Session, id int) {
-				prevActivityMu.Lock()
-				prevActivity[id] = "error"
-				prevActivityMu.Unlock()
+			break_: func(a *AppService, _ *terminal.Session, id int) {
+				setConfirmed(t, a, id, "error")
 			},
 			want: "state is error",
 		},
 		{
 			name: "a pane that finished a minute ago is not idle",
-			break_: func(_ *AppService, _ *terminal.Session, id int) {
-				prevActivityMu.Lock()
-				activitySince[id] = time.Now().Add(-time.Minute)
-				prevActivityMu.Unlock()
+			break_: func(a *AppService, _ *terminal.Session, id int) {
+				setConfirmedSince(t, a, id, currentStateForTest(a, id), time.Now().Add(-time.Minute))
 			},
 			want: "idle for",
 		},
@@ -168,7 +158,7 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 			a, sess, id, now := readyToSuspend(t)
 			tt.break_(a, sess, id)
 
-			reason := a.suspendBlocker(id, sess, 30*time.Minute, now)
+			reason := blockerFor(t, a, id, 30*time.Minute, now)
 			if reason == "" {
 				t.Fatalf("pane was allowed to suspend, expected a block containing %q", tt.want)
 			}
@@ -180,8 +170,8 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 }
 
 func TestSuspendBlocker_DisabledFeatureBlocksEverything(t *testing.T) {
-	a, sess, id, now := readyToSuspend(t)
-	if reason := a.suspendBlocker(id, sess, 0, now); reason != "feature disabled" {
+	a, _, id, now := readyToSuspend(t)
+	if reason := blockerFor(t, a, id, 0, now); reason != "feature disabled" {
 		t.Errorf("blocker = %q, want %q", reason, "feature disabled")
 	}
 }
@@ -213,7 +203,7 @@ func TestSuspendBlocker_SkipsAnAlreadySuspendedPane(t *testing.T) {
 	if !sess.TrySuspend() {
 		t.Fatal("TrySuspend refused a done session")
 	}
-	if reason := a.suspendBlocker(id, sess, 30*time.Minute, now); reason != "already suspended" {
+	if reason := blockerFor(t, a, id, 30*time.Minute, now); reason != "already suspended" {
 		t.Errorf("blocker = %q, want %q", reason, "already suspended")
 	}
 }

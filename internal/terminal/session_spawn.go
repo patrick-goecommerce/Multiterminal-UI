@@ -138,10 +138,21 @@ func (s *Session) readLoop(p gopty.Pty, gen int, done, exit chan struct{}) {
 				return // a newer generation owns the session
 			}
 
-			// Send raw bytes to GUI frontend (blocking with done-guard)
+			// Send raw bytes to the consumer. The plain send is tried on its
+			// own first, because a select over both cases picks at random
+			// among the ready ones: for a command that prints and exits, done
+			// is closed by the time this runs, so half of those runs would
+			// throw the last chunk away and the pane would show nothing at
+			// all. Only when the buffer is genuinely full does the done guard
+			// matter, and there it is what keeps a dead session's reader from
+			// blocking forever.
 			select {
 			case s.RawOutputCh <- chunk:
-			case <-done:
+			default:
+				select {
+				case s.RawOutputCh <- chunk:
+				case <-done:
+				}
 			}
 
 			// Signal for legacy TUI consumers (non-blocking)

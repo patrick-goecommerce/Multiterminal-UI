@@ -5,6 +5,7 @@ package backend
 
 import (
 	"fmt"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"log"
 	"os"
 	"os/exec"
@@ -274,15 +275,15 @@ func (a *AppService) startReviewPipeline(card *KanbanCard, dir string, state *Ka
 func (a *AppService) waitForReviewResult(sessionID int) bool {
 	for i := 0; i < 120; i++ { // max 10 minutes (120 * 5s)
 		time.Sleep(5 * time.Second)
-		a.mu.Lock()
-		sess := a.sessions[sessionID]
-		a.mu.Unlock()
-		if sess == nil {
+		summary, err := a.host.Get(sessionID)
+		if err != nil {
 			return false
 		}
-		activity := activityString(sess.GetActivity())
-		if activity == "done" || activity == "idle" {
-			text := sess.Screen.PlainText()
+		if summary.Activity == hub.ActivityDone || summary.Activity == hub.ActivityIdle {
+			text, err := a.host.PlainText(sessionID)
+			if err != nil {
+				return false
+			}
 			return strings.Contains(text, "REVIEW_PASS")
 		}
 	}

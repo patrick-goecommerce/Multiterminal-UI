@@ -4,11 +4,31 @@ import type { SessionOpts } from './claude';
 import { resolveMCPConfigPath } from './mcp';
 import * as App from '../../wailsjs/go/backend/App';
 
+/**
+ * Sessions the backend still holds.
+ *
+ * Empty unless the session daemon owns them: with the in-process host they
+ * died with the last window, and a saved id then names nothing.
+ */
+async function liveSessions(): Promise<any[]> {
+  try {
+    return (await App.ListLiveSessions()) || [];
+  } catch (err) {
+    console.error('[restoreSession] ListLiveSessions failed:', err);
+    return [];
+  }
+}
+
 /** Restore saved tabs/panes from the backend session file. */
 export async function restoreSession(claudePath: string, codexPath?: string, geminiPath?: string): Promise<boolean> {
   try {
     const saved = await App.LoadTabs();
-    if (!saved || !saved.tabs || saved.tabs.length === 0) return false;
+    // Sessions that outlived the last window have to be claimed by the panes
+    // that own them, or the restore would launch a second agent next to each
+    // one that is still running.
+    const alive = await liveSessions();
+    const live = new Set<number>(alive.map((s: any) => s.id));
+    if ((!saved || !saved.tabs || saved.tabs.length === 0) && live.size === 0) return false;
 
     for (const savedTab of saved.tabs) {
       // setActive=false: avoid triggering xterm.js creation for each tab during
@@ -77,7 +97,22 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
         const argv = buildClaudeArgv(mode, savedPane.model || '', claudePath, codexPath || 'codex', geminiPath || 'gemini', sessOpts);
 
         try {
-          const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, mode);
+          // A pane whose session is still running re-attaches to it: same
+          // process, same context, and the screen comes back from the host's
+          // replay buffer instead of blank.
+          const savedSessionId = (savedPane as any).session_id || 0;
+          let sessionId = 0;
+          let reattached = false;
+          if (savedSessionId && live.has(savedSessionId)) {
+            reattached = await App.AttachSession(savedSessionId, 24, 80).catch(() => false);
+            if (reattached) {
+              sessionId = savedSessionId;
+              live.delete(savedSessionId);
+            }
+          }
+          if (!reattached) {
+            sessionId = await App.CreateSession(argv, sessionDir, 24, 80, mode);
+          }
           if (sessionId > 0) {
             // Restore the pane's state-start timestamp so its duration badge
             // keeps counting from where it was, instead of starting over on
@@ -90,9 +125,13 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
             // after a restart is almost always a transient "active". Without
             // the state the seed would attach to that one and show hours of
             // "läuft" on a session two seconds old.
+            //
+            // A re-attached pane needs none of this: its session never
+            // stopped, so the backend's own state is the current one and a
+            // saved timestamp would only overwrite it with something older.
             const activitySince = (savedPane as any).activity_since ?? 0;
             const activityState = (savedPane as any).activity_state ?? '';
-            if (activitySince && activityState) {
+            if (!reattached && activitySince && activityState) {
               App.SeedActivitySince(sessionId, activitySince, activityState).catch((err) => {
                 console.error('[restoreSession] SeedActivitySince failed:', err);
               });
@@ -131,8 +170,10 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
       }
     }
 
+    await adoptOrphanSessions(alive, live);
+
     const state = tabStore.getState();
-    if (saved.active_tab >= 0 && saved.active_tab < state.tabs.length) {
+    if (saved && saved.active_tab >= 0 && saved.active_tab < state.tabs.length) {
       tabStore.setActiveTab(state.tabs[saved.active_tab].id);
     }
     return true;
@@ -140,6 +181,44 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
     console.error('[restoreSession]', err);
     return false;
   }
+}
+
+/**
+ * Give every still-running session left over after the restore a pane.
+ *
+ * These are sessions no saved pane claimed: an agent that opened one over the
+ * control API while no window was up, or a pane whose tab was closed without
+ * closing its session. Without this they keep running with nothing on screen
+ * pointing at them, which is the state herdr's sidebar exists to prevent.
+ * Grouped by directory so a project's leftovers land in one tab.
+ */
+async function adoptOrphanSessions(alive: any[], unclaimed: Set<number>): Promise<void> {
+  if (unclaimed.size === 0) return;
+
+  const byDir = new Map<string, any[]>();
+  for (const s of alive) {
+    if (!unclaimed.has(s.id)) continue;
+    const list = byDir.get(s.dir || '') || [];
+    list.push(s);
+    byDir.set(s.dir || '', list);
+  }
+
+  for (const [dir, sessions] of byDir) {
+    const tabId = tabStore.addTab(dirLabel(dir), dir, false);
+    for (const s of sessions) {
+      const attached = await App.AttachSession(s.id, 24, 80).catch(() => false);
+      if (!attached) continue;
+      tabStore.addPane(tabId, s.id, s.name || `Session ${s.id}`, (s.mode || 'shell') as any, '');
+    }
+  }
+}
+
+/** dirLabel names a tab after the directory's last segment. */
+export function dirLabel(dir: string): string {
+  if (!dir) return 'Wiederhergestellt';
+  const trimmed = dir.replace(/[\\/]+$/, '');
+  const parts = trimmed.split(/[\\/]/);
+  return parts[parts.length - 1] || trimmed;
 }
 
 /** Pure mapping Pane → SavedPane shape (testbar, eine Quelle der Wahrheit). */
@@ -163,6 +242,9 @@ export function paneToSaved(pane: any) {
     // Paired with the timestamp: on restore the seed only counts if the pane
     // confirms this same state again (see restoreSession).
     activity_state: pane.activity || '',
+    // Only useful while the session outlives the window, i.e. with the session
+    // daemon; the restore checks it against what the host still holds.
+    session_id: pane.sessionId || 0,
   };
 }
 

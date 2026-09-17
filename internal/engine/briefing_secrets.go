@@ -10,7 +10,7 @@ import (
 
 // SecretFinding represents a detected secret — NEVER stores the actual value.
 type SecretFinding struct {
-	Type    string `json:"type"`    // "AWS_KEY" | "GITHUB_TOKEN" | "PRIVATE_KEY" | "DB_CREDENTIALS" | "STRIPE_KEY" | "GENERIC_SECRET"
+	Type    string `json:"type"` // "AWS_KEY" | "GITHUB_TOKEN" | "PRIVATE_KEY" | "DB_CREDENTIALS" | "STRIPE_KEY" | "GENERIC_SECRET"
 	File    string `json:"file"`
 	Line    int    `json:"line"`
 	Preview string `json:"preview"` // redacted, e.g. "STRIPE_SK=sk_live_****"

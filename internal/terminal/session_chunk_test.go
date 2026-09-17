@@ -67,7 +67,7 @@ func TestUTF8SafeChunkLen_FullReassembly(t *testing.T) {
 	inputs := []string{
 		strings.Repeat("─│┌┐└┘├┤┬┴┼", 200), // box-drawing table
 		strings.Repeat("café ☃ 日本語 ", 100), // mixed 2/3-byte runes
-		strings.Repeat("a", 2048),           // pure ASCII
+		strings.Repeat("a", 2048),          // pure ASCII
 		"→ ASCII table: " + strings.Repeat("═╬╣", 500),
 	}
 	for _, in := range inputs {

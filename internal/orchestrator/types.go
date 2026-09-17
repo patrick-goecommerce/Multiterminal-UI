@@ -42,14 +42,14 @@ type VerifyResult struct {
 
 // LoopSignal indicates a detected pathological pattern.
 type LoopSignal struct {
-	Type   string `json:"type"`   // "same_error" | "fix_chain" | "file_churn" etc.
+	Type   string `json:"type"` // "same_error" | "fix_chain" | "file_churn" etc.
 	Detail string `json:"detail"`
 	Source string `json:"source"` // "step" | "repo"
 }
 
 // StepError describes why a step failed.
 type StepError struct {
-	Class   string `json:"class"`   // "build" | "test" | "timeout" | "budget" | "crash" | "scope_exceeded"
+	Class   string `json:"class"` // "build" | "test" | "timeout" | "budget" | "crash" | "scope_exceeded"
 	Message string `json:"message"`
 }
 
