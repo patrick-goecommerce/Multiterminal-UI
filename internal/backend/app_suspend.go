@@ -96,6 +96,13 @@ func (a *AppService) ResumeSession(id int) error {
 	if summary.ResumeID == "" {
 		return errors.New("no claude session id known for this pane — it cannot be resumed")
 	}
+	if len(spec.argv) == 0 {
+		// Nothing remembered here: the session was started by the daemon, by
+		// an agent over MCP, or before this window existed. The host has its
+		// CreateSpec and a launcher, so it can rebuild both halves itself —
+		// which is the whole reason Host.Wake exists.
+		return a.host.Wake(id)
+	}
 	dir := spec.dir
 	if dir == "" {
 		dir = summary.Dir

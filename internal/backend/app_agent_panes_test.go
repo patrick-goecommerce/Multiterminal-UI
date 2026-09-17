@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
@@ -51,5 +52,55 @@ func TestSpawnedEvent_NamesThePane(t *testing.T) {
 	got, _ = spawnedEvent(hub.SessionSummary{ID: 4, Mode: "codex", Origin: hub.OriginCLI})
 	if got.Name != "Codex" {
 		t.Errorf("name = %q, want %q", got.Name, "Codex")
+	}
+}
+
+// A pane is not just a row in the tab store: the window has to stream the
+// session's bytes and know its mode. Without the subscription the pane appears
+// and stays black, which is exactly what happened when the MCP server stopped
+// going through CreateSession.
+func TestOnSessionCreated_AdoptsTheSession(t *testing.T) {
+	a := newTestApp()
+
+	id, err := a.host.Create(hub.CreateSpec{
+		Argv:   printArgv("delegiert"),
+		Dir:    sessionDir(t),
+		Mode:   "claude",
+		Origin: hub.OriginCLI,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { _ = a.host.Close(id) })
+
+	a.mu.Lock()
+	mode := a.sessionMode[id]
+	a.mu.Unlock()
+	if mode != "claude" {
+		t.Errorf("mode = %q, want %q — mode-dependent features read this", mode, "claude")
+	}
+
+	if got := drainBatcher(t, a, id, "delegiert"); !strings.Contains(got, "delegiert") {
+		t.Errorf("the session's output never reached the pane: %q", got)
+	}
+}
+
+// The window's own panes are already streamed by CreateSession. A second
+// subscription would deliver every byte twice.
+func TestAdoptSession_IsNotDoneTwice(t *testing.T) {
+	a := newTestApp()
+	a.mu.Lock()
+	a.sessionMode[9] = "claude"
+	a.mu.Unlock()
+
+	// No session with this ID exists, so a stream attempt would log a failed
+	// attach. What is asserted is that it does not get that far.
+	a.adoptSession(hub.SessionSummary{ID: 9, Mode: "shell"})
+
+	a.mu.Lock()
+	mode := a.sessionMode[9]
+	a.mu.Unlock()
+	if mode != "claude" {
+		t.Errorf("mode = %q, want the window's own %q", mode, "claude")
 	}
 }

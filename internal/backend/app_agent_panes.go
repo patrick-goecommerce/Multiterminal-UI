@@ -33,10 +33,33 @@ type SessionSpawnedEvent struct {
 // onSessionCreated reacts to a new session on the host.
 func (a *AppService) onSessionCreated(s hub.SessionSummary) {
 	ev, ok := spawnedEvent(s)
-	if !ok || a.app == nil {
+	if !ok {
 		return
 	}
+	a.adoptSession(s)
+	if a.app == nil {
+		return // no frontend yet; the pane comes out of the restore instead
+	}
 	a.app.Event.Emit("mtui:session-spawned", ev)
+}
+
+// adoptSession puts this window's own bookkeeping around a session it did not
+// create: the mode map, and above all the output subscription.
+//
+// CreateSession does both for a pane the UI opened. Without them the pane
+// appears and stays black, because nothing is copying the session's bytes
+// toward the WebView, and every mode-dependent feature reads it as a shell.
+func (a *AppService) adoptSession(s hub.SessionSummary) {
+	a.mu.Lock()
+	_, known := a.sessionMode[s.ID]
+	if !known && s.Mode != "" {
+		a.sessionMode[s.ID] = s.Mode
+	}
+	a.mu.Unlock()
+	if known {
+		return // already this window's; a second subscription would double every byte
+	}
+	a.streamSession(s.ID)
 }
 
 // spawnedEvent decides whether a session needs a pane drawn for it, and what
