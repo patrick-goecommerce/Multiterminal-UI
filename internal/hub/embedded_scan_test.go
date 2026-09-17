@@ -154,13 +154,21 @@ func TestScanLoop_StopsOnRelease(t *testing.T) {
 	sink.await(t, EventSessionScan)
 
 	h.Release()
-	// Drain whatever was already queued, then require silence.
-	for len(sink.got) > 0 {
-		<-sink.got
-	}
-	select {
-	case name := <-sink.got:
-		t.Errorf("a released host emitted %q", name)
-	case <-time.After(1500 * time.Millisecond):
+
+	// Only the SCAN has to stop. Release ends the sessions, so a
+	// session.exited afterwards is the host reporting what it just did, not a
+	// loop that kept running; asserting on total silence made this test fail
+	// whenever that exit landed after the drain below, which is a race the
+	// test itself created.
+	deadline := time.After(1500 * time.Millisecond)
+	for {
+		select {
+		case name := <-sink.got:
+			if name == EventSessionScan {
+				t.Fatal("the scan loop kept running after Release")
+			}
+		case <-deadline:
+			return
+		}
 	}
 }

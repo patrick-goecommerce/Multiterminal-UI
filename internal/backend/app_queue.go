@@ -2,137 +2,84 @@ package backend
 
 import (
 	"log"
-	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
-// QueueItem represents a single prompt in a session's pipeline queue.
-type QueueItem struct {
-	ID     int    `json:"id"`
-	Prompt string `json:"prompt"`
-	Status string `json:"status"` // "pending", "sent", "done"
-}
+// The prompt queue, as the window sees it.
+//
+// The queue itself is the host's (internal/hub/queue.go): an enqueued task has
+// to keep moving while no window is open, which is the whole point of the
+// daemon. What stays here is the worktree-finish flow, which enqueues a prep
+// prompt and watches for it to complete. That is product workflow, it asks the
+// user questions, and it has no business in a session host.
+//
+// So this file is two things: the finish-flow guards around the queue calls,
+// and the bindings the frontend already uses.
 
-// sessionQueue holds the pipeline queue for a single session.
-type sessionQueue struct {
-	items  []QueueItem
-	nextID int
-}
+// QueueItem is the frontend-facing shape. Aliased rather than redeclared: two
+// identical structs would be one Wails deserialization away from diverging.
+type QueueItem = hub.QueueItem
 
-func queueHasStatus(items []QueueItem, status string) bool {
-	for _, it := range items {
-		if it.Status == status {
-			return true
-		}
-	}
-	return false
-}
-
-func truncateStr(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "..."
-}
-
-// AddToQueue adds a prompt to a session's pipeline queue.
-// If the session is idle/done and nothing is in-flight, it triggers immediately.
+// AddToQueue adds a prompt to a session's queue.
 func (a *AppService) AddToQueue(sessionId int, prompt string) QueueItem {
+	// The queue is closed to new items while a finish flow runs. The prep item
+	// itself is enqueued BEFORE the state is created, which is why this check
+	// can be unconditional.
 	a.mu.Lock()
-	// Queue is locked for new items while a finish flow is active. The prep
-	// item itself is enqueued BEFORE the state is created (task 7 ordering).
-	if st := a.finishStates[sessionId]; st != nil {
-		a.mu.Unlock()
+	st := a.finishStates[sessionId]
+	a.mu.Unlock()
+	if st != nil {
 		log.Printf("[queue] session %d: rejected item during finish phase %q", sessionId, st.Phase)
 		return QueueItem{}
 	}
-	q := a.queues[sessionId]
-	if q == nil {
-		q = &sessionQueue{}
-		a.queues[sessionId] = q
-	}
-	q.nextID++
-	item := QueueItem{ID: q.nextID, Prompt: prompt, Status: "pending"}
-	q.items = append(q.items, item)
-	shouldTrigger := !queueHasStatus(q.items, "sent")
-	a.mu.Unlock()
 
-	log.Printf("[queue] session %d: added item %d: %q", sessionId, item.ID, truncateStr(prompt, 60))
-	a.emitQueueUpdate(sessionId)
-
-	if shouldTrigger {
-		a.tryProcessQueue(sessionId)
+	item, err := a.host.QueueAdd(sessionId, prompt)
+	if err != nil {
+		log.Printf("[queue] session %d: add failed: %v", sessionId, err)
+		return QueueItem{}
 	}
 	return item
 }
 
-// GetQueue returns the current pipeline queue for a session.
+// GetQueue returns the current queue for a session.
 func (a *AppService) GetQueue(sessionId int) []QueueItem {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	q := a.queues[sessionId]
-	if q == nil {
-		return []QueueItem{}
-	}
-	result := make([]QueueItem, len(q.items))
-	copy(result, q.items)
-	return result
+	return a.host.QueueList(sessionId)
 }
 
-// RemoveFromQueue removes a single item by ID.
-// Items with status "sent" (currently executing) cannot be removed.
+// RemoveFromQueue removes a single item. An item already in flight stays.
 func (a *AppService) RemoveFromQueue(sessionId int, itemId int) {
-	a.mu.Lock()
-	q := a.queues[sessionId]
-	removed := false
-	if q != nil {
-		for i, item := range q.items {
-			if item.ID == itemId && item.Status != "sent" {
-				q.items = append(q.items[:i], q.items[i+1:]...)
-				log.Printf("[queue] session %d: removed item %d", sessionId, itemId)
-				removed = true
-				break
-			}
-		}
+	removed, err := a.host.QueueRemove(sessionId, itemId, false)
+	if err != nil {
+		log.Printf("[queue] session %d: remove failed: %v", sessionId, err)
+		return
 	}
-	a.mu.Unlock()
-	a.emitQueueUpdate(sessionId)
-
-	if removed {
-		if st := a.getFinishState(sessionId); st != nil && st.PrepItemID == itemId {
-			a.mu.Lock()
-			delete(a.finishStates, sessionId)
-			a.mu.Unlock()
-			a.emitFinishBlocked(sessionId, "", "Fertigstellen abgebrochen (Prep-Prompt entfernt)")
-		}
+	if !removed {
+		return
+	}
+	// Removing the prep prompt is how a user cancels a finish flow.
+	if st := a.getFinishState(sessionId); st != nil && st.PrepItemID == itemId {
+		a.mu.Lock()
+		delete(a.finishStates, sessionId)
+		a.mu.Unlock()
+		a.emitFinishBlocked(sessionId, "", "Fertigstellen abgebrochen (Prep-Prompt entfernt)")
 	}
 }
 
-// ClearDoneFromQueue removes all completed items from the queue.
+// ClearDoneFromQueue removes the completed items.
 func (a *AppService) ClearDoneFromQueue(sessionId int) {
-	a.mu.Lock()
-	q := a.queues[sessionId]
-	if q != nil {
-		filtered := make([]QueueItem, 0, len(q.items))
-		for _, item := range q.items {
-			if item.Status != "done" {
-				filtered = append(filtered, item)
-			}
-		}
-		q.items = filtered
+	if err := a.host.QueueClear(sessionId, true); err != nil {
+		log.Printf("[queue] session %d: clearing done items failed: %v", sessionId, err)
 	}
-	a.mu.Unlock()
-	a.emitQueueUpdate(sessionId)
 }
 
-// ClearQueue removes all items from a session's queue.
+// ClearQueue removes everything, which also cancels a finish flow that was
+// still waiting for its prep prompt.
 func (a *AppService) ClearQueue(sessionId int) {
-	a.mu.Lock()
-	delete(a.queues, sessionId)
-	a.mu.Unlock()
-	a.emitQueueUpdate(sessionId)
-
+	if err := a.host.QueueClear(sessionId, false); err != nil {
+		log.Printf("[queue] session %d: clear failed: %v", sessionId, err)
+		return
+	}
 	if st := a.getFinishState(sessionId); st != nil && st.Phase == "preparing" {
 		a.mu.Lock()
 		delete(a.finishStates, sessionId)
@@ -141,106 +88,30 @@ func (a *AppService) ClearQueue(sessionId int) {
 	}
 }
 
-// tryProcessQueue sends the next pending item if the session is ready.
-//
-// A sleeping pane has to be in this set: it emits no further activity of its
-// own, so without it AddToQueue would enqueue an item that nothing ever picks
-// up, which is a silent hang. processQueue turns the attempt into a wake-up.
-// Asleep is read from the summary rather than from the activity, because the
-// status is where that fact actually lives.
-func (a *AppService) tryProcessQueue(sessionId int) {
-	if summary, err := a.host.Get(sessionId); err == nil && summary.Asleep() {
-		a.processQueue(sessionId)
-		return
-	}
-	act, _ := a.host.ConfirmedActivity(sessionId)
-	if act == hub.ActivityDone || act == hub.ActivityIdle || act == "" {
-		a.processQueue(sessionId)
-	}
-}
-
-// processQueue advances the queue: marks "sent" as "done", sends next "pending".
-// Called on activity→done transitions and when new items are added to idle sessions.
-func (a *AppService) processQueue(sessionId int) {
-	// A sleeping pane cannot take a prompt: sess.Write would fail and the item
-	// would be marked "sent" without ever being delivered. Wake it instead and
-	// leave the queue untouched — the resumed pane's next "done" transition
-	// (applyScanResults) runs processQueue again.
-	if summary, err := a.host.Get(sessionId); err == nil && summary.Asleep() {
-		log.Printf("[queue] session %d: queued while asleep — waking up", sessionId)
-		a.wakeSession(sessionId)
-		return
-	}
-
-	a.mu.Lock()
-	q := a.queues[sessionId]
-	if q == nil || len(q.items) == 0 {
-		a.mu.Unlock()
-		return
-	}
-
-	// Mark current "sent" item as "done"
-	doneItemID := 0
-	for i := range q.items {
-		if q.items[i].Status == "sent" {
-			q.items[i].Status = "done"
-			doneItemID = q.items[i].ID
-			break
-		}
-	}
-
-	// Find and send the next "pending" item (copy value to avoid dangling pointer after unlock)
-	var next QueueItem
-	var hasNext bool
-	for i := range q.items {
-		if q.items[i].Status == "pending" {
-			q.items[i].Status = "sent"
-			next = q.items[i]
-			hasNext = true
-			break
-		}
-	}
-
-	a.mu.Unlock()
-
-	if doneItemID != 0 {
-		a.onQueueItemDone(sessionId, doneItemID)
-	}
-
-	if hasNext && a.hasSession(sessionId) {
-		// Write prompt text first, then Enter separately with a small delay.
-		// Claude Code's TUI needs time to process the pasted text before
-		// receiving the Enter key — writing everything in one chunk can cause
-		// the \r to be swallowed.
-		err := a.host.Write(sessionId, []byte(next.Prompt))
-		if err != nil {
-			log.Printf("[queue] session %d: write error for item %d: %v", sessionId, next.ID, err)
-		} else {
-			time.Sleep(100 * time.Millisecond)
-			err = a.host.Write(sessionId, []byte("\r"))
-			if err != nil {
-				log.Printf("[queue] session %d: enter error for item %d: %v", sessionId, next.ID, err)
-			} else {
-				log.Printf("[queue] session %d: sent item %d: %q", sessionId, next.ID, truncateStr(next.Prompt, 60))
-			}
-		}
-		// Reset activity so the next "done" transition reads as a change.
-		// Without it the confirmed state might already be "done" from the
-		// previous item and the scan would miss the transition. ForceActivity
-		// also stamps the state's start and clears any armed candidate: setting
-		// the state alone would leave the timestamp on the previous one and let
-		// a stale candidate confirm on the next tick (#188).
-		_ = a.host.ResetActivity(sessionId)
-		_ = a.host.ForceActivity(sessionId, hub.ActivityIdle, time.Now())
-	}
-
-	a.emitQueueUpdate(sessionId)
-}
-
-// emitQueueUpdate notifies the frontend that a session's queue changed.
-func (a *AppService) emitQueueUpdate(sessionId int) {
+// onQueueUpdate forwards the host's queue changes to the frontend.
+func (a *AppService) onQueueUpdate(sessionId int) {
 	if a.app == nil {
 		return
 	}
 	a.app.Event.Emit("queue:update", sessionId)
+}
+
+// queueBusy reports whether a session still has prompts coming. The idle
+// suspend asks: putting a pane to sleep with work waiting for it would stall
+// the queue until somebody woke it by hand.
+func (a *AppService) queueBusy(sessionId int) bool {
+	for _, item := range a.host.QueueList(sessionId) {
+		if item.Status == hub.QueuePending || item.Status == hub.QueueSent {
+			return true
+		}
+	}
+	return false
+}
+
+// truncateStr shortens a string for a log line or a prompt echo.
+func truncateStr(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }

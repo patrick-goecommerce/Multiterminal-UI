@@ -7,10 +7,10 @@ import (
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
-// pinPrevActivity keeps AddToQueue's pre-existing auto-dispatch
-// (tryProcessQueue) from firing during test setup. Unit tests have no real
+// pinPrevActivity keeps AddToQueue's auto-dispatch from firing during test
+// setup. Unit tests have no real
 // session, so its confirmed activity defaults to "" on first read, which
-// tryProcessQueue treats as idle and immediately flips a freshly enqueued prep
+// the queue treats as ready and immediately flips a freshly enqueued prep
 // item from "pending" to "sent", before the test can exercise it. A real
 // session mid-turn would report a busy activity here instead, so this mirrors
 // production.
@@ -32,8 +32,11 @@ func TestProcessQueue_ReportsItemDone(t *testing.T) {
 	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	prepID := a.getFinishState(1).PrepItemID
 	// Simulate the scan loop: first done sends the item, second done completes it.
-	a.processQueue(1) // pending → sent (no session ⇒ write skipped, status still advances)
-	a.processQueue(1) // sent → done ⇒ onQueueItemDone(1, prepID) fires
+	// The host advances the queue; the window learns about a finished item
+	// through EventQueueItemDone, which the test host delivers straight into
+	// onHostEvent.
+	a.host.QueueAdvance(1) // pending → sent
+	a.host.QueueAdvance(1) // sent → done ⇒ EventQueueItemDone
 	q := a.GetQueue(1)
 	if len(q) != 1 || q[0].ID != prepID || q[0].Status != "done" {
 		t.Fatalf("prep item not completed: %+v", q)

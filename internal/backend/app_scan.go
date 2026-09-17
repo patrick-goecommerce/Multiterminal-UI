@@ -107,21 +107,22 @@ func (a *AppService) applyScanResults(results []hub.ScanResult) {
 		// None of it is gated on a.app: the event emitter is display, and its
 		// absence says nothing about whether the queue must advance.
 
-		// Trigger pipeline queue on fresh "done" transition
+		// The queue advances on the host, which also runs with no window open.
+		// What is left here is telling the orchestrator.
 		if activityChanged && confirmedActivity == "done" {
-			a.processQueue(id)
-			// Notify orchestrator that this agent finished
 			a.notifyOrchestratorDone(id)
 		}
 
-		// A settled-"idle" pane (output stopped, no recognizable prompt) with an
-		// active finish prep must still advance the queue: the "done" trigger
-		// above never fires when Claude finishes without a visible ❯ prompt, which
-		// would otherwise strand the finish prep as "pending" forever. Scoped to a
-		// preparing finish flow so general pipeline timing is unaffected.
+		// A settled "idle" pane (output stopped, no recognisable prompt) with an
+		// active finish prep still has to advance: the "done" trigger never
+		// fires when the agent finishes without drawing a visible prompt, which
+		// would strand the prep item as pending forever. The host deliberately
+		// does not do this for every session, because "idle" also means the
+		// classifier did not recognise the screen and typing into a pager is
+		// worse than waiting. Only this flow knows better, so only it nudges.
 		if activityChanged && confirmedActivity == "idle" {
 			if st := a.getFinishState(id); st != nil && st.Phase == "preparing" {
-				a.processQueue(id)
+				a.host.QueueAdvance(id)
 			}
 		}
 

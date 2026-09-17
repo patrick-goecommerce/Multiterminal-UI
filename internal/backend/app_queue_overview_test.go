@@ -9,47 +9,39 @@ import (
 // ---------------------------------------------------------------------------
 // GetAllQueues — cross-session queue aggregation
 // ---------------------------------------------------------------------------
+//
+// The queues live on the host now, so these fill them through it. The orphan
+// case is gone as a test because it is gone as a state: a queue belongs to a
+// session and cannot outlive it.
 
 func TestGetAllQueues_Empty(t *testing.T) {
 	app := newTestApp()
-	result := app.GetAllQueues()
-	if len(result) != 0 {
+	t.Cleanup(app.host.Release)
+	if result := app.GetAllQueues(); len(result) != 0 {
 		t.Errorf("expected 0 queue items, got %d", len(result))
 	}
 }
 
-func TestGetAllQueues_SkipsEmptyQueues(t *testing.T) {
+func TestGetAllQueues_SkipsSessionsWithoutQueues(t *testing.T) {
 	app := newTestApp()
-	sess := terminal.NewSession(1, 24, 80)
-	adopt(t, app, 1, sess)
-	app.queues[1] = &sessionQueue{items: []QueueItem{}}
+	t.Cleanup(app.host.Release)
+	adopt(t, app, 1, terminal.NewSession(1, 24, 80))
 
-	result := app.GetAllQueues()
-	if len(result) != 0 {
-		t.Errorf("expected 0 (empty queue skipped), got %d", len(result))
-	}
-}
-
-func TestGetAllQueues_SkipsOrphanQueues(t *testing.T) {
-	app := newTestApp()
-	// Queue exists but no session
-	app.queues[99] = &sessionQueue{items: []QueueItem{{ID: 1, Prompt: "x", Status: "pending"}}}
-
-	result := app.GetAllQueues()
-	if len(result) != 0 {
-		t.Errorf("expected 0 (orphan queue skipped), got %d", len(result))
+	if result := app.GetAllQueues(); len(result) != 0 {
+		t.Errorf("expected 0 (no queue on that session), got %d", len(result))
 	}
 }
 
 func TestGetAllQueues_ReturnsMatchingQueues(t *testing.T) {
 	app := newTestApp()
-	sess := terminal.NewSession(1, 24, 80)
-	adopt(t, app, 1, sess)
-	app.queues[1] = &sessionQueue{
-		items: []QueueItem{
-			{ID: 1, Prompt: "hello", Status: "pending"},
-			{ID: 2, Prompt: "world", Status: "sent"},
-		},
+	t.Cleanup(app.host.Release)
+	adopt(t, app, 1, terminal.NewSession(1, 24, 80))
+
+	if _, err := app.host.QueueAdd(1, "hello"); err != nil {
+		t.Fatalf("QueueAdd: %v", err)
+	}
+	if _, err := app.host.QueueAdd(1, "world"); err != nil {
+		t.Fatalf("QueueAdd: %v", err)
 	}
 
 	result := app.GetAllQueues()
@@ -61,5 +53,23 @@ func TestGetAllQueues_ReturnsMatchingQueues(t *testing.T) {
 	}
 	if len(result[0].Items) != 2 {
 		t.Errorf("expected 2 items, got %d", len(result[0].Items))
+	}
+}
+
+// A queue goes away with its session, so an overview never lists a pane that
+// is no longer there.
+func TestGetAllQueues_ForgetsAClosedSession(t *testing.T) {
+	app := newTestApp()
+	t.Cleanup(app.host.Release)
+	adopt(t, app, 1, terminal.NewSession(1, 24, 80))
+	if _, err := app.host.QueueAdd(1, "hello"); err != nil {
+		t.Fatalf("QueueAdd: %v", err)
+	}
+
+	if err := app.host.Close(1); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if result := app.GetAllQueues(); len(result) != 0 {
+		t.Errorf("expected 0 after the session closed, got %d", len(result))
 	}
 }

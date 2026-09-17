@@ -64,10 +64,9 @@ func (a *AppService) GetDashboardStats() DashboardStats {
 		}
 
 		// Aggregate queue depth
-		q := a.queues[s.ID]
-		if q != nil {
-			for _, item := range q.items {
-				if item.Status == "pending" || item.Status == "sent" {
+		{
+			for _, item := range a.host.QueueList(s.ID) {
+				if item.Status == hub.QueuePending || item.Status == hub.QueueSent {
 					di.queuePend++
 				}
 			}

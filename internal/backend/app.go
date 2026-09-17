@@ -36,8 +36,7 @@ type AppService struct {
 	// process and ends them with it, a hub.Remote leaves them to the daemon.
 	// Which one is decided by config.SessionHost (see newSessionHost).
 	host               hub.Host
-	launches           map[int]launchSpec // how each session was started (for ResumeSession)
-	queues             map[int]*sessionQueue
+	launches           map[int]launchSpec    // how each session was started (for ResumeSession)
 	finishStates       map[int]*finishState  // active worktree-finish flows, keyed by session ID
 	sessionIssues      map[int]*sessionIssue // issue linked to each session
 	mu                 sync.Mutex
@@ -98,7 +97,6 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 		app:           app,
 		cfg:           cfg,
 		launches:      make(map[int]launchSpec),
-		queues:        make(map[int]*sessionQueue),
 		finishStates:  make(map[int]*finishState),
 		sessionIssues: make(map[int]*sessionIssue),
 		agentSessions: make(map[int]AgentSessionInfo),
@@ -326,7 +324,6 @@ func (a *AppService) CloseSession(id int) {
 		_ = a.host.Close(id)
 		a.mu.Lock()
 		delete(a.launches, id)
-		delete(a.queues, id)
 		delete(a.finishStates, id)
 		delete(a.sessionIssues, id)
 		delete(a.sessionMode, id)

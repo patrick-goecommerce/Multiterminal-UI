@@ -37,6 +37,12 @@ func (h *Embedded) ScanActivity() []ScanResult {
 		}
 		out = append(out, r)
 	}
+	// Advancing the queue belongs here and not in the loop above it: this is
+	// where a transition is confirmed, and a caller that drives the scan
+	// itself (a client polling /v1/scan, a test) must not silently get a queue
+	// that never moves. It fires only on Changed, which is true exactly once
+	// per transition, so a second scan right after is a no-op.
+	h.advanceQueuesAfterScan(out)
 	return out
 }
 
@@ -157,6 +163,9 @@ func (h *Embedded) scanLoop() {
 		case <-ticker.C:
 			results := h.ScanActivity()
 			if len(results) > 0 {
+				// ScanActivity already advanced the queues; an enqueued task
+				// keeps moving because this loop runs where the sessions are,
+				// not because a client asked.
 				h.emit(EventSessionScan, ScanReport{Results: results})
 			}
 			if next := scanTick(len(results)); next != interval {

@@ -319,7 +319,7 @@ wo seine Sessions liegen.
 | 1e | `session_host: daemon`: GUI startet den Daemon, verbindet sich, Restore hängt wieder an statt neu zu starten | **App schließen und öffnen, Agents laufen weiter** | **fertig** |
 | 2a | Scan, Hook-Leser und die Shim-Endpunkte (Statusline, tmux) laufen auf dem Host | Zustand wird auch ohne offenes Fenster fortgeschrieben; `MTUI_PORT` bleibt gültig | **fertig** |
 | 2b | Sessions im Daemon anlegen (`CreateSpec.Launch`, `hub.Launcher`, `internal/launch`) | der Daemon startet Agents selbst, `mt new` | **fertig** |
-| 2c | MCP-Server, Queue und Keepalive in den Daemon | agentgestartete Sessions und die Warteschlange leben ohne GUI weiter | offen |
+| 2c | Debounce, Queue und Wecken beim Host; MCP und Keepalive offen | eine eingereihte Aufgabe läuft ohne offenes Fenster weiter | **teilweise** |
 | 3 | `mt` als CLI-Client (`ls`, `read`, `send`, `keys`, `wait`, `kill`, `hub`) | Sessions ohne GUI bedienbar | **fertig** |
 | 4 | Remote-Hubs über SSH | Laptop und Server in einer Oberfläche | offen |
 | 5 | Kanban-Orchestrator headless, weitere Agent-CLIs, Plugin-Hooks | Boards laufen ohne offenes Fenster | offen |
@@ -349,8 +349,9 @@ App, kein Record, falsche Protokollversion), fällt die App auf den eingebettete
 zurück und schreibt eine Warnung, die über `CheckHealth` in der Oberfläche landet.
 
 **Was im Daemon-Modus heute noch an der offenen GUI hängt:** der MCP-Server (ein Agent
-kann also nur delegieren, solange ein Fenster offen ist) sowie Queue und Keepalive (eine
-eingereihte Aufgabe wartet, bis wieder ein Fenster da ist). Scan, Hook-Leser und die
+kann also nur delegieren, solange ein Fenster offen ist) und der Keepalive (dessen Timer
+liegt im Frontend). Die Queue nicht mehr: sie liegt seit Phase 2c beim Host und läuft
+ohne Fenster weiter. Scan, Hook-Leser und die
 Shim-Endpunkte sind seit Phase 2a beim Host und laufen durch; Sessions anlegen kann der
 Daemon seit Phase 2b selbst.
 

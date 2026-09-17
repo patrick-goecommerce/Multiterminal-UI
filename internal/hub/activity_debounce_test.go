@@ -345,9 +345,14 @@ func (stubLauncher) ResumeArgv(argv []string, resumeID string) []string {
 // waitFor polls until cond holds, or fails. A suspend is armed asynchronously
 // (the kill takes long enough that no caller should block on it), so a test
 // that asserts straight after Suspend would be asserting on a race.
+//
+// The deadline is generous because it has to cover the worst case, not the
+// usual one: a suspend kills a process tree, and under -race with the whole
+// suite running it took past ten seconds. A tight deadline here does not catch
+// a slow suspend, it just fails on a loaded machine.
 func waitFor(t *testing.T, cond func() bool, msg string) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(45 * time.Second)
 	for !cond() {
 		if time.Now().After(deadline) {
 			t.Fatal(msg)

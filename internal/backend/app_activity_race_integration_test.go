@@ -30,8 +30,7 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	sess.Screen.Write([]byte("$ "))
 
 	app := &AppService{
-		host:   testHost(map[int]*terminal.Session{sessID: sess}),
-		queues: map[int]*sessionQueue{},
+		host: testHost(map[int]*terminal.Session{sessID: sess}),
 	}
 
 	// The real wiring: the host records what a hook event said and hands the

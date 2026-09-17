@@ -70,6 +70,8 @@ type Embedded struct {
 	killTree  func(pid int)
 	launcher  Launcher
 	activity  *activityDebouncer
+	queueMu   sync.Mutex
+	queues    map[int]*sessionQueue
 	startedAt time.Time
 
 	// stop ends the background loops this host runs (the scan, the hook
@@ -110,6 +112,7 @@ func NewEmbedded(opts Options) *Embedded {
 		killTree:  opts.KillTree,
 		launcher:  opts.Launcher,
 		activity:  newActivityDebouncer(),
+		queues:    make(map[int]*sessionQueue),
 		startedAt: time.Now(),
 		stop:      make(chan struct{}),
 	}
@@ -210,6 +213,7 @@ func (h *Embedded) Close(id int) error {
 	// leaves five map entries behind for the life of the process, and a reused
 	// ID would inherit a stranger's confirmed state.
 	h.activity.forget(id)
+	h.forgetQueue(id)
 	return nil
 }
 

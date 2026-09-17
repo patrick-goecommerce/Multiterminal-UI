@@ -67,6 +67,23 @@ func (a *AppService) onHostEvent(name string, payload any) {
 		}
 		a.applyScanResults(report.Results)
 
+	case hub.EventQueueUpdate:
+		ev, ok := hub.DecodePayload[hub.QueueUpdate](payload)
+		if !ok {
+			return
+		}
+		a.onQueueUpdate(ev.SessionID)
+
+	case hub.EventQueueItemDone:
+		// The host says a queued prompt finished. What that means is this
+		// window's business: the worktree-finish flow enqueues a prep prompt
+		// and moves on when it completes.
+		ev, ok := hub.DecodePayload[hub.QueueItemDone](payload)
+		if !ok {
+			return
+		}
+		a.onQueueItemDone(ev.SessionID, ev.ItemID)
+
 	case hub.EventTmuxCommand:
 		entry, ok := hub.DecodePayload[hub.TmuxCommand](payload)
 		if !ok || a.app == nil {

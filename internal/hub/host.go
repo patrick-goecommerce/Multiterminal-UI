@@ -117,6 +117,30 @@ type Host interface {
 	// agent needs in its environment is the caller's policy.
 	Resume(id int, argv []string, dir string, env []string) error
 
+	// QueueAdd puts a prompt at the end of a session's queue. When nothing is
+	// in flight it is sent at once rather than waiting for a transition that
+	// has already happened.
+	QueueAdd(id int, prompt string) (QueueItem, error)
+
+	// QueueList returns a session's queue, never nil.
+	QueueList(id int) []QueueItem
+
+	// QueueRemove drops one item and reports whether it was there.
+	//
+	// An item already in flight is normally kept: the agent has it, so
+	// removing the row would only hide what is happening. force overrides
+	// that, for a caller that owns the item outright and is tearing down the
+	// flow it belongs to.
+	QueueRemove(id, itemID int, force bool) (bool, error)
+
+	// QueueClear empties a session's queue, or only its finished items.
+	QueueClear(id int, doneOnly bool) error
+
+	// QueueAdvance marks the item in flight done and sends the next one. The
+	// host calls it itself on every confirmed transition; a caller needs it
+	// only to push a queue along for a reason of its own.
+	QueueAdvance(id int)
+
 	// Wake resumes a sleeping session, working out the command line and the
 	// environment from what the host already knows. It is the counterpart to
 	// Suspend and the reason a daemon can pick up a pane nobody is watching:

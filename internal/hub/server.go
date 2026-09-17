@@ -234,6 +234,8 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
+	case action == "queue" || strings.HasPrefix(action, "queue/"):
+		s.handleQueue(w, r, id, strings.TrimPrefix(strings.TrimPrefix(action, "queue"), "/"))
 	case action == "wake" && r.Method == http.MethodPost:
 		if err := s.host.Wake(id); err != nil {
 			writeHostError(w, err)
@@ -434,4 +436,49 @@ type activityWrite struct {
 	Activity Activity  `json:"activity"`
 	At       time.Time `json:"at"`
 	Seed     bool      `json:"seed,omitempty"`
+}
+
+// handleQueue routes /v1/sessions/{id}/queue and its sub-paths.
+func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request, id int, rest string) {
+	switch {
+	case rest == "" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]any{"items": s.host.QueueList(id)})
+	case rest == "" && r.Method == http.MethodPost:
+		var body struct {
+			Prompt string `json:"prompt"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		item, err := s.host.QueueAdd(id, body.Prompt)
+		if err != nil {
+			writeHostError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
+	case rest == "" && r.Method == http.MethodDelete:
+		if err := s.host.QueueClear(id, r.URL.Query().Get("done") == "1"); err != nil {
+			writeHostError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	case rest == "advance" && r.Method == http.MethodPost:
+		s.host.QueueAdvance(id)
+		w.WriteHeader(http.StatusAccepted)
+	case r.Method == http.MethodDelete:
+		itemID, err := strconv.Atoi(rest)
+		if err != nil {
+			http.Error(w, "bad queue item id", http.StatusBadRequest)
+			return
+		}
+		removed, err := s.host.QueueRemove(id, itemID, r.URL.Query().Get("force") == "1")
+		if err != nil {
+			writeHostError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"removed": removed})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }

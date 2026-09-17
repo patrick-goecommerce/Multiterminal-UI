@@ -86,20 +86,13 @@ func TestSuspendBlocker_Blocks(t *testing.T) {
 			want: "no resume id",
 		},
 		{
-			name: "a queued prompt is about to be sent",
+			// One item is enough: the queue sends it straight away, so it is
+			// in flight, which is the state a sleeping pane must not be in.
+			name: "a queued prompt is still being worked on",
 			break_: func(a *AppService, _ *terminal.Session, id int) {
-				a.mu.Lock()
-				a.queues[id] = &sessionQueue{items: []QueueItem{{ID: 1, Prompt: "x", Status: "pending"}}}
-				a.mu.Unlock()
-			},
-			want: "queued prompts waiting",
-		},
-		{
-			name: "a prompt already sent is still being worked on",
-			break_: func(a *AppService, _ *terminal.Session, id int) {
-				a.mu.Lock()
-				a.queues[id] = &sessionQueue{items: []QueueItem{{ID: 1, Prompt: "x", Status: "sent"}}}
-				a.mu.Unlock()
+				if _, err := a.host.QueueAdd(id, "x"); err != nil {
+					t.Fatalf("QueueAdd: %v", err)
+				}
 			},
 			want: "queued prompts waiting",
 		},

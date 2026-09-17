@@ -199,8 +199,8 @@ func (a *AppService) FinishWorktree(sessionId int) {
 		_ = deleteFinishMarker(finishMarkerPath(), cp.WorktreePath)
 		a.mu.Lock()
 		delete(a.finishStates, sessionId)
-		delete(a.queues, sessionId)
 		a.mu.Unlock()
+		_ = a.host.QueueClear(sessionId, false)
 		if a.app != nil {
 			a.app.Event.Emit("worktree:finish-done", WorktreeFinishDoneEvent{
 				SessionID: sessionId, MainRoot: root,

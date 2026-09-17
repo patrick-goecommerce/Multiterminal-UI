@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -55,4 +56,33 @@ func backdateCandidate(t *testing.T, a *AppService, id int) {
 	if !emb.BackdateActivityForTest(id) {
 		t.Fatal("no debounce candidate was armed; the scan never observed the new state")
 	}
+}
+
+// newTestApp builds an AppService with every map initialised and a host of
+// its own.
+//
+// Initialise new maps here as they are added. A nil map that production code
+// writes to panics *while holding a.mu*, so the deferred cleanup then blocks on
+// that mutex forever and the test hangs until the package times out instead of
+// failing. That cost ten minutes per run until it was found (#186).
+//
+// The queues map is gone from this list on purpose: the prompt queue belongs
+// to the host now, so there is nothing here to forget to initialise.
+func newTestApp() *AppService {
+	a := &AppService{
+		launches:      make(map[int]launchSpec),
+		sessionMode:   make(map[int]string),
+		sessionIssues: make(map[int]*sessionIssue),
+		chatSessions:  make(map[string]*ChatSession),
+		chatBuffers:   make(map[string]*strings.Builder),
+		finishStates:  make(map[int]*finishState),
+		agentSessions: make(map[int]AgentSessionInfo),
+		worktreeState: make(map[int]worktreeState),
+		lastProbedCwd: make(map[int]string),
+	}
+	// The host's events have to reach the app, exactly as they do in
+	// production. Without this a test sees a queue advance on the host and no
+	// reaction in the window, which is the bug this wiring exists to prevent.
+	a.host = hub.NewEmbedded(hub.Options{Sink: hub.SinkFunc(a.onHostEvent)})
+	return a
 }

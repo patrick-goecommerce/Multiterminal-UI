@@ -244,9 +244,16 @@ const (
 	EventTmuxCommand = "tmux.command"
 	// EventSessionHook carries one lifecycle event the agent reported, after
 	// the host has recorded what it said about the session's state.
-	EventSessionHook      = "session.hook"
-	EventSessionCreated   = "session.created"
-	EventSessionExited    = "session.exited"
+	EventSessionHook    = "session.hook"
+	EventSessionCreated = "session.created"
+	EventSessionExited  = "session.exited"
+	// EventQueueUpdate carries a session's whole prompt queue after any change
+	// to it. The whole list rather than a delta: a client that missed one
+	// event would otherwise be wrong until the next, and the list is short.
+	EventQueueUpdate = "queue.update"
+	// EventQueueItemDone reports that a queued prompt finished. The host has
+	// no view on what that means; MTUI's worktree-finish flow is one consumer.
+	EventQueueItemDone    = "queue.item_done"
 	EventSessionSuspended = "session.suspended"
 	EventSessionResumed   = "session.resumed"
 )
@@ -346,4 +353,16 @@ func DecodePayload[T any](payload any) (T, bool) {
 	}
 	var zero T
 	return zero, false
+}
+
+// QueueUpdate is the payload of EventQueueUpdate.
+type QueueUpdate struct {
+	SessionID int         `json:"session_id" yaml:"session_id"`
+	Items     []QueueItem `json:"items" yaml:"items"`
+}
+
+// QueueItemDone is the payload of EventQueueItemDone.
+type QueueItemDone struct {
+	SessionID int `json:"session_id" yaml:"session_id"`
+	ItemID    int `json:"item_id" yaml:"item_id"`
 }

@@ -54,7 +54,6 @@ func (a *AppService) suspendBlocker(id int, s hub.SessionSummary, timeout time.D
 
 	a.mu.Lock()
 	mode := a.sessionMode[id]
-	queue := a.queues[id]
 	_, isAgent := a.agentSessions[id]
 	finish := a.finishStates[id]
 	a.mu.Unlock()
@@ -74,7 +73,7 @@ func (a *AppService) suspendBlocker(id int, s hub.SessionSummary, timeout time.D
 	if !s.HasHookData {
 		return "no hook data yet"
 	}
-	if queue != nil && (queueHasStatus(queue.items, "pending") || queueHasStatus(queue.items, "sent")) {
+	if a.queueBusy(id) {
 		return "queued prompts waiting"
 	}
 	if orchestratorHolds(id) {
