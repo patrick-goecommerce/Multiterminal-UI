@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -85,4 +86,28 @@ func newTestApp() *AppService {
 	// reaction in the window, which is the bug this wiring exists to prevent.
 	a.host = hub.NewEmbedded(hub.Options{Sink: hub.SinkFunc(a.onHostEvent)})
 	return a
+}
+
+// sessionDir returns a working directory for a test session.
+//
+// Not t.TempDir(), for the reason spelled out in internal/hub's copy: on
+// Windows a directory that is a live process's working directory cannot be
+// removed, and t.TempDir's cleanup runs before the host has released the
+// session using it. That turned three tests here red on CI with a cleanup
+// error and no assertion failure.
+func sessionDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "mtui-session-")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() {
+		for i := 0; i < 40; i++ {
+			if os.RemoveAll(dir) == nil {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	})
+	return dir
 }

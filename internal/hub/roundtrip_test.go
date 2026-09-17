@@ -76,7 +76,7 @@ func TestRemote_CreateListAndClose(t *testing.T) {
 	addr, _ := serveHost(t, host)
 	r := dialTest(t, addr, nil)
 
-	id, err := r.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()})
+	id, err := r.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestRemote_OutputArrivesOverTheSocket(t *testing.T) {
 	addr, _ := serveHost(t, host)
 	r := dialTest(t, addr, nil)
 
-	id, err := r.Create(CreateSpec{Argv: printArgv("over-the-wire"), Dir: t.TempDir()})
+	id, err := r.Create(CreateSpec{Argv: printArgv("over-the-wire"), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestRemote_InputReachesThePTY(t *testing.T) {
 	addr, _ := serveHost(t, host)
 	r := dialTest(t, addr, nil)
 
-	id, err := r.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir()})
+	id, err := r.Create(CreateSpec{Argv: shellArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestRemote_EventsReachTheSink(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	r := dialTest(t, strings.TrimPrefix(ts.URL, "http://"), sink)
-	if _, err := r.Create(CreateSpec{Argv: printArgv("bye"), Dir: t.TempDir()}); err != nil {
+	if _, err := r.Create(CreateSpec{Argv: printArgv("bye"), Dir: sessionDir(t)}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	sink.await(t, EventSessionCreated)
@@ -178,7 +178,7 @@ func TestRemote_ReleaseLeavesSessionsRunning(t *testing.T) {
 	addr, _ := serveHost(t, host)
 	r := dialTest(t, addr, nil)
 
-	id, err := r.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()})
+	id, err := r.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestRemote_ReconnectsAndResumesTheStream(t *testing.T) {
 	proxy := newBreakableProxy(t, addr)
 	r := dialTest(t, proxy.addr(), nil)
 
-	id, err := host.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir()})
+	id, err := host.Create(CreateSpec{Argv: shellArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestRemote_ReserveComesFromTheDaemon(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reserve: %v", err)
 	}
-	id, err := r.Create(CreateSpec{ID: reserved, Argv: sleepArgv(), Dir: t.TempDir()})
+	id, err := r.Create(CreateSpec{ID: reserved, Argv: sleepArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestRemote_ScreenAndAgentStateOverTheWire(t *testing.T) {
 	addr, _ := serveHost(t, host)
 	r := dialTest(t, addr, nil)
 
-	id, err := r.Create(CreateSpec{Argv: printArgv("screen-marker"), Dir: t.TempDir()})
+	id, err := r.Create(CreateSpec{Argv: printArgv("screen-marker"), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -385,7 +385,7 @@ func TestRemote_ConfirmedActivityCrossesTheWire(t *testing.T) {
 	addr, _ := serveHost(t, host)
 	client := dialTest(t, addr, nil)
 
-	id, err := host.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	id, err := host.Create(CreateSpec{Argv: shellArgv(), Dir: sessionDir(t), Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -415,7 +415,7 @@ func TestRemote_SeedActivityKeepsItsRules(t *testing.T) {
 	addr, _ := serveHost(t, host)
 	client := dialTest(t, addr, nil)
 
-	id, err := host.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	id, err := host.Create(CreateSpec{Argv: shellArgv(), Dir: sessionDir(t), Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}

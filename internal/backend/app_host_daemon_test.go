@@ -69,7 +69,7 @@ func TestListLiveSessions_ReportsWhatTheHostHolds(t *testing.T) {
 		t.Fatalf("a fresh host reported %d sessions, want none", len(got))
 	}
 
-	id := a.CreateSession(sleepArgvForTest(), t.TempDir(), 24, 80, "claude")
+	id := a.CreateSession(sleepArgvForTest(), sessionDir(t), 24, 80, "claude")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
@@ -98,7 +98,7 @@ func TestAttachSession_ReplaysWhatTheSessionAlreadyProduced(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 
-	id := a.CreateSession(printArgv("attach-marker"), t.TempDir(), 24, 80, "shell")
+	id := a.CreateSession(printArgv("attach-marker"), sessionDir(t), 24, 80, "shell")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
@@ -124,7 +124,7 @@ func TestAttachSession_RecoversTheModeFromTheHost(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 
-	id := a.CreateSession(sleepArgvForTest(), t.TempDir(), 24, 80, "claude")
+	id := a.CreateSession(sleepArgvForTest(), sessionDir(t), 24, 80, "claude")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
@@ -170,7 +170,7 @@ func TestAppService_AgainstARemoteHost(t *testing.T) {
 	a := newTestApp()
 	a.host = remote
 
-	id := a.CreateSession(printArgv("remote-marker"), t.TempDir(), 24, 80, "shell")
+	id := a.CreateSession(printArgv("remote-marker"), sessionDir(t), 24, 80, "shell")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}

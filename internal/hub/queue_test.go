@@ -15,7 +15,7 @@ func queueHost(t *testing.T) (*Embedded, int) {
 	t.Helper()
 	h := NewEmbedded(Options{Version: "test"})
 	t.Cleanup(h.Release)
-	id, err := h.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	id, err := h.Create(CreateSpec{Argv: shellArgv(), Dir: sessionDir(t), Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestQueue_EmitsUpdatesAndCompletions(t *testing.T) {
 	})
 	h := NewEmbedded(Options{Version: "test", Sink: sink})
 	t.Cleanup(h.Release)
-	id, err := h.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	id, err := h.Create(CreateSpec{Argv: shellArgv(), Dir: sessionDir(t), Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}

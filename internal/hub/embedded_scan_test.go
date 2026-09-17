@@ -116,7 +116,7 @@ func TestScanLoop_ReportsWithoutBeingAsked(t *testing.T) {
 	h := NewEmbedded(Options{Scan: true, Sink: sink})
 	t.Cleanup(h.Release)
 
-	if _, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()}); err != nil {
+	if _, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	sink.await(t, EventSessionScan)
@@ -148,7 +148,7 @@ func TestScanTick_SlowsDownWithMoreSessions(t *testing.T) {
 func TestScanLoop_StopsOnRelease(t *testing.T) {
 	sink := newSink()
 	h := NewEmbedded(Options{Scan: true, Sink: sink})
-	if _, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()}); err != nil {
+	if _, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	sink.await(t, EventSessionScan)

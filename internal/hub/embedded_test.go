@@ -147,7 +147,7 @@ func TestEmbedded_CreateAfterReleaseIsRefused(t *testing.T) {
 
 func TestEmbedded_OutputReachesAnAttachedClient(t *testing.T) {
 	h := newTestHost(t, nil)
-	id, err := h.Create(CreateSpec{Argv: printArgv("mtui-hub-marker"), Dir: t.TempDir()})
+	id, err := h.Create(CreateSpec{Argv: printArgv("mtui-hub-marker"), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestEmbedded_OutputReachesAnAttachedClient(t *testing.T) {
 // the bytes were produced and must still get them.
 func TestEmbedded_LateAttachReplaysHistory(t *testing.T) {
 	h := newTestHost(t, nil)
-	id, err := h.Create(CreateSpec{Argv: printArgv("written-before-attach"), Dir: t.TempDir()})
+	id, err := h.Create(CreateSpec{Argv: printArgv("written-before-attach"), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestEmbedded_LateAttachReplaysHistory(t *testing.T) {
 // same bytes, and neither starves the other.
 func TestEmbedded_TwoClientsSeeTheSameOutput(t *testing.T) {
 	h := newTestHost(t, nil)
-	id, err := h.Create(CreateSpec{Argv: printArgv("shared-output"), Dir: t.TempDir()})
+	id, err := h.Create(CreateSpec{Argv: printArgv("shared-output"), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestEmbedded_TwoClientsSeeTheSameOutput(t *testing.T) {
 func TestEmbedded_ExitIsReported(t *testing.T) {
 	sink := newSink()
 	h := newTestHost(t, sink)
-	if _, err := h.Create(CreateSpec{Argv: printArgv("bye"), Dir: t.TempDir()}); err != nil {
+	if _, err := h.Create(CreateSpec{Argv: printArgv("bye"), Dir: sessionDir(t)}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	sink.await(t, EventSessionCreated)
@@ -241,7 +241,7 @@ func TestEmbedded_ExitIsReported(t *testing.T) {
 
 func TestEmbedded_CloseForgetsTheSession(t *testing.T) {
 	h := newTestHost(t, nil)
-	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()})
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestEmbedded_CloseForgetsTheSession(t *testing.T) {
 // hanging on a channel nobody will ever write to again.
 func TestEmbedded_CloseEndsSubscriptions(t *testing.T) {
 	h := newTestHost(t, nil)
-	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()})
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestEmbedded_CloseEndsSubscriptions(t *testing.T) {
 // waiting to hand over bytes nobody collects.
 func TestEmbedded_SubscriptionCloseStopsTheFeed(t *testing.T) {
 	h := newTestHost(t, nil)
-	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()})
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestEmbedded_SubscriptionCloseStopsTheFeed(t *testing.T) {
 func TestEmbedded_ListIsOrderedByID(t *testing.T) {
 	h := newTestHost(t, nil)
 	for i := 0; i < 3; i++ {
-		if _, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()}); err != nil {
+		if _, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)}); err != nil {
 			t.Fatalf("Create %d: %v", i, err)
 		}
 	}
@@ -336,7 +336,7 @@ func TestEmbedded_ListIsOrderedByID(t *testing.T) {
 
 func TestEmbedded_RepaintRendersTheMirror(t *testing.T) {
 	h := newTestHost(t, nil)
-	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t), Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -369,7 +369,7 @@ func TestEmbedded_ReserveThenCreateKeepsTheID(t *testing.T) {
 		t.Fatal("Reserve returned 0, which means \"allocate one\" to Create")
 	}
 
-	id, err := h.Create(CreateSpec{ID: reserved, Argv: sleepArgv(), Dir: t.TempDir()})
+	id, err := h.Create(CreateSpec{ID: reserved, Argv: sleepArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestEmbedded_ReserveIsNotReused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reserve: %v", err)
 	}
-	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()})
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -398,11 +398,11 @@ func TestEmbedded_ReserveIsNotReused(t *testing.T) {
 func TestEmbedded_CreateRefusesAnIDThatIsInUse(t *testing.T) {
 	h := newTestHost(t, nil)
 
-	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: t.TempDir()})
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if _, err := h.Create(CreateSpec{ID: id, Argv: sleepArgv(), Dir: t.TempDir()}); err == nil {
+	if _, err := h.Create(CreateSpec{ID: id, Argv: sleepArgv(), Dir: sessionDir(t)}); err == nil {
 		t.Error("creating a second session with a live ID succeeded")
 	}
 }

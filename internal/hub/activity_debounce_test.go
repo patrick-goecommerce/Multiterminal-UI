@@ -226,7 +226,7 @@ func TestDebounce_UnseededSessionStampsTheObservation(t *testing.T) {
 // a reused ID would inherit a stranger's confirmed state.
 func TestEmbedded_CloseForgetsTheDebounceState(t *testing.T) {
 	host := newTestHost(t, nil)
-	id, err := host.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	id, err := host.Create(CreateSpec{Argv: shellArgv(), Dir: sessionDir(t), Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestEmbedded_WakeResumesASleepingSession(t *testing.T) {
 // conversation ID recorded.
 func suspendedSession(t *testing.T, h *Embedded, resumeID string) int {
 	t.Helper()
-	id, err := h.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	id, err := h.Create(CreateSpec{Argv: shellArgv(), Dir: sessionDir(t), Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestEmbedded_WakeRefusesWithoutALauncher(t *testing.T) {
 func TestEmbedded_WakeIsANoopWhenAwake(t *testing.T) {
 	h := NewEmbedded(Options{Version: "test", Launcher: stubLauncher{}})
 	t.Cleanup(h.Release)
-	id, err := h.Create(CreateSpec{Argv: shellArgv(), Dir: t.TempDir(), Rows: 24, Cols: 80})
+	id, err := h.Create(CreateSpec{Argv: shellArgv(), Dir: sessionDir(t), Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}

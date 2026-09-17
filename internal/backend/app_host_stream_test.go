@@ -10,6 +10,7 @@ import (
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
+	"path/filepath"
 )
 
 // printArgv is a command that writes a marker to the terminal and exits.
@@ -95,11 +96,20 @@ func TestCreateSession_UsesTheReservedID(t *testing.T) {
 }
 
 // A failed launch must not leave a half-registered session behind.
+//
+// The trigger is a working directory that does not exist, not a command that
+// does not exist. On Windows a bare command name keeps the COMSPEC wrapper
+// (CLAUDE.md, Platform Gotchas), so the process that starts is cmd.exe, which
+// starts perfectly well and only then reports that it cannot find the command.
+// "A command that cannot start" is therefore a Unix-only idea, and the test
+// asserted it on every platform. A chdir into a directory that is not there
+// fails before any process exists, everywhere.
 func TestCreateSession_FailedLaunchIsNotRegistered(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 
-	id := a.CreateSession([]string{"definitely-not-a-real-binary-mtui"}, t.TempDir(), 24, 80, "shell")
+	missing := filepath.Join(t.TempDir(), "dieses-verzeichnis-gibt-es-nicht")
+	id := a.CreateSession([]string{"definitely-not-a-real-binary-mtui"}, missing, 24, 80, "shell")
 	if id != -1 {
 		t.Fatalf("CreateSession returned %d for a command that cannot start, want -1", id)
 	}
