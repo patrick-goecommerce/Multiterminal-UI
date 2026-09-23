@@ -50,26 +50,65 @@
     copiedTimer = setTimeout(() => { copiedPath = ''; }, 1500);
   }
 
+  // The sidebar stays mounted while it is hidden, and `git status -uall` is
+  // one of the more expensive things MTUI runs: a git process plus a console
+  // host every 5 s, on a large repo for a second or more each. The statuses
+  // are only drawn while the sidebar is open, so that is the only time they
+  // are fetched; opening it (or bringing the window back) fetches once.
   onMount(() => {
-    if (dir) {
-      loadDir(dir);
-      refreshGitStatus();
-      loadFavorites();
-    }
-    gitPollTimer = setInterval(refreshGitStatus, 5000);
+    gitPollTimer = setInterval(pollGitStatus, 5000);
+    document.addEventListener('visibilitychange', onPageVisibility);
   });
 
   onDestroy(() => {
     if (gitPollTimer) clearInterval(gitPollTimer);
+    document.removeEventListener('visibilitychange', onPageVisibility);
   });
 
+  function gitStatusShown(): boolean {
+    return visible && !document.hidden;
+  }
+
+  function pollGitStatus() {
+    if (gitStatusShown()) refreshGitStatus();
+  }
+
+  function onPageVisibility() {
+    if (gitStatusShown()) refreshGitStatus();
+  }
+
+  // Called from `$:` with `visible` as its only argument, so nothing else in
+  // here becomes a dependency (see CLAUDE.md on reactive blocks).
+  let wasVisible = false;
+  function onSidebarVisibility(nowVisible: boolean) {
+    if (nowVisible && !wasVisible && !document.hidden) refreshGitStatus();
+    wasVisible = nowVisible;
+  }
+  $: onSidebarVisibility(visible);
+
+  // One `git status` at a time per directory: on a big repo a run can outlast
+  // the 5 s interval, and a second one started behind it only adds load.
+  let gitStatusInFlight = '';
   async function refreshGitStatus() {
-    if (!dir) return;
+    const forDir = dir;
+    if (!forDir || gitStatusInFlight === forDir) return;
+    gitStatusInFlight = forDir;
     try {
-      gitStatuses = await App.GetGitFileStatuses(dir);
+      const result = await App.GetGitFileStatuses(forDir);
+      if (forDir === dir) gitStatuses = result;
     } catch {
-      gitStatuses = {};
+      if (forDir === dir) gitStatuses = {};
+    } finally {
+      if (gitStatusInFlight === forDir) gitStatusInFlight = '';
     }
+  }
+
+  function onDirChange(newDir: string) {
+    if (!newDir) return;
+    loadDir(newDir);
+    loadFavorites();
+    gitStatuses = {};
+    if (gitStatusShown()) refreshGitStatus();
   }
 
   async function loadDir(path: string) {
@@ -138,11 +177,7 @@
     }).length;
   })();
 
-  $: if (dir) {
-    loadDir(dir);
-    refreshGitStatus();
-    loadFavorites();
-  }
+  $: onDirChange(dir);
 </script>
 
 {#if visible}
