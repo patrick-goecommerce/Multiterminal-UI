@@ -68,14 +68,21 @@
   onMount(loadDashboardData);
   onDestroy(() => { if (statsInterval) clearInterval(statsInterval); });
 
-  // Reload data periodically while dashboard is visible
-  $: if ($workspace.activeView === 'dashboard') {
-    loadDashboardData();
-    statsInterval = setInterval(loadDashboardData, 5000);
-  } else {
+  // Reload data periodically while the dashboard is visible. This has to be a
+  // function acting on a state change: the store is an object and emits on
+  // every change (collapsing the nav, switching tabs), and a `$:` block that
+  // called setInterval directly started one more interval per emission, each
+  // polling forever, even after the dashboard was left (CLAUDE.md rule on
+  // assignments in `$:` blocks).
+  function setPolling(visible: boolean) {
+    if (visible === (statsInterval !== null)) return;
     if (statsInterval) clearInterval(statsInterval);
     statsInterval = null;
+    if (!visible) return;
+    loadDashboardData();
+    statsInterval = setInterval(loadDashboardData, 5000);
   }
+  $: setPolling($workspace.activeView === 'dashboard');
 
   // Build card groups: in main window, enrich backend data with store info (tabId, tabName).
   // In secondary window, use pure backend data.
