@@ -32,6 +32,10 @@ type SavedTab struct {
 	// otherwise the grid falls back to equal fractions.
 	ColFractions []float64 `json:"col_fractions,omitempty"`
 	RowFractions []float64 `json:"row_fractions,omitempty"`
+	// FocusOrder is the focus layout's arrangement: indices into Panes, most
+	// recently used first (0 and 1 are the big slots). Absent for a tab that
+	// never had one; the frontend then falls back to the pane order.
+	FocusOrder []int `json:"focus_order,omitempty"`
 }
 
 // SavedPane captures enough information to re-launch a single pane.

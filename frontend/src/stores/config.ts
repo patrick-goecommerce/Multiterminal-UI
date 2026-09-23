@@ -102,6 +102,14 @@ export interface MCPServerConfig {
   port: number;
 }
 
+/** Pane arrangement. mode is 'grid' (default) or 'focus'; float_x/float_y are
+ *  where the focus mode's floating window was dragged to, negative = never. */
+export interface LayoutConfig {
+  mode: string;
+  float_x: number;
+  float_y: number;
+}
+
 export interface AppConfig {
   default_shell: string;
   default_dir: string;
@@ -156,6 +164,7 @@ export interface AppConfig {
    * closing the window; anything else keeps them in this process.
    */
   session_host: string;
+  layout: LayoutConfig;
 }
 
 export const config = writable<AppConfig>({
@@ -269,4 +278,5 @@ export const config = writable<AppConfig>({
   // before GetConfig answers, and the backend decides what an unset value
   // means. Writing 'embedded' here would look like a decision this file made.
   session_host: '',
+  layout: { mode: 'grid', float_x: -1, float_y: -1 },
 });
