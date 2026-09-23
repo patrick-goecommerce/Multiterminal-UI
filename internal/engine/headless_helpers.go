@@ -41,6 +41,9 @@ func runClaude(ctx context.Context, workDir, prompt, systemPrompt, model string)
 	cmd.Stdin = strings.NewReader(prompt)
 	cmd.Env = stripClaudeEnv(os.Environ())
 	hideWindow(cmd)
+	// A cancelled card must stop claude and its MCP servers, not just the
+	// cmd.exe in front of them.
+	procs.KillTreeOnCancel(cmd)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -85,6 +88,9 @@ func runVerify(ctx context.Context, workDir string, steps []orchestrator.VerifyS
 		cmd := exec.CommandContext(ctx, comspec, "/c", step.Command)
 		cmd.Dir = workDir
 		hideWindow(cmd)
+		// A verify step can be a watcher or a dev server that never exits on
+		// its own; cancelling must reach it through the cmd.exe wrapper.
+		procs.KillTreeOnCancel(cmd)
 
 		output, err := cmd.CombinedOutput()
 		exitCode := 0
