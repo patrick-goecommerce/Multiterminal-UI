@@ -107,3 +107,28 @@ func TestSanitizePaneName_Truncates(t *testing.T) {
 		t.Errorf("sanitizePaneName did not truncate: len=%d (%q), max=%d", len([]rune(got)), got, paneNameMaxLen)
 	}
 }
+
+// With every slot taken a prompt must not start another claude, and must not
+// burn the pane's throttle either, so its next prompt still gets a name.
+func TestMaybeGeneratePaneName_SkipsWhenSlotsAreFull(t *testing.T) {
+	for i := 0; i < cap(nameGenSlots); i++ {
+		nameGenSlots <- struct{}{}
+	}
+	defer func() {
+		for i := 0; i < cap(nameGenSlots); i++ {
+			<-nameGenSlots
+		}
+	}()
+	const id = 987654
+	defer cleanupNameTracking(id)
+
+	a := &AppService{}
+	a.maybeGeneratePaneName(id, "refactor the login flow")
+
+	nameGenMu.Lock()
+	_, tracked := lastNameGen[id]
+	nameGenMu.Unlock()
+	if tracked {
+		t.Fatal("a skipped prompt set the throttle; the pane would stay unnamed for the whole interval")
+	}
+}
