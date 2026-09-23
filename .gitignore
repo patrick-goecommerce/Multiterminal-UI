@@ -7,6 +7,8 @@
 /mtui.exe
 /mtuid
 /mtuid.exe
+/mt
+/mt.exe
 
 # Logs
 *.log
