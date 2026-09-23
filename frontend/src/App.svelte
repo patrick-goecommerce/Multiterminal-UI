@@ -480,8 +480,17 @@
     updateCommitAge();
     updateIssueCount();
     updateConflicts();
-    branchInterval = setInterval(() => { updateBranch(); updateConflicts(); }, 10000);
-    commitAgeInterval = setInterval(updateCommitAge, 30000);
+    // Each of these starts a git process (plus a console host on Windows).
+    // A minimised or hidden window shows none of the results, so it skips
+    // them; the next tick after it comes back catches up.
+    branchInterval = setInterval(() => {
+      if (document.hidden) return;
+      updateBranch();
+      updateConflicts();
+    }, 10000);
+    commitAgeInterval = setInterval(() => {
+      if (!document.hidden) updateCommitAge();
+    }, 30000);
     document.addEventListener('keydown', handleGlobalKeydown);
   });
 

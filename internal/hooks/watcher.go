@@ -50,7 +50,29 @@ func NewWatcher(dir string, onEvent func(Event)) *Watcher {
 	return &Watcher{dir: dir, onEvent: onEvent, offsets: make(map[string]int64)}
 }
 
-// Start begins polling the hooks directory every 100ms.
+// How often the directory is read. While hooks are firing an agent is working
+// and every event moves a badge or the queue, so the reader looks ten times a
+// second. Once nothing has been written for pollIdleAfter it drops to twice a
+// second: with thirty idle panes that is the difference between 36 000 and
+// 7 200 directory listings an hour for no events at all. The first event after
+// a quiet stretch waits at most pollIdle, which the screen scan (500 to 750 ms)
+// would not have beaten anyway.
+const (
+	pollFast      = 100 * time.Millisecond
+	pollIdle      = 500 * time.Millisecond
+	pollIdleAfter = 5 * time.Second
+)
+
+// pollInterval returns the delay before the next read, given how long ago the
+// reader last found something.
+func pollInterval(sinceLastEvent time.Duration) time.Duration {
+	if sinceLastEvent < pollIdleAfter {
+		return pollFast
+	}
+	return pollIdle
+}
+
+// Start begins polling the hooks directory (see pollInterval).
 // Existing files are seeked to their current end so that events from previous
 // app sessions are not replayed (session IDs reset on each start, so old
 // events would otherwise match new sessions and cause spurious state jumps).
@@ -64,16 +86,20 @@ func (w *Watcher) Start(ctx context.Context) {
 	w.logPurge(w.purgeStaleFiles(FileMaxAge), "at startup")
 	w.skipExistingFiles()
 	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
+		lastEvent := time.Now()
+		poll := time.NewTimer(pollFast)
+		defer poll.Stop()
 		purge := time.NewTicker(purgeInterval)
 		defer purge.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
-				w.processDirectory()
+			case <-poll.C:
+				if w.processDirectory() {
+					lastEvent = time.Now()
+				}
+				poll.Reset(pollInterval(time.Since(lastEvent)))
 			case <-purge.C:
 				// A long-running app would otherwise accumulate for days
 				// between restarts — which is exactly how this got out of hand.
@@ -112,11 +138,15 @@ func (w *Watcher) skipExistingFiles() {
 // nothing new. Opening them all regardless cost 85 ms per pass against a 100 ms
 // ticker — 85 % of a core, indefinitely (issue #192). os.ReadDir already carries
 // the size on Windows, so the check itself is free.
-func (w *Watcher) processDirectory() {
+//
+// It reports whether any file had something new, which is what the poll
+// interval keys off.
+func (w *Watcher) processDirectory() bool {
 	entries, err := os.ReadDir(w.dir)
 	if err != nil {
-		return
+		return false
 	}
+	found := false
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
 			continue
@@ -132,7 +162,9 @@ func (w *Watcher) processDirectory() {
 			continue
 		}
 		w.processFile(filepath.Join(w.dir, entry.Name()), entry.Name())
+		found = true
 	}
+	return found
 }
 
 // processFile reads new lines from a JSONL file since the last read offset.

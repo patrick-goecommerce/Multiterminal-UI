@@ -200,6 +200,15 @@ if (!isMainWindow()) {
 
 Main window receives `window:tabs-merged` event → appends tabs to tab bar with brief highlight animation.
 
+Stand 2026-09 (implementation differs from the sketch above): the secondary
+window pushes its tab state through `SaveWindowTabs` on every store change,
+and the backend's `WindowClosing` hook emits `window:tabs-merged` from that
+state. `DetachTab` seeds it with the detached tab, so a window closed before
+its first push still hands its tab back. Closing the **main** window quits the
+app even while secondary windows are open: a secondary window cannot take over
+the main window's duties (layout saving, agent panes, keep-alive), and until
+then the main window's sessions kept running with no pane.
+
 ### Initialization
 ```ts
 // App.svelte onMount

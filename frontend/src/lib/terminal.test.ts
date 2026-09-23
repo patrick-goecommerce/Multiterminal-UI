@@ -36,3 +36,54 @@ describe('attachWebglRenderer — WebGL context loss', () => {
     expect(refresh).toHaveBeenCalledWith(0, terminal.rows - 1);
   });
 });
+
+describe('attachWebglRenderer / detachWebglRenderer — context budget', () => {
+  const fakeTerminal = () => ({ rows: 40, refresh: vi.fn(), loadAddon: vi.fn() }) as any;
+
+  test('attaching twice holds one context, detaching gives it back', async () => {
+    const { webglContextCount, detachWebglRenderer } = await import('./terminal');
+    const t = fakeTerminal();
+    const before = webglContextCount();
+
+    attachWebglRenderer(t);
+    attachWebglRenderer(t);
+    expect(webglContextCount()).toBe(before + 1);
+    expect(t.loadAddon).toHaveBeenCalledTimes(1);
+
+    detachWebglRenderer(t);
+    expect(webglContextCount()).toBe(before);
+  });
+
+  // A background pane gave its context back; a context-loss retry that was
+  // already scheduled must not take it again.
+  test('a context-loss retry does not re-attach a detached terminal', async () => {
+    vi.useFakeTimers();
+    try {
+      const { webglContextCount, detachWebglRenderer } = await import('./terminal');
+      const t = fakeTerminal();
+      const before = webglContextCount();
+      attachWebglRenderer(t);
+      capturedContextLossCb!();
+      detachWebglRenderer(t);
+      vi.advanceTimersByTime(200);
+
+      expect(webglContextCount()).toBe(before);
+      expect(t.loadAddon).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // On a host where creating the context always fails, each attempt used to
+  // keep its slot, and after eight the window stopped trying WebGL for good.
+  test('a failed loadAddon does not keep its slot', async () => {
+    const { webglContextCount } = await import('./terminal');
+    const before = webglContextCount();
+    for (let i = 0; i < 10; i++) {
+      const t = fakeTerminal();
+      t.loadAddon = vi.fn(() => { throw new Error('no WebGL2'); });
+      attachWebglRenderer(t);
+    }
+    expect(webglContextCount()).toBe(before);
+  });
+});

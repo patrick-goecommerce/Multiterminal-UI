@@ -73,6 +73,7 @@ func (s *Session) spawnLocked(argv []string, dir string, env []string) error {
 
 	s.p = p
 	s.cmd = cmd
+	s.cmdExited = false
 	// Into a job right away, so the tree can still be ended if this process
 	// dies before it gets to close the session.
 	if s.job == nil {
@@ -210,6 +211,9 @@ func (s *Session) noteOutput(gen int) bool {
 func (s *Session) waitLoop(cmd *gopty.Cmd, gen int, done chan struct{}) {
 	err := cmd.Wait()
 	s.mu.Lock()
+	if s.cmd == cmd {
+		s.cmdExited = true
+	}
 	if s.sus.gen == gen && s.Status == StatusRunning {
 		if err != nil {
 			if cmd.ProcessState != nil {

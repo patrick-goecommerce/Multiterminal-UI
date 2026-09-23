@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hooks"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
@@ -34,6 +35,7 @@ type Embedded struct {
 	queues      map[int]*sessionQueue
 	keepAliveFn func() KeepAlive
 	startedAt   time.Time
+	hookWatcher *hooks.Watcher // nil without a hooks directory
 
 	// stop ends the background loops this host runs (the scan, the hook
 	// reader). Closed exactly once, by Release.
@@ -170,6 +172,13 @@ func (h *Embedded) Close(id int) error {
 		h.killTree(m.sess.Pid())
 	}
 	m.sess.Close()
+	// Its hook file goes with it. Only a SessionEnd event removed one so far,
+	// and a pane that is closed rather than exited never writes one, so every
+	// closed pane left its file behind in a directory the reader lists several
+	// times a second.
+	if w, agent := h.hookWatcher, m.sess.HookSessionID(); w != nil && agent != "" {
+		w.Forget(agent)
+	}
 
 	h.mu.Lock()
 	delete(h.sessions, id)

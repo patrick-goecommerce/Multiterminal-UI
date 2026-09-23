@@ -259,47 +259,89 @@ export function getTerminalTheme(theme: string): import('@xterm/xterm').ITheme {
 const MAX_WEBGL_CONTEXTS = 8; // conservative limit — leaves headroom for other WebGL users
 let activeWebglCount = 0;
 
+// The addon a terminal currently renders with, and whether its pane still
+// wants one. A pane in a background tab gives its context back
+// (detachWebglRenderer); a context-loss retry must not bring it back behind
+// the pane's back.
+const webglAddons = new WeakMap<Terminal, WebglAddon>();
+const webglWanted = new WeakSet<Terminal>();
+
+/** Number of WebGL contexts currently held, for tests and diagnostics. */
+export function webglContextCount(): number {
+  return activeWebglCount;
+}
+
 /**
  * Load the WebGL renderer onto an already-opened terminal.
- * Must be called AFTER terminal.open(element).
+ * Must be called AFTER terminal.open(element). Calling it again for a
+ * terminal that already renders with WebGL does nothing.
  * Falls back to DOM renderer silently if WebGL is unavailable or context limit reached.
  */
 export function attachWebglRenderer(terminal: Terminal): void {
+  webglWanted.add(terminal);
+  if (webglAddons.has(terminal)) return;
   if (activeWebglCount >= MAX_WEBGL_CONTEXTS) {
     // DOM renderer stays active — avoids evicting older contexts.
     return;
   }
+  let webgl: WebglAddon;
   try {
-    const webgl = new WebglAddon();
-    activeWebglCount++;
-    webgl.onContextLoss(() => {
-      webgl.dispose(); // reverts to DOM renderer, decrements activeWebglCount
-      // A lost GL context leaves the canvas frozen on its last, half-erased
-      // frame. The DOM renderer does not repaint the existing buffer on its
-      // own, so an idle pane (e.g. Claude waiting at the prompt) stays garbled
-      // until new output arrives. Force a full repaint. This fires on display
-      // power cycles and output-device switches (monitor → laptop → monitor).
-      try {
-        terminal.refresh(0, terminal.rows - 1);
-      } catch {
-        // terminal already disposed — nothing to repaint.
-      }
-      // The GPU is typically back after such an event, so restore the WebGL
-      // renderer rather than leaving the pane on the slower DOM renderer.
-      setTimeout(() => attachWebglRenderer(terminal), 100);
-    });
-    // Decrement counter when the terminal or addon is disposed normally.
-    const origDispose = webgl.dispose.bind(webgl);
-    let disposed = false;
-    webgl.dispose = () => {
-      if (!disposed) {
-        disposed = true;
-        activeWebglCount = Math.max(0, activeWebglCount - 1);
-      }
-      origDispose();
-    };
-    terminal.loadAddon(webgl);
+    webgl = new WebglAddon();
   } catch {
-    // WebGL unavailable (e.g. software rendering) — DOM renderer stays active.
+    return; // WebGL unavailable (e.g. software rendering) — DOM renderer stays active.
   }
+  activeWebglCount++;
+  // Decrement counter when the terminal or addon is disposed, whichever way.
+  const origDispose = webgl.dispose.bind(webgl);
+  let disposed = false;
+  webgl.dispose = () => {
+    if (!disposed) {
+      disposed = true;
+      activeWebglCount = Math.max(0, activeWebglCount - 1);
+      if (webglAddons.get(terminal) === webgl) webglAddons.delete(terminal);
+    }
+    try {
+      origDispose();
+    } catch {
+      // never activated (loadAddon threw) — nothing to tear down.
+    }
+  };
+  webgl.onContextLoss(() => {
+    webgl.dispose(); // reverts to DOM renderer, decrements activeWebglCount
+    // A lost GL context leaves the canvas frozen on its last, half-erased
+    // frame. The DOM renderer does not repaint the existing buffer on its
+    // own, so an idle pane (e.g. Claude waiting at the prompt) stays garbled
+    // until new output arrives. Force a full repaint. This fires on display
+    // power cycles and output-device switches (monitor → laptop → monitor).
+    try {
+      terminal.refresh(0, terminal.rows - 1);
+    } catch {
+      // terminal already disposed — nothing to repaint.
+    }
+    // The GPU is typically back after such an event, so restore the WebGL
+    // renderer rather than leaving the pane on the slower DOM renderer, unless
+    // the pane gave its context back in the meantime.
+    setTimeout(() => {
+      if (webglWanted.has(terminal)) attachWebglRenderer(terminal);
+    }, 100);
+  });
+  try {
+    terminal.loadAddon(webgl);
+    webglAddons.set(terminal, webgl);
+  } catch {
+    // The count went up before loadAddon; without this a host where context
+    // creation always fails (RDP without GPU) leaks one slot per attempt and
+    // stops trying WebGL for good after eight.
+    webgl.dispose();
+  }
+}
+
+/**
+ * Give a terminal's WebGL context back; it renders with the DOM renderer
+ * until attachWebglRenderer is called again. Scrollback and screen are
+ * untouched: only the GPU side goes.
+ */
+export function detachWebglRenderer(terminal: Terminal): void {
+  webglWanted.delete(terminal);
+  webglAddons.get(terminal)?.dispose();
 }

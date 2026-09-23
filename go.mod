@@ -37,3 +37,7 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 )
+
+// Patched copy: closes the process handle go-pty leaks per start on
+// Windows. See third_party/go-pty/PATCHES.md.
+replace github.com/aymanbagabas/go-pty => ./third_party/go-pty

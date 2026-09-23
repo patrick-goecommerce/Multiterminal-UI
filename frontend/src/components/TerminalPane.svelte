@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { t } from '../stores/i18n';
-  import { createTerminal, getTerminalTheme, buildFontFamily, attachWebglRenderer, DEFAULT_SCROLLBACK } from '../lib/terminal';
+  import { createTerminal, getTerminalTheme, buildFontFamily, attachWebglRenderer, detachWebglRenderer, DEFAULT_SCROLLBACK } from '../lib/terminal';
   import { pasteToSession, copySelection, writeTextToSession } from '../lib/clipboard';
   import { encodeForPty } from '../lib/claude';
   import { PendingOutput } from '../lib/output-buffer';
@@ -485,7 +485,32 @@
     triggerMountTerminal = mountTerminal;
   });
 
+  // A pane whose tab stays in the background gives its WebGL context back
+  // after a while and draws with the DOM renderer until it is shown again.
+  // Each context holds a GPU canvas and a glyph atlas, only eight are handed
+  // out, and a tab visited once kept its panes' contexts for good: the panes
+  // that are actually on screen then fell back to the slow renderer. The
+  // delay keeps quick back-and-forth between two tabs from rebuilding them.
+  const WEBGL_RELEASE_DELAY_MS = 60_000;
+  let webglReleaseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Called from `$:` with `active` as its only argument (see CLAUDE.md).
+  function syncWebglWithTab(isActive: boolean) {
+    if (isActive) {
+      if (webglReleaseTimer) { clearTimeout(webglReleaseTimer); webglReleaseTimer = null; }
+      if (termInstance) attachWebglRenderer(termInstance.terminal);
+      return;
+    }
+    if (!termInstance || webglReleaseTimer) return;
+    webglReleaseTimer = setTimeout(() => {
+      webglReleaseTimer = null;
+      if (termInstance && !active) detachWebglRenderer(termInstance.terminal);
+    }, WEBGL_RELEASE_DELAY_MS);
+  }
+  $: syncWebglWithTab(active);
+
   onDestroy(() => {
+    if (webglReleaseTimer) { clearTimeout(webglReleaseTimer); webglReleaseTimer = null; }
     if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
     if (cleanupFn) cleanupFn();
     if (queueCleanup) queueCleanup();

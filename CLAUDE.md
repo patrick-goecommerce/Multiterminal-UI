@@ -141,7 +141,11 @@ A GUI terminal multiplexer built for Claude Code power users.
   runes. That is fine and not urgent, but do not assume Svelte 4 semantics when reading the
   Svelte docs.
 - **Terminal emulation:** xterm.js (frontend) + VT100 screen buffer for activity scanning (backend)
-- **PTY management:** go-pty (cross-platform: Unix PTY + Windows ConPTY)
+- **PTY management:** go-pty (cross-platform: Unix PTY + Windows ConPTY), used as a patched copy
+  in `third_party/go-pty` through a `replace` in go.mod: upstream leaks one process handle per
+  start on Windows. `third_party/go-pty/PATCHES.md` says what changed and when to drop it.
+  Because the PID is no longer pinned after the exit, `Session.Pid()` reports 0 once the process
+  was waited on; never kill a tree by a PID captured earlier.
 - **Config:** YAML (`~/.multiterminal.yaml`), per project `.mtui/config.json`
 - **Three binaries:** the app, `mtuid` (session daemon), `mt` (CLI client)
 - **The whole repo builds and tests on Linux.** `go test ./internal/... ./cmd/mt/ ./cmd/mtuid/`

@@ -128,6 +128,53 @@ func TestKeepAlive_SkipsSessionsThatAreNotRunning(t *testing.T) {
 	}
 }
 
+// The nudge ends in a Return, and a Return answers whatever the pane is asking.
+// A prompt left open for hours is exactly what the keep-alive would find.
+func TestKeepAlive_NeverTypesIntoAPaneThatIsAsking(t *testing.T) {
+	for _, activity := range []Activity{ActivityWaitingPermission, ActivityWaitingAnswer, ActivityActive, ActivityError} {
+		t.Run(string(activity), func(t *testing.T) {
+			h := policyFor(t, claudePolicy())
+			id := adoptForKeepAlive(t, h, 1, "claude", time.Now().Add(-2*time.Hour))
+			if err := h.SetHookActivity(id, activity); err != nil {
+				t.Fatal(err)
+			}
+			if got, ok := h.keepAliveTarget(time.Now(), time.Time{}); ok {
+				t.Errorf("picked session %d while it was %s", got, activity)
+			}
+		})
+	}
+}
+
+// A pane that is asking is skipped, not a reason to give up: the next one at
+// rest still gets the nudge.
+func TestKeepAlive_SkipsTheAskingPaneForTheNextOne(t *testing.T) {
+	h := policyFor(t, claudePolicy())
+	long := time.Now().Add(-2 * time.Hour)
+	asking := adoptForKeepAlive(t, h, 1, "claude", long)
+	adoptForKeepAlive(t, h, 2, "claude", long)
+	if err := h.SetHookActivity(asking, ActivityWaitingPermission); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.SetHookActivity(2, ActivityDone); err != nil {
+		t.Fatal(err)
+	}
+
+	if id, ok := h.keepAliveTarget(time.Now(), time.Time{}); !ok || id != 2 {
+		t.Errorf("target = (%d, %v), want (2, true)", id, ok)
+	}
+}
+
+// A session another agent opened is that agent's conversation.
+func TestKeepAlive_LeavesAgentSessionsAlone(t *testing.T) {
+	h := policyFor(t, claudePolicy())
+	id := adoptForKeepAlive(t, h, 1, "claude", time.Now().Add(-2*time.Hour))
+	h.SetOriginForTest(id, OriginAgent)
+
+	if _, ok := h.keepAliveTarget(time.Now(), time.Time{}); ok {
+		t.Error("nudged a session an agent opened")
+	}
+}
+
 // adoptForKeepAlive starts a session with a known mode and last-output time.
 func adoptForKeepAlive(t *testing.T, h *Embedded, id int, mode string, lastOutput time.Time) int {
 	t.Helper()

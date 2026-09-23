@@ -9,9 +9,12 @@ import (
 )
 
 // FileMaxAge is how long an untouched hook file is kept before it is
-// removed. Generous on purpose: a pane can sit idle for days, and the only cost
-// of keeping a file too long is one directory entry.
-const FileMaxAge = 7 * 24 * time.Hour
+// removed. A day is enough: the file is a log the reader has already consumed,
+// and the state it produced lives in memory, so removing the file of a pane
+// that sat idle longer loses nothing (see below). Keeping files longer is not
+// free either: the directory is listed several times a second, and every
+// entry in it is paid for on every listing.
+const FileMaxAge = 24 * time.Hour
 
 // purgeInterval is how often stale files are swept while the app runs.
 const purgeInterval = time.Hour

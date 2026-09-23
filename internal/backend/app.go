@@ -114,12 +114,6 @@ func NewAppService(app *application.App, cfg config.Config, safeMode bool) *AppS
 	return svc
 }
 
-// SetMainWindow stores the main window reference for dialog and focus operations.
-func (a *AppService) SetMainWindow(w *application.WebviewWindow) {
-	a.mainWindow = w
-	a.winMgr.register("main", w, nil)
-}
-
 // ServiceStartup implements the Wails v3 Service interface.
 func (a *AppService) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
 	a.serviceCtx = ctx
