@@ -150,7 +150,11 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	a.cancelAll = cancel
 	a.outputBatch() // ensure the batcher is initialized before batchLoop starts
 	go a.batchLoop(scanCtx)
-	go a.scheduleLoop(scanCtx)
+	// scheduleLoop is deliberately not started. Every run of a due schedule
+	// created a claude session that nothing ever drew or closed, one more
+	// invisible process tree per run until the app quit, and there is no UI
+	// left to create or see schedules. Before it comes back, its sessions need
+	// an origin so a pane is drawn, and a close once they are done.
 	go a.idleSuspendLoop(scanCtx)
 
 	// Register custom protocol for notification clicks, then bring up the
