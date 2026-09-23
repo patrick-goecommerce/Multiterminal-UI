@@ -1,8 +1,10 @@
 package backend
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -17,60 +19,6 @@ var detachedTabStates = struct {
 	states map[string]string
 }{states: make(map[string]string)}
 
-// draggingTab holds info about the tab currently being dragged between windows.
-// Set on dragstart, cleared on dragend or when claimed by a target window.
-var draggingTab = struct {
-	mu           sync.Mutex
-	tabID        string
-	windowID     string
-	tabStateJSON string
-}{}
-
-// SetDraggingTab is called by the source window when a tab drag begins.
-func (a *AppService) SetDraggingTab(tabID, windowID, tabStateJSON string) {
-	draggingTab.mu.Lock()
-	defer draggingTab.mu.Unlock()
-	draggingTab.tabID = tabID
-	draggingTab.windowID = windowID
-	draggingTab.tabStateJSON = tabStateJSON
-}
-
-// ClaimDraggedTab is called by the target window when a tab is dropped on its
-// tab bar. It returns the tab state JSON so the target can import the tab, and
-// emits window:tab-claimed so the source window removes the tab.
-// Returns empty string if nothing is being dragged (or wrong tabID).
-func (a *AppService) ClaimDraggedTab(tabID string) string {
-	draggingTab.mu.Lock()
-	// Accept by specific ID or by "whatever is currently dragging" (empty ID).
-	if draggingTab.tabID == "" || (tabID != "" && draggingTab.tabID != tabID) {
-		draggingTab.mu.Unlock()
-		return ""
-	}
-	sourceWindowID := draggingTab.windowID
-	tabStateJSON := draggingTab.tabStateJSON
-	claimedTabID := draggingTab.tabID
-	draggingTab.tabID = ""
-	draggingTab.windowID = ""
-	draggingTab.tabStateJSON = ""
-	draggingTab.mu.Unlock()
-
-	// Tell the source window to close this tab.
-	a.app.Event.Emit("window:tab-claimed", map[string]string{
-		"windowId": sourceWindowID,
-		"tabId":    claimedTabID,
-	})
-	return tabStateJSON
-}
-
-// ClearDraggingTab is called when a drag ends without a cross-window drop.
-func (a *AppService) ClearDraggingTab() {
-	draggingTab.mu.Lock()
-	defer draggingTab.mu.Unlock()
-	draggingTab.tabID = ""
-	draggingTab.windowID = ""
-	draggingTab.tabStateJSON = ""
-}
-
 // windowEntry tracks one open window and the tab IDs it currently owns.
 type windowEntry struct {
 	Window       *application.WebviewWindow
@@ -83,6 +31,10 @@ type windowManager struct {
 	mu      sync.Mutex
 	windows map[string]*windowEntry
 	app     *application.App
+	// quitting makes the main window's quit happen once: Quit closes the
+	// remaining windows, and closing the main one again must not start a
+	// second quit on top of the first.
+	quitting sync.Once
 }
 
 func newWindowManager(app *application.App) *windowManager {
@@ -92,10 +44,54 @@ func newWindowManager(app *application.App) *windowManager {
 	}
 }
 
-func (wm *windowManager) register(id string, win *application.WebviewWindow, tabIDs []string) {
+// register records a window. tabState is the state its tabs start out with,
+// so a window that closes before it ever called SaveWindowTabs still hands
+// its tabs back (see DetachTab).
+func (wm *windowManager) register(id string, win *application.WebviewWindow, tabIDs []string, tabState string) {
 	wm.mu.Lock()
 	defer wm.mu.Unlock()
-	wm.windows[id] = &windowEntry{Window: win, TabIDs: tabIDs}
+	wm.windows[id] = &windowEntry{Window: win, TabIDs: tabIDs, tabStateJSON: tabState}
+}
+
+// others counts the open windows apart from the one named.
+func (wm *windowManager) others(id string) int {
+	wm.mu.Lock()
+	defer wm.mu.Unlock()
+	n := len(wm.windows)
+	if _, ok := wm.windows[id]; ok {
+		n--
+	}
+	return n
+}
+
+// SetMainWindow stores the main window reference for dialog and focus
+// operations, and ties the app's life to it.
+func (a *AppService) SetMainWindow(w *application.WebviewWindow) {
+	a.mainWindow = w
+	a.winMgr.register("main", w, nil, "")
+	w.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+		a.onMainWindowClosing()
+	})
+}
+
+// onMainWindowClosing quits the app when the main window closes while a
+// detached window is still open.
+//
+// Wails only quits once the last window is gone, so the app used to live on
+// in the detached window. The main window's tabs were gone, but their
+// sessions kept running with nothing on screen, and the window left behind
+// cannot stand in for the main one: it saves no layout, draws no panes for
+// agent sessions and runs no keep-alive. Everything that happens on a normal
+// quit happens here too: the sessions end with the in-process host and stay
+// with the daemon.
+func (a *AppService) onMainWindowClosing() {
+	if a.winMgr.others("main") == 0 {
+		return // the last window; Wails quits on its own
+	}
+	a.winMgr.quitting.Do(func() {
+		log.Printf("[WindowManager] main window closing with detached windows open — quitting")
+		go a.app.Quit() // not from inside the hook: Quit waits on the main thread
+	})
 }
 
 func (wm *windowManager) unregister(id string) {
@@ -135,7 +131,11 @@ func (a *AppService) DetachTab(tabID string, sourceWindowID string, tabStateJSON
 		URL:    url,
 	})
 
-	a.winMgr.register(newID, win, []string{tabID})
+	// Seeded with the tab it was created for. The window replaces it via
+	// SaveWindowTabs, but only 300 ms after its store first changes, and a
+	// window closed before that used to take its tab (and the sessions in it)
+	// with it.
+	a.winMgr.register(newID, win, []string{tabID}, windowStateOf(tabStateJSON))
 
 	// Store serialised tab state for the new window to pick up on load.
 	if tabStateJSON != "" {
@@ -168,6 +168,23 @@ func (a *AppService) DetachTab(tabID string, sourceWindowID string, tabStateJSON
 	win.Show()
 	log.Printf("[DetachTab] created window %s for tab %s", newID, tabID)
 	return newID, nil
+}
+
+// windowStateOf wraps one tab's state in the shape SaveWindowTabs stores and
+// window:tabs-merged carries, {"tabs": [...]}. Anything that is not a JSON
+// object yields no state rather than one the main window cannot parse.
+func windowStateOf(tabStateJSON string) string {
+	tab := json.RawMessage(strings.TrimSpace(tabStateJSON))
+	if !json.Valid(tab) || len(tab) == 0 || tab[0] != '{' {
+		return ""
+	}
+	out, err := json.Marshal(struct {
+		Tabs []json.RawMessage `json:"tabs"`
+	}{Tabs: []json.RawMessage{tab}})
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }
 
 // GetDetachedTabState returns and clears the serialised tab state stored for
@@ -225,7 +242,7 @@ func (a *AppService) OpenDashboardWindow() (string, error) {
 		URL:    url,
 	})
 
-	a.winMgr.register(newID, win, nil)
+	a.winMgr.register(newID, win, nil, "")
 
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		a.winMgr.unregister(newID)
