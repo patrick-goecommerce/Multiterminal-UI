@@ -1,4 +1,6 @@
+import { get } from 'svelte/store';
 import { tabStore } from '../stores/tabs';
+import type { Pane } from '../stores/tabs';
 import { INDEX_TO_MODE, MODE_TO_INDEX, buildClaudeArgv, genSessionId } from './claude';
 import type { SessionOpts } from './claude';
 import { resolveMCPConfigPath } from './mcp';
@@ -214,6 +216,40 @@ async function adoptOrphanSessions(alive: any[], unclaimed: Set<number>): Promis
 }
 
 /** dirLabel names a tab after the directory's last segment. */
+/**
+ * Ends the processes behind one pane. A chat pane runs its conversation as a
+ * claude process keyed by conversation ID, a terminal pane as a host session.
+ */
+export function closePaneSession(pane: Pane): void {
+  const done = pane.display === 'chat'
+    ? (pane.conversationId ? App.CloseChatSession(pane.conversationId) : undefined)
+    : (pane.sessionId > 0 ? App.CloseSession(pane.sessionId) : undefined);
+  Promise.resolve(done).catch((err) => console.error('[closePaneSession]', pane.id, err));
+}
+
+/**
+ * Closes a tab and ends every session in it.
+ *
+ * tabStore.closeTab only drops the tab from the store, and for a long time
+ * that was all closing a tab did: each pane kept its claude tree, its MCP
+ * servers and its console running, invisibly, until the app quit, and in
+ * daemon mode for good. Moving a tab to another window goes through the store
+ * directly and must keep its sessions, which is why this lives here and not
+ * in closeTab.
+ *
+ * The store never closes a window's last tab, so neither does this, and that
+ * tab's sessions are left alone.
+ */
+export function closeTabWithSessions(tabId: string): boolean {
+  const { tabs } = get(tabStore);
+  if (tabs.length <= 1) return false;
+  const tab = tabs.find((t) => t.id === tabId);
+  if (!tab) return false;
+  for (const pane of tab.panes) closePaneSession(pane);
+  tabStore.closeTab(tabId);
+  return true;
+}
+
 export function dirLabel(dir: string): string {
   if (!dir) return 'Wiederhergestellt';
   const trimmed = dir.replace(/[\\/]+$/, '');

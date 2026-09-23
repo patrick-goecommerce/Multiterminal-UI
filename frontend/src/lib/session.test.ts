@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, linkSessionIssue, resolveMCPProfile, seedActivitySince, listLiveSessions, attachSession } = vi.hoisted(() => ({
+const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, linkSessionIssue, resolveMCPProfile, seedActivitySince, listLiveSessions, attachSession, closeSession, closeChatSession } = vi.hoisted(() => ({
   loadTabs: vi.fn(),
   ensureProjectWorktreeSetup: vi.fn(),
   createSession: vi.fn(),
@@ -10,6 +10,8 @@ const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, 
   seedActivitySince: vi.fn(),
   listLiveSessions: vi.fn(),
   attachSession: vi.fn(),
+  closeSession: vi.fn(),
+  closeChatSession: vi.fn(),
 }));
 
 vi.mock('../../wailsjs/go/backend/App', () => ({
@@ -22,9 +24,11 @@ vi.mock('../../wailsjs/go/backend/App', () => ({
   SeedActivitySince: seedActivitySince,
   ListLiveSessions: listLiveSessions,
   AttachSession: attachSession,
+  CloseSession: closeSession,
+  CloseChatSession: closeChatSession,
 }));
 
-import { paneToSaved, restoreSession, dirLabel } from './session';
+import { paneToSaved, restoreSession, dirLabel, closeTabWithSessions } from './session';
 import { tabStore } from '../stores/tabs';
 
 describe('paneToSaved', () => {
@@ -335,5 +339,38 @@ describe('dirLabel', () => {
 
   it('falls back when there is no directory', () => {
     expect(dirLabel('')).toBe('Wiederhergestellt');
+  });
+});
+
+describe('closeTabWithSessions', () => {
+  beforeEach(() => {
+    closeSession.mockReset().mockResolvedValue(undefined);
+    closeChatSession.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('beendet jede Session des Tabs, bevor er ihn entfernt', () => {
+    tabStore.addTab('bleibt');
+    const tabId = tabStore.addTab('weg');
+    tabStore.addPane(tabId, 11, 'a', 'claude', '');
+    tabStore.addPane(tabId, 12, 'b', 'shell', '');
+    tabStore.addPane(tabId, 0, 'chat', 'claude', '', null, '', '', '', '', '', false, 'chat', 'conv-7');
+
+    expect(closeTabWithSessions(tabId)).toBe(true);
+
+    expect(closeSession.mock.calls.map((c) => c[0]).sort()).toEqual([11, 12]);
+    expect(closeChatSession).toHaveBeenCalledWith('conv-7');
+    expect(tabStore.getState().tabs.find((t) => t.id === tabId)).toBeUndefined();
+  });
+
+  it('lässt den letzten Tab samt Sessions stehen', () => {
+    const { tabs } = tabStore.getState();
+    for (const t of tabs.slice(1)) tabStore.closeTab(t.id);
+    const onlyId = tabStore.getState().tabs[0].id;
+    tabStore.addPane(onlyId, 21, 'x', 'claude', '');
+
+    expect(closeTabWithSessions(onlyId)).toBe(false);
+
+    expect(closeSession).not.toHaveBeenCalled();
+    expect(tabStore.getState().tabs).toHaveLength(1);
   });
 });
