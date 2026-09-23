@@ -168,3 +168,40 @@ describe('PaneGrid focus mode: panes the app places', () => {
     expect(slotKind(container, opened)).toBe('slot-big');
   });
 });
+
+describe('PaneGrid focus mode: review fixes', () => {
+  it('keeps a placed pane in the small column when it takes the focus', async () => {
+    const { container, rerender } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, active: true, layoutMode: 'focus' } });
+    const fresh = tabStore.addPane(tabA, 'h1:80', 'ersatz', 'claude', '');
+    placePane(tabA, fresh, 3);
+    await rerender({ panes: panesOf(tabA) });
+    await tick();
+
+    expect(get(focusOrders)[tabA][3]).toBe(fresh);
+    expect(slotKind(container, fresh)).toBe('slot-small');
+  });
+
+  it('shows the waiting list only in the visible grid', () => {
+    const { container } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, active: false, layoutMode: 'focus' } });
+    expect(container.querySelector('.waiting-list')).toBeNull();
+  });
+
+  it('does not save the window position on a click without a move', async () => {
+    const App = await import('../../wailsjs/go/backend/App');
+    (App.SaveConfig as any).mockClear();
+    floatingPane.set({ tabId: tabB, paneId: b });
+    const { container } = render(PaneGrid, {
+      props: { panes: panesOf(tabB), tabId: tabB, tabName: 'Beta', active: false, layoutMode: 'focus' },
+    });
+    const bar = container.querySelector('.float-bar') as HTMLElement;
+    bar.setPointerCapture = () => {};
+    await fireEvent.pointerDown(bar, { clientX: 100, clientY: 100, pointerId: 1 });
+    await fireEvent.pointerUp(bar, { clientX: 100, clientY: 100, pointerId: 1 });
+    expect(App.SaveConfig).not.toHaveBeenCalled();
+
+    await fireEvent.pointerDown(bar, { clientX: 100, clientY: 100, pointerId: 1 });
+    await fireEvent.pointerMove(bar, { clientX: 160, clientY: 140, pointerId: 1 });
+    await fireEvent.pointerUp(bar, { clientX: 160, clientY: 140, pointerId: 1 });
+    expect(App.SaveConfig).toHaveBeenCalledTimes(1);
+  });
+});

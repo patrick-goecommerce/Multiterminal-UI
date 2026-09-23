@@ -70,8 +70,10 @@
     dispatch('cancelFinish', e.detail);
   }
 
+  // The tab's own directory rides along: a floating pane belongs to another
+  // tab than the active one, and its relative paths mean its own project.
   function handleNavigateFile(e: CustomEvent) {
-    dispatch('navigateFile', e.detail);
+    dispatch('navigateFile', { ...e.detail, dir: tabDir });
   }
 
   function handleSplitPane() {
@@ -225,7 +227,10 @@
   onDestroy(() => areaObserver?.disconnect());
 
   $: order = reconcileOrder($focusOrders[tabId], panes.map((p) => p.id));
-  $: waiting = focus ? waitingElsewhere($allTabs, tabId) : [];
+  // Only the visible grid needs the list; every tab has a PaneGrid, and the
+  // hidden ones would rescan all panes on each activity update for nothing.
+  // The count only sizes the small column, never the big panes.
+  $: waiting = focus && active ? waitingElsewhere($allTabs, tabId) : [];
   $: geo = focusGeometry(areaW, areaH, panes.length, waiting.length);
   // A pane of this tab shown floating over another tab. Only while this tab
   // is not the active one: here it has its own slot.
@@ -242,13 +247,14 @@
   function slotStyle(s: Slot): string {
     const r = s.rect;
     let css = `left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;`;
-    if (s.kind === 'float') css += 'visibility:visible;pointer-events:auto;z-index:30;';
+    // Above the active tab's cards and list (z-index <= 5), below FilePreview (10).
+    if (s.kind === 'float') css += 'visibility:visible;pointer-events:auto;z-index:8;';
     if (s.kind === 'hidden') css += 'visibility:hidden;pointer-events:none;';
     return css;
   }
 
   function innerStyle(s: Slot): string {
-    if (s.kind === 'small' && s.logical) {
+    if (s.logical) {
       return `left:0;bottom:0;width:${s.logical.w}px;height:${s.logical.h}px;transform:scale(${s.scale});transform-origin:bottom left;`;
     }
     if (s.kind === 'float') return `left:0;right:0;top:${FLOAT_BAR}px;bottom:0;`;
@@ -275,9 +281,14 @@
     // Nobody chose that pane, so it must not jump to the left.
     const closedFocus = !panes.some((p) => p.id === lastFocus);
     lastFocus = id;
-    const isNew = !seen.has(id) && !consumePlaced(id);
+    // A pane the app placed (a replacement, an agent's pane) stays where it
+    // was put, also when it takes the focus. The marks of the other panes are
+    // dropped here too: from now on they follow the normal rules.
+    const wasPlaced = consumePlaced(id);
+    panes.forEach((p) => consumePlaced(p.id));
+    const isNew = !seen.has(id);
     panes.forEach((p) => seen.add(p.id));
-    if (closedFocus && !isNew) return;
+    if (wasPlaced || (closedFocus && !isNew)) return;
     // Written after this reactive pass, not during it: a store set from inside
     // a `$:` statement does not re-run the statements before it in Svelte 5's
     // legacy mode, so the slots would keep showing the old order.
@@ -333,9 +344,12 @@
   }
   function floatPointerUp() {
     if (!floatDrag) return;
+    const moved = Math.abs(floatDrag.x - dragStart.x) > 2 || Math.abs(floatDrag.y - dragStart.y) > 2;
     const r = floatingRect(areaW, areaH, floatDrag.x, floatDrag.y);
     floatDrag = null;
-    void saveFloatPosition(r.x, r.y);
+    // A click on the bar is not a move: saving it would pin a window that was
+    // never moved to where the centre happened to be.
+    if (moved) void saveFloatPosition(r.x, r.y);
   }
 
   // Same colours as the pane titlebar (PaneTitlebar.svelte), so a state reads
@@ -435,7 +449,7 @@
     </div>
   {/each}
 
-  {#if focus && !maximizedPane}
+  {#if focus && active && !maximizedPane}
     <div class="waiting-list" style="left:{geo.list.x}px;top:{geo.list.y}px;width:{geo.list.w}px;height:{geo.list.h}px;">
       <div class="wl-head">
         <span>Wartet auf dich · andere Projekte</span>

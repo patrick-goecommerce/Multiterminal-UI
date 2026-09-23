@@ -176,10 +176,18 @@
   const handleGlobalKeydown = createGlobalKeyHandler({
     onNewPane: () => { showLaunchDialog = true; },
     onNewTab: () => { showProjectDialog = true; },
-    onCloseTab: () => { if ($activeTab) requestCloseTab($activeTab.id); },
+    // While the floating window has the keyboard, Ctrl+W closes that window,
+    // not the project behind it.
+    onCloseTab: () => {
+      if (floatHasKeyboard && get(floatingPane)) { floatingPane.set(null); return; }
+      if ($activeTab) requestCloseTab($activeTab.id);
+    },
     onToggleSidebar: () => workspace.toggleSidebar(),
     onOpenIssues: () => workspace.openSidebar('issues'),
     onToggleMaximize: () => {
+      // The floating window is already the one thing in front; maximizing the
+      // active tab's pane from there would act on a pane the user is not in.
+      if (floatHasKeyboard && get(floatingPane)) return;
       const tab = $activeTab;
       if (tab?.focusedPaneId) tabStore.toggleMaximize(tab.id, tab.focusedPaneId);
     },
@@ -507,6 +515,7 @@
       if (!document.hidden) updateCommitAge();
     }, 30000);
     document.addEventListener('keydown', handleGlobalKeydown);
+    document.addEventListener('focusin', trackKeyboardOwner);
   });
 
   onDestroy(() => {
@@ -520,6 +529,7 @@
     if (linkInterceptorCleanup) linkInterceptorCleanup();
     window.removeEventListener('beforeunload', saveSession);
     document.removeEventListener('keydown', handleGlobalKeydown);
+    document.removeEventListener('focusin', trackKeyboardOwner);
   });
 
   async function updateBranch() {
@@ -866,7 +876,7 @@
     // Read the MCP profile off the pane BEFORE closing it, so a restart keeps
     // the pane's server set instead of silently reverting to "all servers".
     const mcpProfile = tab.panes.find((p) => p.id === paneId)?.mcpProfile || '';
-    const slot = slotIndexOf(tab.id, paneId);
+    const slot = layoutMode === 'focus' ? slotIndexOf(tab.id, paneId) : -1;
     App.CloseSession(sessionId);
     tabStore.closePane(tab.id, paneId);
     // Restart = fresh session, but still pin an id so it stays toggle-able to chat.
@@ -890,7 +900,7 @@
     if (!pane) return;
     const { name, mode, model } = pane;
     // The toggle replaces the pane with a new one; that one takes its place.
-    const slot = slotIndexOf(tab.id, pane.id);
+    const slot = layoutMode === 'focus' ? slotIndexOf(tab.id, pane.id) : -1;
 
     if (pane.display === 'chat') {
       // Chat → Terminal: resume the same claude session so the conversation is
@@ -937,16 +947,21 @@
   }
 
   function handleSendCommand(e: CustomEvent<{ text: string }>) {
-    const tab = $activeTab;
+    // The command palette takes the keyboard itself, so this goes by who had
+    // it before: the floating pane, or the active tab's focused pane.
+    const float = floatHasKeyboard ? get(floatingPane) : null;
+    const tab = float ? $allTabs.find((t) => t.id === float.tabId) : $activeTab;
     if (!tab) return;
-    const focusedPane = tab.panes.find((p) => p.focused);
+    const focusedPane = float ? tab.panes.find((p) => p.id === float.paneId) : tab.panes.find((p) => p.focused);
     if (focusedPane) App.WriteToSession(focusedPane.sessionId, encodeForPty(e.detail.text + '\n'));
     showCommandPalette = false;
   }
 
-  function handleNavigateFile(e: CustomEvent<{ path: string }>) {
+  function handleNavigateFile(e: CustomEvent<{ path: string; dir?: string }>) {
     const rel = e.detail.path;
-    const dir = $activeTab?.dir ?? '';
+    // PaneGrid sends the pane's own tab directory; it differs from the active
+    // tab's when the link was clicked in a floating pane of another project.
+    const dir = e.detail.dir ?? $activeTab?.dir ?? '';
     // Resolve relative path against working directory
     const fullPath = rel.match(/^[A-Z]:|^\//) ? rel : (dir ? dir.replace(/\\/g, '/').replace(/\/$/, '') + '/' + rel.replace(/\\/g, '/') : rel);
     previewFilePath = fullPath;
@@ -1005,6 +1020,17 @@
   $: tabInfo = `Tab ${($allTabs.findIndex((t) => t.id === $activeTab?.id) ?? 0) + 1}/${$allTabs.length}  Pane ${currentPanes}/${MAX_PANES_PER_TAB}`;
 
   $: layoutMode = layoutModeOf($config.layout?.mode);
+
+  // Whether the keyboard was last in the floating pane. Dialogs (command
+  // palette, rename) take focus without changing it, so a command sent from
+  // the palette still goes where the user was typing.
+  let floatHasKeyboard = false;
+  function trackKeyboardOwner(e: FocusEvent) {
+    const el = e.target as HTMLElement | null;
+    if (!el?.closest) return;
+    if (el.closest('.slot-float')) floatHasKeyboard = true;
+    else if (el.closest('.tab-layers')) floatHasKeyboard = false;
+  }
 
   // A floating window closes when its pane is gone, when its own tab became
   // the active one (there it has its slot), or when the grid layout is back.
@@ -1273,7 +1299,7 @@
     const loc = findPaneLocation(sessionId);
     if (!loc) return;
     const { tab, pane } = loc;
-    const slot = slotIndexOf(tab.id, pane.id);
+    const slot = layoutMode === 'focus' ? slotIndexOf(tab.id, pane.id) : -1;
     tabStore.closePane(tab.id, pane.id);
     const sid = mode !== 'shell' ? genSessionId() : '';
     const mcpProfile = pane.mcpProfile || '';

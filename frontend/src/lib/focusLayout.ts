@@ -18,11 +18,19 @@ export function layoutModeOf(mode: string | undefined): LayoutMode {
 
 // --- Order ------------------------------------------------------------------
 
-/** The saved order, minus panes that are gone, plus new ones at the end. */
+/** The saved order, minus panes that are gone and duplicates, plus new ones
+ *  at the end. The result always holds every id exactly once: an order longer
+ *  than the pane list would give the last pane a slot that does not exist. */
 export function reconcileOrder(order: string[] | undefined, ids: string[]): string[] {
   const present = new Set(ids);
-  const kept = (order ?? []).filter((id) => present.has(id));
-  const known = new Set(kept);
+  const known = new Set<string>();
+  const kept: string[] = [];
+  for (const id of order ?? []) {
+    if (present.has(id) && !known.has(id)) {
+      known.add(id);
+      kept.push(id);
+    }
+  }
   return [...kept, ...ids.filter((id) => !known.has(id))];
 }
 
@@ -163,8 +171,8 @@ export type SlotKind = 'big' | 'small' | 'float' | 'max' | 'hidden';
 export interface Slot {
   kind: SlotKind;
   rect: Rect;
-  /** small only: the logical size the terminal keeps (the big slot's), and the
-   *  factor it is drawn at. The PTY never learns about the small size, so a
+  /** small (and a small one hidden behind a maximized pane): the logical size
+   *  the terminal keeps (the big slot's), and the factor it is drawn at. The PTY never learns about the small size, so a
    *  pane moving between big and small does not reflow its TUI. */
   logical?: { w: number; h: number };
   scale?: number;
@@ -182,7 +190,15 @@ export function slotFor(
 ): Slot {
   if (floating && floating.id === id) return { kind: 'float', rect: floating.rect };
   const full: Rect = { x: FOCUS_PAD, y: FOCUS_PAD, w: area.w - 2 * FOCUS_PAD, h: area.h - 2 * FOCUS_PAD };
-  if (maximizedId) return maximizedId === id ? { kind: 'max', rect: full } : { kind: 'hidden', rect: NOWHERE };
+  if (maximizedId === id) return { kind: 'max', rect: full };
+  const own = ownSlot(id, order, geo);
+  // Behind a maximized pane the others keep their size and are only hidden.
+  // A zero-size slot would make the terminal fit itself, and its PTY, down to
+  // two columns, and the TUI would come back rewrapped.
+  return maximizedId ? { ...own, kind: 'hidden' } : own;
+}
+
+function ownSlot(id: string, order: string[], geo: FocusGeometry): Slot {
   const idx = order.indexOf(id);
   if (idx < 0) return { kind: 'hidden', rect: NOWHERE };
   if (idx < 2) return { kind: 'big', rect: geo.big[idx] ?? NOWHERE };

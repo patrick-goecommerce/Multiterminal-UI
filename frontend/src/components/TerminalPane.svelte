@@ -390,6 +390,9 @@
 
     resizeObserver = new ResizeObserver(() => {
       if (!termInstance || isZooming) return;
+      // A container with no size has nothing to fit to; fitting anyway would
+      // shrink the PTY to the fit addon's 2x1 minimum and rewrap the TUI.
+      if (!containerEl.clientWidth || !containerEl.clientHeight) return;
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         if (termInstance) {

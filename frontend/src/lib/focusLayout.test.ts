@@ -29,6 +29,10 @@ describe('layoutModeOf', () => {
 });
 
 describe('order', () => {
+  it('drops duplicates, so no pane gets a slot that does not exist', () => {
+    expect(reconcileOrder(['a', 'a', 'b'], ['a', 'b', 'c'])).toEqual(['a', 'b', 'c']);
+  });
+
   it('drops closed panes and appends new ones', () => {
     expect(reconcileOrder(['c', 'a', 'x'], ['a', 'b', 'c'])).toEqual(['c', 'a', 'b']);
     expect(reconcileOrder(undefined, ['a', 'b'])).toEqual(['a', 'b']);
@@ -168,5 +172,14 @@ describe('slotFor', () => {
   it('hides the others while one pane is maximized', () => {
     expect(slotFor('a', ['a', 'b'], geo, area, null, 'b').kind).toBe('hidden');
     expect(slotFor('b', ['a', 'b'], geo, area, null, 'b').kind).toBe('max');
+  });
+
+  // A zero-size slot would fit the terminal, and its PTY, down to 2x1.
+  it('keeps the hidden panes at their own size behind a maximized one', () => {
+    const big = slotFor('a', ['a', 'b', 'c'], geo, area, null, 'b');
+    expect(big.rect).toEqual(geo.big[0]);
+    const small = slotFor('c', ['a', 'b', 'c'], geo, area, null, 'b');
+    expect(small.kind).toBe('hidden');
+    expect(small.logical).toEqual({ w: geo.big[1].w, h: geo.big[1].h });
   });
 });
