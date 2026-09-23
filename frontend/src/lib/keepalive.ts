@@ -2,6 +2,7 @@ import { tabStore } from '../stores/tabs';
 import { buildClaudeArgv, encodeForPty } from './claude';
 import * as App from '../../wailsjs/go/backend/App';
 import { isMainWindow } from './window';
+import type { SessionRef } from './sessionRef';
 
 export interface KeepAliveConfig {
   enabled: boolean | null;
@@ -34,15 +35,15 @@ export async function startKeepAliveLoop(
   if (!cfg.enabled || cfg.interval_minutes <= 0) return () => {};
 
   // Auto-start: create a Claude session if none exists in ANY window.
-  const existing = await App.GetFirstClaudeSessionID().catch(() => -1);
-  if (existing < 0) {
+  const existing = await App.GetFirstClaudeSessionID().catch(() => '');
+  if (!existing) {
     const state = tabStore.getState();
     if (state.tabs.length > 0) {
       const firstTab = state.tabs[0];
       const argv = buildClaudeArgv('claude', '', claudePath);
       try {
         const sessionId = await App.CreateSession(argv, firstTab.dir || '', 24, 80, 'claude');
-        if (sessionId > 0) {
+        if (sessionId) {
           tabStore.addPane(firstTab.id, sessionId, 'Claude', 'claude', '');
         }
       } catch (err) {
@@ -55,7 +56,7 @@ export async function startKeepAliveLoop(
   // polling instead of finishing its minute on a host nobody is watching.
   let cancelled = false;
 
-  async function sendPing(sessionId: number) {
+  async function sendPing(sessionId: SessionRef) {
     // Message text and Enter as separate writes: an agent's redraw can swallow
     // a Return that arrives in the same chunk as the text.
     await App.WriteToSession(sessionId, encodeForPty(cfg.message));
@@ -81,7 +82,7 @@ export async function startKeepAliveLoop(
         lastChangeAt = Date.now();
       } else if (Date.now() - lastChangeAt >= idleMs) {
         const sessionId = await App.GetFirstClaudeSessionID();
-        if (sessionId >= 0) await sendPing(sessionId);
+        if (sessionId) await sendPing(sessionId);
         return;
       }
     }

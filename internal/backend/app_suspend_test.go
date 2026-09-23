@@ -14,7 +14,7 @@ func newSuspendTestService() *AppService {
 }
 
 // registerSession puts a session object into the service maps the way
-// CreateSession would, without spawning a process. Resume is stubbed out so a
+// createSession would, without spawning a process. Resume is stubbed out so a
 // wake-up in these tests never launches a real claude CLI.
 func registerSession(t *testing.T, a *AppService, id int, mode string, argv []string, dir string) *terminal.Session {
 	t.Helper()
@@ -173,12 +173,12 @@ func TestIsClaudeMode(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// SuspendSession gating.
+// suspendSession gating.
 // ---------------------------------------------------------------------------
 
 func TestSuspendSession_UnknownSession(t *testing.T) {
 	a := newSuspendTestService()
-	if err := a.SuspendSession(999); err == nil {
+	if err := a.suspendSession(999); err == nil {
 		t.Fatal("expected an error for an unknown session")
 	}
 }
@@ -188,7 +188,7 @@ func TestSuspendSession_RejectsNonClaudeModes(t *testing.T) {
 	sess := registerSession(t, a, 1, "shell", []string{"pwsh"}, "")
 	sess.SetResumeID("uuid")
 	sess.SetHookActivity(terminal.ActivityDone)
-	if err := a.SuspendSession(1); err == nil {
+	if err := a.suspendSession(1); err == nil {
 		t.Fatal("shell panes have no resume path and must be rejected")
 	}
 }
@@ -197,7 +197,7 @@ func TestSuspendSession_RejectsWithoutResumeID(t *testing.T) {
 	a := newSuspendTestService()
 	sess := registerSession(t, a, 1, "claude", []string{"claude"}, "")
 	sess.SetHookActivity(terminal.ActivityDone)
-	if err := a.SuspendSession(1); err == nil {
+	if err := a.suspendSession(1); err == nil {
 		t.Fatal("a pane without a claude session id could never be resumed")
 	}
 }
@@ -207,7 +207,7 @@ func TestSuspendSession_RejectsBusyPane(t *testing.T) {
 	sess := registerSession(t, a, 1, "claude", []string{"claude", "--session-id", "u1"}, "")
 	sess.SetResumeID("u1")
 	sess.SetHookActivity(terminal.ActivityActive)
-	if err := a.SuspendSession(1); err == nil {
+	if err := a.suspendSession(1); err == nil {
 		t.Fatal("only a finished (done) pane may sleep")
 	}
 	if sess.IsSuspendedOrSuspending() {
@@ -221,13 +221,13 @@ func TestSuspendSession_SuspendsDonePane(t *testing.T) {
 	sess.SetResumeID("u1")
 	sess.SetHookActivity(terminal.ActivityDone)
 
-	if err := a.SuspendSession(1); err != nil {
+	if err := a.suspendSession(1); err != nil {
 		t.Fatalf("SuspendSession: %v", err)
 	}
 	waitFor(t, func() bool { return sess.IsSuspended() }, "session did not reach the suspended state")
 	waitFor(t, func() bool { return lastActivity(a, 1) == "sleeping" },
 		"prevActivity never became \"sleeping\" — the scan loop would re-emit the old state")
-	if !a.IsSessionSuspended(1) {
+	if !a.isSessionSuspended(1) {
 		t.Fatal("IsSessionSuspended must report true")
 	}
 }
@@ -237,22 +237,22 @@ func TestSuspendSession_IsIdempotent(t *testing.T) {
 	sess := registerSession(t, a, 1, "claude", []string{"claude", "--session-id", "u1"}, "")
 	sess.SetResumeID("u1")
 	sess.SetHookActivity(terminal.ActivityDone)
-	if err := a.SuspendSession(1); err != nil {
+	if err := a.suspendSession(1); err != nil {
 		t.Fatalf("SuspendSession: %v", err)
 	}
 	waitFor(t, func() bool { return sess.IsSuspended() }, "not suspended")
-	if err := a.SuspendSession(1); err != nil {
+	if err := a.suspendSession(1); err != nil {
 		t.Fatalf("second SuspendSession must be a no-op, got %v", err)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// ResumeSession gating.
+// resumeSession gating.
 // ---------------------------------------------------------------------------
 
 func TestResumeSession_UnknownSession(t *testing.T) {
 	a := newSuspendTestService()
-	if err := a.ResumeSession(999); err == nil {
+	if err := a.resumeSession(999); err == nil {
 		t.Fatal("expected an error for an unknown session")
 	}
 }
@@ -260,7 +260,7 @@ func TestResumeSession_UnknownSession(t *testing.T) {
 func TestResumeSession_AwakePaneIsNoOp(t *testing.T) {
 	a := newSuspendTestService()
 	registerSession(t, a, 1, "claude", []string{"claude"}, "")
-	if err := a.ResumeSession(1); err != nil {
+	if err := a.resumeSession(1); err != nil {
 		t.Fatalf("resuming an awake pane must be a no-op, got %v", err)
 	}
 }
@@ -274,7 +274,7 @@ func TestResumeSession_WithoutResumeIDFails(t *testing.T) {
 	if !sess.TrySuspend() || !sess.FinishSuspend() {
 		t.Fatal("failed to put the test session to sleep")
 	}
-	if err := a.ResumeSession(1); err == nil {
+	if err := a.resumeSession(1); err == nil {
 		t.Fatal("waking a pane with no claude session id must fail loudly")
 	}
 	if !sess.IsSuspended() {
@@ -287,7 +287,7 @@ func TestResumeSession_UsesResumeArgvAndIdenticalEnv(t *testing.T) {
 	sess := registerSession(t, a, 1, "claude", []string{"claude", "--model", "opus", "--session-id", "u1"}, "C:\\repo")
 	sess.SetResumeID("u1")
 	sess.SetHookActivity(terminal.ActivityDone)
-	if err := a.SuspendSession(1); err != nil {
+	if err := a.suspendSession(1); err != nil {
 		t.Fatalf("SuspendSession: %v", err)
 	}
 	waitFor(t, func() bool { return sess.IsSuspended() }, "not suspended")
@@ -298,7 +298,7 @@ func TestResumeSession_UsesResumeArgvAndIdenticalEnv(t *testing.T) {
 		gotArgv, gotDir, gotEnv = argv, dir, env
 		return nil
 	})
-	if err := a.ResumeSession(1); err != nil {
+	if err := a.resumeSession(1); err != nil {
 		t.Fatalf("ResumeSession: %v", err)
 	}
 
@@ -332,14 +332,14 @@ func TestResumeSession_HookSessionIDWinsOverArgv(t *testing.T) {
 	sess.SetResumeID("argv-id")
 	sess.SetHookSessionID("hook-id")
 	sess.SetHookActivity(terminal.ActivityDone)
-	if err := a.SuspendSession(1); err != nil {
+	if err := a.suspendSession(1); err != nil {
 		t.Fatalf("SuspendSession: %v", err)
 	}
 	waitFor(t, func() bool { return sess.IsSuspended() }, "not suspended")
 
 	var gotArgv []string
 	sess.SetSpawnForTest(func(argv []string, _ string, _ []string) error { gotArgv = argv; return nil })
-	if err := a.ResumeSession(1); err != nil {
+	if err := a.resumeSession(1); err != nil {
 		t.Fatalf("ResumeSession: %v", err)
 	}
 	if strings.Join(gotArgv, " ") != "claude --resume hook-id" {
@@ -356,18 +356,18 @@ func TestAddToQueue_OnSleepingPaneWakesInsteadOfHanging(t *testing.T) {
 	sess := registerSession(t, a, 1, "claude", []string{"claude", "--session-id", "u1"}, "")
 	sess.SetResumeID("u1")
 	sess.SetHookActivity(terminal.ActivityDone)
-	if err := a.SuspendSession(1); err != nil {
+	if err := a.suspendSession(1); err != nil {
 		t.Fatalf("SuspendSession: %v", err)
 	}
 	waitFor(t, func() bool { return sess.IsSuspended() }, "not suspended")
 
-	item := a.AddToQueue(1, "mach weiter")
+	item := a.addToQueue(1, "mach weiter")
 	if item.ID == 0 {
 		t.Fatal("the item must be queued, not rejected")
 	}
 	// The item stays pending: processQueue refuses to write into a sleeping
 	// pane and triggers a wake instead. Nothing may be marked "sent".
-	for _, it := range a.GetQueue(1) {
+	for _, it := range a.getQueue(1) {
 		if it.Status != "pending" {
 			t.Fatalf("item %d status = %q, want pending — a sleeping pane cannot receive a prompt", it.ID, it.Status)
 		}

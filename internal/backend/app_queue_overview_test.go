@@ -48,8 +48,8 @@ func TestGetAllQueues_ReturnsMatchingQueues(t *testing.T) {
 	if len(result) != 1 {
 		t.Fatalf("expected 1 overview item, got %d", len(result))
 	}
-	if result[0].SessionID != 1 {
-		t.Errorf("session ID = %d, want 1", result[0].SessionID)
+	if result[0].SessionID != app.ref(1) {
+		t.Errorf("session ID = %q, want %q", result[0].SessionID, app.ref(1))
 	}
 	if len(result[0].Items) != 2 {
 		t.Errorf("expected 2 items, got %d", len(result[0].Items))

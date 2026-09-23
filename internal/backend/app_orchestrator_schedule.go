@@ -4,9 +4,10 @@ package backend
 
 import (
 	"fmt"
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"log"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // runOrchestrator is the main scheduler goroutine. It ticks every 5 seconds,
@@ -110,7 +111,7 @@ func (a *AppService) spawnAgent(orch *orchestratorState, state *KanbanState, car
 	}
 
 	// Spawn PTY session in the worktree directory
-	sessionID := a.CreateSession(argv, wt.Path, 24, 80, "claude")
+	sessionID := a.createSession(argv, wt.Path, 24, 80, "claude")
 	if sessionID < 0 {
 		log.Printf("[orchestrator] session creation failed for card %s", card.ID)
 		return false
@@ -125,7 +126,7 @@ func (a *AppService) spawnAgent(orch *orchestratorState, state *KanbanState, car
 
 	// Link session to parent issue for progress tracking
 	if card.ParentIssue > 0 {
-		a.LinkSessionIssue(sessionID, card.ParentIssue, card.Title, wt.Branch, orch.dir)
+		a.linkSessionIssue(sessionID, card.ParentIssue, card.Title, wt.Branch, orch.dir)
 	}
 
 	// Move card to in_progress
@@ -140,7 +141,7 @@ func (a *AppService) spawnAgent(orch *orchestratorState, state *KanbanState, car
 	if card.Prompt != "" {
 		go func() {
 			time.Sleep(2 * time.Second)
-			a.AddToQueue(sessionID, card.Prompt)
+			a.addToQueue(sessionID, card.Prompt)
 		}()
 	}
 

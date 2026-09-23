@@ -66,7 +66,7 @@ func TestCleanupWorktree_UnmergedBranchSurvives(t *testing.T) {
 
 // TestFinishWorktree_BlockedRetryAfterMergeCleansUp covers the cleanup-retry
 // path: the merge already went through (count==0) and a marker exists, so a
-// FinishWorktree call from the "blocked" phase must resume straight into the
+// finishWorktree call from the "blocked" phase must resume straight into the
 // cleanup and tear everything down.
 func TestFinishWorktree_BlockedRetryAfterMergeCleansUp(t *testing.T) {
 	tmpHome := t.TempDir()
@@ -87,7 +87,7 @@ func TestFinishWorktree_BlockedRetryAfterMergeCleansUp(t *testing.T) {
 		Phase: "blocked", WorktreePath: wt, Branch: "terminal/feat",
 		TargetBranch: "alpha-main", Mode: "shell",
 	}
-	a.FinishWorktree(1)
+	a.finishWorktree(1)
 
 	deadline := time.After(5 * time.Second)
 	for {
@@ -138,7 +138,7 @@ func TestFinishWorktree_CleanupPhaseRetryCleansUp(t *testing.T) {
 		Phase: "cleanup", WorktreePath: wt, Branch: "terminal/feat",
 		TargetBranch: "alpha-main", Mode: "shell",
 	}
-	a.FinishWorktree(1)
+	a.finishWorktree(1)
 
 	deadline := time.After(5 * time.Second)
 	for {

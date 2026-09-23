@@ -43,8 +43,8 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	}
 
 	// User queues a prompt; the session is idle, so it is sent immediately.
-	app.AddToQueue(sessID, "test")
-	if got := app.GetQueue(sessID); len(got) != 1 || got[0].Status != "sent" {
+	app.addToQueue(sessID, "test")
+	if got := app.getQueue(sessID); len(got) != 1 || got[0].Status != "sent" {
 		t.Fatalf("queue after AddToQueue = %+v, want 1 item with status 'sent'", got)
 	}
 
@@ -91,7 +91,7 @@ func TestActivityRace_QueueAdvancesDespiteStrayDetectActivityCall(t *testing.T) 
 	}
 
 	// The queue item itself must have advanced to "done", not be stuck as "sent".
-	queue := app.GetQueue(sessID)
+	queue := app.getQueue(sessID)
 	if len(queue) != 1 || queue[0].Status != "done" {
 		t.Fatalf("queue after done transition = %+v, want 1 item with status 'done'", queue)
 	}

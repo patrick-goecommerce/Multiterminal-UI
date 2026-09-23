@@ -26,14 +26,14 @@ func TestSpawnedEvent_OnlyForSessionsFromElsewhere(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("origin="+tt.origin, func(t *testing.T) {
-			got, ok := spawnedEvent(hub.SessionSummary{
+			got, ok := spawnedEvent("h1", hub.SessionSummary{
 				ID: 7, Mode: "claude", Dir: "/tmp", Origin: tt.origin,
 			})
 			if ok != tt.want {
 				t.Fatalf("a pane for origin %q: %t, want %t", tt.origin, ok, tt.want)
 			}
-			if ok && got.ID != 7 {
-				t.Errorf("event carried session %d, want 7", got.ID)
+			if ok && got.ID != hub.Local("h1", 7) {
+				t.Errorf("event carried session %q, want h1:7", got.ID)
 			}
 		})
 	}
@@ -42,14 +42,14 @@ func TestSpawnedEvent_OnlyForSessionsFromElsewhere(t *testing.T) {
 // The pane's label is the one thing the event exists to carry that the summary
 // does not already say plainly.
 func TestSpawnedEvent_NamesThePane(t *testing.T) {
-	got, _ := spawnedEvent(hub.SessionSummary{
+	got, _ := spawnedEvent("h1", hub.SessionSummary{
 		ID: 3, Mode: "claude", Model: "opus", Origin: hub.OriginAgent,
 	})
 	if got.Name != "Claude (opus)" {
 		t.Errorf("name = %q, want %q", got.Name, "Claude (opus)")
 	}
 
-	got, _ = spawnedEvent(hub.SessionSummary{ID: 4, Mode: "codex", Origin: hub.OriginCLI})
+	got, _ = spawnedEvent("h1", hub.SessionSummary{ID: 4, Mode: "codex", Origin: hub.OriginCLI})
 	if got.Name != "Codex" {
 		t.Errorf("name = %q, want %q", got.Name, "Codex")
 	}

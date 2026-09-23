@@ -8,6 +8,7 @@
   import { sendNotification } from '../lib/notifications';
   import { playBell, audioMuted } from '../lib/audio';
   import { tabStore, type Pane } from '../stores/tabs';
+  import { sessionNumber, type SessionRef } from '../lib/sessionRef';
   import { currentTheme } from '../stores/theme';
   import { config } from '../stores/config';
   import * as App from '../../wailsjs/go/backend/App';
@@ -188,9 +189,9 @@
     let flushScheduled = false;
     let isReady = false;
     let appCursorVisible = true; // track DECTCEM state across batches
-    // Stagger flushes by session ID (0-9 ms offset) to spread xterm.js work
+    // Stagger flushes by session number (0-9 ms offset) to spread xterm.js work
     // across the 16ms frame instead of having all panes flush simultaneously.
-    const FLUSH_DELAY = 16 + (pane.sessionId % 10);
+    const FLUSH_DELAY = 16 + (sessionNumber(pane.sessionId) % 10);
     const HIDE_CURSOR = new Uint8Array([0x1b, 0x5b, 0x3f, 0x32, 0x35, 0x6c]); // \x1b[?25l
     const SHOW_CURSOR = new Uint8Array([0x1b, 0x5b, 0x3f, 0x32, 0x35, 0x68]); // \x1b[?25h
 
@@ -314,7 +315,7 @@
     // Wails v3: payload is in event.data ([]TerminalOutputEvent { id, data })
     // Inactive panes buffer data silently — scheduleFlush() is a no-op when !active.
     cleanupFn = EventsOn('terminal:output-batch', (event: any) => {
-      const items: Array<{ id: number; data: string }> = event.data;
+      const items: Array<{ id: SessionRef; data: string }> = event.data;
       if (!Array.isArray(items)) return;
       let gotData = false;
       for (const item of items) {
@@ -402,7 +403,7 @@
 
     // Wails v3: queue:update payload is the session ID directly in event.data
     queueCleanup = EventsOn('queue:update', (event: any) => {
-      const sid: number = event.data;
+      const sid: SessionRef = event.data;
       if (sid === pane.sessionId) {
         App.GetQueue(pane.sessionId).then(items => {
           queueCount = items.filter((i: any) => i.status !== 'done').length;

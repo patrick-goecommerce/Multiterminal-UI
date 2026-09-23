@@ -120,7 +120,7 @@ func TestOnWorktreeChange_StillClearsWhenLeavingForMainRepo(t *testing.T) {
 	}
 	a.onWorktreeChange(1, "", "", repo)
 
-	if cleared == nil || cleared.ID != 1 {
+	if cleared == nil || cleared.ID != a.ref(1) {
 		t.Fatalf("expected WorktreeClearedEvent, got %+v", cleared)
 	}
 	if _, _, ok := a.currentWorktree(1); ok {

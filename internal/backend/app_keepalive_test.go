@@ -18,7 +18,7 @@ func fakeSession(t *testing.T, a *AppService, id int, mode string) {
 
 func TestGetFirstClaudeSessionID_NoneRunning(t *testing.T) {
 	a := newTestAgentControlService()
-	if got := a.GetFirstClaudeSessionID(); got != -1 {
+	if got := a.firstClaudeSessionID(); got != -1 {
 		t.Fatalf("GetFirstClaudeSessionID() = %d, want -1", got)
 	}
 }
@@ -28,7 +28,7 @@ func TestGetFirstClaudeSessionID_IgnoresNonClaudeModes(t *testing.T) {
 	fakeSession(t, a, 1, "shell")
 	fakeSession(t, a, 2, "codex")
 	fakeSession(t, a, 3, "gemini")
-	if got := a.GetFirstClaudeSessionID(); got != -1 {
+	if got := a.firstClaudeSessionID(); got != -1 {
 		t.Fatalf("GetFirstClaudeSessionID() = %d, want -1 (no claude-mode session)", got)
 	}
 }
@@ -40,7 +40,7 @@ func TestGetFirstClaudeSessionID_ReturnsOldestClaudeSession(t *testing.T) {
 	fakeSession(t, a, 3, "claude") // lower ID, i.e. created earlier — should win
 	fakeSession(t, a, 9, "claude-auto")
 
-	if got := a.GetFirstClaudeSessionID(); got != 3 {
+	if got := a.firstClaudeSessionID(); got != 3 {
 		t.Fatalf("GetFirstClaudeSessionID() = %d, want 3 (oldest claude-mode session)", got)
 	}
 }
@@ -53,7 +53,7 @@ func TestGetFirstClaudeSessionID_SkipsClosedSessions(t *testing.T) {
 	a.mu.Unlock()
 	fakeSession(t, a, 4, "claude")
 
-	if got := a.GetFirstClaudeSessionID(); got != 4 {
+	if got := a.firstClaudeSessionID(); got != 4 {
 		t.Fatalf("GetFirstClaudeSessionID() = %d, want 4 (id 1 has no live session)", got)
 	}
 }

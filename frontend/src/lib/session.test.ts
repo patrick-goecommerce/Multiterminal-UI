@@ -71,7 +71,7 @@ describe('restoreSession worktree setup', () => {
   beforeEach(() => {
     loadTabs.mockReset();
     ensureProjectWorktreeSetup.mockReset().mockResolvedValue(undefined);
-    createSession.mockReset().mockResolvedValue(1);
+    createSession.mockReset().mockResolvedValue('h1:1');
     worktreeDirExists.mockReset().mockResolvedValue(false);
     linkSessionIssue.mockReset();
     resolveMCPProfile.mockReset().mockResolvedValue('');
@@ -115,7 +115,7 @@ describe('restoreSession MCP profile', () => {
   beforeEach(() => {
     loadTabs.mockReset();
     ensureProjectWorktreeSetup.mockReset().mockResolvedValue(undefined);
-    createSession.mockReset().mockResolvedValue(1);
+    createSession.mockReset().mockResolvedValue('h1:1');
     worktreeDirExists.mockReset().mockResolvedValue(false);
     linkSessionIssue.mockReset();
     resolveMCPProfile.mockReset().mockResolvedValue('');
@@ -171,7 +171,7 @@ describe('restoreSession activitySince seeding', () => {
   beforeEach(() => {
     loadTabs.mockReset();
     ensureProjectWorktreeSetup.mockReset().mockResolvedValue(undefined);
-    createSession.mockReset().mockResolvedValue(1);
+    createSession.mockReset().mockResolvedValue('h1:1');
     worktreeDirExists.mockReset().mockResolvedValue(false);
     linkSessionIssue.mockReset();
     resolveMCPProfile.mockReset().mockResolvedValue('');
@@ -197,7 +197,7 @@ describe('restoreSession activitySince seeding', () => {
   it('seeds the backend with the restored timestamp and the state it belongs to', async () => {
     await restoreWith({ activity_since: 1700000000, activity_state: 'done' });
 
-    expect(seedActivitySince).toHaveBeenCalledWith(1, 1700000000, 'done');
+    expect(seedActivitySince).toHaveBeenCalledWith('h1:1', 1700000000, 'done');
   });
 
   // A session file from before this field existed has no activity_since key
@@ -234,7 +234,7 @@ describe('restoreSession with a session daemon', () => {
   beforeEach(() => {
     loadTabs.mockReset();
     ensureProjectWorktreeSetup.mockReset().mockResolvedValue(undefined);
-    createSession.mockReset().mockResolvedValue(99);
+    createSession.mockReset().mockResolvedValue('h1:99');
     worktreeDirExists.mockReset().mockResolvedValue(false);
     linkSessionIssue.mockReset();
     resolveMCPProfile.mockReset().mockResolvedValue('');
@@ -259,20 +259,49 @@ describe('restoreSession with a session daemon', () => {
   }
 
   it('re-attaches a pane whose session is still running', async () => {
-    listLiveSessions.mockResolvedValue([{ id: 7, name: 'p', dir: 'D:/repos/foo', mode: 'claude', running: true }]);
-    loadTabs.mockResolvedValue(tabWith({ session_id: 7 }));
+    listLiveSessions.mockResolvedValue([{ id: 'h1:7', name: 'p', dir: 'D:/repos/foo', mode: 'claude', running: true }]);
+    loadTabs.mockResolvedValue(tabWith({ session_id: 'h1:7' }));
 
     await restoreSession('claude');
 
-    expect(attachSession).toHaveBeenCalledWith(7, 24, 80);
+    expect(attachSession).toHaveBeenCalledWith('h1:7', 24, 80);
     expect(createSession).not.toHaveBeenCalled();
+  });
+
+  // A session file from before refs carried a hub has a bare number, which
+  // the backend hands over as "7". It can only have meant the one host of
+  // that time, and launching a second agent next to the running one is the
+  // thing the re-attach exists to prevent.
+  it('re-attaches a pane saved with a legacy bare number', async () => {
+    listLiveSessions.mockResolvedValue([{ id: 'h1:7', name: 'p', dir: 'D:/repos/foo', mode: 'claude', running: true }]);
+    loadTabs.mockResolvedValue(tabWith({ session_id: '7' }));
+
+    await restoreSession('claude');
+
+    expect(attachSession).toHaveBeenCalledWith('h1:7', 24, 80);
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  // Session 7 of another hub is not ours, whatever number it has. The saved
+  // pane gets a fresh session; h1:7 is still somebody's and ends up in a tab
+  // of its own through the orphan adoption.
+  it('does not re-attach to the same number on another hub', async () => {
+    listLiveSessions.mockResolvedValue([{ id: 'h1:7', name: 'p', dir: 'D:/repos/foo', mode: 'claude', running: true }]);
+    loadTabs.mockResolvedValue(tabWith({ session_id: 'h2:7' }));
+
+    const fresh = () => tabStore.getState().tabs.flatMap((t) => t.panes).filter((p) => p.sessionId === 'h1:99').length;
+    const before = fresh();
+    await restoreSession('claude');
+
+    expect(createSession).toHaveBeenCalledTimes(1);
+    expect(fresh()).toBe(before + 1);
   });
 
   // The saved id is meaningless once the session is gone, which is every
   // restart without the daemon.
   it('launches when the saved session is no longer alive', async () => {
     listLiveSessions.mockResolvedValue([]);
-    loadTabs.mockResolvedValue(tabWith({ session_id: 7 }));
+    loadTabs.mockResolvedValue(tabWith({ session_id: 'h1:7' }));
 
     await restoreSession('claude');
 
@@ -283,8 +312,8 @@ describe('restoreSession with a session daemon', () => {
   // A re-attached session never stopped, so the backend's state is current and
   // the saved one would only drag it backwards.
   it('does not seed a stale activity onto a re-attached pane', async () => {
-    listLiveSessions.mockResolvedValue([{ id: 7, name: 'p', dir: 'D:/repos/foo', mode: 'claude', running: true }]);
-    loadTabs.mockResolvedValue(tabWith({ session_id: 7, activity_since: 1700000000, activity_state: 'done' }));
+    listLiveSessions.mockResolvedValue([{ id: 'h1:7', name: 'p', dir: 'D:/repos/foo', mode: 'claude', running: true }]);
+    loadTabs.mockResolvedValue(tabWith({ session_id: 'h1:7', activity_since: 1700000000, activity_state: 'done' }));
 
     await restoreSession('claude');
 
@@ -293,18 +322,18 @@ describe('restoreSession with a session daemon', () => {
 
   it('still seeds a relaunched pane', async () => {
     listLiveSessions.mockResolvedValue([]);
-    loadTabs.mockResolvedValue(tabWith({ session_id: 7, activity_since: 1700000000, activity_state: 'done' }));
+    loadTabs.mockResolvedValue(tabWith({ session_id: 'h1:7', activity_since: 1700000000, activity_state: 'done' }));
 
     await restoreSession('claude');
 
-    expect(seedActivitySince).toHaveBeenCalledWith(99, 1700000000, 'done');
+    expect(seedActivitySince).toHaveBeenCalledWith('h1:99', 1700000000, 'done');
   });
 
   // A session no saved pane claims would otherwise keep running with nothing
   // on screen pointing at it.
   it('gives a leftover session a pane of its own', async () => {
     listLiveSessions.mockResolvedValue([
-      { id: 12, name: 'agent', dir: 'D:/repos/bar', mode: 'claude', running: true },
+      { id: 'h1:12', name: 'agent', dir: 'D:/repos/bar', mode: 'claude', running: true },
     ]);
     loadTabs.mockResolvedValue({ active_tab: 0, tabs: [] });
 
@@ -314,12 +343,12 @@ describe('restoreSession with a session daemon', () => {
     const restored = await restoreSession('claude');
 
     expect(restored).toBe(true);
-    expect(attachSession).toHaveBeenCalledWith(12, 24, 80);
+    expect(attachSession).toHaveBeenCalledWith('h1:12', 24, 80);
     const tabs = tabStore.getState().tabs;
     expect(tabs).toHaveLength(before + 1);
     const added = tabs[tabs.length - 1];
     expect(added.name).toBe('bar');
-    expect(added.panes[0].sessionId).toBe(12);
+    expect(added.panes[0].sessionId).toBe('h1:12');
   });
 
   it('reports nothing to restore when there are neither tabs nor live sessions', async () => {
@@ -351,13 +380,13 @@ describe('closeTabWithSessions', () => {
   it('beendet jede Session des Tabs, bevor er ihn entfernt', () => {
     tabStore.addTab('bleibt');
     const tabId = tabStore.addTab('weg');
-    tabStore.addPane(tabId, 11, 'a', 'claude', '');
-    tabStore.addPane(tabId, 12, 'b', 'shell', '');
-    tabStore.addPane(tabId, 0, 'chat', 'claude', '', null, '', '', '', '', '', false, 'chat', 'conv-7');
+    tabStore.addPane(tabId, 'h1:11', 'a', 'claude', '');
+    tabStore.addPane(tabId, 'h1:12', 'b', 'shell', '');
+    tabStore.addPane(tabId, '', 'chat', 'claude', '', null, '', '', '', '', '', false, 'chat', 'conv-7');
 
     expect(closeTabWithSessions(tabId)).toBe(true);
 
-    expect(closeSession.mock.calls.map((c) => c[0]).sort()).toEqual([11, 12]);
+    expect(closeSession.mock.calls.map((c) => c[0]).sort()).toEqual(['h1:11', 'h1:12']);
     expect(closeChatSession).toHaveBeenCalledWith('conv-7');
     expect(tabStore.getState().tabs.find((t) => t.id === tabId)).toBeUndefined();
   });
@@ -366,7 +395,7 @@ describe('closeTabWithSessions', () => {
     const { tabs } = tabStore.getState();
     for (const t of tabs.slice(1)) tabStore.closeTab(t.id);
     const onlyId = tabStore.getState().tabs[0].id;
-    tabStore.addPane(onlyId, 21, 'x', 'claude', '');
+    tabStore.addPane(onlyId, 'h1:21', 'x', 'claude', '');
 
     expect(closeTabWithSessions(onlyId)).toBe(false);
 

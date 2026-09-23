@@ -26,7 +26,7 @@ func TestWaitForAgent_ReturnsImmediatelyWhenAlreadyDone(t *testing.T) {
 	sess.SetHookActivity(terminal.ActivityDone)
 
 	start := time.Now()
-	state, err := a.WaitForAgent(context.Background(), 1, nil, time.Minute)
+	state, err := a.waitForAgent(context.Background(), 1, nil, time.Minute)
 	if err != nil {
 		t.Fatalf("WaitForAgent: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestWaitForAgent_BlockedCountsByDefault(t *testing.T) {
 	a, sess := waitTestApp(t, 2)
 	sess.SetHookActivity(terminal.ActivityWaitingPermission)
 
-	state, err := a.WaitForAgent(context.Background(), 2, nil, time.Minute)
+	state, err := a.waitForAgent(context.Background(), 2, nil, time.Minute)
 	if err != nil {
 		t.Fatalf("WaitForAgent: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestWaitForAgent_AQuestionIsAlsoBlocked(t *testing.T) {
 	a, sess := waitTestApp(t, 3)
 	sess.SetHookActivity(terminal.ActivityWaitingAnswer)
 
-	state, err := a.WaitForAgent(context.Background(), 3, []string{"blocked"}, time.Minute)
+	state, err := a.waitForAgent(context.Background(), 3, []string{"blocked"}, time.Minute)
 	if err != nil {
 		t.Fatalf("WaitForAgent: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestWaitForAgent_ReturnsWhenTheStateArrives(t *testing.T) {
 		sess.SetHookActivity(terminal.ActivityDone)
 	}()
 
-	state, err := a.WaitForAgent(context.Background(), 4, []string{"done"}, 10*time.Second)
+	state, err := a.waitForAgent(context.Background(), 4, []string{"done"}, 10*time.Second)
 	if err != nil {
 		t.Fatalf("WaitForAgent: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestWaitForAgent_TimesOutWithTheStateItSaw(t *testing.T) {
 	a, sess := waitTestApp(t, 5)
 	sess.SetHookActivity(terminal.ActivityActive)
 
-	_, err := a.WaitForAgent(context.Background(), 5, []string{"done"}, 300*time.Millisecond)
+	_, err := a.waitForAgent(context.Background(), 5, []string{"done"}, 300*time.Millisecond)
 	if err == nil {
 		t.Fatal("waiting on a session that never finishes returned no error")
 	}
@@ -113,7 +113,7 @@ func TestWaitForAgent_AnExitEndsTheWait(t *testing.T) {
 	}
 
 	// The session is gone, so the wait cannot even start.
-	if _, err := a.WaitForAgent(context.Background(), 6, []string{"done"}, time.Second); err == nil {
+	if _, err := a.waitForAgent(context.Background(), 6, []string{"done"}, time.Second); err == nil {
 		t.Error("waiting on a session the host does not have succeeded")
 	}
 }
@@ -121,7 +121,7 @@ func TestWaitForAgent_AnExitEndsTheWait(t *testing.T) {
 func TestWaitForAgent_RejectsAnUnknownState(t *testing.T) {
 	a, _ := waitTestApp(t, 7)
 
-	_, err := a.WaitForAgent(context.Background(), 7, []string{"finished"}, time.Second)
+	_, err := a.waitForAgent(context.Background(), 7, []string{"finished"}, time.Second)
 	if err == nil {
 		t.Fatal("an unknown state was accepted")
 	}
@@ -142,7 +142,7 @@ func TestWaitForAgent_HonoursCancellation(t *testing.T) {
 	}()
 
 	start := time.Now()
-	if _, err := a.WaitForAgent(ctx, 8, []string{"done"}, time.Minute); err == nil {
+	if _, err := a.waitForAgent(ctx, 8, []string{"done"}, time.Minute); err == nil {
 		t.Fatal("a cancelled wait returned no error")
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {

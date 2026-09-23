@@ -30,13 +30,6 @@ const (
 	StatusSuspended  Status = "suspended"
 )
 
-// Ref addresses one session across hubs. Hosts speak in plain IDs; the hub
-// half is filled in at the wire boundary (see package doc).
-type Ref struct {
-	Hub string `json:"hub" yaml:"hub"`
-	ID  int    `json:"id" yaml:"id"`
-}
-
 // CreateSpec is everything needed to start a session. Env is passed in rather
 // than assembled here: which variables a Claude pane needs (hook wiring,
 // worktree firewall, session ID) is policy that belongs to the caller, and the

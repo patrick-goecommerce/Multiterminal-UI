@@ -69,7 +69,7 @@ func TestListLiveSessions_ReportsWhatTheHostHolds(t *testing.T) {
 		t.Fatalf("a fresh host reported %d sessions, want none", len(got))
 	}
 
-	id := a.CreateSession(sleepArgvForTest(), sessionDir(t), 24, 80, "claude")
+	id := a.createSession(sleepArgvForTest(), sessionDir(t), 24, 80, "claude")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
@@ -78,8 +78,8 @@ func TestListLiveSessions_ReportsWhatTheHostHolds(t *testing.T) {
 	if len(live) != 1 {
 		t.Fatalf("got %d live sessions, want 1", len(live))
 	}
-	if live[0].ID != id || live[0].Mode != "claude" || !live[0].Running {
-		t.Errorf("live session = %+v, want id %d, mode claude, running", live[0], id)
+	if live[0].ID != a.ref(id) || live[0].Mode != "claude" || !live[0].Running {
+		t.Errorf("live session = %+v, want id %s, mode claude, running", live[0], a.ref(id))
 	}
 }
 
@@ -87,7 +87,7 @@ func TestAttachSession_UnknownSessionIsReported(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 
-	if a.AttachSession(404, 24, 80) {
+	if a.attachSession(404, 24, 80) {
 		t.Error("attaching to a session the host does not have succeeded")
 	}
 }
@@ -98,7 +98,7 @@ func TestAttachSession_ReplaysWhatTheSessionAlreadyProduced(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 
-	id := a.CreateSession(printArgv("attach-marker"), sessionDir(t), 24, 80, "shell")
+	id := a.createSession(printArgv("attach-marker"), sessionDir(t), 24, 80, "shell")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
@@ -109,7 +109,7 @@ func TestAttachSession_ReplaysWhatTheSessionAlreadyProduced(t *testing.T) {
 	}
 
 	// A new window attaches to the same session.
-	if !a.AttachSession(id, 24, 80) {
+	if !a.attachSession(id, 24, 80) {
 		t.Fatal("AttachSession refused a live session")
 	}
 	if got := drainBatcher(t, a, id, "attach-marker"); !strings.Contains(got, "attach-marker") {
@@ -124,7 +124,7 @@ func TestAttachSession_RecoversTheModeFromTheHost(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 
-	id := a.CreateSession(sleepArgvForTest(), sessionDir(t), 24, 80, "claude")
+	id := a.createSession(sleepArgvForTest(), sessionDir(t), 24, 80, "claude")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
@@ -134,7 +134,7 @@ func TestAttachSession_RecoversTheModeFromTheHost(t *testing.T) {
 	delete(a.sessionMode, id)
 	a.mu.Unlock()
 
-	if !a.AttachSession(id, 24, 80) {
+	if !a.attachSession(id, 24, 80) {
 		t.Fatal("AttachSession refused a live session")
 	}
 	a.mu.Lock()
@@ -170,7 +170,7 @@ func TestAppService_AgainstARemoteHost(t *testing.T) {
 	a := newTestApp()
 	a.host = remote
 
-	id := a.CreateSession(printArgv("remote-marker"), sessionDir(t), 24, 80, "shell")
+	id := a.createSession(printArgv("remote-marker"), sessionDir(t), 24, 80, "shell")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
@@ -200,10 +200,10 @@ func TestAppService_AgainstARemoteHost(t *testing.T) {
 		t.Error("a remote host did not report that sessions outlive the window")
 	}
 	live := b.ListLiveSessions()
-	if len(live) != 1 || live[0].ID != id {
+	if len(live) != 1 || live[0].ID != b.ref(id) {
 		t.Fatalf("second window sees %+v, want session %d", live, id)
 	}
-	if !b.AttachSession(id, 24, 80) {
+	if !b.attachSession(id, 24, 80) {
 		t.Fatal("AttachSession refused the surviving session")
 	}
 	if got := drainBatcher(t, b, id, "remote-marker"); !strings.Contains(got, "remote-marker") {

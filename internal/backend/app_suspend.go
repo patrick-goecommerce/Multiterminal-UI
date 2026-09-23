@@ -53,10 +53,10 @@ func (a *AppService) rememberLaunch(id int, argv []string, dir, mode string) {
 // command line is launch policy, and the daemon has to be able to wake a pane
 // without a window. See launch_delegate.go.
 
-// SuspendSession puts a finished Claude pane to sleep. Returns an error when
+// suspendSession puts a finished Claude pane to sleep. Returns an error when
 // the pane is not eligible; the kill itself runs asynchronously because
 // taskkill takes 100–300 ms and must never run under a lock.
-func (a *AppService) SuspendSession(id int) error {
+func (a *AppService) suspendSession(id int) error {
 	a.mu.Lock()
 	mode := a.sessionMode[id]
 	a.mu.Unlock()
@@ -79,9 +79,9 @@ func (a *AppService) SuspendSession(id int) error {
 	return err
 }
 
-// ResumeSession wakes a sleeping pane by restarting claude with --resume into
+// resumeSession wakes a sleeping pane by restarting claude with --resume into
 // the same session object. Calling it on an awake pane is a no-op.
-func (a *AppService) ResumeSession(id int) error {
+func (a *AppService) resumeSession(id int) error {
 	a.mu.Lock()
 	spec := a.launches[id]
 	a.mu.Unlock()
@@ -117,8 +117,8 @@ func (a *AppService) ResumeSession(id int) error {
 	return nil
 }
 
-// IsSessionSuspended reports whether a pane is currently asleep.
-func (a *AppService) IsSessionSuspended(id int) bool {
+// isSessionSuspended reports whether a pane is currently asleep.
+func (a *AppService) isSessionSuspended(id int) bool {
 	summary, err := a.host.Get(id)
 	return err == nil && summary.Status == hub.StatusSuspended
 }
@@ -144,7 +144,7 @@ func (a *AppService) wakeSession(id int) {
 			}
 			time.Sleep(wakeSettleInterval)
 		}
-		if err := a.ResumeSession(id); err != nil {
+		if err := a.resumeSession(id); err != nil {
 			log.Printf("[resume] implicit wake of session %d failed: %v", id, err)
 		}
 	}()
@@ -170,5 +170,5 @@ func (a *AppService) emitLifecycleActivity(id int, state string) {
 	if a.app == nil {
 		return
 	}
-	a.app.Event.Emit("terminal:activity", ActivityInfo{ID: id, Activity: state, ActivitySince: now.Unix()})
+	a.app.Event.Emit("terminal:activity", ActivityInfo{ID: a.ref(id), Activity: state, ActivitySince: now.Unix()})
 }

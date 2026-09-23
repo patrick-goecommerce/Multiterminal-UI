@@ -3,6 +3,7 @@ package backend
 import (
 	"testing"
 
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
@@ -49,12 +50,12 @@ func TestCleanupActivityTracking_NonExistentSession(t *testing.T) {
 
 func TestActivityInfo_Fields(t *testing.T) {
 	info := ActivityInfo{
-		ID:       5,
+		ID:       hub.Local("h1", 5),
 		Activity: "done",
 		Cost:     "$0.42",
 	}
-	if info.ID != 5 {
-		t.Fatalf("expected ID 5, got %d", info.ID)
+	if info.ID.ID != 5 {
+		t.Fatalf("expected ID 5, got %s", info.ID)
 	}
 	if info.Activity != "done" {
 		t.Fatalf("expected 'done', got %q", info.Activity)

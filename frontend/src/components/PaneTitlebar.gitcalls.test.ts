@@ -18,7 +18,7 @@ import { resetBranchCache } from '../lib/git-polling';
 
 function pane(overrides: Partial<Pane> = {}): Pane {
   return {
-    id: 'pane-1', sessionId: 42, name: 'Claude', mode: 'claude', model: '', focused: true,
+    id: 'pane-1', sessionId: 'h1:42', name: 'Claude', mode: 'claude', model: '', focused: true,
     activity: 'idle', cost: '', running: true, maximized: false, issueNumber: null,
     issueTitle: '', issueBranch: '', worktreePath: '', branch: '', targetBranch: '',
     zoomDelta: 0, background: false, display: 'terminal', conversationId: '',

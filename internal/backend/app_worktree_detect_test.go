@@ -64,7 +64,7 @@ func TestOnWorktreeChange_ClearsWhenCwdLeavesWorktree(t *testing.T) {
 	}
 	a.onWorktreeChange(1, "", "", repo) // ordinary event, cwd back at main repo
 
-	if cleared == nil || cleared.ID != 1 {
+	if cleared == nil || cleared.ID != a.ref(1) {
 		t.Fatalf("expected WorktreeClearedEvent for session 1, got %+v", cleared)
 	}
 	if _, _, ok := a.currentWorktree(1); ok {
@@ -103,7 +103,7 @@ func TestOnWorktreePathBlocked_EmitsEvent(t *testing.T) {
 	if emitted == nil {
 		t.Fatal("expected WorktreePathBlockedEvent to be emitted")
 	}
-	if emitted.ID != 1 || emitted.Path != `D:\repo\internal\backend\app.go` || emitted.Reason != "Pfad liegt im Hauptrepo..." {
+	if emitted.ID != a.ref(1) || emitted.Path != `D:\repo\internal\backend\app.go` || emitted.Reason != "Pfad liegt im Hauptrepo..." {
 		t.Errorf("unexpected event: %+v", emitted)
 	}
 }

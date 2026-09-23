@@ -132,12 +132,12 @@ func (a *AppService) UsesSessionDaemon() bool {
 // LiveSession is a session the host already holds, in the shape the frontend
 // needs to put a pane back in front of it.
 type LiveSession struct {
-	ID       int    `json:"id" yaml:"id"`
-	Name     string `json:"name" yaml:"name"`
-	Dir      string `json:"dir" yaml:"dir"`
-	Mode     string `json:"mode" yaml:"mode"`
-	Activity string `json:"activity" yaml:"activity"`
-	Running  bool   `json:"running" yaml:"running"`
+	ID       hub.Ref `json:"id" yaml:"id"`
+	Name     string  `json:"name" yaml:"name"`
+	Dir      string  `json:"dir" yaml:"dir"`
+	Mode     string  `json:"mode" yaml:"mode"`
+	Activity string  `json:"activity" yaml:"activity"`
+	Running  bool    `json:"running" yaml:"running"`
 }
 
 // ListLiveSessions returns the sessions the host is holding right now.
@@ -150,7 +150,7 @@ func (a *AppService) ListLiveSessions() []LiveSession {
 	out := make([]LiveSession, 0, len(summaries))
 	for _, s := range summaries {
 		out = append(out, LiveSession{
-			ID:       s.ID,
+			ID:       a.ref(s.ID),
 			Name:     s.Name,
 			Dir:      s.Dir,
 			Mode:     s.Mode,
@@ -161,14 +161,14 @@ func (a *AppService) ListLiveSessions() []LiveSession {
 	return out
 }
 
-// AttachSession puts an existing session back on screen: the pane streams from
+// attachSession puts an existing session back on screen: the pane streams from
 // wherever the session is, replayed from the host's ring so it comes back with
 // its history rather than blank.
 //
 // It returns false when the host has no such session, which is how a restore
 // tells "this pane is still running" from "this pane has to be launched
 // again".
-func (a *AppService) AttachSession(id int, rows int, cols int) bool {
+func (a *AppService) attachSession(id int, rows int, cols int) bool {
 	summary, err := a.host.Get(id)
 	if err != nil {
 		return false

@@ -7,9 +7,11 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 // SessionState is the top-level structure serialised to disk.
@@ -50,13 +52,41 @@ type SavedPane struct {
 	MCPProfile      string `json:"mcp_profile,omitempty"`       // MCP profile name chosen at launch ("" = all global servers, "none" = zero); see config.MCPProfile
 	ActivitySince   int64  `json:"activity_since,omitempty"`    // unix seconds when the current activity state began; survives a restart so the pane keeps its duration
 	ActivityState   string `json:"activity_state,omitempty"`    // the activity ActivitySince belongs to ("done", "idle", …); the seed is honoured on restore only if the pane confirms this same state first
-	// SessionID is the host's id for this pane's session. It only means
-	// anything while that session is still alive, which is the case exactly
-	// when the session daemon owns it (session_host: daemon): the restore then
-	// re-attaches to the running agent instead of launching a second one. With
-	// the in-process host the session died with the window and the id names
-	// nothing, which is why the restore checks it against ListLiveSessions.
-	SessionID int `json:"session_id,omitempty"`
+	// SessionID is the pane's session as the frontend holds it, "hub:id". It
+	// only means anything while that session is still alive, which is the
+	// case exactly when the session daemon owns it (session_host: daemon): the
+	// restore then re-attaches to the running agent instead of launching a
+	// second one. With the in-process host the session died with the window
+	// and the ref names nothing, which is why the restore checks it against
+	// ListLiveSessions.
+	SessionID PaneSessionRef `json:"session_id,omitempty"`
+}
+
+// PaneSessionRef is a hub.Ref in its string form. It is a string here rather
+// than the hub type because config sits below hub and should not pull in the
+// PTY code to hold one field.
+//
+// Files written before refs carried a hub have a bare number in this field.
+// It loads as that number in string form, which hub.ParseRef reads as a
+// legacy ref without a hub.
+type PaneSessionRef string
+
+// UnmarshalJSON accepts the string form and the legacy number.
+func (r *PaneSessionRef) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*r = PaneSessionRef(s)
+		return nil
+	}
+	var n int
+	if err := json.Unmarshal(b, &n); err != nil {
+		return fmt.Errorf("session_id: want a string or a number, got %s", b)
+	}
+	*r = ""
+	if n > 0 {
+		*r = PaneSessionRef(strconv.Itoa(n))
+	}
+	return nil
 }
 
 // sessionPath returns the path to ~/.multiterminal-session.json.

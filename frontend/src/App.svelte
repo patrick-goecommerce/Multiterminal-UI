@@ -35,6 +35,7 @@
   import { sendNotification } from './lib/notifications';
   import { installExternalLinkInterceptor } from './lib/external-links';
   import { restoreSession, saveSession, closePaneSession, closeTabWithSessions } from './lib/session';
+  import { NO_SESSION, sessionNumber, type SessionRef } from './lib/sessionRef';
   import { startKeepAliveLoop } from './lib/keepalive';
   import { fetchBranch, fetchCommitAge, fetchConflicts, fetchIssueCount, fetchRepoURL } from './lib/git-polling';
   import { checkForNewCommit } from './lib/background-agents';
@@ -80,14 +81,14 @@
   let pendingCloseTabId = '';
   let activeSkillCount = 0;
   let showAskUser = false;
-  let askUserSessionId = 0;
+  let askUserSessionId: SessionRef = '';
   let askUserSessionName = '';
   let askUserQuestion = '';
   let askUserOptions: string[] = [];
   let previewFilePath = '';
   let finishDialog: {
     visible: boolean;
-    sessionId: number;
+    sessionId: SessionRef;
     state: 'ready' | 'blocked' | 'staging';
     worktreePath: string;
     targetBranch: string;
@@ -102,7 +103,7 @@
     cleanupFailed: boolean;
   } = {
     visible: false,
-    sessionId: 0,
+    sessionId: '',
     state: 'ready',
     worktreePath: '',
     targetBranch: '',
@@ -435,20 +436,20 @@
         null, '', '', '', '', '', false, 'terminal', '', '');
     });
     EventsOn('terminal:exit', (event: any) => {
-      const id: number = event.data.id;
+      const id: SessionRef = event.data.id;
       tabStore.markExited(id);
     });
     EventsOn('terminal:error', (event: any) => {
-      const id: number = event.data.id;
+      const id: SessionRef = event.data.id;
       const msg: string = event.data.message;
       console.error('[terminal:error]', id, msg);
-      alert($t('app.terminalError', { id: String(id), msg }));
+      alert($t('app.terminalError', { id: String(sessionNumber(id)), msg }));
     });
 
     // Ask-User Bridging: show dialog when agent needs input
     EventsOn('ask_user:question', (event: any) => {
       const q = event.data || event;
-      askUserSessionId = q.session_id || q.sessionId || 0;
+      askUserSessionId = q.session_id || q.sessionId || '';
       askUserSessionName = q.session_name || q.sessionName || '';
       askUserQuestion = q.question || '';
       askUserOptions = q.options || [];
@@ -611,7 +612,7 @@
         const name = getClaudeName(type, model);
         // Chat panes have no argv, but the profile rides along so toggling the
         // pane back to terminal keeps the user's MCP choice.
-        tabStore.addPane(tab.id, 0, name, type, model || '', null, '', '', '', '', '', false, 'chat', conv.id, '', mcpProfile);
+        tabStore.addPane(tab.id, NO_SESSION, name, type, model || '', null, '', '', '', '', '', false, 'chat', conv.id, '', mcpProfile);
         workspace.setView('terminals');
       } catch (err) { console.error('[handleLaunch] CreateConversation failed:', err); }
       return;
@@ -673,7 +674,7 @@
       });
 
       const sessionId = await App.CreateSession(argv, sessionDir, 24, 80, type);
-      if (sessionId > 0) {
+      if (sessionId) {
         let paneBranch = issueBranch;
         if (!paneBranch) {
           try { paneBranch = await App.GetGitBranch(sessionDir); } catch {}
@@ -713,7 +714,7 @@
         mcpConfigPath: await resolveMCPConfigPath(resolved.sessionDir, mcpProfile),
       });
       const sessionId = await App.CreateSession(argv, resolved.sessionDir, 24, 80, type);
-      if (sessionId > 0) {
+      if (sessionId) {
         let paneBranch = resolved.issueBranch;
         if (!paneBranch) {
           try { paneBranch = await App.GetGitBranch(resolved.sessionDir); } catch {}
@@ -795,7 +796,7 @@
     showSkillPicker = true;
   }
 
-  function handleClosePane(e: CustomEvent<{ paneId: string; sessionId?: number }>) {
+  function handleClosePane(e: CustomEvent<{ paneId: string; sessionId?: SessionRef }>) {
     const tab = $activeTab;
     if (!tab) return;
     const pane = tab.panes.find((p) => p.id === e.detail.paneId);
@@ -826,7 +827,7 @@
     if (tab) tabStore.renamePane(tab.id, e.detail.paneId, e.detail.name);
   }
 
-  async function handleRestartPane(e: CustomEvent<{ paneId: string; sessionId: number; mode: PaneMode; model: string; name: string }>) {
+  async function handleRestartPane(e: CustomEvent<{ paneId: string; sessionId: SessionRef; mode: PaneMode; model: string; name: string }>) {
     const tab = $activeTab;
     if (!tab) return;
     const { paneId, sessionId, mode, model, name } = e.detail;
@@ -844,7 +845,7 @@
     });
     try {
       const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
-      if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model,
+      if (newSessionId) tabStore.addPane(tab.id, newSessionId, name, mode, model,
         null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile);
     } catch (err) { console.error('[handleRestartPane] failed:', err); }
   }
@@ -879,7 +880,7 @@
       });
       try {
         const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
-        if (newSessionId > 0) tabStore.addPane(tab.id, newSessionId, name, mode, model,
+        if (newSessionId) tabStore.addPane(tab.id, newSessionId, name, mode, model,
           null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile);
       } catch (err) { console.error('[toggleDisplay→terminal] failed:', err); }
     } else {
@@ -895,7 +896,7 @@
       const provider = mode.startsWith('codex') ? 'codex' : mode.startsWith('gemini') ? 'gemini' : 'claude';
       try {
         const conv = await App.CreateConversation(provider, model || '', tab.dir || '', modeToPermissionMode(mode), '');
-        tabStore.addPane(tab.id, 0, name, mode, model || '', null, '', '', '', '', '', false, 'chat', conv.id, resumeId);
+        tabStore.addPane(tab.id, NO_SESSION, name, mode, model || '', null, '', '', '', '', '', false, 'chat', conv.id, resumeId);
       } catch (err) { console.error('[toggleDisplay→chat] failed:', err); }
     }
   }
@@ -1042,12 +1043,12 @@
     issueCount = await fetchIssueCount(tab?.dir || '');
   }
 
-  function handleAskUserAnswer(e: CustomEvent<{ sessionId: number; answer: string }>) {
+  function handleAskUserAnswer(e: CustomEvent<{ sessionId: SessionRef; answer: string }>) {
     showAskUser = false;
     App.AnswerAskUser(e.detail.sessionId, e.detail.answer).catch(err => console.error('[AnswerAskUser]', err));
   }
 
-  function handleAskUserDismiss(e: CustomEvent<{ sessionId: number }>) {
+  function handleAskUserDismiss(e: CustomEvent<{ sessionId: SessionRef }>) {
     showAskUser = false;
     App.DismissAskUser(e.detail.sessionId).catch(() => {});
   }
@@ -1074,7 +1075,7 @@
     updateIssueCount();
   }
 
-  async function handleCommitPush(e: CustomEvent<{ paneId: string; sessionId: number }>) {
+  async function handleCommitPush(e: CustomEvent<{ paneId: string; sessionId: SessionRef }>) {
     const { sessionId } = e.detail;
     const tab = $activeTab;
     if (!tab) return;
@@ -1095,14 +1096,14 @@
   // --- Worktree finish flow -------------------------------------------------
 
   /** True when a pane of THIS window owns the given session id. */
-  function ownsSession(sessionId: number): boolean {
+  function ownsSession(sessionId: SessionRef): boolean {
     for (const tab of get(allTabs)) {
       if (tab.panes.some((p) => p.sessionId === sessionId)) return true;
     }
     return false;
   }
 
-  function findPaneBySession(sessionId: number) {
+  function findPaneBySession(sessionId: SessionRef) {
     for (const tab of get(allTabs)) {
       const pane = tab.panes.find((p) => p.sessionId === sessionId);
       if (pane) return pane;
@@ -1110,7 +1111,7 @@
     return null;
   }
 
-  function findPaneLocation(sessionId: number) {
+  function findPaneLocation(sessionId: SessionRef) {
     for (const tab of get(allTabs)) {
       const pane = tab.panes.find((p) => p.sessionId === sessionId);
       if (pane) return { tab, pane };
@@ -1118,7 +1119,7 @@
     return null;
   }
 
-  function startFinish(sessionId: number) {
+  function startFinish(sessionId: SessionRef) {
     const pane = findPaneBySession(sessionId);
     if (!pane?.worktreePath) return;
     // Detected worktrees carry a target branch (from hook detection); the prompt
@@ -1139,7 +1140,7 @@
   // finish never blindly commits them.
   const stagingDeselect = /\.env|node_modules|dist\/|build\//;
 
-  async function openShellStaging(sessionId: number, wtPath: string, target: string) {
+  async function openShellStaging(sessionId: SessionRef, wtPath: string, target: string) {
     let files: { path: string; status: string; selected: boolean }[] = [];
     try {
       const changed = await App.GetWorktreeChangedFiles(wtPath);
@@ -1168,7 +1169,7 @@
 
   // Runs the commit (optional) + rebase, then hands back to the shared verify gate.
   // A rebase conflict flips the dialog into a rebase-specific blocked state.
-  async function runShellStage(sessionId: number, wtPath: string, target: string,
+  async function runShellStage(sessionId: SessionRef, wtPath: string, target: string,
                                paths: string[], message: string) {
     try {
       if (paths.length > 0) {
@@ -1191,11 +1192,11 @@
     App.CheckWorktreeFinish(sessionId);
   }
 
-  function handleFinishWorktree(e: CustomEvent<{ paneId: string; sessionId: number }>) {
+  function handleFinishWorktree(e: CustomEvent<{ paneId: string; sessionId: SessionRef }>) {
     startFinish(e.detail.sessionId);
   }
 
-  async function handleQuickAction(e: CustomEvent<{ sessionId: number; prompt: string }>) {
+  async function handleQuickAction(e: CustomEvent<{ sessionId: SessionRef; prompt: string }>) {
     try {
       await sendQuickAction(e.detail.sessionId, e.detail.prompt);
     } catch (err) {
@@ -1203,16 +1204,16 @@
     }
   }
 
-  function handleRetryFinish(sessionId: number) {
+  function handleRetryFinish(sessionId: SessionRef) {
     startFinish(sessionId);
   }
 
-  function handleCancelFinish(e: CustomEvent<{ sessionId: number }>) {
+  function handleCancelFinish(e: CustomEvent<{ sessionId: SessionRef }>) {
     App.CancelWorktreeFinish(e.detail.sessionId);
     tabStore.setFinishPhase(e.detail.sessionId, '');
   }
 
-  async function relaunchPaneAfterFinish(sessionId: number, mainRoot: string, mode: string) {
+  async function relaunchPaneAfterFinish(sessionId: SessionRef, mainRoot: string, mode: string) {
     const loc = findPaneLocation(sessionId);
     if (!loc) return;
     const { tab, pane } = loc;
@@ -1228,14 +1229,14 @@
       : [];
     try {
       const newId = await App.CreateSession(argv, mainRoot, 24, 80, pane.mode);
-      if (newId > 0) {
+      if (newId) {
         tabStore.addPane(tab.id, newId, pane.name, pane.mode, pane.model,
           null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile);
       }
     } catch (err) { console.error('[relaunchPaneAfterFinish] failed:', err); }
   }
 
-  async function handleIssueAction(e: CustomEvent<{ paneId: string; sessionId: number; issueNumber: number; action: string }>) {
+  async function handleIssueAction(e: CustomEvent<{ paneId: string; sessionId: SessionRef; issueNumber: number; action: string }>) {
     const { sessionId, issueNumber, action } = e.detail;
     const tab = $activeTab;
     if (!tab) return;

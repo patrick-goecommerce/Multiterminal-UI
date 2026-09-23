@@ -29,7 +29,7 @@ func TestProcessQueue_ReportsItemDone(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 	pinPrevActivity(t, a, 1, "generating")
-	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
+	a.startWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	prepID := a.getFinishState(1).PrepItemID
 	// Simulate the scan loop: first done sends the item, second done completes it.
 	// The host advances the queue; the window learns about a finished item
@@ -37,7 +37,7 @@ func TestProcessQueue_ReportsItemDone(t *testing.T) {
 	// onHostEvent.
 	a.host.QueueAdvance(1) // pending → sent
 	a.host.QueueAdvance(1) // sent → done ⇒ EventQueueItemDone
-	q := a.GetQueue(1)
+	q := a.getQueue(1)
 	if len(q) != 1 || q[0].ID != prepID || q[0].Status != "done" {
 		t.Fatalf("prep item not completed: %+v", q)
 	}
@@ -62,9 +62,9 @@ func TestRemovePrepItem_ResetsFinish(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 	pinPrevActivity(t, a, 1, "generating")
-	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
+	a.startWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
 	prepID := a.getFinishState(1).PrepItemID
-	a.RemoveFromQueue(1, prepID)
+	a.removeFromQueue(1, prepID)
 	if st := a.getFinishState(1); st != nil {
 		t.Errorf("finish state survived prep item removal: %+v", st)
 	}
@@ -74,8 +74,8 @@ func TestClearQueue_ResetsFinish(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 	pinPrevActivity(t, a, 1, "generating")
-	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
-	a.ClearQueue(1)
+	a.startWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
+	a.clearQueue(1)
 	if st := a.getFinishState(1); st != nil {
 		t.Errorf("finish state survived ClearQueue: %+v", st)
 	}
@@ -85,12 +85,12 @@ func TestAddToQueue_LockedDuringFinish(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 	pinPrevActivity(t, a, 1, "generating")
-	a.StartWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
-	item := a.AddToQueue(1, "sollte abgelehnt werden")
+	a.startWorktreeFinish(1, `C:\wt`, "terminal/x", "alpha-main", "claude")
+	item := a.addToQueue(1, "sollte abgelehnt werden")
 	if item.ID != 0 {
 		t.Errorf("queue accepted item during active finish: %+v", item)
 	}
-	if got := len(a.GetQueue(1)); got != 1 {
+	if got := len(a.getQueue(1)); got != 1 {
 		t.Errorf("queue length %d, want 1 (only prep item)", got)
 	}
 }

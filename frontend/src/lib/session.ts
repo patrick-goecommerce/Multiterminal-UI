@@ -5,6 +5,7 @@ import { INDEX_TO_MODE, MODE_TO_INDEX, buildClaudeArgv, genSessionId } from './c
 import type { SessionOpts } from './claude';
 import { resolveMCPConfigPath } from './mcp';
 import * as App from '../../wailsjs/go/backend/App';
+import { NO_SESSION, sameSession, sessionNumber, type SessionRef } from './sessionRef';
 
 /**
  * Sessions the backend still holds.
@@ -29,7 +30,7 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
     // that own them, or the restore would launch a second agent next to each
     // one that is still running.
     const alive = await liveSessions();
-    const live = new Set<number>(alive.map((s: any) => s.id));
+    const live = new Set<SessionRef>(alive.map((s: any) => s.id));
     if ((!saved || !saved.tabs || saved.tabs.length === 0) && live.size === 0) return false;
 
     for (const savedTab of saved.tabs) {
@@ -59,7 +60,7 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
 
         if (display === 'chat') {
           // Chat panes have no PTY; the backend chat process restarts lazily on next message (with --resume).
-          const chatPaneId = tabStore.addPane(tabId, 0, savedPane.name, mode, savedPane.model || '', null, '', '', '', '', '', false, 'chat', conversationId, '', mcpProfile);
+          const chatPaneId = tabStore.addPane(tabId, NO_SESSION, savedPane.name, mode, savedPane.model || '', null, '', '', '', '', '', false, 'chat', conversationId, '', mcpProfile);
           if ((savedPane as any).user_renamed) tabStore.renamePane(tabId, chatPaneId, savedPane.name);
           continue;
         }
@@ -102,20 +103,24 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
           // A pane whose session is still running re-attaches to it: same
           // process, same context, and the screen comes back from the host's
           // replay buffer instead of blank.
-          const savedSessionId = (savedPane as any).session_id || 0;
-          let sessionId = 0;
+          // The saved ref is matched against what the host reports rather than
+          // passed on as is: a pane saved before refs carried a hub has a bare
+          // number, which the backend refuses to guess about.
+          const savedSessionId: SessionRef = String((savedPane as any).session_id || '');
+          const liveMatch = savedSessionId ? [...live].find((l) => sameSession(savedSessionId, l)) : undefined;
+          let sessionId: SessionRef = NO_SESSION;
           let reattached = false;
-          if (savedSessionId && live.has(savedSessionId)) {
-            reattached = await App.AttachSession(savedSessionId, 24, 80).catch(() => false);
+          if (liveMatch) {
+            reattached = await App.AttachSession(liveMatch, 24, 80).catch(() => false);
             if (reattached) {
-              sessionId = savedSessionId;
-              live.delete(savedSessionId);
+              sessionId = liveMatch;
+              live.delete(liveMatch);
             }
           }
           if (!reattached) {
             sessionId = await App.CreateSession(argv, sessionDir, 24, 80, mode);
           }
-          if (sessionId > 0) {
+          if (sessionId) {
             // Restore the pane's state-start timestamp so its duration badge
             // keeps counting from where it was, instead of starting over on
             // the first confirmed activity after restart (#189). A session
@@ -194,7 +199,7 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
  * pointing at them, which is the state herdr's sidebar exists to prevent.
  * Grouped by directory so a project's leftovers land in one tab.
  */
-async function adoptOrphanSessions(alive: any[], unclaimed: Set<number>): Promise<void> {
+async function adoptOrphanSessions(alive: any[], unclaimed: Set<SessionRef>): Promise<void> {
   if (unclaimed.size === 0) return;
 
   const byDir = new Map<string, any[]>();
@@ -210,7 +215,7 @@ async function adoptOrphanSessions(alive: any[], unclaimed: Set<number>): Promis
     for (const s of sessions) {
       const attached = await App.AttachSession(s.id, 24, 80).catch(() => false);
       if (!attached) continue;
-      tabStore.addPane(tabId, s.id, s.name || `Session ${s.id}`, (s.mode || 'shell') as any, '');
+      tabStore.addPane(tabId, s.id, s.name || `Session ${sessionNumber(s.id)}`, (s.mode || 'shell') as any, '');
     }
   }
 }
@@ -223,7 +228,7 @@ async function adoptOrphanSessions(alive: any[], unclaimed: Set<number>): Promis
 export function closePaneSession(pane: Pane): void {
   const done = pane.display === 'chat'
     ? (pane.conversationId ? App.CloseChatSession(pane.conversationId) : undefined)
-    : (pane.sessionId > 0 ? App.CloseSession(pane.sessionId) : undefined);
+    : (pane.sessionId ? App.CloseSession(pane.sessionId) : undefined);
   Promise.resolve(done).catch((err) => console.error('[closePaneSession]', pane.id, err));
 }
 
@@ -280,7 +285,7 @@ export function paneToSaved(pane: any) {
     activity_state: pane.activity || '',
     // Only useful while the session outlives the window, i.e. with the session
     // daemon; the restore checks it against what the host still holds.
-    session_id: pane.sessionId || 0,
+    session_id: pane.sessionId || '',
   };
 }
 

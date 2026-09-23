@@ -1,15 +1,16 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { sessionNumber, type SessionRef } from '../lib/sessionRef';
 
   export let visible = false;
-  export let sessionId = 0;
+  export let sessionId: SessionRef = '';
   export let sessionName = '';
   export let question = '';
   export let options: string[] = [];
 
   const dispatch = createEventDispatcher<{
-    answer: { sessionId: number; answer: string };
-    dismiss: { sessionId: number };
+    answer: { sessionId: SessionRef; answer: string };
+    dismiss: { sessionId: SessionRef };
   }>();
 
   let customAnswer = '';
@@ -49,7 +50,7 @@
         <span class="header-icon">&#9888;</span>
         <div class="header-text">
           <h3>Agent benötigt Eingabe</h3>
-          <span class="session-label">{sessionName || `Session ${sessionId}`}</span>
+          <span class="session-label">{sessionName || `Session ${sessionNumber(sessionId)}`}</span>
         </div>
       </div>
 

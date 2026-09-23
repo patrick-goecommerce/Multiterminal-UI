@@ -6,6 +6,7 @@
   import { workspace } from '../stores/workspace';
   import { isMainWindow } from '../lib/window';
   import type { backend } from '../../wailsjs/go/models';
+  import type { SessionRef } from '../lib/sessionRef';
 
   const dispatch = createEventDispatcher<{
     navigate: { tabId: string; paneId: string };
@@ -27,7 +28,7 @@
   // Unified card type used by swim lanes (works from both stores and backend)
   interface DashCard {
     id: string;           // sessionId or paneId
-    sessionId: number;
+    sessionId: SessionRef;
     name: string;
     activity: string;
     cost: string;
@@ -90,11 +91,11 @@
     const groups: CardGroups = { starting: [], needsAttention: [], active: [], done: [], idle: [] };
 
     // Build a sessionId → pane/tab lookup from stores (only populated in main window)
-    const storeMap = new Map<number, { paneId: string; tabId: string; tabName: string }>();
+    const storeMap = new Map<SessionRef, { paneId: string; tabId: string; tabName: string }>();
     if (_isMain) {
       for (const tab of tabs) {
         for (const pane of tab.panes) {
-          if (pane.sessionId != null) {
+          if (pane.sessionId) {
             storeMap.set(pane.sessionId, { paneId: pane.id, tabId: tab.id, tabName: tab.name });
           }
         }

@@ -4,13 +4,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // TestActivityInfoCarriesStatuslineFields guards that the event payload exposes
 // context%/model so the frontend can render them.
 func TestActivityInfoCarriesStatuslineFields(t *testing.T) {
-	info := ActivityInfo{ID: 1, Activity: "active", Cost: "$1.23", ContextPct: 40, Model: "Opus 4.8"}
+	info := ActivityInfo{ID: hub.Local("h1", 1), Activity: "active", Cost: "$1.23", ContextPct: 40, Model: "Opus 4.8"}
 	if info.ContextPct != 40 || info.Model != "Opus 4.8" {
 		t.Fatalf("ActivityInfo = %+v, want ContextPct=40 Model=Opus 4.8", info)
 	}

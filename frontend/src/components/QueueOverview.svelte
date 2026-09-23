@@ -2,11 +2,12 @@
   import { onMount, onDestroy } from 'svelte';
   import { createEventDispatcher } from 'svelte';
   import * as App from '../../wailsjs/go/backend/App';
+  import { sessionNumber, type SessionRef } from '../lib/sessionRef';
 
   export let dir = '';
 
   const dispatch = createEventDispatcher<{
-    navigate: { sessionId: number };
+    navigate: { sessionId: SessionRef };
   }>();
 
   interface QueueItem {
@@ -16,7 +17,7 @@
   }
 
   interface QueueSession {
-    session_id: number;
+    session_id: SessionRef;
     session_name: string;
     dir: string;
     activity: string;
@@ -51,19 +52,19 @@
   $: totalSent = sessions.reduce((n, s) => n + s.items.filter(i => i.status === 'sent').length, 0);
   $: totalDone = sessions.reduce((n, s) => n + s.items.filter(i => i.status === 'done').length, 0);
 
-  function handleRemove(sessionId: number, itemId: number) {
+  function handleRemove(sessionId: SessionRef, itemId: number) {
     App.RemoveFromQueue(sessionId, itemId)
       .then(loadQueues)
       .catch(err => console.error('[queue] remove error:', err));
   }
 
-  function handleClearDone(sessionId: number) {
+  function handleClearDone(sessionId: SessionRef) {
     App.ClearDoneFromQueue(sessionId)
       .then(loadQueues)
       .catch(err => console.error('[queue] clear error:', err));
   }
 
-  function handleNavigate(sessionId: number) {
+  function handleNavigate(sessionId: SessionRef) {
     dispatch('navigate', { sessionId });
   }
 
@@ -127,7 +128,7 @@
           <div class="session-header">
             <span class="session-dot" style="background: {activityDot(sess.activity)}"></span>
             <button class="session-name" on:click={() => handleNavigate(sess.session_id)}>
-              {sess.session_name || `Session ${sess.session_id}`}
+              {sess.session_name || `Session ${sessionNumber(sess.session_id)}`}
             </button>
             <span class="session-count">{sess.items.length}</span>
             <button class="btn-clear" on:click={() => handleClearDone(sess.session_id)} title="Erledigte löschen">&#128465;</button>

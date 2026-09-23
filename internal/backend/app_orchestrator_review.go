@@ -5,13 +5,14 @@ package backend
 
 import (
 	"fmt"
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"log"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // runReviewTests executes the review command in the card's worktree directory.
@@ -65,14 +66,14 @@ func (a *AppService) spawnReviewAgent(card *KanbanCard, dir string) int {
 		"Review this diff for code quality, bugs, security issues, and adherence to project rules.\n"+
 			"Respond with exactly REVIEW_PASS or REVIEW_FAIL on the first line, "+
 			"followed by your findings.\n\nDiff:\n```\n%s\n```", diff)
-	sessionID := a.CreateSession([]string{"claude"}, dir, 24, 80, "claude")
+	sessionID := a.createSession([]string{"claude"}, dir, 24, 80, "claude")
 	if sessionID < 0 {
 		log.Printf("[review] failed to create review session for card %s", card.ID)
 		return -1
 	}
 	go func() {
 		time.Sleep(2 * time.Second)
-		a.AddToQueue(sessionID, prompt)
+		a.addToQueue(sessionID, prompt)
 	}()
 	log.Printf("[review] spawned review agent session %d for card %s", sessionID, card.ID)
 	return sessionID
@@ -202,7 +203,7 @@ func (a *AppService) startReviewPipeline(card *KanbanCard, dir string, state *Ka
 			card.ReviewResult = "test_fail"
 			log.Printf("[review] tests failed for card %s, retry %d/%d", card.ID, card.RetryCount, card.MaxRetries)
 			if card.AgentSessionID > 0 {
-				a.AddToQueue(card.AgentSessionID, fmt.Sprintf(
+				a.addToQueue(card.AgentSessionID, fmt.Sprintf(
 					"Tests failed (attempt %d/%d). Fix the issues:\n%s",
 					card.RetryCount, card.MaxRetries, truncateStr(testOutput, 4000)))
 			}
@@ -230,7 +231,7 @@ func (a *AppService) startReviewPipeline(card *KanbanCard, dir string, state *Ka
 			card.RetryCount++
 			card.ReviewResult = "review_fail"
 			if card.AgentSessionID > 0 {
-				a.AddToQueue(card.AgentSessionID, fmt.Sprintf(
+				a.addToQueue(card.AgentSessionID, fmt.Sprintf(
 					"Code review failed (attempt %d/%d). Address the review feedback.",
 					card.RetryCount, card.MaxRetries))
 			}

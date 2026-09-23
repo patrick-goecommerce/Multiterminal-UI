@@ -4,7 +4,7 @@ import type { Tab, Pane } from '../stores/tabs';
 
 function makePane(overrides: Partial<Pane>): Pane {
   return {
-    id: 'p1', sessionId: 1, name: 'Claude', mode: 'claude', model: '',
+    id: 'p1', sessionId: 'h1:1', name: 'Claude', mode: 'claude', model: '',
     focused: false, activity: 'idle', cost: '', running: true, maximized: false,
     issueNumber: null, issueTitle: '', issueBranch: '', worktreePath: '',
     branch: 'main', targetBranch: '', zoomDelta: 0,

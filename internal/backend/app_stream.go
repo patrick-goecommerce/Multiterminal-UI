@@ -6,6 +6,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // outputBatcher accumulates raw PTY bytes from all sessions and emits
@@ -94,10 +96,11 @@ func (a *AppService) batchLoop(ctx context.Context) {
 			}
 			items := make([]TerminalOutputEvent, 0, len(batch))
 			var batchBytes int
+			hubID := a.hubID() // once per flush, not per session
 			for id, raw := range batch {
 				batchBytes += len(raw)
 				items = append(items, TerminalOutputEvent{
-					ID:   id,
+					ID:   hub.Local(hubID, id),
 					Data: base64.StdEncoding.EncodeToString(raw),
 				})
 			}

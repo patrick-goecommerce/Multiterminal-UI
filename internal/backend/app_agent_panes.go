@@ -19,11 +19,11 @@ import (
 // SessionSpawnedEvent tells the frontend to attach a visible pane to a session
 // that was created outside this window's UI.
 type SessionSpawnedEvent struct {
-	ID    int    `json:"id" yaml:"id"`
-	Tool  string `json:"tool" yaml:"tool"`
-	Model string `json:"model" yaml:"model"`
-	Dir   string `json:"dir" yaml:"dir"`
-	Name  string `json:"name" yaml:"name"`
+	ID    hub.Ref `json:"id" yaml:"id"`
+	Tool  string  `json:"tool" yaml:"tool"`
+	Model string  `json:"model" yaml:"model"`
+	Dir   string  `json:"dir" yaml:"dir"`
+	Name  string  `json:"name" yaml:"name"`
 	// Origin is who asked for it: "agent" through the MCP server, "cli"
 	// through mt new. The frontend shows both the same way; it is here so a
 	// pane can say where it came from without a second event.
@@ -32,7 +32,7 @@ type SessionSpawnedEvent struct {
 
 // onSessionCreated reacts to a new session on the host.
 func (a *AppService) onSessionCreated(s hub.SessionSummary) {
-	ev, ok := spawnedEvent(s)
+	ev, ok := spawnedEvent(a.hubID(), s)
 	if !ok {
 		return
 	}
@@ -46,7 +46,7 @@ func (a *AppService) onSessionCreated(s hub.SessionSummary) {
 // adoptSession puts this window's own bookkeeping around a session it did not
 // create: the mode map, and above all the output subscription.
 //
-// CreateSession does both for a pane the UI opened. Without them the pane
+// createSession does both for a pane the UI opened. Without them the pane
 // appears and stays black, because nothing is copying the session's bytes
 // toward the WebView, and every mode-dependent feature reads it as a shell.
 func (a *AppService) adoptSession(s hub.SessionSummary) {
@@ -68,7 +68,7 @@ func (a *AppService) adoptSession(s hub.SessionSummary) {
 // Only sessions with an origin do. An empty origin is a window's own UI, which
 // already drew its pane when it asked for the session; drawing a second one
 // would double every pane in the app.
-func spawnedEvent(s hub.SessionSummary) (SessionSpawnedEvent, bool) {
+func spawnedEvent(hubID string, s hub.SessionSummary) (SessionSpawnedEvent, bool) {
 	if s.Origin == "" {
 		return SessionSpawnedEvent{}, false
 	}
@@ -77,7 +77,7 @@ func spawnedEvent(s hub.SessionSummary) (SessionSpawnedEvent, bool) {
 		name = fmt.Sprintf("%s (%s)", name, s.Model)
 	}
 	return SessionSpawnedEvent{
-		ID:     s.ID,
+		ID:     hub.Local(hubID, s.ID),
 		Tool:   s.Mode,
 		Model:  s.Model,
 		Dir:    s.Dir,
