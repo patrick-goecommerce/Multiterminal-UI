@@ -79,11 +79,16 @@ type Session struct {
 	contextPct int
 	model      string
 	costSource CostSource
+	// agentName is the session's own name as the agent reports it (Claude
+	// Code's session_name: /rename, --name or its generated title).
+	agentName string
 
 	// hookSessionID / hasHookData: set by Claude Code hook events.
 	// hasHookData=true means the scan loop skips DetectActivity() for this session.
 	hookSessionID string
 	hasHookData   bool
+	// hookActivityAt is when a hook event last set Activity.
+	hookActivityAt time.Time
 }
 
 // NewSession creates a Session with the given screen dimensions but does not

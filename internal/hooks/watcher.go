@@ -33,6 +33,9 @@ type Event struct {
 	WorktreeBranch string `json:"worktree_branch"`
 	BlockedPath    string `json:"blocked_path"`
 	BlockReason    string `json:"block_reason"`
+	// NotificationType is set on Notification events (permission_prompt,
+	// elicitation_dialog, ...); empty from Claude Code versions without it.
+	NotificationType string `json:"notification_type"`
 }
 
 // Watcher tails a hooks directory and reports what it finds.

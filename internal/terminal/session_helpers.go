@@ -59,6 +59,14 @@ func (s *Session) SetLastOutputAtForTest(t time.Time) {
 	s.mu.Unlock()
 }
 
+// SetHookActivityAtForTest backdates when a hook last set the activity, so
+// tests outside this package can get past a settle time without sleeping.
+func (s *Session) SetHookActivityAtForTest(t time.Time) {
+	s.mu.Lock()
+	s.hookActivityAt = t
+	s.mu.Unlock()
+}
+
 // GetStatus returns the session's lifecycle status under lock. Reading the
 // Status field directly races with the read and wait loops that write it.
 func (s *Session) GetStatus() SessionStatus {

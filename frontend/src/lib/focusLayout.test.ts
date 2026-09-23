@@ -10,7 +10,7 @@ function pane(id: string, activity: Pane['activity'] = 'idle', activitySince = 0
     id, sessionId: `h1:${id}`, name: id, mode: 'claude', model: '', focused: false, activity,
     cost: '', running: true, maximized: false, issueNumber: null, issueTitle: '', issueBranch: '',
     worktreePath: '', branch: '', targetBranch: '', zoomDelta: 0, background: false,
-    display: 'terminal', conversationId: '', claudeSessionId: '', mcpProfile: '', autoName: '',
+    display: 'terminal', conversationId: '', claudeSessionId: '', mcpProfile: '', autoName: '', sessionName: '',
     oscTitle: '', autoNameSource: '', userRenamed: false, finishPhase: '', activitySince,
   };
 }

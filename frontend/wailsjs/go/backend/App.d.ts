@@ -25,7 +25,17 @@ export function CheckForUpdates():Promise<backend.UpdateInfo>;
 
 export function CheckGitHubCLI():Promise<string>;
 
+export function ClaimDraggedTab(arg1:string):Promise<string>;
+
+export function ClearDraggingTab():Promise<void>;
+
+export function GetDetachedTabState(arg1:string):Promise<string>;
+
 export function RuntimeStats():Promise<backend.RuntimeStats>;
+
+export function SaveWindowTabs(arg1:string,arg2:string):Promise<void>;
+
+export function SetDraggingTab(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function WriteDiagnosticDump():Promise<string>;
 
@@ -181,6 +191,8 @@ export function RemoveFavorite(arg1:string,arg2:string):Promise<void>;
 export function RemoveFromQueue(arg1:string,arg2:number):Promise<void>;
 
 export function RemoveWorktree(arg1:string,arg2:number):Promise<void>;
+
+export function ResendActivity(arg1:string):Promise<void>;
 
 export function ResizeSession(arg1:string,arg2:number,arg3:number):Promise<void>;
 

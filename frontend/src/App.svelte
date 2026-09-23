@@ -339,11 +339,15 @@
     // Wails v3: event handlers receive a WailsEvent object; payload is in event.data
     EventsOn('terminal:activity', (event: any) => {
       const info = event.data; // ActivityInfo { id, activity, cost, activitySince, title }
+      // The same state can arrive twice (the hook's early report, then the
+      // confirmed one), so the notification below keys off the transition.
+      const before = $allTabs.flatMap((t) => t.panes).find((p) => p.sessionId === info.id)?.activity;
       tabStore.updateActivity(info.id, info.activity, info.cost, info.activitySince ?? 0);
       if (info.title) tabStore.setAutoName(info.id, info.title, 'osc');
+      if (info.sessionName) tabStore.setSessionName(info.id, info.sessionName);
       // Notify when an issue-linked agent finishes (only when window is focused,
       // because TerminalPane already sends a notification when unfocused)
-      if (info.activity === 'done' && document.hasFocus()) {
+      if (info.activity === 'done' && before !== 'done' && document.hasFocus()) {
         for (const tab of $allTabs) {
           const pane = tab.panes.find((p: any) => p.sessionId === info.id);
           if (pane?.issueNumber) {

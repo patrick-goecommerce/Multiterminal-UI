@@ -85,9 +85,10 @@ func scanOne(id int, sess *terminal.Session) ScanResult {
 		ID:         id,
 		Activity:   activityOf(activity),
 		Cost:       sess.GetTokens().TotalCost,
-		Title:      sess.GetTitle(),
+		Title:      cleanTitle(sess.GetTitle()),
 		ContextPct: ctxPct,
 		Model:      model,
+		Name:       sess.AgentName(),
 	}
 }
 
@@ -113,6 +114,23 @@ func classifyForScan(sess *terminal.Session) terminal.ActivityState {
 		return activity
 	}
 
+	// "Needs permission" ends with the tool's PostToolUse, which for a long
+	// Bash run comes minutes after the user said yes. In between the pane
+	// would sit in the waiting list for nothing. Once the dialog is gone from
+	// the screen and output flows again, the tool is running.
+	// permissionSettle keeps the check off the moment the hook fires: Claude
+	// Code runs the hook before it draws the dialog, and the output before
+	// the draw would otherwise read as "approved".
+	if activity == terminal.ActivityWaitingPermission {
+		lastOutput := sess.GetLastOutputAt()
+		if time.Since(sess.HookActivityAt()) > permissionSettle &&
+			!lastOutput.IsZero() && time.Since(lastOutput) < terminal.ActivityStaleThreshold &&
+			sess.ClassifyScreenState() != terminal.ActivityWaitingAnswer {
+			return terminal.ActivityActive
+		}
+		return activity
+	}
+
 	// When the hook says "active" but the PTY has been quiet well past the
 	// normal detection threshold and the screen already shows a completed
 	// prompt, the terminating hook event was lost or delayed. Without this a
@@ -129,6 +147,10 @@ func classifyForScan(sess *terminal.Session) terminal.ActivityState {
 	}
 	return activity
 }
+
+// permissionSettle is how long a permission request is taken at its word
+// before the screen may overrule it (see classifyForScan).
+const permissionSettle = 2 * time.Second
 
 // scanTick returns how long to wait before looking again.
 //

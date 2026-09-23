@@ -226,7 +226,29 @@ Design: `docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md`
   There is no scan loop in the backend any more.
 - Agent state → `cmd/mtui-hook` writes JSON → `internal/hooks` tails it on the host →
   `EventSessionHook`. Hook events are authoritative; once one arrives for a session, screen
-  pattern detection stops overriding it.
+  pattern detection stops overriding it. The mapping is `hookActivity` in
+  `internal/hub/hook_activity.go`:
+  - `Stop` is "waitingAnswer" when the last paragraph of `last_assistant_message` asks a
+    question, else "done". The screen cannot tell: Claude Code prints a timing line and a
+    recap between the question and the prompt.
+  - `Notification` goes by `notification_type` (`permission_prompt`, `elicitation_dialog`, …),
+    not by a "?" in the text; the "?" reading is only the fallback for older Claude Code.
+  - `AskUserQuestion` (PreToolUse/PermissionRequest) is "waitingAnswer", not work.
+  - "waitingPermission" falls back to "active" once the dialog is gone and output flows
+    (`classifyForScan`), because the next hook, PostToolUse, only comes when the tool is done.
+  - No hook events beyond the eight in `hookEvents` are registered: the hooks live in the
+    user's global settings.json, and how older Claude Code versions react to unknown event
+    names is undocumented.
+- A scan tick carries the state only on its own change (`scanActivityInfo`). Cost- or
+  title-only ticks send it empty, which the frontend ignores; repeating it painted the old
+  state over a fresher hook state still in the debounce window.
+- Pane name: the agent's own `session_name` from the status line wins over MTUI's LLM name
+  and the terminal title (`paneDisplayName`); the naming call is skipped once it exists.
+  Terminal titles lose their spinner glyph in the hub (`cleanTitle`), or every frame is a
+  new title and an event.
+- `go test ./internal/tsmodels/` also holds the state vocabulary together (`hub.Activity` vs
+  `Pane['activity']`) and recomputes every binding ID in `App.js` (FNV-1a of the method
+  name) against `App.d.ts`. A hand-added binding with a wrong ID only fails at runtime.
 
 ## Project Structure
 

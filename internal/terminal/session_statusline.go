@@ -28,3 +28,22 @@ func (s *Session) StatuslineInfo() (contextPct int, model string, src CostSource
 	defer s.mu.Unlock()
 	return s.contextPct, s.model, s.costSource
 }
+
+// SetAgentName records the name the agent itself gives the session. An empty
+// name is ignored: the status line leaves the field out until a name exists,
+// which is not a reason to forget one.
+func (s *Session) SetAgentName(name string) {
+	if name == "" {
+		return
+	}
+	s.mu.Lock()
+	s.agentName = name
+	s.mu.Unlock()
+}
+
+// AgentName returns the name the agent gave the session, empty if none yet.
+func (s *Session) AgentName() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.agentName
+}

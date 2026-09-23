@@ -355,6 +355,10 @@ export function RemoveWorktree(arg1, arg2) {
   return $Call.ByID(375711242, arg1, arg2);
 }
 
+export function ResendActivity(arg1) {
+  return $Call.ByID(4181262233, arg1);
+}
+
 export function ResizeSession(arg1, arg2, arg3) {
   return $Call.ByID(3357609161, arg1, arg2, arg3);
 }

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 )
 
 // The shim endpoints are what MTUI's helper binaries post to: the statusline
@@ -46,7 +47,11 @@ func (h *Embedded) startShim() error {
 type statuslinePayload struct {
 	SessionID int `json:"sessionId"`
 	Payload   struct {
-		Cost struct {
+		// SessionName is Claude Code's name for the session: the one set with
+		// /rename or --name, otherwise its own generated title. Absent until
+		// one of those exists.
+		SessionName string `json:"session_name"`
+		Cost        struct {
 			TotalCostUSD  float64 `json:"total_cost_usd"`
 			TotalDuration int     `json:"total_duration_ms"`
 		} `json:"cost"`
@@ -78,6 +83,9 @@ func (h *Embedded) handleShimStatusline(w http.ResponseWriter, r *http.Request) 
 		int(p.Payload.ContextWindow.UsedPercentage),
 		p.Payload.Model.DisplayName,
 	)
+	if err == nil {
+		h.setAgentName(p.SessionID, p.Payload.SessionName)
+	}
 	log.Printf("[hub] statusline session %d cost=%.4f ctx=%d%% model=%q found=%t",
 		p.SessionID, p.Payload.Cost.TotalCostUSD,
 		int(p.Payload.ContextWindow.UsedPercentage), p.Payload.Model.DisplayName, err == nil)
@@ -100,4 +108,11 @@ func (h *Embedded) handleShimTmuxLog(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "logged"})
+}
+
+// setAgentName records the agent's own name for a session, if it has one.
+func (h *Embedded) setAgentName(id int, name string) {
+	if m, err := h.lookup(id); err == nil {
+		m.sess.SetAgentName(strings.TrimSpace(name))
+	}
 }

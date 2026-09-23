@@ -430,3 +430,18 @@ func TestResumeID_RoundTrip(t *testing.T) {
 		t.Fatalf("resume id = %q, want abc", got)
 	}
 }
+
+// The hook state belongs to the killed process. Left set, it made the scan
+// confirm "idle" right after the wake and cut "wacht auf" short.
+func TestResume_ForgetsTheOldProcessHookState(t *testing.T) {
+	s := suspendedSession(t)
+	s.SetHookActivity(ActivityDone)
+	rec := &spawnRecorder{}
+	rec.install(s)
+	if err := s.Resume(nil, "", nil); err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	if s.HasHookData() {
+		t.Fatal("a resumed session must be classified by its screen until its new process reports")
+	}
+}

@@ -20,7 +20,8 @@ func summarize(id int, m *managed) SessionSummary {
 	}
 	return SessionSummary{
 		ID:            id,
-		Name:          m.sess.Name(),
+		Name:          firstNonEmpty(m.sess.AgentName(), cleanTitle(m.sess.Name())),
+		AgentName:     m.sess.AgentName(),
 		Dir:           m.spec.Dir,
 		Mode:          m.spec.Mode,
 		Status:        statusOf(m.sess),
@@ -29,7 +30,7 @@ func summarize(id int, m *managed) SessionSummary {
 		StartedAt:     m.startedAt,
 		LastOutputAt:  m.sess.GetLastOutputAt(),
 		Activity:      activityOf(m.sess.GetActivity()),
-		Title:         m.sess.GetTitle(),
+		Title:         cleanTitle(m.sess.GetTitle()),
 		Cost:          m.sess.GetTokens().TotalCost,
 		ContextPct:    contextPct,
 		Model:         model,

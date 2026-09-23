@@ -140,8 +140,11 @@ const (
 // itself: every field here is a field nobody has to hold a *terminal.Session
 // to read, and holding one is what a remote client cannot do.
 type SessionSummary struct {
-	ID           int       `json:"id" yaml:"id"`
-	Name         string    `json:"name" yaml:"name"`
+	ID   int    `json:"id" yaml:"id"`
+	Name string `json:"name" yaml:"name"`
+	// AgentName is the name the agent gave the session itself, empty until
+	// it reported one. Name falls back to the terminal title.
+	AgentName    string    `json:"agent_name" yaml:"agent_name"`
 	Dir          string    `json:"dir" yaml:"dir"`
 	Mode         string    `json:"mode" yaml:"mode"`
 	Status       Status    `json:"status" yaml:"status"`
@@ -216,6 +219,10 @@ type ScanResult struct {
 	Title      string    `json:"title" yaml:"title"`
 	ContextPct int       `json:"context_pct" yaml:"context_pct"`
 	Model      string    `json:"model" yaml:"model"`
+	// Name is the agent's own name for the session (Claude Code's
+	// session_name), empty until it reports one. Title is the terminal title
+	// with any spinner glyph in front removed.
+	Name string `json:"name" yaml:"name"`
 }
 
 // Info describes a Host to a client that just connected.

@@ -156,6 +156,12 @@ func (s *Session) Resume(argv []string, dir string, env []string) error {
 	s.sus.readExit = make(chan struct{})
 	s.Status = StatusRunning
 	s.Activity = ActivityIdle
+	// The hook state belongs to the process that was killed. Until the new
+	// one reports, the screen decides: it shows the transcript replay as
+	// "active", which keeps the pane on "wacht auf" until the replay is over.
+	// With the old flag left set the scan confirmed "idle" after one debounce
+	// window and ended "wacht auf" twelve seconds early.
+	s.hasHookData = false
 	s.sus.aborted = false
 
 	if err := s.spawnLocked(argv, dir, env); err != nil {

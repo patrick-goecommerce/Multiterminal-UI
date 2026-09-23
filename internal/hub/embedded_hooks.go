@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"strings"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hooks"
 )
@@ -69,37 +68,9 @@ func (h *Embedded) applyHookEvent(w *hooks.Watcher, ev hooks.Event) {
 		return
 	}
 
-	if activity, ok := hookActivity(ev.Event, ev.Message); ok {
+	if activity, ok := hookActivity(ev); ok {
 		m.sess.SetHookActivity(terminalActivity(activity))
 		report.Activity = activity
 	}
 	h.emit(EventSessionHook, report)
-}
-
-// hookActivity maps a Claude Code event name to an agent state.
-//
-// The bool reports whether the event carries any state information at all.
-// Not every event does: a Notification without a question mark says nothing
-// about whether the turn ended, and an unknown event says nothing at all.
-// Returning a state anyway meant inventing one, which tore running sessions to
-// "done" and idle ones to "idle" (#188). Callers must leave the current state
-// untouched when this is false.
-func hookActivity(event, message string) (Activity, bool) {
-	switch event {
-	case "PreToolUse", "PostToolUse", "UserPromptSubmit":
-		return ActivityActive, true
-	case "PostToolUseFailure":
-		return ActivityError, true
-	case "PermissionRequest":
-		return ActivityWaitingPermission, true
-	case "Notification":
-		if strings.Contains(message, "?") {
-			return ActivityWaitingAnswer, true
-		}
-		return ActivityIdle, false
-	case "Stop":
-		return ActivityDone, true
-	default:
-		return ActivityIdle, false
-	}
 }

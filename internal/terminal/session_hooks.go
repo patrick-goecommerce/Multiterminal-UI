@@ -1,12 +1,23 @@
 package terminal
 
+import "time"
+
 // SetHookActivity updates the activity state from a hook event and marks
 // the session as having authoritative hook data.
 func (s *Session) SetHookActivity(state ActivityState) {
 	s.mu.Lock()
 	s.Activity = state
 	s.hasHookData = true
+	s.hookActivityAt = time.Now()
 	s.mu.Unlock()
+}
+
+// HookActivityAt returns when a hook event last set the activity state; zero
+// if none has.
+func (s *Session) HookActivityAt() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.hookActivityAt
 }
 
 // HasHookData reports whether hook events have set the activity state.
