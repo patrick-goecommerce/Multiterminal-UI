@@ -538,6 +538,33 @@ Session selbst bauen können (Hook-Verdrahtung, Worktree-Firewall, Session-ID), 
 ist heute GUI-Politik. Es ist derselbe Block, an dem Phase 2b hängt, und deshalb löst man
 beides zusammen oder gar nicht.
 
+## Der Agent-Skill
+
+Das dritte Gesicht, das bis hierher fehlte. `internal/skills/delegate/SKILL.md` ist ein
+Claude-Code-Skill namens `mtui-delegate`: Front Matter mit Name und Beschreibung, darunter
+Anweisungen, wann ein Agent eine Teilaufgabe in ein eigenes Pane abgibt und wie. MTUI
+legt ihn als `~/.claude/skills/mtui-delegate/SKILL.md` ab, zusammen mit der
+MCP-Registrierung (`startLocalListeners`), und nimmt ihn wieder weg, wenn die
+Agent-Steuerung abgeschaltet ist. Claude lädt ihn von selbst, wenn die Beschreibung zur
+Aufgabe passt.
+
+Der Skill beschreibt beide Wege, weil keiner allein immer da ist: die MCP-Tools gibt es in
+beiden Modi (im Fenster oder in `mtuid`), aber nicht in einem Pane mit MCP-Profil `none`;
+`mt` gibt es nur mit dem Daemon. Ein Agent prüft `MULTITERMINAL_SESSION_ID`, bevor er
+irgendetwas davon anfasst, denn außerhalb von MTUI zeigt der Skill ins Leere.
+
+Was darin steht, ist Erfahrung, die sonst jeder Agent selbst machen müsste: der Prompt muss
+ohne den eigenen Kontext verständlich sein; das Ergebnis gehört in eine Datei, weil
+`read_output` nur den sichtbaren Bildschirm liefert; wer Dateien ändert, bekommt einen
+eigenen Worktree; `blocked` heißt "der Mensch ist dran", nicht "ich klicke Ja"; und jede
+geöffnete Session wird wieder geschlossen, weil ein offenes Pane seinen ganzen
+Prozessbaum am Leben hält.
+
+Eine Markierungszeile im Text sagt, dass MTUI die Datei verwaltet. Beim Start wird sie
+aktualisiert, wenn sich der Inhalt geändert hat (Zeilenenden egal, wie beim generierten
+`CLAUDE.local.md`). Wer die Zeile löscht, übernimmt die Datei, und MTUI fasst sie nicht
+mehr an.
+
 ## Stand nach Phase 2b: der Daemon startet selbst
 
 Bis hierher konnte eine Session nur ein Prozess anlegen, der schon wusste, was "claude"

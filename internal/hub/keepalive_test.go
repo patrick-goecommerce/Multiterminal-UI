@@ -3,6 +3,8 @@ package hub
 import (
 	"testing"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // The keep-alive picks a session and decides whether to nudge it. Both halves
@@ -175,15 +177,21 @@ func TestKeepAlive_LeavesAgentSessionsAlone(t *testing.T) {
 	}
 }
 
-// adoptForKeepAlive starts a session with a known mode and last-output time.
+// adoptForKeepAlive registers a session with a known mode and last-output
+// time.
+//
+// No process is started. With one, the silence the test sets up was a race:
+// a pseudoconsole writes its startup sequences a moment after the process
+// starts, which moved LastOutputAt back to "now" after the test had dated it
+// two hours back, and the keep-alive then rightly saw no silence. That turned
+// the Windows run red on a slow runner. The keep-alive only reads the
+// summary, so a session object in the right state is all it needs.
 func adoptForKeepAlive(t *testing.T, h *Embedded, id int, mode string, lastOutput time.Time) int {
 	t.Helper()
-	got, err := h.Create(CreateSpec{
-		ID: id, Argv: sleepArgv(), Dir: sessionDir(t), Rows: 24, Cols: 80, Mode: mode,
-	})
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	h.setLastOutputForTest(got, lastOutput)
-	return got
+	h.AdoptForTest(id, terminal.NewSession(id, 24, 80))
+	h.mu.Lock()
+	h.sessions[id].spec.Mode = mode
+	h.mu.Unlock()
+	h.setLastOutputForTest(id, lastOutput)
+	return id
 }
