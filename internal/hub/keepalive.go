@@ -91,7 +91,7 @@ func (h *Embedded) keepAliveTarget(now, lastPing time.Time) (int, bool) {
 		if s.LastOutputAt.After(newest) {
 			newest = s.LastOutputAt
 		}
-		if s.Status != StatusRunning || !eligible[s.Mode] {
+		if s.Status != StatusRunning || !eligible[s.Mode] || !safeToNudge(s) {
 			continue
 		}
 		if target == 0 || s.ID < target {
@@ -107,6 +107,23 @@ func (h *Embedded) keepAliveTarget(now, lastPing time.Time) (int, bool) {
 		return 0, false
 	}
 	return target, true
+}
+
+// safeToNudge reports whether typing into a session can only ever mean "hello".
+//
+// The message is followed by a Return, and a Return is an answer: a pane
+// waiting on "Do you want to proceed? 1. Yes" takes it as the highlighted
+// choice. A keep-alive fires after hours of silence, which is exactly how long
+// an unanswered prompt sits there, so only a pane at rest qualifies.
+//
+// A session an agent opened is not the user's to greet either. Its owner reads
+// its screen and waits on its state, and a stray turn lands in the middle of
+// somebody else's conversation.
+func safeToNudge(s SessionSummary) bool {
+	if s.Origin == OriginAgent {
+		return false
+	}
+	return s.Activity == ActivityIdle || s.Activity == ActivityDone
 }
 
 // sendKeepAlive types the message and submits it, the same way the queue does
