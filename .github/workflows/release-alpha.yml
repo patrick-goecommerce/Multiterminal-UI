@@ -23,7 +23,7 @@ jobs:
           node-version: "22"
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
 
       - name: Build frontend
         shell: bash
