@@ -77,10 +77,30 @@ func main() {
 		backend.InitLoggingFromConfig(cfg)
 	}
 
+	var mainWindow *application.WebviewWindow
 	app := application.New(application.Options{
 		Name: "Multiterminal",
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
+		},
+		// One GUI per logon session. A second start used to be a whole second
+		// app: in embedded mode its host is empty, so the restore launched a
+		// new agent for every saved pane, all of them duplicates of the ones
+		// the first instance was already running. Now the second start only
+		// brings the first window to the front. The Windows mutex is
+		// per-session, so on an RDP host every user still gets their own.
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: "de.go-ecommerce.multiterminal",
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+				if mainWindow == nil {
+					return
+				}
+				if mainWindow.IsMinimised() {
+					mainWindow.UnMinimise()
+				}
+				mainWindow.Show()
+				mainWindow.Focus()
+			},
 		},
 	})
 
@@ -89,7 +109,7 @@ func main() {
 
 	app.RegisterService(application.NewService(svc))
 
-	mainWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{
+	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            backend.VersionTitle(),
 		Width:            1400,
 		Height:           900,
