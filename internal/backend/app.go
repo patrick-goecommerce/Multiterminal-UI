@@ -161,45 +161,6 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	return nil
 }
 
-// ServiceShutdown implements the Wails v3 Service interface.
-func (a *AppService) ServiceShutdown() error {
-	if a.cancelAll != nil {
-		a.cancelAll()
-	}
-	// Releasing the host means different things by design: the embedded host
-	// owns its sessions and ends them (killing each process tree first, which
-	// the old shutdown loop did not, leaving descendants holding handles
-	// inside worktrees, #185), while a daemon host is merely disconnected and
-	// keeps every agent running for the next window.
-	a.host.Release()
-
-	// Withdraw the published loopback ports so no helper process dials a port
-	// this instance no longer owns.
-	a.releaseDiscoveryRecords()
-
-	// Mark clean shutdown and auto-disable logging if stable
-	config.MarkCleanShutdown(&a.health)
-	if config.ShouldAutoDisableLogging(&a.health) {
-		config.DisableAutoLogging(&a.health)
-		a.cfg.LoggingEnabled = false
-		_ = config.Save(a.cfg)
-		log.Println("[Shutdown] Auto-logging disabled after 3 clean shutdowns")
-	}
-	_ = config.SaveHealth(a.health)
-	log.Println("[Shutdown] Clean shutdown recorded")
-
-	if a.safeMode {
-		if a.sessionBackup != nil {
-			if err := config.SaveSession(*a.sessionBackup); err != nil {
-				log.Printf("[SafeMode] failed to restore session backup: %v", err)
-			}
-		} else {
-			config.ClearSession()
-		}
-	}
-	return nil
-}
-
 // SessionInfo is the JSON-serialisable session metadata sent to the frontend.
 type SessionInfo struct {
 	ID       int    `json:"id"`

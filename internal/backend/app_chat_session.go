@@ -239,17 +239,37 @@ func (s *ChatSession) SendTurn(content string) error {
 	return err
 }
 
-// Close terminates the session.
-func (s *ChatSession) Close() {
+// Close terminates the session in the background.
+func (s *ChatSession) Close() { s.close(false) }
+
+// close ends the session's whole process tree. With sync set it returns only
+// once the tree is gone, which shutdown needs: the process is about to exit
+// and would otherwise leave claude and its MCP servers behind.
+//
+// Killing only cmd.Process, as this used to, ended the cmd.exe wrapper and
+// left claude, node and every MCP server of the chat running. The tree goes
+// first, while the root is still alive, because taskkill /T walks parent links.
+func (s *ChatSession) close(sync bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.closed {
+		s.mu.Unlock()
 		return
 	}
 	s.closed = true
 	_ = s.stdin.Close()
-	if s.cmd != nil && s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
-		go func() { _ = s.wait() }() // reap once; async so we don't block under lock
+	cmd := s.cmd
+	s.mu.Unlock()
+	if cmd == nil || cmd.Process == nil {
+		return
 	}
+	end := func() {
+		killProcessTree(cmd.Process.Pid)
+		_ = cmd.Process.Kill()
+		_ = s.wait() // reap once
+	}
+	if sync {
+		end()
+		return
+	}
+	go end()
 }
