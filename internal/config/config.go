@@ -81,6 +81,8 @@ type Config struct {
 	// Anything unrecognised means embedded, because losing a pane is worse
 	// than ignoring a typo.
 	SessionHost string `yaml:"session_host" json:"session_host"`
+	// Layout is the pane arrangement, opt-in focus mode (see layout.go).
+	Layout LayoutSettings `yaml:"layout" json:"layout"`
 	// UpdateChannel selects which GitHub release track CheckForUpdates/ApplyUpdate
 	// pull from: "stable" (release.yml, non-prerelease) or "alpha" (release-alpha.yml,
 	// prerelease). Defaults to "stable" regardless of the running build variant.
@@ -394,6 +396,7 @@ func DefaultConfig() Config {
 		UpdateChannel:          "alpha",
 		AutoUpdateCheckMinutes: 0,
 		TerminalScrollback:     DefaultTerminalScrollback,
+		Layout:                 defaultLayout(),
 		// A single starter profile: MTUI's own MCP server is registered
 		// globally (see app_mcp_register.go), so "only mtui" is the smallest
 		// useful set for a pane that should not spawn npx-based servers.
@@ -579,6 +582,7 @@ func Load() Config {
 	if !validScrollbackSizes[cfg.TerminalScrollback] {
 		cfg.TerminalScrollback = DefaultTerminalScrollback
 	}
+	normalizeLayout(&cfg.Layout)
 
 	if cfg.Favorites == nil {
 		cfg.Favorites = make(map[string][]string)

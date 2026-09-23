@@ -46,6 +46,8 @@
   import { EventsOn, Window } from '../wailsjs/runtime/runtime';
   import { subscribeChatEvents } from './lib/chat-events';
   import { sendQuickAction } from './lib/quickActionQueue';
+  import { layoutModeOf, waitingElsewhere, nextWaiting, floatingStillValid, type LayoutMode } from './lib/focusLayout';
+  import { floatingPane } from './stores/focusLayout';
 
   const MAX_PANES_PER_TAB = 10;
 
@@ -190,6 +192,7 @@
       else workspace.setView('dashboard');
     },
     onOpenSkills: () => { if (projectInitialized) openSkillEditor(); },
+    onNextWaiting: () => jumpToNextWaiting(),
   });
 
   onMount(async () => {
@@ -805,8 +808,15 @@
     showSkillPicker = true;
   }
 
+  /** The tab a pane belongs to. Usually the active one, but in focus mode a
+   *  pane of another tab can be open as a floating window, and its events must
+   *  reach its own tab, not the one it floats over. */
+  function paneTab(paneId: string) {
+    return $allTabs.find((t) => t.panes.some((p) => p.id === paneId)) ?? $activeTab;
+  }
+
   function handleClosePane(e: CustomEvent<{ paneId: string; sessionId?: SessionRef }>) {
-    const tab = $activeTab;
+    const tab = paneTab(e.detail.paneId);
     if (!tab) return;
     const pane = tab.panes.find((p) => p.id === e.detail.paneId);
     if (!pane) return;
@@ -822,22 +832,22 @@
   }
 
   function handleMaximizePane(e: CustomEvent<{ paneId: string }>) {
-    const tab = $activeTab;
+    const tab = paneTab(e.detail.paneId);
     if (tab) tabStore.toggleMaximize(tab.id, e.detail.paneId);
   }
 
   function handleFocusPane(e: CustomEvent<{ paneId: string }>) {
-    const tab = $activeTab;
+    const tab = paneTab(e.detail.paneId);
     if (tab) tabStore.focusPane(tab.id, e.detail.paneId);
   }
 
   function handleRenamePane(e: CustomEvent<{ paneId: string; name: string }>) {
-    const tab = $activeTab;
+    const tab = paneTab(e.detail.paneId);
     if (tab) tabStore.renamePane(tab.id, e.detail.paneId, e.detail.name);
   }
 
   async function handleRestartPane(e: CustomEvent<{ paneId: string; sessionId: SessionRef; mode: PaneMode; model: string; name: string }>) {
-    const tab = $activeTab;
+    const tab = paneTab(e.detail.paneId);
     if (!tab) return;
     const { paneId, sessionId, mode, model, name } = e.detail;
     // Read the MCP profile off the pane BEFORE closing it, so a restart keeps
@@ -860,7 +870,7 @@
   }
 
   async function handleToggleDisplay(e: CustomEvent<{ paneId: string }>) {
-    const tab = $activeTab;
+    const tab = paneTab(e.detail.paneId);
     if (!tab) return;
     const pane = tab.panes.find((p) => p.id === e.detail.paneId);
     if (!pane) return;
@@ -978,6 +988,27 @@
   $: canChangeDir = currentPanes === 0;
   $: tabInfo = `Tab ${($allTabs.findIndex((t) => t.id === $activeTab?.id) ?? 0) + 1}/${$allTabs.length}  Pane ${currentPanes}/${MAX_PANES_PER_TAB}`;
 
+  $: layoutMode = layoutModeOf($config.layout?.mode);
+
+  // A floating window closes when its pane is gone, when its own tab became
+  // the active one (there it has its slot), or when the grid layout is back.
+  // Called as a function so only the arguments are dependencies (CLAUDE.md).
+  $: pruneFloating($allTabs, $activeTab?.id ?? '', layoutMode);
+  function pruneFloating(tabs: typeof $allTabs, activeId: string, mode: LayoutMode) {
+    const ref = get(floatingPane);
+    if (ref && (mode !== 'focus' || !floatingStillValid(ref, tabs, activeId))) floatingPane.set(null);
+  }
+
+  /** Ctrl+Shift+J: the next pane in another tab that waits for the user. Focus
+   *  mode opens it floating over the current tab; the grid switches to it. */
+  function jumpToNextWaiting() {
+    const next = nextWaiting(waitingElsewhere($allTabs, $activeTab?.id ?? ''), get(floatingPane));
+    if (!next) return;
+    if (layoutMode === 'focus') floatingPane.set(next);
+    else tabStore.setActiveTab(next.tabId);
+    tabStore.focusPane(next.tabId, next.paneId);
+  }
+
   // Reflect the focused pane in the native window title (distinguishes multi-window).
   // Only $activeTab is a reactive dependency; the dedup lives inside the function so
   // Svelte does not track _lastWindowTitle (see CLAUDE.md $: footgun note).
@@ -1086,7 +1117,7 @@
 
   async function handleCommitPush(e: CustomEvent<{ paneId: string; sessionId: SessionRef }>) {
     const { sessionId } = e.detail;
-    const tab = $activeTab;
+    const tab = paneTab(e.detail.paneId);
     if (!tab) return;
     const dir = tab.dir || '';
     try {
@@ -1247,7 +1278,7 @@
 
   async function handleIssueAction(e: CustomEvent<{ paneId: string; sessionId: SessionRef; issueNumber: number; action: string }>) {
     const { sessionId, issueNumber, action } = e.detail;
-    const tab = $activeTab;
+    const tab = paneTab(e.detail.paneId);
     if (!tab) return;
     const dir = tab.dir || '';
 
@@ -1314,6 +1345,8 @@
                 panes={tab.panes}
                 active={tab.id === $activeTab?.id}
                 tabDir={tab.dir || ''}
+                tabName={tab.name}
+                layoutMode={layoutMode}
                 colFractions={tab.colFractions}
                 rowFractions={tab.rowFractions}
                 on:closePane={handleClosePane}

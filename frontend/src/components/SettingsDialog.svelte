@@ -62,6 +62,8 @@
   // window. sessionDaemonLive is what the backend actually ended up using,
   // which can differ from the setting until the app is restarted.
   let sessionDaemonWanted = $config.session_host === 'daemon';
+  // 'grid' (default) or 'focus'. Anything else in the config reads as grid.
+  let layoutMode: string = $config.layout?.mode === 'focus' ? 'focus' : 'grid';
   let sessionDaemonLive = false;
 
   let idleSuspendEnabled = ($config as any).idle_suspend?.enabled ?? false;
@@ -144,6 +146,7 @@
     audioInputSound = $config.audio?.input_sound || '';
     audioErrorSound = $config.audio?.error_sound || '';
     sessionDaemonWanted = $config.session_host === 'daemon';
+    layoutMode = $config.layout?.mode === 'focus' ? 'focus' : 'grid';
     App.UsesSessionDaemon().then((v: boolean) => { sessionDaemonLive = v; }).catch(() => {});
     idleSuspendEnabled = ($config as any).idle_suspend?.enabled ?? false;
     idleSuspendMinutes = ($config as any).idle_suspend?.timeout_minutes || 30;
@@ -371,6 +374,7 @@
         cloud: { base_url: sttBaseUrl, model: sttModel, api_key: sttApiKey },
       },
       session_host: sessionDaemonWanted ? 'daemon' : 'embedded',
+      layout: { ...($config.layout ?? { float_x: -1, float_y: -1 }), mode: layoutMode },
       idle_suspend: {
         enabled: idleSuspendEnabled,
         timeout_minutes: idleSuspendMinutes,
@@ -455,6 +459,15 @@
           {#each availableThemes as t}
             <option value={t.value} selected={t.value === selectedTheme}>{t.label}</option>
           {/each}
+        </select>
+      </div>
+
+      <div class="setting-group">
+        <label class="setting-label" for="layout-mode-select">Pane-Anordnung</label>
+        <p class="setting-desc">Raster zeigt alle Panes eines Tabs gleich groß. Fokus zeigt die zwei zuletzt genutzten groß und die übrigen klein am rechten Rand. Panes aus anderen Projekten, die auf dich warten, stehen dort als Liste und öffnen sich als verschiebbares Fenster, ohne dass du den Tab wechselst (Strg+Umschalt+J springt zum nächsten).</p>
+        <select id="layout-mode-select" class="theme-select" bind:value={layoutMode}>
+          <option value="grid">Raster (Standard)</option>
+          <option value="focus">Fokus</option>
         </select>
       </div>
 

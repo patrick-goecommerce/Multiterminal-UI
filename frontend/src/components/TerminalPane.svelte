@@ -466,6 +466,9 @@
         if (e.ctrlKey && e.key === 'f') { openSearch(); return false; }
         if (e.ctrlKey && ['z', 'n', 't', 'w', 'b'].includes(e.key)) return false;
         if (e.ctrlKey && e.key >= '1' && e.key <= '9') return false;
+        // Ctrl+Shift+J belongs to the app (next waiting pane). Plain Ctrl+J
+        // stays with the terminal: it is a newline there, Claude Code uses it.
+        if (e.ctrlKey && e.shiftKey && (e.key === 'J' || e.key === 'j')) return false;
         return true;
       });
 

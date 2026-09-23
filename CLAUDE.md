@@ -325,6 +325,7 @@ go vet ./...                      # Static analysis
 | Ctrl+B           | Toggle file browser sidebar                   |
 | Ctrl+F           | Search in terminal output (per pane)          |
 | Ctrl+1-9         | Focus pane by index (1 = first pane)          |
+| Ctrl+Shift+J     | Next pane in another tab that waits for you   |
 
 ## Smart Features
 
@@ -337,6 +338,21 @@ Claude Code panes automatically scan for token usage and cost information.
 The pane border **flashes** when Claude changes state:
 - **Green glow** — Claude finished generating (prompt returned)
 - **Yellow pulse** — Claude needs user input (confirmation, Y/n, etc.)
+
+### Focus Layout (opt-in)
+`layout.mode: focus` (Settings → Pane-Anordnung) replaces the grid: the two most recently used
+panes of a tab big, the rest small on the right, and below them the panes of OTHER tabs that
+wait for a permission or an answer. One of those opens as a draggable floating window over
+the current tab; its position is saved in `layout.float_x/float_y`. Logic in
+`frontend/src/lib/focusLayout.ts`, rendering in `PaneGrid.svelte`.
+- **Panes are moved, never remounted.** Both layouts render through the same keyed `{#each}`;
+  in grid mode the slot wrappers are `display: contents`. A remount would drop the xterm.
+- **Small panes are scaled, not resized** (`transform: scale()` at the big slot's size), so the
+  PTY keeps its geometry and a TUI does not reflow when a pane is promoted.
+- **The floating pane stays in its own tab layer** and overrides that layer's `visibility:
+  hidden`. Pane events therefore resolve their tab by pane id (`paneTab` in App.svelte), not
+  via `$activeTab`.
+- No automatic reordering: a waiting pane in the current tab keeps its slot.
 
 ### Themes
 Five built-in colour themes. Set `theme` in `~/.multiterminal.yaml`:
@@ -359,6 +375,10 @@ commit_reminder_minutes: 30
 # Opt-in: hand the sessions to the mtuid daemon so they survive closing
 # the app. Anything other than "daemon" keeps them in this process.
 session_host: embedded
+# Pane arrangement: grid (default) or focus. float_x/float_y: where the
+# focus mode's floating window was dragged to (-1 = centred).
+layout:
+  mode: grid
 claude_models:
   - label: Default
     id: ""

@@ -1103,6 +1103,22 @@ export namespace config {
 	        this.timeout_minutes = source["timeout_minutes"];
 	    }
 	}
+	export class LayoutSettings {
+	    mode: string;
+	    float_x: number;
+	    float_y: number;
+
+	    static createFrom(source: any = {}) {
+	        return new LayoutSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.float_x = source["float_x"];
+	        this.float_y = source["float_y"];
+	    }
+	}
 	export class Config {
 	    default_shell: string;
 	    default_dir: string;
@@ -1135,6 +1151,7 @@ export namespace config {
 	    terminal_scrollback: number;
 	    idle_suspend: IdleSuspendSettings;
 	    session_host: string;
+	    layout: LayoutSettings;
 	    mcp_profiles: MCPProfile[];
 	    default_mcp_profile: string;
 
@@ -1190,6 +1207,7 @@ export namespace config {
 	        this.terminal_scrollback = source["terminal_scrollback"];
 	        this.idle_suspend = this.convertValues(source["idle_suspend"], IdleSuspendSettings);
 	        this.session_host = source["session_host"];
+	        this.layout = this.convertValues(source["layout"], LayoutSettings);
 	        this.mcp_profiles = this.convertValues(source["mcp_profiles"], MCPProfile);
 	        this.default_mcp_profile = source["default_mcp_profile"];
 	        this.last_opened_dir = source["last_opened_dir"];
