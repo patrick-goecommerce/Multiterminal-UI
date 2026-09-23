@@ -102,7 +102,10 @@ func (a *AppService) applyStatusLine(cfg config.StatusLineSettings) {
 	// Best-effort: delete a stale PS1 script left over from an older build.
 	_ = os.Remove(statusLineScriptPath())
 
-	rendererExe := resolveBundledBinary("mtui-statusline", statuslineBin)
+	rendererExe, err := resolveBundledBinaryChecked("mtui-statusline", statuslineBin)
+	if err != nil {
+		log.Printf("[statusline] mtui-statusline: %v", err)
+	}
 	if rendererExe == "" {
 		log.Printf("[statusline] mtui-statusline binary not found — statusline not registered")
 		return
