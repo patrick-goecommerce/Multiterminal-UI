@@ -1261,6 +1261,8 @@ export namespace config {
 	    activity_since?: number;
 	    activity_state?: string;
 	    session_id?: string;
+	    auto_name?: string;
+	    agent_name?: string;
 
 	    display?: string;
 	    conversation_id?: string;
@@ -1285,6 +1287,8 @@ export namespace config {
 	        this.activity_since = source["activity_since"];
 	        this.activity_state = source["activity_state"];
 	        this.session_id = source["session_id"];
+	        this.auto_name = source["auto_name"];
+	        this.agent_name = source["agent_name"];
 	        this.display = source["display"];
 	        this.conversation_id = source["conversation_id"];
 	        this.claude_session_id = source["claude_session_id"];

@@ -64,6 +64,12 @@ type SavedPane struct {
 	// and the ref names nothing, which is why the restore checks it against
 	// ListLiveSessions.
 	SessionID PaneSessionRef `json:"session_id,omitempty"`
+	// AutoName is the name MTUI generated from the first prompt, AgentName the
+	// one the agent gave the session itself (Claude Code's session_name). Both
+	// are kept so a restored pane is not back to its launch name until the
+	// agent reports again.
+	AutoName  string `json:"auto_name,omitempty"`
+	AgentName string `json:"agent_name,omitempty"`
 }
 
 // PaneSessionRef is a hub.Ref in its string form. It is a string here rather

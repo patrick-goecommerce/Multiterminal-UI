@@ -43,6 +43,14 @@ func (a *AppService) maybeGeneratePaneName(mtID int, prompt string) {
 	if !a.cfg.ShouldAutoName() || strings.TrimSpace(prompt) == "" {
 		return
 	}
+	// The agent already named the session itself (Claude Code's session
+	// name), which the pane shows in preference; a naming call would cost a
+	// claude cold start for a name nobody sees.
+	if a.host != nil {
+		if s, err := a.host.Get(mtID); err == nil && s.AgentName != "" {
+			return
+		}
+	}
 
 	now := time.Now().Unix()
 	nameGenMu.Lock()

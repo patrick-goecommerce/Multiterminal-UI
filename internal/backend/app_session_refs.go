@@ -89,6 +89,13 @@ func (a *AppService) SeedActivitySince(r hub.Ref, unix int64, state string) {
 	_ = a.host.SeedActivity(id, hub.Activity(state), time.Unix(unix, 0))
 }
 
+// ResendActivity emits a session's current state once more. A pane that
+// re-attached to a running session (daemon mode) exists in the frontend only
+// after the attach returned, so the state has to be asked for then; waiting
+// for the next change would leave it on "startet" until the agent does
+// something.
+func (a *AppService) ResendActivity(r hub.Ref) { a.resendActivity(a.local(r)) }
+
 // GetFirstClaudeSessionID returns the first live Claude session, or the zero
 // ref.
 func (a *AppService) GetFirstClaudeSessionID() hub.Ref { return a.ref(a.firstClaudeSessionID()) }

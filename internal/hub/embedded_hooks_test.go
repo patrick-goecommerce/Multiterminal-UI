@@ -9,38 +9,83 @@ import (
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
-// The mapping from a Claude Code event name to an agent state is what the
-// whole hook path turns on, so every case is pinned.
+// The mapping from a Claude Code event to an agent state is what the whole
+// hook path turns on, so every case is pinned.
 func TestHookActivity_MapsWhatAnEventClaims(t *testing.T) {
 	cases := []struct {
-		event   string
-		message string
-		want    Activity
-		wantOK  bool
+		name   string
+		ev     hooks.Event
+		want   Activity
+		wantOK bool
 	}{
-		{"PreToolUse", "", ActivityActive, true},
-		{"PostToolUse", "", ActivityActive, true},
-		{"UserPromptSubmit", "", ActivityActive, true},
-		{"PostToolUseFailure", "", ActivityError, true},
-		{"PermissionRequest", "", ActivityWaitingPermission, true},
-		{"Stop", "", ActivityDone, true},
-		{"Notification", "Weiter so?", ActivityWaitingAnswer, true},
-		// A notification without a question mark says nothing about whether
-		// the turn ended. Claude's own wording ("Claude needs your permission
-		// to use Bash") has no "?", and mapping it to done tore a running
-		// session to "finished" (#188).
-		{"Notification", "Claude needs your permission to use Bash", ActivityIdle, false},
+		{"tool starts", hooks.Event{Event: "PreToolUse", Tool: "Bash"}, ActivityActive, true},
+		{"tool done", hooks.Event{Event: "PostToolUse", Tool: "Bash"}, ActivityActive, true},
+		{"prompt", hooks.Event{Event: "UserPromptSubmit"}, ActivityActive, true},
+		{"tool failed", hooks.Event{Event: "PostToolUseFailure"}, ActivityError, true},
+		{"permission", hooks.Event{Event: "PermissionRequest", Tool: "Bash"}, ActivityWaitingPermission, true},
+		{"stop", hooks.Event{Event: "Stop"}, ActivityDone, true},
+		{"stop with a statement", hooks.Event{Event: "Stop", Message: "Alles erledigt."}, ActivityDone, true},
+		{"stop with a question", hooks.Event{Event: "Stop", Message: "Tests sind grün.\n\nSoll ich pushen?"}, ActivityWaitingAnswer, true},
+		// AskUserQuestion waits for the user; it is not work.
+		{"ask user", hooks.Event{Event: "PreToolUse", Tool: "AskUserQuestion"}, ActivityWaitingAnswer, true},
+		{"ask user via permission", hooks.Event{Event: "PermissionRequest", Tool: "AskUserQuestion"}, ActivityWaitingAnswer, true},
+		{"ask user answered", hooks.Event{Event: "PostToolUse", Tool: "AskUserQuestion"}, ActivityActive, true},
+		// Notifications are read by their type.
+		{"permission prompt", hooks.Event{Event: "Notification", NotificationType: "permission_prompt", Message: "Claude needs your permission to use Bash"}, ActivityWaitingPermission, true},
+		{"elicitation", hooks.Event{Event: "Notification", NotificationType: "elicitation_dialog"}, ActivityWaitingAnswer, true},
+		{"agent needs input", hooks.Event{Event: "Notification", NotificationType: "agent_needs_input"}, ActivityWaitingAnswer, true},
+		{"elicitation answered", hooks.Event{Event: "Notification", NotificationType: "elicitation_response"}, ActivityActive, true},
+		// An idle reminder says nothing new: the state it reminds of is
+		// already set, and "waiting for your input" must not undo a question.
+		{"idle reminder", hooks.Event{Event: "Notification", NotificationType: "idle_prompt", Message: "Claude is waiting for your input"}, ActivityIdle, false},
+		// Without a type (older Claude Code): the old "?" reading.
+		{"untyped question", hooks.Event{Event: "Notification", Message: "Weiter so?"}, ActivityWaitingAnswer, true},
+		{"untyped statement", hooks.Event{Event: "Notification", Message: "Claude needs your permission to use Bash"}, ActivityIdle, false},
 		// An unknown event is not evidence of idleness either.
-		{"unknown", "", ActivityIdle, false},
+		{"unknown", hooks.Event{Event: "unknown"}, ActivityIdle, false},
 	}
 	for _, c := range cases {
-		got, ok := hookActivity(c.event, c.message)
+		got, ok := hookActivity(c.ev)
 		if ok != c.wantOK {
-			t.Errorf("hookActivity(%q, %q) ok = %v, want %v", c.event, c.message, ok, c.wantOK)
+			t.Errorf("%s: ok = %v, want %v", c.name, ok, c.wantOK)
 			continue
 		}
 		if ok && got != c.want {
-			t.Errorf("hookActivity(%q, %q) = %q, want %q", c.event, c.message, got, c.want)
+			t.Errorf("%s: activity = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// The case that started this: Claude ends with a question, then Claude Code
+// prints a timing line and a recap below it, so the screen check (two lines
+// above the prompt) never sees the "?".
+func TestEndsWithQuestion(t *testing.T) {
+	yes := []string{
+		"Noch offen aus #985: SmartSupply.\n\nSoll ich pushen und den PR gegen main öffnen? Danach startet automatisch das Pflicht-Review.",
+		"Fertig.\n\nWie soll ich weitermachen?\n\n1. Alles committen\n2. Erst die Tests",
+		"Welche Variante nimmst du? **A** oder **B**?**",
+		"Passt das so?",
+		"Soll ich das mergen？",
+		"Ergebnis:\n```go\nx := a ? b : c\n```\n\nSoll ich das so lassen?",
+		// The tail of a long message can begin inside a code block.
+		"x := y\n```\n\nSoll ich weitermachen?",
+	}
+	no := []string{
+		"",
+		"Alles erledigt, Tests sind grün.",
+		"Warum? Weil der Cache leer war.\n\nIch habe ihn neu gefüllt, jetzt läuft es.",
+		"Siehe https://example.com/page?tab=1 für Details.",
+		"Code:\n```\nif ok? then\n```",
+		"- erledigt\n- getestet",
+	}
+	for _, m := range yes {
+		if !endsWithQuestion(m) {
+			t.Errorf("endsWithQuestion(%q) = false, want true", m)
+		}
+	}
+	for _, m := range no {
+		if endsWithQuestion(m) {
+			t.Errorf("endsWithQuestion(%q) = true, want false", m)
 		}
 	}
 }

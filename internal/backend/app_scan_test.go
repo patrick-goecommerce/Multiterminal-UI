@@ -112,3 +112,21 @@ func TestScanGuard_HookActivityNotOverwrittenByScan(t *testing.T) {
 		t.Errorf("after scan, activity = %d, want ActivityWaitingPermission — hook guard not working", got)
 	}
 }
+
+// A tick that emits only because the cost or the title moved must not repeat
+// the confirmed state: it would paint over a fresher hook state still inside
+// the debounce window.
+func TestScanActivityInfo_StateOnlyOnItsOwnChange(t *testing.T) {
+	ref := hub.Local("h", 3)
+	quiet := scanActivityInfo(ref, hub.ScanResult{ID: 3, Activity: hub.ActivityDone, Title: "neu"}, "$0.10")
+	if quiet.Activity != "" || quiet.ActivitySince != 0 {
+		t.Errorf("title-only emit carries a state: %+v", quiet)
+	}
+	if quiet.Title != "neu" || quiet.Cost != "$0.10" {
+		t.Errorf("title-only emit lost its payload: %+v", quiet)
+	}
+	changed := scanActivityInfo(ref, hub.ScanResult{ID: 3, Activity: hub.ActivityDone, Changed: true}, "")
+	if changed.Activity != "done" {
+		t.Errorf("a real change must carry the state, got %q", changed.Activity)
+	}
+}

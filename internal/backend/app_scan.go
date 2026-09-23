@@ -17,6 +17,9 @@ type ActivityInfo struct {
 	Title      string  `json:"title"`      // OSC-derived window title (fallback pane name)
 	ContextPct int     `json:"contextPct"` // % of context window used (statusline); 0 if unknown
 	Model      string  `json:"model"`      // model display name (statusline); "" if unknown
+	// SessionName is the agent's own name for the session (Claude Code's
+	// session_name), "" until it reports one.
+	SessionName string `json:"sessionName"`
 	// ActivitySince is when the confirmed state began, as seconds since epoch;
 	// 0 when unknown. Travels on the event only — events are plain JSON and do
 	// not need models.ts, unlike binding returns.
@@ -33,6 +36,7 @@ var (
 	prevEmitMu sync.Mutex
 	prevCost   = make(map[int]string)
 	prevTitle  = make(map[int]string)
+	prevName   = make(map[int]string)
 )
 
 // cleanupActivityTracking removes stale tracking data for a closed session.
@@ -41,6 +45,7 @@ func cleanupActivityTracking(id int) {
 	prevEmitMu.Lock()
 	delete(prevCost, id)
 	delete(prevTitle, id)
+	delete(prevName, id)
 	prevEmitMu.Unlock()
 }
 
@@ -62,7 +67,6 @@ func (a *AppService) applyScanResults(results []hub.ScanResult) {
 		if r.Cost > 0 {
 			costStr = fmt.Sprintf("$%.2f", r.Cost)
 		}
-		ctxPct, model := r.ContextPct, r.Model
 		title := r.Title
 
 		// Only emit when state, cost, or title actually changed. The activity
@@ -78,26 +82,22 @@ func (a *AppService) applyScanResults(results []hub.ScanResult) {
 		prevEmitMu.Lock()
 		costChanged := prevCost[id] != costStr
 		titleChanged := prevTitle[id] != title
-		changed := activityChanged || costChanged || titleChanged
+		nameChanged := prevName[id] != r.Name
+		changed := activityChanged || costChanged || titleChanged || nameChanged
 		if costChanged {
 			prevCost[id] = costStr
 		}
 		if titleChanged {
 			prevTitle[id] = title
 		}
+		if nameChanged {
+			prevName[id] = r.Name
+		}
 		prevEmitMu.Unlock()
 
 		if changed && a.app != nil {
 			log.Printf("[scan] session %d: activity=%s cost=%s title=%q", id, confirmedActivity, costStr, title)
-			a.app.Event.Emit("terminal:activity", ActivityInfo{
-				ID:            a.ref(id),
-				Activity:      confirmedActivity,
-				Cost:          costStr,
-				Title:         title,
-				ContextPct:    ctxPct,
-				Model:         model,
-				ActivitySince: unixOrZero(r.Since),
-			})
+			a.app.Event.Emit("terminal:activity", scanActivityInfo(a.ref(id), r, costStr))
 		}
 
 		// Everything below is a side effect of the *confirmed* change, and
@@ -154,4 +154,28 @@ func unixOrZero(t time.Time) int64 {
 		return 0
 	}
 	return t.Unix()
+}
+
+// scanActivityInfo is what one scan result tells the frontend.
+//
+// The state rides along only on its own change. A tick that emits because the
+// cost or the title moved used to repeat the confirmed state too, and while a
+// hook's fresher state was still inside the debounce window that repeat
+// painted the old one back over it: "läuft", "fertig", "läuft" within a
+// second. The frontend leaves the state alone when the field is empty.
+func scanActivityInfo(ref hub.Ref, r hub.ScanResult, cost string) ActivityInfo {
+	info := ActivityInfo{
+		ID:         ref,
+		Cost:       cost,
+		Title:      r.Title,
+		ContextPct: r.ContextPct,
+		Model:      r.Model,
+
+		SessionName: r.Name,
+	}
+	if r.Changed {
+		info.Activity = string(r.Activity)
+		info.ActivitySince = unixOrZero(r.Since)
+	}
+	return info
 }

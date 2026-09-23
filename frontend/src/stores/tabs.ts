@@ -37,6 +37,9 @@ export interface Pane {
   mcpProfile: string;
   /** LLM-generated pane name (from the user's prompt). */
   autoName: string;
+  /** The agent's own name for the session (Claude Code's session_name: the
+   *  one set with /rename or --name, otherwise its generated title). */
+  sessionName: string;
   /** OSC-derived window title from the PTY. */
   oscTitle: string;
   /** Which auto source was updated most recently — drives display (most-recent-wins). */
@@ -52,10 +55,12 @@ export interface Pane {
 }
 
 /** Resolve the name shown in a pane titlebar.
- *  Priority: manual rename > most-recently-updated auto source > pane name.
- *  If the most-recent auto source happens to be empty, fall back to the other. */
+ *  Priority: manual rename > the agent's own session name > most-recently-
+ *  updated auto source > pane name. If the most-recent auto source happens to
+ *  be empty, fall back to the other. */
 export function paneDisplayName(pane: Pane): string {
   if (pane.userRenamed) return pane.name;
+  if (pane.sessionName) return pane.sessionName;
   const recent = pane.autoNameSource === 'llm' ? pane.autoName
     : pane.autoNameSource === 'osc' ? pane.oscTitle
     : '';
@@ -244,6 +249,19 @@ function createTabStore() {
       });
     },
 
+    /** The agent's own name for a session (by session id). Empty is ignored:
+     *  a status line without the field does not mean the name is gone. */
+    setSessionName(sessionId: SessionRef, name: string) {
+      if (!name) return;
+      update((state) => {
+        for (const tab of state.tabs) {
+          const pane = tab.panes.find((p) => p.sessionId === sessionId);
+          if (pane) pane.sessionName = name;
+        }
+        return state;
+      });
+    },
+
     addPane(tabId: string, sessionId: SessionRef, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, targetBranch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = '', claudeSessionId = '', mcpProfile = ''): string {
       const paneId = `pane-${nextPaneNum++}`;
       update((state) => {
@@ -275,6 +293,7 @@ function createTabStore() {
           claudeSessionId,
           mcpProfile,
           autoName: '',
+          sessionName: '',
           oscTitle: '',
           autoNameSource: '',
           userRenamed: false,

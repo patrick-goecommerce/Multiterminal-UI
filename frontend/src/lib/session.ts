@@ -153,8 +153,14 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
             const issueNum = (savedPane as any).issue_number || 0;
             const issueBranch = (savedPane as any).issue_branch || '';
             const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch, wtPath && sessionDir === wtPath ? wtPath : '', wtBranch, wtTarget, false, 'terminal', '', claudeSessionId, mcpProfile);
+            // A re-attached session kept running while no window was up; its
+            // state is only sent on the next change. Ask for it now that the
+            // pane exists, or it shows "startet" until the agent moves.
+            if (reattached) App.ResendActivity(sessionId).catch(() => {});
             restoredIds[restoredIds.length - 1] = paneId;
             if ((savedPane as any).user_renamed) tabStore.renamePane(tabId, paneId, savedPane.name);
+            if ((savedPane as any).auto_name) tabStore.setAutoName(sessionId, (savedPane as any).auto_name, 'llm');
+            tabStore.setSessionName(sessionId, (savedPane as any).agent_name || '');
             const zd = (savedPane as any).zoom_delta || 0;
             if (zd !== 0) {
               tabStore.setZoomDelta(tabId, paneId, zd);
@@ -225,6 +231,7 @@ async function adoptOrphanSessions(alive: any[], unclaimed: Set<SessionRef>): Pr
       const attached = await App.AttachSession(s.id, 24, 80).catch(() => false);
       if (!attached) continue;
       tabStore.addPane(tabId, s.id, s.name || `Session ${sessionNumber(s.id)}`, (s.mode || 'shell') as any, '');
+      App.ResendActivity(s.id).catch(() => {});
     }
   }
 }
@@ -295,6 +302,10 @@ export function paneToSaved(pane: any) {
     // Only useful while the session outlives the window, i.e. with the session
     // daemon; the restore checks it against what the host still holds.
     session_id: pane.sessionId || '',
+    // Names that came from the agent or from MTUI's naming call. Without them
+    // a restored pane shows its launch name until the agent reports again.
+    auto_name: pane.autoName || '',
+    agent_name: pane.sessionName || '',
   };
 }
 

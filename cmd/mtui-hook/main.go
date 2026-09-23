@@ -1,7 +1,7 @@
 // Command mtui-hook is the Multiterminal Claude Code hook handler. It reads a
 // hook event JSON on stdin and appends a JSONL line to
 // %APPDATA%\Multiterminal\hooks\<session_id>.jsonl — the same format the previous
-// PowerShell handler wrote (see internal/backend/app_hooks.go rawHookEvent).
+// PowerShell handler wrote (see internal/hooks.Event).
 //
 // It replaces hook_handler.ps1 specifically to stop a console window flashing on
 // every hook event: PowerShell is a console-subsystem program, so Claude spawning
@@ -33,14 +33,26 @@ type claudeEvent struct {
 	Cwd          string          `json:"cwd"`
 	ToolInput    json.RawMessage `json:"tool_input"`
 	ToolResponse json.RawMessage `json:"tool_response"`
+	// NotificationType says what a Notification is about (permission_prompt,
+	// elicitation_dialog, idle_prompt, ...). The message text is for people
+	// and was the only thing MTUI looked at before, by searching it for "?".
+	NotificationType string `json:"notification_type"`
+	// LastAssistantMessage is the final text of the turn, on Stop. Whether it
+	// ends in a question decides between "done" and "has a question", which
+	// the screen cannot tell once Claude prints anything below the question.
+	LastAssistantMessage string `json:"last_assistant_message"`
 }
+
+// stopMessageTail is how much of the last assistant message a Stop line
+// carries: enough for the last paragraph, small enough for the hook file.
+const stopMessageTail = 600
 
 type enterWorktreeResponse struct {
 	WorktreePath   string `json:"worktreePath"`
 	WorktreeBranch string `json:"worktreeBranch"`
 }
 
-// hookLine mirrors internal/backend.rawHookEvent — keep the json tags in sync.
+// hookLine mirrors internal/hooks.Event — keep the json tags in sync.
 type hookLine struct {
 	Ts             int64  `json:"ts"`
 	Event          string `json:"event"`
@@ -53,6 +65,8 @@ type hookLine struct {
 	WorktreeBranch string `json:"worktree_branch,omitempty"`
 	BlockedPath    string `json:"blocked_path,omitempty"`
 	BlockReason    string `json:"block_reason,omitempty"`
+	// NotificationType is copied from a Notification event.
+	NotificationType string `json:"notification_type,omitempty"`
 }
 
 // hookSpecificOutput / preToolUseOutput implement Claude Code's documented
@@ -92,6 +106,9 @@ func run() {
 	// UserPromptSubmit carries the user's prompt text in `prompt`, not `message`.
 	if eventType == "UserPromptSubmit" && ev.Prompt != "" {
 		message = ev.Prompt
+	}
+	if eventType == "Stop" && ev.LastAssistantMessage != "" {
+		message = tail(ev.LastAssistantMessage, stopMessageTail)
 	}
 
 	hooksDir := filepath.Join(os.Getenv("APPDATA"), "Multiterminal", "hooks")
@@ -143,6 +160,8 @@ func run() {
 		WorktreeBranch: worktreeBranch,
 		BlockedPath:    blockedPath,
 		BlockReason:    blockReason,
+
+		NotificationType: ev.NotificationType,
 	})
 	if err == nil {
 		if f, ferr := os.OpenFile(
@@ -170,4 +189,13 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// tail returns the last n runes of s, never splitting a rune.
+func tail(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[len(r)-n:])
 }

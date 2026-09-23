@@ -435,9 +435,29 @@ describe('paneDisplayName', () => {
   it('falls back to the pane name when no auto name is set', () => {
     const pane = {
       name: 'Shell', userRenamed: false,
-      autoName: '', oscTitle: '', autoNameSource: '',
+      autoName: '', sessionName: '', oscTitle: '', autoNameSource: '',
     } as any;
     expect(paneDisplayName(pane)).toBe('Shell');
+  });
+
+  // Claude Code's own session name (/rename, --name or its generated title)
+  // beats the raw terminal title and MTUI's naming call, not a manual rename.
+  it('prefers the agent\'s own session name over auto names', () => {
+    const pane = {
+      name: 'Shell', userRenamed: false, sessionName: 'Datenbankverbindung',
+      autoName: 'db-live', oscTitle: 'Datenbankverbindung live', autoNameSource: 'osc',
+    } as any;
+    expect(paneDisplayName(pane)).toBe('Datenbankverbindung');
+    expect(paneDisplayName({ ...pane, userRenamed: true, name: 'Meins' })).toBe('Meins');
+  });
+
+  it('keeps a session name when a status line comes without one', () => {
+    const tab = tabStore.addTab('N', '/n');
+    tabStore.addPane(tab, 'h1:77', 'Claude', 'claude', '');
+    tabStore.setSessionName('h1:77', 'Refactor Auth');
+    tabStore.setSessionName('h1:77', '');
+    const pane = tabStore.getState().tabs.find((t) => t.id === tab)!.panes[0];
+    expect(pane.sessionName).toBe('Refactor Auth');
   });
 
   it('falls back to the other source if the recent one is empty', () => {
@@ -459,7 +479,7 @@ describe('windowTitle', () => {
     const tab = {
       name: 'Tab 1', focusedPaneId: 'pane-2',
       panes: [
-        { id: 'pane-1', name: 'Shell', userRenamed: false, autoName: '', oscTitle: '', autoNameSource: '' },
+        { id: 'pane-1', name: 'Shell', userRenamed: false, autoName: '', sessionName: '', oscTitle: '', autoNameSource: '' },
         { id: 'pane-2', name: 'Shell', userRenamed: false, autoName: 'auth-refactor', oscTitle: '', autoNameSource: 'llm' },
       ],
     } as any;

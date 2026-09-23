@@ -22,7 +22,7 @@ function pane(overrides: Partial<Pane> = {}): Pane {
     activity: 'idle', cost: '', running: true, maximized: false, issueNumber: null,
     issueTitle: '', issueBranch: '', worktreePath: '', branch: '', targetBranch: '',
     zoomDelta: 0, background: false, display: 'terminal', conversationId: '',
-    claudeSessionId: '', mcpProfile: '', autoName: '', oscTitle: '', autoNameSource: '',
+    claudeSessionId: '', mcpProfile: '', autoName: '', sessionName: '', oscTitle: '', autoNameSource: '',
     userRenamed: false, finishPhase: '', activitySince: 0,
     ...overrides,
   };

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, linkSessionIssue, resolveMCPProfile, seedActivitySince, listLiveSessions, attachSession, closeSession, closeChatSession } = vi.hoisted(() => ({
+const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, linkSessionIssue, resolveMCPProfile, seedActivitySince, listLiveSessions, attachSession, closeSession, closeChatSession, resendActivity } = vi.hoisted(() => ({
   loadTabs: vi.fn(),
   ensureProjectWorktreeSetup: vi.fn(),
   createSession: vi.fn(),
@@ -12,6 +12,7 @@ const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, 
   attachSession: vi.fn(),
   closeSession: vi.fn(),
   closeChatSession: vi.fn(),
+  resendActivity: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('../../wailsjs/go/backend/App', () => ({
@@ -26,6 +27,7 @@ vi.mock('../../wailsjs/go/backend/App', () => ({
   AttachSession: attachSession,
   CloseSession: closeSession,
   CloseChatSession: closeChatSession,
+  ResendActivity: resendActivity,
 }));
 
 import { paneToSaved, restoreSession, dirLabel, closeTabWithSessions } from './session';
@@ -47,6 +49,12 @@ describe('paneToSaved', () => {
   it('serialisiert das MCP-Profil (sonst startet der Pane nach Neustart wieder alle MCP-Server)', () => {
     expect(paneToSaved({ name: 'x', mode: 'claude', mcpProfile: 'none' } as any).mcp_profile).toBe('none');
     expect(paneToSaved({ name: 'x', mode: 'claude' } as any).mcp_profile).toBe('');
+  });
+
+  it('saves the auto name and the agent\'s session name', () => {
+    const saved = paneToSaved({ name: 'Claude', mode: 'claude', autoName: 'db-live', sessionName: 'Datenbankverbindung' });
+    expect(saved.auto_name).toBe('db-live');
+    expect(saved.agent_name).toBe('Datenbankverbindung');
   });
 
   it('round-trips activitySince through save and restore', () => {
@@ -268,6 +276,38 @@ describe('restoreSession with a session daemon', () => {
     expect(createSession).not.toHaveBeenCalled();
   });
 
+  // The running session's state is only sent on its next change; without
+  // asking, the pane would show "startet" until the agent does something.
+  it('asks for the state of a re-attached pane once the pane exists', async () => {
+    resendActivity.mockClear();
+    listLiveSessions.mockResolvedValue([{ id: 'h1:7', name: 'p', dir: 'D:/repos/foo', mode: 'claude', running: true }]);
+    loadTabs.mockResolvedValue(tabWith({ session_id: 'h1:7' }));
+
+    await restoreSession('claude');
+
+    expect(resendActivity).toHaveBeenCalledWith('h1:7');
+  });
+
+  it('restores the pane\'s names, so it does not fall back to its launch name', async () => {
+    loadTabs.mockResolvedValue(tabWith({ auto_name: 'db-live', agent_name: 'Datenbankverbindung' }));
+
+    await restoreSession('claude');
+
+    const pane = tabStore.getState().tabs.flatMap((t) => t.panes).find((p) => p.sessionId === 'h1:99')!;
+    expect(pane.autoName).toBe('db-live');
+    expect(pane.sessionName).toBe('Datenbankverbindung');
+  });
+
+  it('does not ask for the state of a relaunched pane', async () => {
+    resendActivity.mockClear();
+    listLiveSessions.mockResolvedValue([]);
+    loadTabs.mockResolvedValue(tabWith({ session_id: 'h1:7' }));
+
+    await restoreSession('claude');
+
+    expect(resendActivity).not.toHaveBeenCalled();
+  });
+
   // A session file from before refs carried a hub has a bare number, which
   // the backend hands over as "7". It can only have meant the one host of
   // that time, and launching a second agent next to the running one is the
@@ -344,6 +384,7 @@ describe('restoreSession with a session daemon', () => {
 
     expect(restored).toBe(true);
     expect(attachSession).toHaveBeenCalledWith('h1:12', 24, 80);
+    expect(resendActivity).toHaveBeenCalledWith('h1:12');
     const tabs = tabStore.getState().tabs;
     expect(tabs).toHaveLength(before + 1);
     const added = tabs[tabs.length - 1];
