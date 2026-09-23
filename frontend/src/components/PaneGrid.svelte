@@ -11,7 +11,7 @@
     focusGeometry, floatingRect, promoteInOrder, reconcileOrder, slotFor, stateLabel,
     waitingElsewhere, FLOAT_BAR, type LayoutMode, type Slot, type WaitingEntry,
   } from '../lib/focusLayout';
-  import { focusOrders, setFocusOrder, floatingPane, saveFloatPosition } from '../stores/focusLayout';
+  import { focusOrders, setFocusOrder, floatingPane, saveFloatPosition, consumePlaced } from '../stores/focusLayout';
 
   export let panes: Pane[] = [];
   export let active: boolean = true;
@@ -271,11 +271,21 @@
       return;
     }
     if (id === lastFocus) return;
+    // The focused pane was closed and the store moved focus to a neighbour.
+    // Nobody chose that pane, so it must not jump to the left.
+    const closedFocus = !panes.some((p) => p.id === lastFocus);
     lastFocus = id;
-    const isNew = !seen.has(id);
+    const isNew = !seen.has(id) && !consumePlaced(id);
     panes.forEach((p) => seen.add(p.id));
-    const next = promoteInOrder(order, id, isNew);
-    if (next !== order) setFocusOrder(tabId, next);
+    if (closedFocus && !isNew) return;
+    // Written after this reactive pass, not during it: a store set from inside
+    // a `$:` statement does not re-run the statements before it in Svelte 5's
+    // legacy mode, so the slots would keep showing the old order.
+    queueMicrotask(() => {
+      const current = reconcileOrder($focusOrders[tabId], panes.map((p) => p.id));
+      const next = promoteInOrder(current, id, isNew);
+      if (next !== current) setFocusOrder(tabId, next);
+    });
   }
 
   // The buttons below hand the keyboard to a terminal. TerminalPane leaves
@@ -328,6 +338,8 @@
     void saveFloatPosition(r.x, r.y);
   }
 
+  // Same colours as the pane titlebar (PaneTitlebar.svelte), so a state reads
+  // the same in a big pane, a small card and the waiting list.
   function dotClass(activity: Pane['activity']): string {
     switch (activity) {
       case 'waitingPermission':
@@ -335,7 +347,19 @@
       case 'active': return 'dot-running';
       case 'done': return 'dot-done';
       case 'error': return 'dot-error';
+      case 'sleeping':
+      case 'resuming': return 'dot-sleeping';
       default: return 'dot-idle';
+    }
+  }
+
+  function stateClass(activity: Pane['activity']): string {
+    switch (activity) {
+      case 'waitingPermission':
+      case 'waitingAnswer': return 'state-waiting';
+      case 'active': return 'state-running';
+      case 'error': return 'state-danger';
+      default: return '';
     }
   }
 </script>
@@ -365,7 +389,7 @@
         <span class="float-tab">{tabName}</span>
         <span class="float-sep">·</span>
         <span class="float-name">{paneDisplayName(pane)}</span>
-        <span class="float-state">{stateLabel(pane.activity)}</span>
+        <span class="float-state {stateClass(pane.activity)}">{stateLabel(pane.activity)}</span>
         <span class="float-spacer"></span>
         <button class="float-btn" on:click={() => gotoFloatingTab(pane.id)}>Zum Projekt wechseln</button>
         <button class="float-btn float-close" title="Schließen" aria-label="Schließen" on:click={closeFloating}>×</button>
@@ -404,7 +428,7 @@
         <span class="small-head">
           <span class="dot {dotClass(pane.activity)}"></span>
           <span class="small-name">{paneDisplayName(pane)}</span>
-          <span class="small-state">{stateLabel(pane.activity)}</span>
+          <span class="small-state {stateClass(pane.activity)}">{stateLabel(pane.activity)}</span>
         </span>
       </button>
     {/if}
@@ -526,7 +550,7 @@
   .float-tab { font-weight: 600; color: var(--fg); }
   .float-sep { color: var(--fg-muted); }
   .float-name { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .float-state { color: var(--status-waiting, #d6a85c); white-space: nowrap; }
+  .float-state { color: var(--fg-muted); white-space: nowrap; }
   .float-spacer { flex: 1; }
   .float-btn {
     background: transparent;
@@ -566,11 +590,22 @@
   .small-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .small-state { color: var(--fg-muted); white-space: nowrap; }
 
-  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--status-idle, #5a6457); }
-  .dot-waiting { background: var(--status-waiting, #d6a85c); }
-  .dot-running { background: var(--status-ai, #a184f4); }
-  .dot-done { background: var(--status-running, #4cc56a); }
-  .dot-error { background: var(--status-danger, #d65f5f); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--status-idle, var(--fg-muted)); }
+  .dot-running { background: var(--status-running); animation: fl-spin 1s linear infinite; }
+  .dot-done { background: var(--status-running); box-shadow: 0 0 6px var(--status-running); }
+  .dot-waiting {
+    background: var(--status-waiting);
+    box-shadow: 0 0 7px var(--status-waiting);
+    animation: fl-pulse 1.2s ease-in-out infinite;
+  }
+  .dot-error { background: var(--status-danger); }
+  .dot-sleeping { background: var(--fg-muted); opacity: 0.6; }
+  @keyframes fl-spin { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+  @keyframes fl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .state-running { color: var(--status-running); }
+  .state-waiting { color: var(--status-waiting); }
+  .state-danger { color: var(--status-danger); }
 
   .waiting-list {
     position: absolute;

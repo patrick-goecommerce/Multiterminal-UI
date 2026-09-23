@@ -353,6 +353,14 @@ the current tab; its position is saved in `layout.float_x/float_y`. Logic in
   hidden`. Pane events therefore resolve their tab by pane id (`paneTab` in App.svelte), not
   via `$activeTab`.
 - No automatic reordering: a waiting pane in the current tab keeps its slot.
+- A pane the app replaces (restart, terminal/chat toggle, worktree finish) takes the old one's
+  slot, and a pane an agent opens (MCP, `mt new`) goes to the small column without taking the
+  keyboard: capture `slotIndexOf` before `closePane`, then `placePane` after `addPane`. Any new
+  code path that swaps a pane for a new one needs the same two calls, or the pane jumps left.
+- The order is saved per tab as `SavedTab.focus_order` (indices into `panes`).
+- **Never write `focusOrders` from inside a `$:` statement.** Svelte 5's legacy mode does not
+  re-run the statements before it, so the slots keep the old order. `onFocusChange` defers its
+  write with `queueMicrotask` for that reason.
 
 ### Themes
 Five built-in colour themes. Set `theme` in `~/.multiterminal.yaml`:

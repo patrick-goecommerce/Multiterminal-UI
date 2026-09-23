@@ -1298,6 +1298,7 @@ export namespace config {
 	    panes: SavedPane[];
 	    col_fractions?: number[];
 	    row_fractions?: number[];
+	    focus_order?: number[];
 
 	    static createFrom(source: any = {}) {
 	        return new SavedTab(source);
@@ -1311,6 +1312,7 @@ export namespace config {
 	        this.panes = this.convertValues(source["panes"], SavedPane);
 	        this.col_fractions = source["col_fractions"];
 	        this.row_fractions = source["row_fractions"];
+	        this.focus_order = source["focus_order"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

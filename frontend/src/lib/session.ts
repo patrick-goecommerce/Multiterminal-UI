@@ -6,6 +6,7 @@ import type { SessionOpts } from './claude';
 import { resolveMCPConfigPath } from './mcp';
 import * as App from '../../wailsjs/go/backend/App';
 import { NO_SESSION, sameSession, sessionNumber, type SessionRef } from './sessionRef';
+import { focusOrderIndices, restoreFocusOrder } from '../stores/focusLayout';
 
 /**
  * Sessions the backend still holds.
@@ -51,7 +52,11 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
         }
       }
 
+      // restoredIds[i] is the pane created for saved pane i (undefined when
+      // it could not be restored), so the focus order can be mapped back.
+      const restoredIds: (string | undefined)[] = [];
       for (const savedPane of savedTab.panes) {
+        restoredIds.push(undefined);
         const mode = INDEX_TO_MODE[savedPane.mode] || 'shell';
         const display = (savedPane as any).display || 'terminal';
         const conversationId = (savedPane as any).conversation_id || '';
@@ -61,6 +66,7 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
         if (display === 'chat') {
           // Chat panes have no PTY; the backend chat process restarts lazily on next message (with --resume).
           const chatPaneId = tabStore.addPane(tabId, NO_SESSION, savedPane.name, mode, savedPane.model || '', null, '', '', '', '', '', false, 'chat', conversationId, '', mcpProfile);
+          restoredIds[restoredIds.length - 1] = chatPaneId;
           if ((savedPane as any).user_renamed) tabStore.renamePane(tabId, chatPaneId, savedPane.name);
           continue;
         }
@@ -147,6 +153,7 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
             const issueNum = (savedPane as any).issue_number || 0;
             const issueBranch = (savedPane as any).issue_branch || '';
             const paneId = tabStore.addPane(tabId, sessionId, savedPane.name, mode, savedPane.model || '', issueNum || null, '', issueBranch, wtPath && sessionDir === wtPath ? wtPath : '', wtBranch, wtTarget, false, 'terminal', '', claudeSessionId, mcpProfile);
+            restoredIds[restoredIds.length - 1] = paneId;
             if ((savedPane as any).user_renamed) tabStore.renamePane(tabId, paneId, savedPane.name);
             const zd = (savedPane as any).zoom_delta || 0;
             if (zd !== 0) {
@@ -166,6 +173,8 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
       if (savedCols || savedRows) {
         tabStore.setGridFractions(tabId, savedCols, savedRows);
       }
+
+      restoreFocusOrder(tabId, savedTab.focus_order, restoredIds);
 
       // Restore focused pane (addPane always focuses the last-added pane)
       if (savedTab.focus_idx >= 0) {
@@ -301,6 +310,7 @@ export function saveSession(): void {
     panes: tab.panes.map(paneToSaved),
     col_fractions: tab.colFractions,
     row_fractions: tab.rowFractions,
+    focus_order: focusOrderIndices(tab.id, tab.panes),
   }));
   App.SaveTabs({ active_tab: Math.max(activeIdx, 0), tabs } as any);
 }

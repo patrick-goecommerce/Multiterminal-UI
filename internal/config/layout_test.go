@@ -45,3 +45,26 @@ func TestLayout_OldConfigKeepsTheDefaults(t *testing.T) {
 		t.Errorf("Layout = %+v, want grid and a negative float position", l)
 	}
 }
+
+// The focus layout's order travels with the tab in the session file, so a
+// restart keeps which panes were big.
+func TestSavedTabRoundTripsFocusOrder(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.json")
+	state := SessionState{Tabs: []SavedTab{
+		{Name: "A", Panes: []SavedPane{{Name: "p0"}, {Name: "p1"}, {Name: "p2"}}, FocusOrder: []int{2, 0, 1}},
+		{Name: "B", Panes: []SavedPane{{Name: "q0"}}},
+	}}
+	if err := saveSessionTo(path, state); err != nil {
+		t.Fatal(err)
+	}
+	got := loadSessionFrom(path)
+	if got == nil || len(got.Tabs) != 2 {
+		t.Fatalf("loaded %+v", got)
+	}
+	if o := got.Tabs[0].FocusOrder; len(o) != 3 || o[0] != 2 || o[1] != 0 || o[2] != 1 {
+		t.Errorf("FocusOrder = %v, want [2 0 1]", o)
+	}
+	if got.Tabs[1].FocusOrder != nil {
+		t.Errorf("a tab without an order must stay without one, got %v", got.Tabs[1].FocusOrder)
+	}
+}

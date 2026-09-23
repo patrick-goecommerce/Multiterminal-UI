@@ -1,9 +1,10 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, fireEvent, cleanup } from '@testing-library/svelte';
 import { get } from 'svelte/store';
+import { tick } from 'svelte';
 import PaneGrid from './PaneGrid.svelte';
 import { tabStore, type Pane } from '../stores/tabs';
-import { focusOrders, floatingPane } from '../stores/focusLayout';
+import { focusOrders, floatingPane, placePane, slotIndexOf, setFocusOrder } from '../stores/focusLayout';
 
 vi.mock('./TerminalPane.svelte', async () => ({ default: (await import('./__fixtures__/PaneStub.svelte')).default }));
 vi.mock('../../wailsjs/go/backend/App', () => ({ SaveConfig: vi.fn().mockResolvedValue(undefined) }));
@@ -49,8 +50,7 @@ describe('PaneGrid in focus mode', () => {
   });
 
   it('moves a clicked small pane to the left', async () => {
-    const { container, component } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, layoutMode: 'focus' } });
-    component.$on('focusPane', (e: CustomEvent) => tabStore.focusPane(tabA, e.detail.paneId));
+    const { container } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, layoutMode: 'focus' } });
     const cover = container.querySelector(`[data-testid="pane-${a[3]}"]`)!.closest('.slot')!.querySelector('.small-cover')!;
     await fireEvent.click(cover);
 
@@ -116,5 +116,55 @@ describe('PaneGrid focus hand-off', () => {
     row.focus();
     await fireEvent.click(row);
     expect(document.activeElement).not.toBe(row);
+  });
+});
+
+describe('PaneGrid focus mode: panes the app places', () => {
+  it('keeps a replaced pane in the old pane\'s slot', async () => {
+    const { container, rerender } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, active: true, layoutMode: 'focus' } });
+    const slot = slotIndexOf(tabA, a[1]);
+    tabStore.closePane(tabA, a[1]);
+    await rerender({ panes: panesOf(tabA) });
+    const fresh = tabStore.addPane(tabA, 'h1:50', 'neu', 'claude', '');
+    placePane(tabA, fresh, slot);
+    await rerender({ panes: panesOf(tabA) });
+
+    expect(get(focusOrders)[tabA][1]).toBe(fresh);
+    expect(slotKind(container, fresh)).toBe('slot-big');
+    expect(get(focusOrders)[tabA][0]).toBe(a[0]);
+  });
+
+  it('puts an agent pane small and leaves focus alone', async () => {
+    tabStore.focusPane(tabA, a[0]);
+    const { container, rerender } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, active: true, layoutMode: 'focus' } });
+    const agent = tabStore.addPane(tabA, 'h1:60', 'agent', 'claude', '');
+    placePane(tabA, agent, 2);
+    tabStore.focusPane(tabA, a[0]);
+    await rerender({ panes: panesOf(tabA) });
+
+    expect(slotKind(container, agent)).toBe('slot-small');
+    expect(get(focusOrders)[tabA].slice(0, 2)).toEqual([a[0], a[1]]);
+  });
+
+  it('does not promote the neighbour that gets focus when the focused pane closes', async () => {
+    setFocusOrder(tabA, [a[1], a[0], a[2], a[3]]);
+    tabStore.focusPane(tabA, a[1]);
+    const { rerender } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, active: true, layoutMode: 'focus' } });
+    // closePane hands focus to the array neighbour (a[2], small here).
+    tabStore.closePane(tabA, a[1]);
+    await rerender({ panes: panesOf(tabA) });
+
+    expect(get(focusOrders)[tabA].slice(0, 2)).toEqual([a[1], a[0]]); // stored order untouched
+    expect(panesOf(tabA).find((p) => p.focused)?.id).toBe(a[2]);
+  });
+
+  it('still puts a pane the user opens on the left', async () => {
+    const { container, rerender } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, active: true, layoutMode: 'focus' } });
+    const opened = tabStore.addPane(tabA, 'h1:70', 'neu', 'claude', '');
+    await rerender({ panes: panesOf(tabA) });
+    await tick();
+
+    expect(get(focusOrders)[tabA][0]).toBe(opened);
+    expect(slotKind(container, opened)).toBe('slot-big');
   });
 });

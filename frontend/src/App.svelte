@@ -47,7 +47,7 @@
   import { subscribeChatEvents } from './lib/chat-events';
   import { sendQuickAction } from './lib/quickActionQueue';
   import { layoutModeOf, waitingElsewhere, nextWaiting, floatingStillValid, type LayoutMode } from './lib/focusLayout';
-  import { floatingPane } from './stores/focusLayout';
+  import { floatingPane, focusOrders, placePane, slotIndexOf } from './stores/focusLayout';
 
   const MAX_PANES_PER_TAB = 10;
 
@@ -168,6 +168,7 @@
   let commitAgeInterval: ReturnType<typeof setInterval> | null = null;
   let updateCheckInterval: ReturnType<typeof setInterval> | null = null;
   let storeUnsubscribe: (() => void) | null = null;
+  let orderUnsubscribe: (() => void) | null = null;
   let keepAliveCleanup: (() => void) | null = null;
   let chatEventsCleanup: (() => void) | null = null;
   let linkInterceptorCleanup: (() => void) | null = null;
@@ -435,8 +436,16 @@
         tab = get(activeTab);
       }
       if (!tab) return;
-      tabStore.addPane(tab.id, info.id, info.name || info.tool, info.tool, info.model || '',
+      const prevFocus = tab.focusedPaneId;
+      const paneId = tabStore.addPane(tab.id, info.id, info.name || info.tool, info.tool, info.model || '',
         null, '', '', '', '', '', false, 'terminal', '', '');
+      // Focus layout: an agent's pane goes to the small column and leaves the
+      // keyboard where it was, instead of taking the big left slot while the
+      // user is typing somewhere else.
+      if (layoutMode === 'focus') {
+        placePane(tab.id, paneId, 2);
+        if (prevFocus && tab.panes.some((p) => p.id === prevFocus)) tabStore.focusPane(tab.id, prevFocus);
+      }
     });
     EventsOn('terminal:exit', (event: any) => {
       const id: SessionRef = event.data.id;
@@ -472,10 +481,13 @@
     });
 
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
-    storeUnsubscribe = tabStore.subscribe(() => {
+    const scheduleSave = () => {
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(saveSession, 1000);
-    });
+    };
+    storeUnsubscribe = tabStore.subscribe(scheduleSave);
+    // The focus layout's order is saved with the tabs (SavedTab.focus_order).
+    orderUnsubscribe = focusOrders.subscribe(scheduleSave);
 
     window.addEventListener('beforeunload', saveSession);
     updateBranch();
@@ -502,6 +514,7 @@
     if (commitAgeInterval) clearInterval(commitAgeInterval);
     if (updateCheckInterval) clearInterval(updateCheckInterval);
     if (storeUnsubscribe) storeUnsubscribe();
+    if (orderUnsubscribe) orderUnsubscribe();
     if (keepAliveCleanup) keepAliveCleanup();
     if (chatEventsCleanup) chatEventsCleanup();
     if (linkInterceptorCleanup) linkInterceptorCleanup();
@@ -853,6 +866,7 @@
     // Read the MCP profile off the pane BEFORE closing it, so a restart keeps
     // the pane's server set instead of silently reverting to "all servers".
     const mcpProfile = tab.panes.find((p) => p.id === paneId)?.mcpProfile || '';
+    const slot = slotIndexOf(tab.id, paneId);
     App.CloseSession(sessionId);
     tabStore.closePane(tab.id, paneId);
     // Restart = fresh session, but still pin an id so it stays toggle-able to chat.
@@ -864,8 +878,8 @@
     });
     try {
       const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
-      if (newSessionId) tabStore.addPane(tab.id, newSessionId, name, mode, model,
-        null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile);
+      if (newSessionId) placePane(tab.id, tabStore.addPane(tab.id, newSessionId, name, mode, model,
+        null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile), slot);
     } catch (err) { console.error('[handleRestartPane] failed:', err); }
   }
 
@@ -875,6 +889,8 @@
     const pane = tab.panes.find((p) => p.id === e.detail.paneId);
     if (!pane) return;
     const { name, mode, model } = pane;
+    // The toggle replaces the pane with a new one; that one takes its place.
+    const slot = slotIndexOf(tab.id, pane.id);
 
     if (pane.display === 'chat') {
       // Chat → Terminal: resume the same claude session so the conversation is
@@ -899,8 +915,8 @@
       });
       try {
         const newSessionId = await App.CreateSession(argv, tab.dir || '', 24, 80, mode);
-        if (newSessionId) tabStore.addPane(tab.id, newSessionId, name, mode, model,
-          null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile);
+        if (newSessionId) placePane(tab.id, tabStore.addPane(tab.id, newSessionId, name, mode, model,
+          null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile), slot);
       } catch (err) { console.error('[toggleDisplay→terminal] failed:', err); }
     } else {
       // Terminal → Chat: an interactive terminal session id is NOT a resumable
@@ -915,7 +931,7 @@
       const provider = mode.startsWith('codex') ? 'codex' : mode.startsWith('gemini') ? 'gemini' : 'claude';
       try {
         const conv = await App.CreateConversation(provider, model || '', tab.dir || '', modeToPermissionMode(mode), '');
-        tabStore.addPane(tab.id, NO_SESSION, name, mode, model || '', null, '', '', '', '', '', false, 'chat', conv.id, resumeId);
+        placePane(tab.id, tabStore.addPane(tab.id, NO_SESSION, name, mode, model || '', null, '', '', '', '', '', false, 'chat', conv.id, resumeId), slot);
       } catch (err) { console.error('[toggleDisplay→chat] failed:', err); }
     }
   }
@@ -1257,6 +1273,7 @@
     const loc = findPaneLocation(sessionId);
     if (!loc) return;
     const { tab, pane } = loc;
+    const slot = slotIndexOf(tab.id, pane.id);
     tabStore.closePane(tab.id, pane.id);
     const sid = mode !== 'shell' ? genSessionId() : '';
     const mcpProfile = pane.mcpProfile || '';
@@ -1270,8 +1287,8 @@
     try {
       const newId = await App.CreateSession(argv, mainRoot, 24, 80, pane.mode);
       if (newId) {
-        tabStore.addPane(tab.id, newId, pane.name, pane.mode, pane.model,
-          null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile);
+        placePane(tab.id, tabStore.addPane(tab.id, newId, pane.name, pane.mode, pane.model,
+          null, '', '', '', '', '', false, 'terminal', '', sid, mcpProfile), slot);
       }
     } catch (err) { console.error('[relaunchPaneAfterFinish] failed:', err); }
   }
