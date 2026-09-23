@@ -34,7 +34,7 @@
   import { createGlobalKeyHandler } from './lib/shortcuts';
   import { sendNotification } from './lib/notifications';
   import { installExternalLinkInterceptor } from './lib/external-links';
-  import { restoreSession, saveSession } from './lib/session';
+  import { restoreSession, saveSession, closePaneSession, closeTabWithSessions } from './lib/session';
   import { startKeepAliveLoop } from './lib/keepalive';
   import { fetchBranch, fetchCommitAge, fetchConflicts, fetchIssueCount, fetchRepoURL } from './lib/git-polling';
   import { checkForNewCommit } from './lib/background-agents';
@@ -807,11 +807,7 @@
     if (pane.worktreePath && pane.finishPhase === '') {
       if (!confirm('Dieses Pane hat einen aktiven Worktree. Trotzdem schließen?\n\n(Der Worktree bleibt liegen und ist weiterhin über das ⎇-Dropdown erreichbar. Zum Mergen/Aufräumen den ✓-Button nutzen.)')) return;
     }
-    if (pane.display === 'chat') {
-      if (pane.conversationId) App.CloseChatSession(pane.conversationId);
-    } else {
-      App.CloseSession(pane.sessionId);
-    }
+    closePaneSession(pane);
     tabStore.closePane(tab.id, pane.id);
   }
 
@@ -1032,12 +1028,12 @@
     if (tab && tabNeedsCloseConfirm(tab)) {
       pendingCloseTabId = tabId;
     } else {
-      tabStore.closeTab(tabId);
+      closeTabWithSessions(tabId);
     }
   }
 
   function confirmCloseTab() {
-    tabStore.closeTab(pendingCloseTabId);
+    closeTabWithSessions(pendingCloseTabId);
     pendingCloseTabId = '';
   }
 

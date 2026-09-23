@@ -150,7 +150,11 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	a.cancelAll = cancel
 	a.outputBatch() // ensure the batcher is initialized before batchLoop starts
 	go a.batchLoop(scanCtx)
-	go a.scheduleLoop(scanCtx)
+	// scheduleLoop is deliberately not started. Every run of a due schedule
+	// created a claude session that nothing ever drew or closed, one more
+	// invisible process tree per run until the app quit, and there is no UI
+	// left to create or see schedules. Before it comes back, its sessions need
+	// an origin so a pane is drawn, and a close once they are done.
 	go a.idleSuspendLoop(scanCtx)
 
 	// Register custom protocol for notification clicks, then bring up the
@@ -158,45 +162,6 @@ func (a *AppService) ServiceStartup(ctx context.Context, opts application.Servic
 	registerProtocol()
 	a.startLocalListeners()
 
-	return nil
-}
-
-// ServiceShutdown implements the Wails v3 Service interface.
-func (a *AppService) ServiceShutdown() error {
-	if a.cancelAll != nil {
-		a.cancelAll()
-	}
-	// Releasing the host means different things by design: the embedded host
-	// owns its sessions and ends them (killing each process tree first, which
-	// the old shutdown loop did not, leaving descendants holding handles
-	// inside worktrees, #185), while a daemon host is merely disconnected and
-	// keeps every agent running for the next window.
-	a.host.Release()
-
-	// Withdraw the published loopback ports so no helper process dials a port
-	// this instance no longer owns.
-	a.releaseDiscoveryRecords()
-
-	// Mark clean shutdown and auto-disable logging if stable
-	config.MarkCleanShutdown(&a.health)
-	if config.ShouldAutoDisableLogging(&a.health) {
-		config.DisableAutoLogging(&a.health)
-		a.cfg.LoggingEnabled = false
-		_ = config.Save(a.cfg)
-		log.Println("[Shutdown] Auto-logging disabled after 3 clean shutdowns")
-	}
-	_ = config.SaveHealth(a.health)
-	log.Println("[Shutdown] Clean shutdown recorded")
-
-	if a.safeMode {
-		if a.sessionBackup != nil {
-			if err := config.SaveSession(*a.sessionBackup); err != nil {
-				log.Printf("[SafeMode] failed to restore session backup: %v", err)
-			}
-		} else {
-			config.ClearSession()
-		}
-	}
 	return nil
 }
 

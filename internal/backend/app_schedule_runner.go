@@ -10,6 +10,8 @@ import (
 
 // scheduleLoop periodically checks for due scheduled tasks and executes them.
 // Runs every 30 seconds to minimize overhead.
+//
+// Not started at the moment; see ServiceStartup for why.
 func (a *AppService) scheduleLoop(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()

@@ -3,7 +3,7 @@
   import { t } from '../stores/i18n';
   import { paneDisplayName, type Pane } from '../stores/tabs';
   import * as App from '../../wailsjs/go/backend/App';
-  import { fetchBranch } from '../lib/git-polling';
+  import { cachedBranch } from '../lib/git-polling';
   import { CLAUDE_MODES } from '../lib/claude';
   import { renderQuickActionPrompt } from '../lib/quickActions';
   import { config } from '../stores/config';
@@ -24,20 +24,42 @@
   // Auto names (most-recently-updated source wins) apply until the user manually renames.
   $: displayName = paneDisplayName(pane);
 
-  // Repository root for the worktree tooltip — fetched once per worktree path
-  // (assignment happens inside the .then callback, not read back in this
-  // block, so it is not itself tracked as a reactive dependency).
+  // Both git lookups below go through functions with a last-value guard, and
+  // that is load-bearing. A `$:` block that reads pane.worktreePath depends on
+  // the whole `pane` object, and in legacy mode an object prop counts as
+  // changed on every store update, in-place mutation or not. Every activity,
+  // cost or title update anywhere therefore re-ran these blocks for every pane
+  // in every tab, and each run started a git process (plus a conhost on
+  // Windows). With 20 panes and a few working agents that was over a hundred
+  // git processes a second.
+
+  // Repository root for the worktree tooltip. It cannot change for a given
+  // worktree path, so it is fetched once per path.
   let mainRepoRoot = '';
-  $: if (pane.worktreePath) {
-    App.GetMainRepoRoot(pane.worktreePath).then((r) => { mainRepoRoot = r; });
+  let mainRepoRootFor = '';
+  function loadMainRepoRoot(worktreePath: string) {
+    if (worktreePath === mainRepoRootFor) return;
+    mainRepoRootFor = worktreePath;
+    mainRepoRoot = '';
+    if (!worktreePath) return;
+    App.GetMainRepoRoot(worktreePath).then((r) => {
+      if (mainRepoRootFor === worktreePath) mainRepoRoot = r;
+    });
   }
+  $: loadMainRepoRoot(pane.worktreePath);
 
   // Fallback branch badge for panes with no worktree (running directly in the
-  // main repo's own working directory) — same async-assignment shape as above.
+  // main repo's own working directory). The branch can change under the pane,
+  // so this is re-read, but through a per-directory cache shared by every pane
+  // of the tab.
   let fallbackBranch = '';
-  $: if (!pane.worktreePath && tabDir) {
-    fetchBranch(tabDir).then((b) => { fallbackBranch = b; });
+  function loadFallbackBranch(worktreePath: string, dir: string) {
+    if (worktreePath || !dir) { fallbackBranch = ''; return; }
+    cachedBranch(dir).then((b) => {
+      if (!pane.worktreePath && tabDir === dir) fallbackBranch = b;
+    });
   }
+  $: loadFallbackBranch(pane.worktreePath, tabDir);
 
   function startRename() {
     editName = displayName;

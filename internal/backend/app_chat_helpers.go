@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/procs"
 )
 
 // wrapClaudeCmd wraps the claude path with COMSPEC on Windows (.cmd shim),
@@ -33,6 +35,10 @@ func wrapClaudeCmdContext(ctx context.Context, path string, args []string) *exec
 	// generation spawn claude outside the PTY. No-op on non-Windows; same
 	// pattern every git/gh spawn in this package uses.
 	hideConsole(cmd)
+	// On a timeout or cancel, end claude and everything under it. The context
+	// alone kills only cmd.exe, and the naming call's timeout then did
+	// nothing: claude kept running and Wait kept waiting for it.
+	procs.KillTreeOnCancel(cmd)
 	return cmd
 }
 

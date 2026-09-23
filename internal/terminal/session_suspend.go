@@ -103,7 +103,8 @@ func (s *Session) FinishSuspend() bool {
 		s.mu.Unlock()
 		return false
 	}
-	cmd, pty := s.cmd, s.p
+	cmd, pty, job := s.cmd, s.p, s.job
+	s.job = nil
 	done, readExit := s.done, s.sus.readExit
 	s.mu.Unlock()
 
@@ -115,6 +116,11 @@ func (s *Session) FinishSuspend() bool {
 	}
 	if cmd != nil {
 		<-done
+	}
+	// A suspended pane is meant to hold no processes at all; this takes the
+	// ones the tree kill could not reach. Resume starts a new job.
+	job.Release()
+	if cmd != nil {
 		// Bounded like Close(): a ConPTY read that never returns must not strand
 		// the pane in StatusSuspending, where nothing would report its state.
 		// A late readLoop is harmless — the generation bump makes it stop.

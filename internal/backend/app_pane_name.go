@@ -20,7 +20,12 @@ type PaneNameEvent struct {
 var (
 	nameGenMu   sync.Mutex
 	lastNameGen = make(map[int]int64)
+	// nameGenSlots caps how many naming calls run at once, across all panes.
+	nameGenSlots = make(chan struct{}, maxConcurrentNameGen)
 )
+
+// maxConcurrentNameGen is how many one-shot naming calls may run at once.
+const maxConcurrentNameGen = 2
 
 // cleanupNameTracking removes throttle state for a closed session.
 func cleanupNameTracking(id int) {
@@ -43,11 +48,22 @@ func (a *AppService) maybeGeneratePaneName(mtID int, prompt string) {
 		nameGenMu.Unlock()
 		return
 	}
+	// Every naming call is a full claude cold start (node, a few hundred MB,
+	// a console host on Windows). With dozens of panes those used to run side
+	// by side without limit. When the slots are taken the prompt is skipped
+	// and the throttle left untouched, so the pane's next prompt tries again.
+	select {
+	case nameGenSlots <- struct{}{}:
+	default:
+		nameGenMu.Unlock()
+		return
+	}
 	lastNameGen[mtID] = now
 	nameGenMu.Unlock()
 
 	model := a.cfg.AutoNaming.Model
 	go func() {
+		defer func() { <-nameGenSlots }()
 		name := a.generatePaneName(model, prompt)
 		if name == "" {
 			return
@@ -138,8 +154,9 @@ const paneNameMaxLen = 24
 // paneNameMinIntervalSec throttles regeneration: after naming a pane, a new
 // prompt only triggers a fresh name once this many seconds have elapsed. This
 // keeps follow-up prompts ("yes", "continue") from spending a model call each
-// while still letting the name follow genuine topic changes.
-const paneNameMinIntervalSec = 90
+// while still letting the name follow genuine topic changes. It was 90 s, which
+// in a busy pane meant a claude process for nearly every prompt.
+const paneNameMinIntervalSec = 300
 
 // shouldRegenerateName decides whether a pane name should be (re)generated.
 // It always generates the first time (lastGenUnix == 0) and otherwise only

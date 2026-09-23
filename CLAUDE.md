@@ -57,6 +57,11 @@ A GUI terminal multiplexer built for Claude Code power users.
   a GUI-subsystem CLI writes its output nowhere and looks like it did nothing. The release
   workflow asserts both directions, because neither is visible until somebody runs it.
 - **Every non-PTY child process MUST call `procs.HideConsole(cmd)` before `Start()`/`Run()`.** MTUI is a GUI app with no console, so any `exec.Command` that launches a console-subsystem program (esp. via `cmd.exe /c …`) makes Windows allocate a **visible console window that flashes**. `internal/procs` sets `CREATE_NO_WINDOW` and is a no-op elsewhere; `internal/backend` reaches it through the `hideConsole` delegate, and `gitx.Cmd` applies it to every git spawn. Apply it to any new spawn too. PTY sessions are exempt (ConPTY has no window). **Recurring bug:** the statusline forwarder shim and the chat/pane-name `claude` spawns each shipped this flash because they skipped it.
+- **PTY sessions run in a Windows Job object** (`procs.Job`, armed with KILL_ON_JOB_CLOSE, handle held
+  only by the owning process). A crash of mtui or mtuid therefore ends every session tree. An intentional
+  close still runs `taskkill /T` first; `Job.Release` then kills leftovers without a visible window and
+  lets windowed ones (an editor started from the pane) go. Non-PTY spawns are not in a job; a cancelled
+  one ends its tree through `procs.KillTreeOnCancel`.
 - `CLAUDECODE` env var must be stripped from PTY environment (see `session.go:Start`).
 - `beforeunload` does NOT fire reliably in WebView2 — use reactive auto-save (store subscription + debounce).
 
