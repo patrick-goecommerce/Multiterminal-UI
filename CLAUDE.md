@@ -125,8 +125,8 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **Feature branches** — branch off `alpha-main`, PR back into `alpha-main`.
 
 ## Alpha Notes (`alpha-main`)
-- Runs on **Wails v3** (alpha) + **multi-window support** (tab drag & drop).
-- `go.mod` uses `github.com/wailsapp/wails/v3` (alpha) — API may change.
+- Runs on **Wails v3** (beta) + **multi-window support** (tab drag & drop).
+- `go.mod` uses `github.com/wailsapp/wails/v3` (beta, pinned to `v3.0.0-beta.25`; the release workflow pins the `wails3` CLI to the same tag) — API may change.
 - `App` struct renamed to `AppService` (Wails v3 service pattern, no `ctx` field).
 - Events: `runtime.EventsEmit(ctx, ...)` → `s.app.Event.Emit(...)`.
 - Frontend bindings in `wailsjs/` are v3-generated — import from `backend/AppService` not `backend/App`.
@@ -136,7 +136,7 @@ A GUI terminal multiplexer built for Claude Code power users.
 
 ## Tech Stack
 - **Language:** Go 1.25 (`go.mod` pins the toolchain; see the comment there) + TypeScript/Svelte
-- **GUI framework:** Wails v3 alpha (Go ↔ WebView bridge, multi-window)
+- **GUI framework:** Wails v3 beta (Go ↔ WebView bridge, multi-window)
 - **Frontend:** Svelte **5**, running entirely in legacy syntax. 32 files use `$:`, none use
   runes. That is fine and not urgent, but do not assume Svelte 4 semantics when reading the
   Svelte docs.
