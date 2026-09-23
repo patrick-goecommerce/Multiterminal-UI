@@ -39,6 +39,9 @@ type Session struct {
 
 	p   gopty.Pty  // cross-platform PTY (Unix PTY or Windows ConPTY)
 	cmd *gopty.Cmd // the spawned child process
+	// cmdExited is set once cmd has been waited on. Its PID is then free for
+	// the OS to hand out again, so Pid stops reporting it.
+	cmdExited bool
 
 	// done is re-armed per process generation: it is closed when the current
 	// generation's process exits, and replaced by Resume. Read it via Done().
@@ -247,7 +250,10 @@ func (s *Session) Name() string {
 func (s *Session) Pid() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.cmd != nil && s.cmd.Process != nil {
+	// After the exit the number may already name some other process: once
+	// the process has been waited on nothing holds its PID reserved any more.
+	// A tree kill by that number would end a stranger's tree.
+	if s.cmd != nil && s.cmd.Process != nil && !s.cmdExited {
 		return s.cmd.Process.Pid
 	}
 	return 0
