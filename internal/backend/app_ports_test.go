@@ -286,6 +286,7 @@ func TestCheckHealthSurfacesBindWarnings(t *testing.T) {
 // the other listener from coming up.
 func TestStartLocalListenersRecordsMCPBindFailure(t *testing.T) {
 	useTempDiscoveryDir(t)
+	useTempHome(t)
 
 	blocker, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -313,6 +314,7 @@ func TestStartLocalListenersRecordsMCPBindFailure(t *testing.T) {
 
 func TestStartLocalListenersSkipsDisabledMCP(t *testing.T) {
 	useTempDiscoveryDir(t)
+	useTempHome(t)
 
 	a := newTestApp()
 	a.cfg = config.DefaultConfig()

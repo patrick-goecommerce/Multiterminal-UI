@@ -33,8 +33,12 @@ func (a *AppService) startLocalListeners() {
 	// The MCP server lets an agent in a pane delegate tasks by opening,
 	// feeding and closing other MTUI sessions. Opt-out via config.
 	if !a.cfg.ShouldRunMCPServer() {
+		a.removeDelegateSkill()
 		return
 	}
+	// The skill that teaches an agent to use it. `mt` also works without the
+	// MCP server, but only in daemon mode; the skill covers both.
+	a.installDelegateSkill()
 	// It belongs wherever the sessions are: a delegating agent asks for a
 	// session and comes back to it later, and both halves have to survive this
 	// window closing. In daemon mode mtuid serves it and publishes its own

@@ -255,7 +255,8 @@ internal/
   orchestrator/ Kanban orchestration: waves, QA, escalation.
   mcpsrv/       Agent-control MCP server over hub.Host: open/send/read/close/wait/list.
                 Served by whoever owns the sessions (mtuid, or the window in embedded mode).
-  skills/       Project skill files.
+  skills/       Project skill files, and the mtui-delegate Agent Skill (delegate/SKILL.md) that
+                startLocalListeners installs to ~/.claude/skills with the MCP registration.
   backend/      The Wails service. Owns no sessions; talks to a Host.
     app.go                       AppService, lifecycle, bindings
     app_host_daemon.go           Picks Embedded vs Remote, starts mtuid, re-attach
