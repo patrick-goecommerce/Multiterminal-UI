@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"path/filepath"
+
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
-	"path/filepath"
 )
 
 // printArgv is a command that writes a marker to the terminal and exits.
@@ -57,7 +58,7 @@ func drainBatcher(t *testing.T, a *AppService, id int, want string) string {
 	return got.String()
 }
 
-// CreateSession has to end with the session's output in the batcher, which is
+// createSession has to end with the session's output in the batcher, which is
 // what the frontend reads. The path changed from a channel the backend drained
 // itself to a subscription on the host, so this is the one that must not
 // regress.
@@ -65,7 +66,7 @@ func TestCreateSession_OutputReachesTheBatcher(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 
-	id := a.CreateSession(printArgv("batcher-marker"), t.TempDir(), 24, 80, "shell")
+	id := a.createSession(printArgv("batcher-marker"), t.TempDir(), 24, 80, "shell")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
@@ -82,7 +83,7 @@ func TestCreateSession_UsesTheReservedID(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 
-	id := a.CreateSession(printArgv("x"), t.TempDir(), 24, 80, "shell")
+	id := a.createSession(printArgv("x"), t.TempDir(), 24, 80, "shell")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
@@ -109,7 +110,7 @@ func TestCreateSession_FailedLaunchIsNotRegistered(t *testing.T) {
 	t.Cleanup(a.host.Release)
 
 	missing := filepath.Join(t.TempDir(), "dieses-verzeichnis-gibt-es-nicht")
-	id := a.CreateSession([]string{"definitely-not-a-real-binary-mtui"}, missing, 24, 80, "shell")
+	id := a.createSession([]string{"definitely-not-a-real-binary-mtui"}, missing, 24, 80, "shell")
 	if id != -1 {
 		t.Fatalf("CreateSession returned %d for a command that cannot start, want -1", id)
 	}
@@ -124,18 +125,18 @@ func TestCreateSession_FailedLaunchIsNotRegistered(t *testing.T) {
 	}
 }
 
-// CloseSession must end the process and forget it, so a later lookup does not
+// closeSession must end the process and forget it, so a later lookup does not
 // hand out a dead session.
 func TestCloseSession_ForgetsTheSession(t *testing.T) {
 	a := newTestApp()
 	t.Cleanup(a.host.Release)
 
-	id := a.CreateSession(sleepArgvForTest(), t.TempDir(), 24, 80, "shell")
+	id := a.createSession(sleepArgvForTest(), t.TempDir(), 24, 80, "shell")
 	if id <= 0 {
 		t.Fatalf("CreateSession returned %d", id)
 	}
 
-	a.CloseSession(id)
+	a.closeSession(id)
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
 		if !a.hasSession(id) {

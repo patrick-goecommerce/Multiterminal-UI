@@ -1,6 +1,7 @@
 import { tabStore } from '../stores/tabs';
 import { buildClaudeArgv, encodeForPty } from './claude';
 import * as App from '../../wailsjs/go/backend/App';
+import type { SessionRef } from './sessionRef';
 
 export interface BackgroundAgentsConfig {
   review_enabled?: boolean;
@@ -21,10 +22,10 @@ export interface CliPaths {
 const lastKnownHash = new Map<string, string>();
 
 // Track BG pane session IDs for reuse
-const bgReviewPanes = new Map<string, number>(); // dir -> sessionId
-const bgTestPanes = new Map<string, number>();    // dir -> sessionId
+const bgReviewPanes = new Map<string, SessionRef>(); // dir -> sessionId
+const bgTestPanes = new Map<string, SessionRef>();    // dir -> sessionId
 
-function findBgPane(tabId: string, type: 'review' | 'test'): number | null {
+function findBgPane(tabId: string, type: 'review' | 'test'): SessionRef | null {
   const state = tabStore.getState();
   const tab = state.tabs.find(t => t.id === tabId);
   if (!tab) return null;
@@ -47,7 +48,7 @@ async function ensureReviewPane(
   dir: string,
   cfg: BackgroundAgentsConfig,
   cliPaths: CliPaths,
-): Promise<number | null> {
+): Promise<SessionRef | null> {
   const existing = findBgPane(tabId, 'review');
   if (existing) return existing;
 
@@ -57,7 +58,7 @@ async function ensureReviewPane(
   const toolLabel = tool.charAt(0).toUpperCase() + tool.slice(1);
   try {
     const sessionId = await App.CreateSession(argv, dir, 24, 80, tool);
-    if (sessionId > 0) {
+    if (sessionId) {
       tabStore.addPane(tabId, sessionId, `Review ${toolLabel} (BG)`, tool, model,
         null, '', '', '', '', '', true);
       bgReviewPanes.set(dir, sessionId);
@@ -72,13 +73,13 @@ async function ensureReviewPane(
 async function ensureTestPane(
   tabId: string,
   dir: string,
-): Promise<number | null> {
+): Promise<SessionRef | null> {
   const existing = findBgPane(tabId, 'test');
   if (existing) return existing;
 
   try {
     const sessionId = await App.CreateSession([], dir, 24, 80, 'shell');
-    if (sessionId > 0) {
+    if (sessionId) {
       tabStore.addPane(tabId, sessionId, 'Test (BG)', 'shell', '',
         null, '', '', '', '', '', true);
       bgTestPanes.set(dir, sessionId);

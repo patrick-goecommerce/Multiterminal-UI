@@ -30,7 +30,7 @@ func (a *AppService) streamSession(id int) {
 // that gap would leave the pane garbled for good (#157), so the batcher's
 // backlog is replaced with a repaint of the mirror first and the chunk lands
 // on top of it. The chunk is then applied twice, which is the same trade
-// ResyncSession makes: a doubled write is a repaint, a hole is a broken pane.
+// resyncSession makes: a doubled write is a repaint, a hole is a broken pane.
 func (a *AppService) pumpToBatcher(id int, sub *hub.Subscription) {
 	defer sub.Close()
 	for chunk := range sub.C {
@@ -113,7 +113,7 @@ func (a *AppService) onHostEvent(name string, payload any) {
 		if !ok || a.app == nil {
 			return // no frontend to notify (before ServiceStartup, and in tests)
 		}
-		a.app.Event.Emit("terminal:exit", TerminalExitEvent{ID: ev.ID, ExitCode: ev.ExitCode})
+		a.app.Event.Emit("terminal:exit", TerminalExitEvent{ID: a.ref(ev.ID), ExitCode: ev.ExitCode})
 
 	case hub.EventSessionSuspended:
 		ev, ok := hub.DecodePayload[hub.SessionSuspended](payload)

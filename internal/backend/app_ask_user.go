@@ -6,20 +6,22 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // AskUserQuestion represents an agent's question that needs user input.
 type AskUserQuestion struct {
-	SessionID   int      `json:"session_id" yaml:"session_id"`
+	SessionID   hub.Ref  `json:"session_id" yaml:"session_id"`
 	SessionName string   `json:"session_name" yaml:"session_name"`
 	Question    string   `json:"question" yaml:"question"`
 	Options     []string `json:"options" yaml:"options"`
 	Timestamp   string   `json:"timestamp" yaml:"timestamp"`
 }
 
-// CheckAskUser analyzes a session's screen buffer for pending questions.
+// checkAskUser analyzes a session's screen buffer for pending questions.
 // Called when activity transitions to waitingPermission or waitingAnswer.
-func (a *AppService) CheckAskUser(sessionID int) *AskUserQuestion {
+func (a *AppService) checkAskUser(sessionID int) *AskUserQuestion {
 	summary, err := a.host.Get(sessionID)
 	if err != nil {
 		return nil
@@ -44,7 +46,7 @@ func (a *AppService) CheckAskUser(sessionID int) *AskUserQuestion {
 	}
 
 	return &AskUserQuestion{
-		SessionID:   sessionID,
+		SessionID:   a.ref(sessionID),
 		SessionName: summary.Name,
 		Question:    question,
 		Options:     options,
@@ -52,8 +54,8 @@ func (a *AppService) CheckAskUser(sessionID int) *AskUserQuestion {
 	}
 }
 
-// AnswerAskUser sends a response to a session that is waiting for input.
-func (a *AppService) AnswerAskUser(sessionID int, answer string) error {
+// answerAskUser sends a response to a session that is waiting for input.
+func (a *AppService) answerAskUser(sessionID int, answer string) error {
 	if !a.hasSession(sessionID) {
 		return nil
 	}
@@ -69,7 +71,7 @@ func (a *AppService) AnswerAskUser(sessionID int, answer string) error {
 	// Emit answered event
 	if a.app != nil {
 		a.app.Event.Emit("ask_user:answered", map[string]interface{}{
-			"sessionId": sessionID,
+			"sessionId": a.ref(sessionID),
 			"answer":    answer,
 		})
 	}
@@ -77,11 +79,11 @@ func (a *AppService) AnswerAskUser(sessionID int, answer string) error {
 	return nil
 }
 
-// DismissAskUser dismisses a pending question without answering.
-func (a *AppService) DismissAskUser(sessionID int) {
+// dismissAskUser dismisses a pending question without answering.
+func (a *AppService) dismissAskUser(sessionID int) {
 	if a.app != nil {
 		a.app.Event.Emit("ask_user:dismissed", map[string]interface{}{
-			"sessionId": sessionID,
+			"sessionId": a.ref(sessionID),
 		})
 	}
 }
@@ -149,5 +151,5 @@ func (a *AppService) emitAskUserQuestion(q *AskUserQuestion) {
 		return
 	}
 	a.app.Event.Emit("ask_user:question", q)
-	log.Printf("[ask-user] question from session %d: %q", q.SessionID, q.Question)
+	log.Printf("[ask-user] question from session %s: %q", q.SessionID, q.Question)
 }

@@ -7,12 +7,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // PaneNameEvent is emitted to the frontend with an auto-generated pane name.
 type PaneNameEvent struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID   hub.Ref `json:"id"`
+	Name string  `json:"name"`
 }
 
 // lastNameGen tracks the unix time a pane was last auto-named, to throttle
@@ -70,7 +72,7 @@ func (a *AppService) maybeGeneratePaneName(mtID int, prompt string) {
 		}
 		log.Printf("[panename] session %d → %q", mtID, name)
 		if a.app != nil {
-			a.app.Event.Emit("pane:autoname", PaneNameEvent{ID: mtID, Name: name})
+			a.app.Event.Emit("pane:autoname", PaneNameEvent{ID: a.ref(mtID), Name: name})
 		}
 	}()
 }

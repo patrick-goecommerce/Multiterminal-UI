@@ -124,7 +124,7 @@ func (a *AppService) executeScheduledTask(task ScheduledTask, dir string) {
 		argv = append(argv, "--model", task.Model)
 	}
 
-	sessionID := a.CreateSession(argv, taskDir, 24, 80, mode)
+	sessionID := a.createSession(argv, taskDir, 24, 80, mode)
 	if sessionID < 0 {
 		log.Printf("[scheduler] failed to create session for task %s", task.ID)
 		return

@@ -3,8 +3,9 @@
   import { t } from '../stores/i18n';
   import * as App from '../../wailsjs/go/backend/App';
   import { EventsOn } from '../../wailsjs/runtime/runtime';
+  import type { SessionRef } from '../lib/sessionRef';
 
-  export let sessionId: number;
+  export let sessionId: SessionRef;
   export let visible: boolean = false;
 
   interface Item { id: number; prompt: string; status: string; }
@@ -64,7 +65,7 @@
     loadQueue();
     // Wails v3: queue:update payload is the session ID in event.data
     cleanupFn = EventsOn('queue:update', (event: any) => {
-      const sid: number = event.data;
+      const sid: SessionRef = event.data;
       if (sid === sessionId) loadQueue();
     });
   });

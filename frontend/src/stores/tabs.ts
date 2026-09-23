@@ -1,10 +1,12 @@
 import { writable, derived, get } from 'svelte/store';
+import type { SessionRef } from '../lib/sessionRef';
 
 export type PaneMode = 'shell' | 'claude' | 'claude-auto' | 'claude-yolo' | 'codex' | 'codex-auto' | 'gemini' | 'gemini-yolo';
 
 export interface Pane {
   id: string;
-  sessionId: number;
+  /** The backend's name for this pane's session; '' for a chat pane. */
+  sessionId: SessionRef;
   name: string;
   mode: PaneMode;
   model: string;
@@ -123,7 +125,7 @@ function createTabStore() {
 
   // Activity states arrive pre-confirmed: the backend holds a differing state
   // for debounceWindow before emitting it, so no smoothing is needed here.
-  function applyActivity(sessionId: number, activity: string, cost: string, activitySince: number) {
+  function applyActivity(sessionId: SessionRef, activity: string, cost: string, activitySince: number) {
     update((state) => {
       for (const tab of state.tabs) {
         for (const pane of tab.panes) {
@@ -229,7 +231,7 @@ function createTabStore() {
     /** Apply an auto-generated name (by session id). Ignored once the user
      *  manually renamed the pane. The most recently applied source wins on
      *  display (see paneDisplayName). source 'llm' sets autoName, 'osc' sets oscTitle. */
-    setAutoName(sessionId: number, value: string, source: 'llm' | 'osc') {
+    setAutoName(sessionId: SessionRef, value: string, source: 'llm' | 'osc') {
       update((state) => {
         for (const tab of state.tabs) {
           const pane = tab.panes.find((p) => p.sessionId === sessionId);
@@ -242,7 +244,7 @@ function createTabStore() {
       });
     },
 
-    addPane(tabId: string, sessionId: number, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, targetBranch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = '', claudeSessionId = '', mcpProfile = ''): string {
+    addPane(tabId: string, sessionId: SessionRef, name: string, mode: PaneMode, model: string, issueNumber?: number | null, issueTitle?: string, issueBranch?: string, worktreePath?: string, branch?: string, targetBranch?: string, background?: boolean, display: 'terminal' | 'chat' = 'terminal', conversationId = '', claudeSessionId = '', mcpProfile = ''): string {
       const paneId = `pane-${nextPaneNum++}`;
       update((state) => {
         const tab = state.tabs.find((t) => t.id === tabId);
@@ -345,11 +347,11 @@ function createTabStore() {
       });
     },
 
-    updateActivity(sessionId: number, activity: string, cost: string, activitySince: number) {
+    updateActivity(sessionId: SessionRef, activity: string, cost: string, activitySince: number) {
       applyActivity(sessionId, activity, cost, activitySince);
     },
 
-    setWorktree(sessionId: number, path: string, branch: string, targetBranch: string) {
+    setWorktree(sessionId: SessionRef, path: string, branch: string, targetBranch: string) {
       update((state) => {
         for (const tab of state.tabs) {
           const pane = tab.panes.find((p) => p.sessionId === sessionId);
@@ -363,7 +365,7 @@ function createTabStore() {
       });
     },
 
-    setFinishPhase(sessionId: number, phase: string) {
+    setFinishPhase(sessionId: SessionRef, phase: string) {
       update((state) => {
         for (const tab of state.tabs) {
           const pane = tab.panes.find((p) => p.sessionId === sessionId);
@@ -375,7 +377,7 @@ function createTabStore() {
       });
     },
 
-    clearWorktree(sessionId: number) {
+    clearWorktree(sessionId: SessionRef) {
       update((state) => {
         for (const tab of state.tabs) {
           const pane = tab.panes.find((p) => p.sessionId === sessionId);
@@ -389,7 +391,7 @@ function createTabStore() {
       });
     },
 
-    markExited(sessionId: number) {
+    markExited(sessionId: SessionRef) {
       update((state) => {
         for (const tab of state.tabs) {
           for (const pane of tab.panes) {

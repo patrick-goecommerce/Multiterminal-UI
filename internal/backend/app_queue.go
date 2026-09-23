@@ -21,8 +21,8 @@ import (
 // identical structs would be one Wails deserialization away from diverging.
 type QueueItem = hub.QueueItem
 
-// AddToQueue adds a prompt to a session's queue.
-func (a *AppService) AddToQueue(sessionId int, prompt string) QueueItem {
+// addToQueue adds a prompt to a session's queue.
+func (a *AppService) addToQueue(sessionId int, prompt string) QueueItem {
 	// The queue is closed to new items while a finish flow runs. The prep item
 	// itself is enqueued BEFORE the state is created, which is why this check
 	// can be unconditional.
@@ -42,13 +42,13 @@ func (a *AppService) AddToQueue(sessionId int, prompt string) QueueItem {
 	return item
 }
 
-// GetQueue returns the current queue for a session.
-func (a *AppService) GetQueue(sessionId int) []QueueItem {
+// getQueue returns the current queue for a session.
+func (a *AppService) getQueue(sessionId int) []QueueItem {
 	return a.host.QueueList(sessionId)
 }
 
-// RemoveFromQueue removes a single item. An item already in flight stays.
-func (a *AppService) RemoveFromQueue(sessionId int, itemId int) {
+// removeFromQueue removes a single item. An item already in flight stays.
+func (a *AppService) removeFromQueue(sessionId int, itemId int) {
 	removed, err := a.host.QueueRemove(sessionId, itemId, false)
 	if err != nil {
 		log.Printf("[queue] session %d: remove failed: %v", sessionId, err)
@@ -66,16 +66,16 @@ func (a *AppService) RemoveFromQueue(sessionId int, itemId int) {
 	}
 }
 
-// ClearDoneFromQueue removes the completed items.
-func (a *AppService) ClearDoneFromQueue(sessionId int) {
+// clearDoneFromQueue removes the completed items.
+func (a *AppService) clearDoneFromQueue(sessionId int) {
 	if err := a.host.QueueClear(sessionId, true); err != nil {
 		log.Printf("[queue] session %d: clearing done items failed: %v", sessionId, err)
 	}
 }
 
-// ClearQueue removes everything, which also cancels a finish flow that was
+// clearQueue removes everything, which also cancels a finish flow that was
 // still waiting for its prep prompt.
-func (a *AppService) ClearQueue(sessionId int) {
+func (a *AppService) clearQueue(sessionId int) {
 	if err := a.host.QueueClear(sessionId, false); err != nil {
 		log.Printf("[queue] session %d: clear failed: %v", sessionId, err)
 		return
@@ -93,7 +93,7 @@ func (a *AppService) onQueueUpdate(sessionId int) {
 	if a.app == nil {
 		return
 	}
-	a.app.Event.Emit("queue:update", sessionId)
+	a.app.Event.Emit("queue:update", a.ref(sessionId))
 }
 
 // queueBusy reports whether a session still has prompts coming. The idle

@@ -4,7 +4,7 @@
 
   export let visible = false;
   export let state: 'ready' | 'blocked' | 'staging' = 'ready';
-  export let sessionId = 0; // spread from finishDialog; not used directly here
+  export let sessionId = ''; // spread from finishDialog; not used directly here
   export let worktreePath = ''; // spread from finishDialog; consumed by App.svelte handlers
   export let targetBranch = '';
   export let commits: string[] = [];

@@ -70,9 +70,9 @@ func TestOnHookActivity_TriggersNoSideEffects(t *testing.T) {
 	reports := 0
 	app.issueProgressHook = func(int, issueProgressEvent) { reports++ }
 
-	app.AddToQueue(sessID, "erster")
-	app.AddToQueue(sessID, "zweiter")
-	if got := app.GetQueue(sessID); len(got) != 2 || got[0].Status != "sent" || got[1].Status != "pending" {
+	app.addToQueue(sessID, "erster")
+	app.addToQueue(sessID, "zweiter")
+	if got := app.getQueue(sessID); len(got) != 2 || got[0].Status != "sent" || got[1].Status != "pending" {
 		t.Fatalf("queue setup = %+v, want item 1 'sent' and item 2 'pending'", got)
 	}
 
@@ -81,7 +81,7 @@ func TestOnHookActivity_TriggersNoSideEffects(t *testing.T) {
 	if reports != 0 {
 		t.Errorf("onHookActivity reported issue progress %d times, want 0 — that belongs to the confirmed change", reports)
 	}
-	if got := app.GetQueue(sessID); got[0].Status != "sent" || got[1].Status != "pending" {
+	if got := app.getQueue(sessID); got[0].Status != "sent" || got[1].Status != "pending" {
 		t.Errorf("queue after onHookActivity = %+v, want unchanged — the queue advances on the confirmed change only", got)
 	}
 }

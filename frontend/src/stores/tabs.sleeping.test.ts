@@ -5,9 +5,9 @@ import { tabStore, computeTabActivity } from './tabs';
 // states, not activity classifications. They must reach the pane instantly and
 // must never make a background tab claim attention.
 
-function paneOf(tabId: string, sessionId: number) {
+function paneOf(tabId: string, sessionNum: number) {
   const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
-  return tab!.panes.find((p) => p.sessionId === sessionId)!;
+  return tab!.panes.find((p) => p.sessionId === `h1:${sessionNum}`)!;
 }
 
 describe('computeTabActivity with sleeping panes', () => {
@@ -39,26 +39,26 @@ describe('computeTabActivity with sleeping panes', () => {
 describe('updateActivity — sleeping and resuming apply immediately', () => {
   it('applies "sleeping" immediately', () => {
     const tabId = tabStore.addTab('Sleep');
-    tabStore.addPane(tabId, 9101, 'Claude', 'claude', '');
+    tabStore.addPane(tabId, 'h1:9101', 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9101, 'sleeping', '', 0);
+    tabStore.updateActivity('h1:9101', 'sleeping', '', 0);
     expect(paneOf(tabId, 9101).activity).toBe('sleeping');
   });
 
   it('applies "resuming" immediately', () => {
     const tabId = tabStore.addTab('Wake');
-    tabStore.addPane(tabId, 9102, 'Claude', 'claude', '');
+    tabStore.addPane(tabId, 'h1:9102', 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9102, 'resuming', '', 0);
+    tabStore.updateActivity('h1:9102', 'resuming', '', 0);
     expect(paneOf(tabId, 9102).activity).toBe('resuming');
   });
 
   it('a later "sleeping" call wins over an earlier "done"', () => {
     const tabId = tabStore.addTab('SleepRace');
-    tabStore.addPane(tabId, 9103, 'Claude', 'claude', '');
+    tabStore.addPane(tabId, 'h1:9103', 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9103, 'done', '', 0);
-    tabStore.updateActivity(9103, 'sleeping', '', 0); // must win
+    tabStore.updateActivity('h1:9103', 'done', '', 0);
+    tabStore.updateActivity('h1:9103', 'sleeping', '', 0); // must win
 
     expect(paneOf(tabId, 9103).activity).toBe('sleeping');
   });
@@ -67,11 +67,11 @@ describe('updateActivity — sleeping and resuming apply immediately', () => {
 describe('updateActivity — the wake-up indicator bridges the replay', () => {
   it('keeps "resuming" while claude replays the transcript (~12–15 s of output)', () => {
     const tabId = tabStore.addTab('Resuming');
-    tabStore.addPane(tabId, 9105, 'Claude', 'claude', '');
+    tabStore.addPane(tabId, 'h1:9105', 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9105, 'sleeping', '', 0);
-    tabStore.updateActivity(9105, 'resuming', '', 1_700_000_200);
-    tabStore.updateActivity(9105, 'active', '$0.30', 1_700_000_260); // replay output starts
+    tabStore.updateActivity('h1:9105', 'sleeping', '', 0);
+    tabStore.updateActivity('h1:9105', 'resuming', '', 1_700_000_200);
+    tabStore.updateActivity('h1:9105', 'active', '$0.30', 1_700_000_260); // replay output starts
 
     const pane = paneOf(tabId, 9105);
     expect(pane.activity).toBe('resuming');
@@ -83,30 +83,30 @@ describe('updateActivity — the wake-up indicator bridges the replay', () => {
 
   it('ends "resuming" once a settled state arrives', () => {
     const tabId = tabStore.addTab('ResumingDone');
-    tabStore.addPane(tabId, 9106, 'Claude', 'claude', '');
+    tabStore.addPane(tabId, 'h1:9106', 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9106, 'resuming', '', 0);
-    tabStore.updateActivity(9106, 'active', '', 0);
-    tabStore.updateActivity(9106, 'done', '', 0);
+    tabStore.updateActivity('h1:9106', 'resuming', '', 0);
+    tabStore.updateActivity('h1:9106', 'active', '', 0);
+    tabStore.updateActivity('h1:9106', 'done', '', 0);
 
     expect(paneOf(tabId, 9106).activity).toBe('done');
   });
 
   it('lets an attention state interrupt the wake-up immediately', () => {
     const tabId = tabStore.addTab('ResumingAsk');
-    tabStore.addPane(tabId, 9107, 'Claude', 'claude', '');
+    tabStore.addPane(tabId, 'h1:9107', 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9107, 'resuming', '', 0);
-    tabStore.updateActivity(9107, 'waitingPermission', '', 0);
+    tabStore.updateActivity('h1:9107', 'resuming', '', 0);
+    tabStore.updateActivity('h1:9107', 'waitingPermission', '', 0);
 
     expect(paneOf(tabId, 9107).activity).toBe('waitingPermission');
   });
 
   it('does not hold "resuming" for a pane that never slept', () => {
     const tabId = tabStore.addTab('NoSleep');
-    tabStore.addPane(tabId, 9108, 'Claude', 'claude', '');
+    tabStore.addPane(tabId, 'h1:9108', 'Claude', 'claude', '');
 
-    tabStore.updateActivity(9108, 'active', '', 0);
+    tabStore.updateActivity('h1:9108', 'active', '', 0);
     expect(paneOf(tabId, 9108).activity).toBe('active');
   });
 });

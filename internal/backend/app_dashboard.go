@@ -3,10 +3,11 @@ package backend
 
 import (
 	"fmt"
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // DashboardStats holds aggregated metrics for the dashboard view.
@@ -124,15 +125,15 @@ func readGitHeadBranch(dir string) string {
 // DashboardPane holds per-session data for the dashboard swim lanes.
 // The frontend uses this to render pane cards without needing local store data.
 type DashboardPane struct {
-	SessionID   int    `json:"session_id" yaml:"session_id"`
-	Name        string `json:"name" yaml:"name"`
-	Activity    string `json:"activity" yaml:"activity"` // idle, active, done, waitingPermission, waitingAnswer, error, starting
-	Cost        string `json:"cost" yaml:"cost"`
-	Dir         string `json:"dir" yaml:"dir"`
-	Branch      string `json:"branch" yaml:"branch"`
-	Running     bool   `json:"running" yaml:"running"`
-	IssueNumber int    `json:"issue_number" yaml:"issue_number"`
-	IssueTitle  string `json:"issue_title" yaml:"issue_title"`
+	SessionID   hub.Ref `json:"session_id" yaml:"session_id"`
+	Name        string  `json:"name" yaml:"name"`
+	Activity    string  `json:"activity" yaml:"activity"` // idle, active, done, waitingPermission, waitingAnswer, error, starting
+	Cost        string  `json:"cost" yaml:"cost"`
+	Dir         string  `json:"dir" yaml:"dir"`
+	Branch      string  `json:"branch" yaml:"branch"`
+	Running     bool    `json:"running" yaml:"running"`
+	IssueNumber int     `json:"issue_number" yaml:"issue_number"`
+	IssueTitle  string  `json:"issue_title" yaml:"issue_title"`
 }
 
 // GetDashboardPanes returns all sessions as pane cards for the dashboard view.
@@ -151,7 +152,7 @@ func (a *AppService) GetDashboardPanes() []DashboardPane {
 		}
 
 		dp := DashboardPane{
-			SessionID: id,
+			SessionID: a.ref(id),
 			Name:      s.Name,
 			Activity:  string(s.Activity),
 			Cost:      costStr,

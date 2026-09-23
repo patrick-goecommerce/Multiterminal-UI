@@ -11,7 +11,7 @@ export function AddIssueComment(arg1:string,arg2:number,arg3:string):Promise<voi
 
 export function AddToGitignore(arg1:string,arg2:string):Promise<void>;
 
-export function AddToQueue(arg1:number,arg2:string):Promise<backend.QueueItem>;
+export function AddToQueue(arg1:string,arg2:string):Promise<backend.QueueItem>;
 
 export function BrowseForAudioFile():Promise<string>;
 
@@ -31,13 +31,13 @@ export function WriteDiagnosticDump():Promise<string>;
 
 export function CheckHealth():Promise<backend.HealthInfo>;
 
-export function ClearDoneFromQueue(arg1:number):Promise<void>;
+export function ClearDoneFromQueue(arg1:string):Promise<void>;
 
-export function ClearQueue(arg1:number):Promise<void>;
+export function ClearQueue(arg1:string):Promise<void>;
 
 export function CloseChatSession(arg1:string):Promise<void>;
 
-export function CloseSession(arg1:number):Promise<void>;
+export function CloseSession(arg1:string):Promise<void>;
 
 // --- Session host (see docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md) ---
 
@@ -45,7 +45,7 @@ export function CloseSession(arg1:number):Promise<void>;
 export function ListLiveSessions():Promise<Array<backend.LiveSession>>;
 
 /** Puts an existing session back on screen. False when the host has no such session. */
-export function AttachSession(arg1:number,arg2:number,arg3:number):Promise<boolean>;
+export function AttachSession(arg1:string,arg2:number,arg3:number):Promise<boolean>;
 
 /** True when the sessions outlive this window because a daemon owns them. */
 export function UsesSessionDaemon():Promise<boolean>;
@@ -56,7 +56,7 @@ export function CreateIssue(arg1:string,arg2:string,arg3:string,arg4:Array<strin
 
 export function CreateNamedWorktree(arg1:string,arg2:string,arg3:string):Promise<backend.WorktreeInfo>;
 
-export function CreateSession(arg1:Array<string>,arg2:string,arg3:number,arg4:number,arg5:string):Promise<number>;
+export function CreateSession(arg1:Array<string>,arg2:string,arg3:number,arg4:number,arg5:string):Promise<string>;
 
 export function CreateWorktree(arg1:string,arg2:number,arg3:string):Promise<backend.WorktreeInfo>;
 
@@ -86,7 +86,7 @@ export function GetDiffStats(arg1:string):Promise<Array<backend.DiffFileStat>>;
 
 export function GetFavorites(arg1:string):Promise<Array<string>>;
 
-export function GetFirstClaudeSessionID():Promise<number>;
+export function GetFirstClaudeSessionID():Promise<string>;
 
 export function GetFileDiff(arg1:string,arg2:string):Promise<string>;
 
@@ -124,7 +124,7 @@ export function GetProjectForceWorktrees(arg1:string):Promise<string>;
 
 export function SetProjectForceWorktrees(arg1:string,arg2:string):Promise<void>;
 
-export function GetQueue(arg1:number):Promise<Array<backend.QueueItem>>;
+export function GetQueue(arg1:string):Promise<Array<backend.QueueItem>>;
 
 export function GetRepoURL(arg1:string):Promise<string>;
 
@@ -136,7 +136,7 @@ export function GetResolvedCodexPath():Promise<string>;
 
 export function GetResolvedGeminiPath():Promise<string>;
 
-export function GetSessionIssue(arg1:number):Promise<number>;
+export function GetSessionIssue(arg1:string):Promise<number>;
 
 export function GetWorkingDir():Promise<string>;
 
@@ -152,7 +152,7 @@ export function IsGitRepo(arg1:string):Promise<boolean>;
 
 export function IsOnIssueBranch(arg1:string,arg2:number):Promise<backend.IssueBranchInfo>;
 
-export function LinkSessionIssue(arg1:number,arg2:number,arg3:string,arg4:string,arg5:string):Promise<void>;
+export function LinkSessionIssue(arg1:string,arg2:number,arg3:string,arg4:string,arg5:string):Promise<void>;
 
 export function ListAllWorktrees(arg1:string):Promise<Array<backend.WorktreeInfo>>;
 
@@ -178,19 +178,19 @@ export function ReadFile(arg1:string):Promise<backend.FileContent>;
 
 export function RemoveFavorite(arg1:string,arg2:string):Promise<void>;
 
-export function RemoveFromQueue(arg1:number,arg2:number):Promise<void>;
+export function RemoveFromQueue(arg1:string,arg2:number):Promise<void>;
 
 export function RemoveWorktree(arg1:string,arg2:number):Promise<void>;
 
-export function ResizeSession(arg1:number,arg2:number,arg3:number):Promise<void>;
+export function ResizeSession(arg1:string,arg2:number,arg3:number):Promise<void>;
 
-export function ResyncSession(arg1:number):Promise<void>;
+export function ResyncSession(arg1:string):Promise<void>;
 
-export function SuspendSession(arg1:number):Promise<void>;
+export function SuspendSession(arg1:string):Promise<void>;
 
-export function ResumeSession(arg1:number):Promise<void>;
+export function ResumeSession(arg1:string):Promise<void>;
 
-export function IsSessionSuspended(arg1:number):Promise<boolean>;
+export function IsSessionSuspended(arg1:string):Promise<boolean>;
 
 export function ResolveMCPProfile(arg1:string,arg2:string):Promise<string>;
 
@@ -200,7 +200,7 @@ export function SaveTabs(arg1:config.SessionState):Promise<void>;
 
 export function SearchFiles(arg1:string,arg2:string):Promise<Array<backend.FileEntry>>;
 
-export function SeedActivitySince(arg1:number,arg2:number,arg3:string):Promise<void>;
+export function SeedActivitySince(arg1:string,arg2:number,arg3:string):Promise<void>;
 
 export function RecordOpenedDir(arg1:string):Promise<void>;
 
@@ -218,7 +218,7 @@ export function ValidateCodexPath(arg1:string):Promise<boolean>;
 
 export function ValidateGeminiPath(arg1:string):Promise<boolean>;
 
-export function WriteToSession(arg1:number,arg2:string):Promise<void>;
+export function WriteToSession(arg1:string,arg2:string):Promise<void>;
 
 // --- Sprint 1: Skills & Project ---
 
@@ -317,11 +317,11 @@ export function ExecutePlan(arg1:string,arg2:string):Promise<void>;
 
 export function StopPlan(arg1:string,arg2:string):Promise<void>;
 
-export function CheckAskUser(arg1:number):Promise<backend.AskUserQuestion>;
+export function CheckAskUser(arg1:string):Promise<backend.AskUserQuestion>;
 
-export function AnswerAskUser(arg1:number,arg2:string):Promise<void>;
+export function AnswerAskUser(arg1:string,arg2:string):Promise<void>;
 
-export function DismissAskUser(arg1:number):Promise<void>;
+export function DismissAskUser(arg1:string):Promise<void>;
 
 // --- Kanban Orchestration ---
 
@@ -371,13 +371,13 @@ export function GetPaneWorktreeDefaults(arg1:string,arg2:string):Promise<backend
 
 export function GetWorktreeFinishStatus(arg1:string,arg2:string,arg3:string):Promise<backend.WorktreeFinishStatus>;
 
-export function StartWorktreeFinish(arg1:number,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+export function StartWorktreeFinish(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
 
-export function CancelWorktreeFinish(arg1:number):Promise<void>;
+export function CancelWorktreeFinish(arg1:string):Promise<void>;
 
-export function FinishWorktree(arg1:number):Promise<void>;
+export function FinishWorktree(arg1:string):Promise<void>;
 
-export function CheckWorktreeFinish(arg1:number):Promise<void>;
+export function CheckWorktreeFinish(arg1:string):Promise<void>;
 
 export function ReconcileFinishMarkers(arg1:string):Promise<void>;
 

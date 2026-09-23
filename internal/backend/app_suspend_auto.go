@@ -119,7 +119,7 @@ func (a *AppService) suspendIdleSessions(now time.Time) {
 			continue
 		}
 		log.Printf("[idle-suspend] session %d idle past %s, suspending", id, timeout)
-		if err := a.SuspendSession(id); err != nil {
+		if err := a.suspendSession(id); err != nil {
 			log.Printf("[idle-suspend] session %d: %v", id, err)
 		}
 	}

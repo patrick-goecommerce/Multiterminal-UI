@@ -173,10 +173,10 @@ type SessionInfo struct {
 	ExitCode int    `json:"exitCode"`
 }
 
-// CreateSession spawns a new PTY session and starts streaming its output
+// createSession spawns a new PTY session and starts streaming its output
 // to the frontend. Returns the session ID.
 // mode must be "shell", "claude", "claude-auto", or "claude-yolo"; it controls env injection.
-func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int, mode string) int {
+func (a *AppService) createSession(argv []string, dir string, rows int, cols int, mode string) int {
 	// The ID has to exist before the environment can, because part of that
 	// environment names the session: the hook and the statusline shim report
 	// back with MULTITERMINAL_SESSION_ID.
@@ -225,7 +225,7 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 		delete(a.launches, id)
 		a.mu.Unlock()
 		if a.app != nil {
-			a.app.Event.Emit("terminal:error", TerminalErrorEvent{ID: id, Message: errMsg})
+			a.app.Event.Emit("terminal:error", TerminalErrorEvent{ID: a.ref(id), Message: errMsg})
 		}
 		return -1
 	}
@@ -239,8 +239,8 @@ func (a *AppService) CreateSession(argv []string, dir string, rows int, cols int
 	return id
 }
 
-// WriteToSession sends raw input data (base64-encoded) to a session's PTY.
-func (a *AppService) WriteToSession(id int, b64data string) {
+// writeToSession sends raw input data (base64-encoded) to a session's PTY.
+func (a *AppService) writeToSession(id int, b64data string) {
 	summary, err := a.host.Get(id)
 	if err != nil {
 		return
@@ -262,16 +262,16 @@ func (a *AppService) WriteToSession(id int, b64data string) {
 	_ = a.host.Write(id, data)
 }
 
-// ResizeSession updates the PTY and screen buffer dimensions.
-func (a *AppService) ResizeSession(id int, rows int, cols int) {
+// resizeSession updates the PTY and screen buffer dimensions.
+func (a *AppService) resizeSession(id int, rows int, cols int) {
 	_ = a.host.Resize(id, rows, cols)
 }
 
-// CloseSession terminates a session and removes it.
+// closeSession terminates a session and removes it.
 // The session is closed asynchronously but removed from the map only
 // after Close() completes, ensuring streamOutput drains all buffered
 // data before the session is gone.
-func (a *AppService) CloseSession(id int) {
+func (a *AppService) closeSession(id int) {
 	if !a.hasSession(id) {
 		return
 	}

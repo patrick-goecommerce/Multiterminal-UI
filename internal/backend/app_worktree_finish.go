@@ -65,7 +65,7 @@ func (a *AppService) emitFinishBlockedEvent(sessionId int, phase, reason string,
 		return
 	}
 	a.app.Event.Emit("worktree:finish-blocked", WorktreeFinishBlockedEvent{
-		SessionID: sessionId, Phase: phase, Reason: reason, CleanupFailed: cleanupFailed,
+		SessionID: a.ref(sessionId), Phase: phase, Reason: reason, CleanupFailed: cleanupFailed,
 	})
 }
 
@@ -102,9 +102,9 @@ func (a *AppService) setFinishCleanupBlocked(sessionId int, reason string) {
 	}
 }
 
-// StartWorktreeFinish begins (or retries) the finish flow for a session.
+// startWorktreeFinish begins (or retries) the finish flow for a session.
 // No-op while a phase other than "blocked" is active (double-click guard).
-func (a *AppService) StartWorktreeFinish(sessionId int, worktreePath, branch, target, mode string) {
+func (a *AppService) startWorktreeFinish(sessionId int, worktreePath, branch, target, mode string) {
 	a.mu.Lock()
 	prevPrepID := 0
 	if st := a.finishStates[sessionId]; st != nil {
@@ -162,7 +162,7 @@ func (a *AppService) StartWorktreeFinish(sessionId int, worktreePath, branch, ta
 	}
 
 	prompt := a.renderFinishPrompt(branch, target, worktreePath)
-	item := a.AddToQueue(sessionId, prompt) // enqueue BEFORE state exists (queue lock, task 8)
+	item := a.addToQueue(sessionId, prompt) // enqueue BEFORE state exists (queue lock, task 8)
 	a.mu.Lock()
 	a.finishStates[sessionId] = &finishState{
 		Phase: "preparing", TargetBranch: target, WorktreePath: worktreePath,
@@ -179,8 +179,8 @@ func (a *AppService) StartWorktreeFinish(sessionId int, worktreePath, branch, ta
 	})
 }
 
-// CancelWorktreeFinish aborts the flow (allowed in preparing/ready/blocked).
-func (a *AppService) CancelWorktreeFinish(sessionId int) {
+// cancelWorktreeFinish aborts the flow (allowed in preparing/ready/blocked).
+func (a *AppService) cancelWorktreeFinish(sessionId int) {
 	a.mu.Lock()
 	st := a.finishStates[sessionId]
 	if st == nil || st.Phase == "merging" || st.Phase == "merged" || st.Phase == "cleanup" {
@@ -208,10 +208,10 @@ func (a *AppService) forceRemoveQueueItem(sessionId, itemId int) {
 	}
 }
 
-// CheckWorktreeFinish runs the verification gate and moves preparing→ready/blocked.
+// checkWorktreeFinish runs the verification gate and moves preparing→ready/blocked.
 // Called by onQueueItemDone (claude) and by the frontend after the shell
 // staging dialog committed+rebased.
-func (a *AppService) CheckWorktreeFinish(sessionId int) {
+func (a *AppService) checkWorktreeFinish(sessionId int) {
 	defer a.recoverFinishPanic(sessionId, "CheckWorktreeFinish")
 	st := a.getFinishState(sessionId)
 	if st == nil {
@@ -234,7 +234,7 @@ func (a *AppService) CheckWorktreeFinish(sessionId int) {
 	// otherwise a stale "ready" event would resurrect a torn-down flow.
 	if stillActive && a.app != nil {
 		a.app.Event.Emit("worktree:finish-ready", WorktreeFinishReadyEvent{
-			SessionID: sessionId, TargetBranch: st.TargetBranch,
+			SessionID: a.ref(sessionId), TargetBranch: st.TargetBranch,
 			Commits: status.Commits, Stat: status.Stat, Untracked: status.Untracked,
 			CleanupOnly: status.State == "cleanup_only",
 		})
@@ -250,7 +250,7 @@ func (a *AppService) onQueueItemDone(sessionId, itemID int) {
 	if st == nil || st.Phase != "preparing" || st.PrepItemID != itemID {
 		return
 	}
-	go a.CheckWorktreeFinish(sessionId)
+	go a.checkWorktreeFinish(sessionId)
 }
 
 // notifyFinishOnActivity surfaces "Claude has a question" while preparing.

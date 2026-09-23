@@ -26,7 +26,7 @@ func TestResyncSession_ReplacesPendingWithSnapshot(t *testing.T) {
 
 	a.outputBatch().add(7, []byte("STALE-TAIL"))
 
-	a.ResyncSession(7)
+	a.resyncSession(7)
 
 	payload := string(a.outputBatch().swap()[7])
 	if payload == "" {
@@ -51,7 +51,7 @@ func TestResyncSession_AddressesRowsAndRestoresCursor(t *testing.T) {
 	sess.Screen.Write([]byte("ab\r\ncd"))
 	adopt(t, a, 1, sess)
 
-	a.ResyncSession(1)
+	a.resyncSession(1)
 	payload := string(a.outputBatch().swap()[1])
 
 	for row := 1; row <= 3; row++ {
@@ -75,7 +75,7 @@ func TestResyncSession_LeavesOtherSessionsUntouched(t *testing.T) {
 	adopt(t, a, 1, newResyncTestSession(t, 1, "one"))
 	a.outputBatch().add(2, []byte("keep-me"))
 
-	a.ResyncSession(1)
+	a.resyncSession(1)
 
 	if got := string(a.outputBatch().swap()[2]); got != "keep-me" {
 		t.Errorf("session 2 pending output was disturbed: got %q, want %q", got, "keep-me")
@@ -88,7 +88,7 @@ func TestResyncSession_UnknownSessionIsNoop(t *testing.T) {
 	a := newTestApp()
 	a.outputBatch().add(3, []byte("data"))
 
-	a.ResyncSession(99)
+	a.resyncSession(99)
 
 	batch := a.outputBatch().swap()
 	if _, ok := batch[99]; ok {
@@ -141,7 +141,7 @@ func TestResyncSession_ConcurrentWithOutputDoesNotDeadlock(t *testing.T) {
 			wg.Add(3)
 			go func() { defer wg.Done(); sess.Screen.Write([]byte("output line\r\n")) }()
 			go func() { defer wg.Done(); a.outputBatch().add(1, []byte("live bytes")) }()
-			go func() { defer wg.Done(); a.ResyncSession(1) }()
+			go func() { defer wg.Done(); a.resyncSession(1) }()
 		}
 		wg.Wait()
 	}()

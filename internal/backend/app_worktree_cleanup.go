@@ -102,12 +102,12 @@ func (a *AppService) ReconcileFinishMarkers(dir string) {
 	}
 }
 
-// FinishWorktree executes merge + cleanup after the user confirmed the
+// finishWorktree executes merge + cleanup after the user confirmed the
 // overlay. Runs in a goroutine (the remove retry may take seconds — a Wails
 // binding must not block, spec 5.4) serialized by finishMu. Accepts the
 // "ready" phase, or a "blocked" retry whose merge already went through (a
 // marker exists): the goroutine then skips the merge via the count==0 path.
-func (a *AppService) FinishWorktree(sessionId int) {
+func (a *AppService) finishWorktree(sessionId int) {
 	a.mu.Lock()
 	st := a.finishStates[sessionId]
 	if st == nil {
@@ -203,7 +203,7 @@ func (a *AppService) FinishWorktree(sessionId int) {
 		_ = a.host.QueueClear(sessionId, false)
 		if a.app != nil {
 			a.app.Event.Emit("worktree:finish-done", WorktreeFinishDoneEvent{
-				SessionID: sessionId, MainRoot: root,
+				SessionID: a.ref(sessionId), MainRoot: root,
 				TargetBranch: cp.TargetBranch, Mode: cp.Mode,
 			})
 		}

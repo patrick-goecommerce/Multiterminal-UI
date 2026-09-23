@@ -1,9 +1,11 @@
 // Package backend provides cross-session queue overview functionality.
 package backend
 
+import "github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
+
 // QueueOverviewItem represents a session's queue with context.
 type QueueOverviewItem struct {
-	SessionID   int         `json:"session_id" yaml:"session_id"`
+	SessionID   hub.Ref     `json:"session_id" yaml:"session_id"`
 	SessionName string      `json:"session_name" yaml:"session_name"`
 	Dir         string      `json:"dir" yaml:"dir"`
 	Activity    string      `json:"activity" yaml:"activity"`
@@ -24,7 +26,7 @@ func (a *AppService) GetAllQueues() []QueueOverviewItem {
 		}
 
 		oi := QueueOverviewItem{
-			SessionID:   id,
+			SessionID:   a.ref(id),
 			SessionName: summary.Name,
 			Dir:         summary.Dir,
 			Activity:    string(summary.Activity),

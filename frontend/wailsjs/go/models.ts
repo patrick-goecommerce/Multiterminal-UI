@@ -194,7 +194,7 @@ export namespace backend {
 	    }
 	}
 	export class LiveSession {
-	    id: number;
+	    id: string;
 	    name: string;
 	    dir: string;
 	    mode: string;
@@ -1242,7 +1242,7 @@ export namespace config {
 	    mcp_profile?: string;
 	    activity_since?: number;
 	    activity_state?: string;
-	    session_id?: number;
+	    session_id?: string;
 
 	    display?: string;
 	    conversation_id?: string;

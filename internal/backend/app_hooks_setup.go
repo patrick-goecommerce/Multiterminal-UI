@@ -3,10 +3,11 @@ package backend
 import (
 	"context"
 	"fmt"
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
 )
 
 // resolveHookBinary resolves the hook helper and, when it cannot be found,
@@ -93,7 +94,7 @@ func (a *AppService) onHookActivity(sessionID int, activity string, cost string)
 		return
 	}
 	a.app.Event.Emit("terminal:activity", ActivityInfo{
-		ID:       sessionID,
+		ID:       a.ref(sessionID),
 		Activity: activity,
 		Cost:     cost,
 		// This path runs a debounce window ahead of confirmActivity, so the

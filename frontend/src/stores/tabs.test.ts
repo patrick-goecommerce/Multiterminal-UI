@@ -102,8 +102,8 @@ describe('tabStore', () => {
       const fgTab = tabStore.addTab('ClearFg');
       tabStore.setActiveTab(fgTab);
 
-      tabStore.addPane(bgTab, 4001, 'Claude', 'claude', '');
-      tabStore.updateActivity(4001, 'waitingAnswer', '', 0);
+      tabStore.addPane(bgTab, 'h1:4001', 'Claude', 'claude', '');
+      tabStore.updateActivity('h1:4001', 'waitingAnswer', '', 0);
 
       let tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
       expect(tab!.unreadActivity).toBe('waitingAnswer');
@@ -135,7 +135,7 @@ describe('tabStore', () => {
 
     it('does not change dir when tab has panes', () => {
       const id = tabStore.addTab('DirTest2', '/old');
-      tabStore.addPane(id, 999, 'Shell', 'shell', '');
+      tabStore.addPane(id, 'h1:999', 'Shell', 'shell', '');
 
       tabStore.setTabDir(id, '/new');
       const tab = tabStore.getState().tabs.find((t) => t.id === id);
@@ -146,13 +146,13 @@ describe('tabStore', () => {
   describe('addPane', () => {
     it('adds a pane with correct properties', () => {
       const tabId = tabStore.addTab('PaneTest');
-      const paneId = tabStore.addPane(tabId, 42, 'Claude', 'claude', 'opus');
+      const paneId = tabStore.addPane(tabId, 'h1:42', 'Claude', 'claude', 'opus');
 
       const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
       const pane = tab!.panes.find((p) => p.id === paneId);
 
       expect(pane).toBeDefined();
-      expect(pane!.sessionId).toBe(42);
+      expect(pane!.sessionId).toBe('h1:42');
       expect(pane!.name).toBe('Claude');
       expect(pane!.mode).toBe('claude');
       expect(pane!.model).toBe('opus');
@@ -165,8 +165,8 @@ describe('tabStore', () => {
 
     it('focuses the new pane and unfocuses others', () => {
       const tabId = tabStore.addTab('FocusTest');
-      tabStore.addPane(tabId, 1, 'P1', 'shell', '');
-      const p2 = tabStore.addPane(tabId, 2, 'P2', 'shell', '');
+      tabStore.addPane(tabId, 'h1:1', 'P1', 'shell', '');
+      const p2 = tabStore.addPane(tabId, 'h1:2', 'P2', 'shell', '');
 
       const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
       // P1 should now be unfocused
@@ -180,8 +180,8 @@ describe('tabStore', () => {
   describe('closePane', () => {
     it('removes the specified pane', () => {
       const tabId = tabStore.addTab('ClosePaneTest');
-      const p1 = tabStore.addPane(tabId, 1, 'P1', 'shell', '');
-      const p2 = tabStore.addPane(tabId, 2, 'P2', 'shell', '');
+      const p1 = tabStore.addPane(tabId, 'h1:1', 'P1', 'shell', '');
+      const p2 = tabStore.addPane(tabId, 'h1:2', 'P2', 'shell', '');
 
       tabStore.closePane(tabId, p1);
 
@@ -192,8 +192,8 @@ describe('tabStore', () => {
 
     it('focuses another pane after closing focused one', () => {
       const tabId = tabStore.addTab('CloseFocusTest');
-      const p1 = tabStore.addPane(tabId, 1, 'P1', 'shell', '');
-      const p2 = tabStore.addPane(tabId, 2, 'P2', 'shell', '');
+      const p1 = tabStore.addPane(tabId, 'h1:1', 'P1', 'shell', '');
+      const p2 = tabStore.addPane(tabId, 'h1:2', 'P2', 'shell', '');
       // p2 is focused
 
       tabStore.closePane(tabId, p2);
@@ -207,8 +207,8 @@ describe('tabStore', () => {
       const fgTab = tabStore.addTab('ClosePaneFg');
       tabStore.setActiveTab(fgTab);
 
-      const p1 = tabStore.addPane(bgTab, 5001, 'C1', 'claude', '');
-      tabStore.updateActivity(5001, 'waitingAnswer', '', 0);
+      const p1 = tabStore.addPane(bgTab, 'h1:5001', 'C1', 'claude', '');
+      tabStore.updateActivity('h1:5001', 'waitingAnswer', '', 0);
 
       let tab = tabStore.getState().tabs.find(t => t.id === bgTab);
       expect(tab!.unreadActivity).toBe('waitingAnswer');
@@ -222,8 +222,8 @@ describe('tabStore', () => {
   describe('focusPane', () => {
     it('sets focus correctly', () => {
       const tabId = tabStore.addTab('FocusPaneTest');
-      const p1 = tabStore.addPane(tabId, 1, 'P1', 'shell', '');
-      const p2 = tabStore.addPane(tabId, 2, 'P2', 'shell', '');
+      const p1 = tabStore.addPane(tabId, 'h1:1', 'P1', 'shell', '');
+      const p2 = tabStore.addPane(tabId, 'h1:2', 'P2', 'shell', '');
 
       tabStore.focusPane(tabId, p1);
 
@@ -239,7 +239,7 @@ describe('tabStore', () => {
   describe('toggleMaximize', () => {
     it('toggles pane maximized state', () => {
       const tabId = tabStore.addTab('MaxTest');
-      const paneId = tabStore.addPane(tabId, 1, 'P1', 'shell', '');
+      const paneId = tabStore.addPane(tabId, 'h1:1', 'P1', 'shell', '');
 
       let tab = tabStore.getState().tabs.find((t) => t.id === tabId);
       expect(tab!.panes[0].maximized).toBe(false);
@@ -257,12 +257,12 @@ describe('tabStore', () => {
   describe('updateActivity', () => {
     it('updates activity and cost by session ID', () => {
       const tabId = tabStore.addTab('ActivityTest');
-      tabStore.addPane(tabId, 777, 'Claude', 'claude', '');
+      tabStore.addPane(tabId, 'h1:777', 'Claude', 'claude', '');
 
-      tabStore.updateActivity(777, 'active', '$0.12', 1_700_000_000);
+      tabStore.updateActivity('h1:777', 'active', '$0.12', 1_700_000_000);
 
       const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
-      const pane = tab!.panes.find((p) => p.sessionId === 777);
+      const pane = tab!.panes.find((p) => p.sessionId === 'h1:777');
       expect(pane!.activity).toBe('active');
       expect(pane!.cost).toBe('$0.12');
       expect(pane!.activitySince).toBe(1_700_000_000);
@@ -271,38 +271,38 @@ describe('tabStore', () => {
     it('finds pane across multiple tabs', () => {
       const tab1 = tabStore.addTab('Tab1');
       const tab2 = tabStore.addTab('Tab2');
-      tabStore.addPane(tab1, 100, 'P1', 'shell', '');
-      tabStore.addPane(tab2, 200, 'P2', 'claude', '');
+      tabStore.addPane(tab1, 'h1:100', 'P1', 'shell', '');
+      tabStore.addPane(tab2, 'h1:200', 'P2', 'claude', '');
 
-      tabStore.updateActivity(200, 'done', '$1.50', 0);
+      tabStore.updateActivity('h1:200', 'done', '$1.50', 0);
 
       const t2 = tabStore.getState().tabs.find((t) => t.id === tab2);
-      const pane = t2!.panes.find((p) => p.sessionId === 200);
+      const pane = t2!.panes.find((p) => p.sessionId === 'h1:200');
       expect(pane!.activity).toBe('done');
       expect(pane!.cost).toBe('$1.50');
     });
 
     it('does not overwrite cost with empty string', () => {
       const tabId = tabStore.addTab('CostTest');
-      tabStore.addPane(tabId, 888, 'Claude', 'claude', '');
+      tabStore.addPane(tabId, 'h1:888', 'Claude', 'claude', '');
 
-      tabStore.updateActivity(888, 'active', '$0.50', 0);
-      tabStore.updateActivity(888, 'done', '', 0);
+      tabStore.updateActivity('h1:888', 'active', '$0.50', 0);
+      tabStore.updateActivity('h1:888', 'done', '', 0);
 
       const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
-      const pane = tab!.panes.find((p) => p.sessionId === 888);
+      const pane = tab!.panes.find((p) => p.sessionId === 'h1:888');
       expect(pane!.cost).toBe('$0.50');
     });
 
     it('keeps the previous activitySince while an empty activity update carries no change', () => {
       const tabId = tabStore.addTab('SinceCostOnlyTest');
-      tabStore.addPane(tabId, 889, 'Claude', 'claude', '');
+      tabStore.addPane(tabId, 'h1:889', 'Claude', 'claude', '');
 
-      tabStore.updateActivity(889, 'active', '', 1_700_000_100);
-      tabStore.updateActivity(889, '', '$0.20', 0); // cost-only update, empty activity
+      tabStore.updateActivity('h1:889', 'active', '', 1_700_000_100);
+      tabStore.updateActivity('h1:889', '', '$0.20', 0); // cost-only update, empty activity
 
       const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
-      const pane = tab!.panes.find((p) => p.sessionId === 889);
+      const pane = tab!.panes.find((p) => p.sessionId === 'h1:889');
       expect(pane!.activitySince).toBe(1_700_000_100);
       expect(pane!.cost).toBe('$0.20');
     });
@@ -311,28 +311,28 @@ describe('tabStore', () => {
   describe('finishPhase', () => {
     it('initializes finishPhase to empty string on a new pane', () => {
       const tabId = tabStore.addTab('T', '/d');
-      tabStore.addPane(tabId, 8100, 'Claude', 'claude', '');
+      tabStore.addPane(tabId, 'h1:8100', 'Claude', 'claude', '');
       const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
-      const pane = tab!.panes.find((p) => p.sessionId === 8100);
+      const pane = tab!.panes.find((p) => p.sessionId === 'h1:8100');
       expect(pane!.finishPhase).toBe('');
     });
 
     it('setFinishPhase sets the phase by session id', () => {
       const tabId = tabStore.addTab('T', '/d');
-      tabStore.addPane(tabId, 8101, 'Claude', 'claude', '');
-      tabStore.setFinishPhase(8101, 'preparing');
+      tabStore.addPane(tabId, 'h1:8101', 'Claude', 'claude', '');
+      tabStore.setFinishPhase('h1:8101', 'preparing');
       const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
-      const pane = tab!.panes.find((p) => p.sessionId === 8101);
+      const pane = tab!.panes.find((p) => p.sessionId === 'h1:8101');
       expect(pane!.finishPhase).toBe('preparing');
     });
 
     it('setFinishPhase leaves worktree fields untouched', () => {
       const tabId = tabStore.addTab('T', '/d');
-      tabStore.addPane(tabId, 8102, 'Claude', 'claude', '');
-      tabStore.setWorktree(8102, '/wt', 'worktree-x', 'alpha-main');
-      tabStore.setFinishPhase(8102, 'merging');
+      tabStore.addPane(tabId, 'h1:8102', 'Claude', 'claude', '');
+      tabStore.setWorktree('h1:8102', '/wt', 'worktree-x', 'alpha-main');
+      tabStore.setFinishPhase('h1:8102', 'merging');
       const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
-      const pane = tab!.panes.find((p) => p.sessionId === 8102);
+      const pane = tab!.panes.find((p) => p.sessionId === 'h1:8102');
       expect(pane!.worktreePath).toBe('/wt');
       expect(pane!.branch).toBe('worktree-x');
       expect(pane!.finishPhase).toBe('merging');
@@ -342,12 +342,12 @@ describe('tabStore', () => {
   describe('markExited', () => {
     it('sets running to false', () => {
       const tabId = tabStore.addTab('ExitTest');
-      tabStore.addPane(tabId, 555, 'Shell', 'shell', '');
+      tabStore.addPane(tabId, 'h1:555', 'Shell', 'shell', '');
 
-      tabStore.markExited(555);
+      tabStore.markExited('h1:555');
 
       const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
-      const pane = tab!.panes.find((p) => p.sessionId === 555);
+      const pane = tab!.panes.find((p) => p.sessionId === 'h1:555');
       expect(pane!.running).toBe(false);
     });
   });
@@ -355,7 +355,7 @@ describe('tabStore', () => {
   describe('renamePane', () => {
     it('changes the pane name', () => {
       const tabId = tabStore.addTab('RenameTest');
-      const paneId = tabStore.addPane(tabId, 1, 'Old', 'shell', '');
+      const paneId = tabStore.addPane(tabId, 'h1:1', 'Old', 'shell', '');
 
       tabStore.renamePane(tabId, paneId, 'New Name');
 
@@ -385,23 +385,23 @@ describe('tabStore', () => {
 describe('setAutoName — most-recent-wins recency', () => {
   it('records the source of the most recent auto name', () => {
     const tabId = tabStore.addTab('AutoRecency');
-    tabStore.addPane(tabId, 6001, 'Shell', 'shell', '');
+    tabStore.addPane(tabId, 'h1:6001', 'Shell', 'shell', '');
 
-    tabStore.setAutoName(6001, 'auth-refactor', 'llm');
+    tabStore.setAutoName('h1:6001', 'auth-refactor', 'llm');
     let pane = tabStore.getState().tabs.find((t) => t.id === tabId)!.panes[0];
     expect(pane.autoNameSource).toBe('llm');
 
-    tabStore.setAutoName(6001, 'vim README.md', 'osc');
+    tabStore.setAutoName('h1:6001', 'vim README.md', 'osc');
     pane = tabStore.getState().tabs.find((t) => t.id === tabId)!.panes[0];
     expect(pane.autoNameSource).toBe('osc');
   });
 
   it('does not change auto names once the pane is user-renamed', () => {
     const tabId = tabStore.addTab('AutoRenamed');
-    const paneId = tabStore.addPane(tabId, 6002, 'Shell', 'shell', '');
+    const paneId = tabStore.addPane(tabId, 'h1:6002', 'Shell', 'shell', '');
     tabStore.renamePane(tabId, paneId, 'My Pane');
 
-    tabStore.setAutoName(6002, 'should-be-ignored', 'osc');
+    tabStore.setAutoName('h1:6002', 'should-be-ignored', 'osc');
     const pane = tabStore.getState().tabs.find((t) => t.id === tabId)!.panes[0];
     expect(pane.autoNameSource).toBe('');
   });
@@ -556,8 +556,8 @@ describe('updateActivity — tab unreadActivity', () => {
     const tab2 = tabStore.addTab('UABackground');
     tabStore.setActiveTab(tab1);
 
-    tabStore.addPane(tab2, 3001, 'Claude', 'claude', '');
-    tabStore.updateActivity(3001, 'done', '$0.10', 0);
+    tabStore.addPane(tab2, 'h1:3001', 'Claude', 'claude', '');
+    tabStore.updateActivity('h1:3001', 'done', '$0.10', 0);
 
     const t2 = tabStore.getState().tabs.find((t) => t.id === tab2);
     expect(t2!.unreadActivity).toBe('done');
@@ -566,9 +566,9 @@ describe('updateActivity — tab unreadActivity', () => {
   it('does not set unreadActivity on the currently active tab', () => {
     const tabId = tabStore.addTab('UAActiveTab');
     tabStore.setActiveTab(tabId);
-    tabStore.addPane(tabId, 3002, 'Claude', 'claude', '');
+    tabStore.addPane(tabId, 'h1:3002', 'Claude', 'claude', '');
 
-    tabStore.updateActivity(3002, 'done', '', 0);
+    tabStore.updateActivity('h1:3002', 'done', '', 0);
 
     const tab = tabStore.getState().tabs.find((t) => t.id === tabId);
     expect(tab!.unreadActivity).toBeNull();
@@ -579,11 +579,11 @@ describe('updateActivity — tab unreadActivity', () => {
     const fgTab = tabStore.addTab('UAForeground');
     tabStore.setActiveTab(fgTab);
 
-    tabStore.addPane(bgTab, 3003, 'C1', 'claude', '');
-    tabStore.addPane(bgTab, 3004, 'C2', 'claude', '');
+    tabStore.addPane(bgTab, 'h1:3003', 'C1', 'claude', '');
+    tabStore.addPane(bgTab, 'h1:3004', 'C2', 'claude', '');
 
-    tabStore.updateActivity(3003, 'done', '', 0);
-    tabStore.updateActivity(3004, 'waitingAnswer', '', 0);
+    tabStore.updateActivity('h1:3003', 'done', '', 0);
+    tabStore.updateActivity('h1:3004', 'waitingAnswer', '', 0);
 
     const tab = tabStore.getState().tabs.find((t) => t.id === bgTab);
     expect(tab!.unreadActivity).toBe('waitingAnswer');
@@ -593,8 +593,8 @@ describe('updateActivity — tab unreadActivity', () => {
 describe('worktree detection state', () => {
   it('setWorktree populates worktreePath/branch/targetBranch on the matching pane', () => {
     const tabId = tabStore.addTab('Test', '/tmp/proj');
-    const paneId = tabStore.addPane(tabId, 42, 'pane', 'claude', '');
-    tabStore.setWorktree(42, '/tmp/proj/.claude/worktrees/feature-a', 'worktree-feature-a', 'alpha-main');
+    const paneId = tabStore.addPane(tabId, 'h1:42', 'pane', 'claude', '');
+    tabStore.setWorktree('h1:42', '/tmp/proj/.claude/worktrees/feature-a', 'worktree-feature-a', 'alpha-main');
     const state = tabStore.getState();
     const pane = state.tabs.find((t) => t.id === tabId)!.panes.find((p) => p.id === paneId)!;
     expect(pane.worktreePath).toBe('/tmp/proj/.claude/worktrees/feature-a');
@@ -604,9 +604,9 @@ describe('worktree detection state', () => {
 
   it('clearWorktree resets worktree fields to empty', () => {
     const tabId = tabStore.addTab('Test2', '/tmp/proj2');
-    const paneId = tabStore.addPane(tabId, 43, 'pane', 'claude', '');
-    tabStore.setWorktree(43, '/tmp/proj2/.claude/worktrees/x', 'worktree-x', 'main');
-    tabStore.clearWorktree(43);
+    const paneId = tabStore.addPane(tabId, 'h1:43', 'pane', 'claude', '');
+    tabStore.setWorktree('h1:43', '/tmp/proj2/.claude/worktrees/x', 'worktree-x', 'main');
+    tabStore.clearWorktree('h1:43');
     const state = tabStore.getState();
     const pane = state.tabs.find((t) => t.id === tabId)!.panes.find((p) => p.id === paneId)!;
     expect(pane.worktreePath).toBe('');

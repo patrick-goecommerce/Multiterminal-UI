@@ -19,9 +19,9 @@ const (
 	agentWaitMax     = hub.AgentWaitMax
 )
 
-// WaitForAgent blocks until a session reaches one of the given states and
+// waitForAgent blocks until a session reaches one of the given states and
 // returns the state it reached. An empty list means "done or blocked".
-func (a *AppService) WaitForAgent(ctx context.Context, sessionID int, until []string, timeout time.Duration) (string, error) {
+func (a *AppService) waitForAgent(ctx context.Context, sessionID int, until []string, timeout time.Duration) (string, error) {
 	return hub.WaitForAgent(ctx, a.host, sessionID, until, timeout)
 }
 

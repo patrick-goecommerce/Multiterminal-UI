@@ -276,11 +276,25 @@ teuer wären:
 
 1. **Jeder Daemon hat eine `hub_id`** (zufällig, beim ersten Start erzeugt, persistiert).
    Das Protokoll adressiert eine Session als Paar `{hub, id}`, nicht als nackte Zahl.
-2. **Die GUI bleibt in Phase 1 bei `int`-IDs.** Frontend, `SavedPane`, xterm-Verwaltung und
-   die MCP-Werkzeuge rechnen durchgehend mit Ganzzahlen; das auf zusammengesetzte Referenzen
-   umzustellen wäre ein eigener, großer Umbau ohne Nutzen, solange es nur einen Hub gibt.
-   Der Client bildet deshalb `{hub, id}` auf eine lokale Ganzzahl ab. Kommt ein zweiter Hub
-   dazu, wächst die Tabelle, das Protokoll bleibt.
+2. **Das Frontend hält eine Session als `"hub:id"`.** Ursprünglich sollte die GUI bei
+   `int`-IDs bleiben und der Client `{hub, id}` auf eine lokale Ganzzahl abbilden. Das ist
+   inzwischen anders gelöst, weil jede weitere Phase die Umstellung teurer gemacht hätte:
+   `hub.Ref` ist nach außen der String `"hub:id"` (der leere String heißt "keine Session"),
+   und genau dieser String geht durch die Bindings, steckt in jedem Event an das Frontend,
+   liegt in `Pane.sessionId` und in `SavedPane.session_id`. Das Frontend behandelt ihn als
+   undurchsichtig: speichern, vergleichen, zurückgeben, nie damit rechnen.
+
+   Die Übersetzung sitzt an genau einer Stelle, `internal/backend/app_session_refs*.go`.
+   Hinter ihr rechnet das Fenster weiter mit den Ganzzahlen seines einen Hosts (Launches,
+   Queues, Finish-Zustände, Kanban-Karten), und `hub.Host`, das Protokoll, `mt` und die
+   MCP-Werkzeuge bleiben bei Ganzzahlen, weil sie immer genau einen Hub ansprechen. Ein
+   Ref für einen anderen Hub löst im Fenster zu "keine Session" auf und nicht zur Session
+   mit derselben Nummer auf dem eigenen Hub: in die falsche Session zu tippen ist
+   schlimmer, als gar nichts zu tun.
+
+   Alte Session-Dateien haben in `session_id` eine nackte Zahl. Sie laden als `"7"`, einem
+   Ref ohne Hub, und der Restore ordnet ihn über die Nummer der laufenden Session zu. Das
+   ist die einzige Stelle, an der eine Nummer ohne Hub etwas bedeutet.
 
 Der Weg zu Remote ist danach: `mtuid` auf dem entfernten Rechner, SSH-Tunnel auf dessen
 Loopback-Port, Discovery-Record vom entfernten Rechner über denselben Kanal holen. Kein
@@ -455,9 +469,11 @@ kein Fenster offen ist, ist eine Produktfrage und keine Architekturfrage.
 
 1. **Remote über SSH** (Phase 4). Ein Tunnel auf den Loopback-Port des entfernten
    Daemons, plus eine Hub-Auswahl im Client. Das Protokoll trägt die Hub-Kennung schon,
-   und `mt --hub <name>` ist die Stelle, an der es sichtbar würde. Vorher fällig: die
-   Session-Identität von `int` auf `hub:id` umstellen, 166 Fundstellen im Frontend und
-   120 in Go. Danach wird es teurer, vorher ist es reine Kosten.
+   und `mt --hub <name>` ist die Stelle, an der es sichtbar würde. Die Umstellung der
+   Session-Identität im Frontend auf `hub:id`, die dafür vorher fällig war, ist erledigt
+   (siehe "Vorleistung für Remote"). Offen bleibt, dass ein Fenster genau einen Host hält:
+   ein zweiter Hub braucht eine Tabelle Hub → Host in `AppService`, an der die Übersetzung
+   in `app_session_refs.go` dann nachschlägt, statt nur den eigenen Hub zu kennen.
 2. **Mehr Agent-CLIs.** herdr startet 22, wir kennen drei. Seit Phase 2b ist das eine
    Tabelle in `internal/launch/agents.go` und ein Kommando in der Config, sonst nichts.
 3. **Plugins.** herdr lädt Verzeichnisse mit `herdr-plugin.toml`, Actions und

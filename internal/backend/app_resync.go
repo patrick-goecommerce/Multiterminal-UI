@@ -1,6 +1,6 @@
 package backend
 
-// ResyncSession repaints a pane from the backend's VT100 mirror.
+// resyncSession repaints a pane from the backend's VT100 mirror.
 //
 // The frontend calls this when a pane's output backlog overflowed and had to be
 // thrown away. It cannot simply resume with the bytes it still holds: a VT100
@@ -12,7 +12,7 @@ package backend
 // is strictly ordered against them: whatever the frontend still applies before
 // it gets overwritten, and everything arriving after it continues from a screen
 // both sides agree on.
-func (a *AppService) ResyncSession(id int) {
+func (a *AppService) resyncSession(id int) {
 	if !a.hasSession(id) {
 		return
 	}

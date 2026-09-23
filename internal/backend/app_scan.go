@@ -2,20 +2,21 @@ package backend
 
 import (
 	"fmt"
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // ActivityInfo is sent to the frontend when a session's activity state changes.
 type ActivityInfo struct {
-	ID         int    `json:"id"`
-	Activity   string `json:"activity"` // "idle", "active", "done", "waitingPermission", "waitingAnswer", "error", plus "sleeping"/"resuming" from emitLifecycleActivity
-	Cost       string `json:"cost"`
-	Title      string `json:"title"`      // OSC-derived window title (fallback pane name)
-	ContextPct int    `json:"contextPct"` // % of context window used (statusline); 0 if unknown
-	Model      string `json:"model"`      // model display name (statusline); "" if unknown
+	ID         hub.Ref `json:"id"`
+	Activity   string  `json:"activity"` // "idle", "active", "done", "waitingPermission", "waitingAnswer", "error", plus "sleeping"/"resuming" from emitLifecycleActivity
+	Cost       string  `json:"cost"`
+	Title      string  `json:"title"`      // OSC-derived window title (fallback pane name)
+	ContextPct int     `json:"contextPct"` // % of context window used (statusline); 0 if unknown
+	Model      string  `json:"model"`      // model display name (statusline); "" if unknown
 	// ActivitySince is when the confirmed state began, as seconds since epoch;
 	// 0 when unknown. Travels on the event only — events are plain JSON and do
 	// not need models.ts, unlike binding returns.
@@ -89,7 +90,7 @@ func (a *AppService) applyScanResults(results []hub.ScanResult) {
 		if changed && a.app != nil {
 			log.Printf("[scan] session %d: activity=%s cost=%s title=%q", id, confirmedActivity, costStr, title)
 			a.app.Event.Emit("terminal:activity", ActivityInfo{
-				ID:            id,
+				ID:            a.ref(id),
 				Activity:      confirmedActivity,
 				Cost:          costStr,
 				Title:         title,

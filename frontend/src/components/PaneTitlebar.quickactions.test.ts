@@ -13,7 +13,7 @@ afterEach(() => {
 function basePane(overrides: Partial<Pane> = {}): Pane {
   return {
     id: 'pane-1',
-    sessionId: 42,
+    sessionId: 'h1:42',
     name: 'Claude',
     mode: 'claude',
     model: '',
@@ -86,7 +86,7 @@ describe('PaneTitlebar — quick actions', () => {
 
     await fireEvent.click(container.querySelector('.quick-action-btn')!);
 
-    expect(received).toEqual([{ sessionId: 42, prompt: 'rebase feat/x onto alpha-main' }]);
+    expect(received).toEqual([{ sessionId: 'h1:42', prompt: 'rebase feat/x onto alpha-main' }]);
   });
 
   it('renders duplicate quick actions without an each_key_duplicate crash', () => {

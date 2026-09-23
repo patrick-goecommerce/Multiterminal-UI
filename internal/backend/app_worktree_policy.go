@@ -2,7 +2,7 @@
 // against the per-project override in .mtui/config.json, and exposes both to
 // the frontend. The resolved value is turned into the
 // MULTITERMINAL_FORCE_WORKTREE_ROOT env var at session launch (see
-// CreateSession) — the mtui-hook binary reads only that env var and never the
+// createSession) — the mtui-hook binary reads only that env var and never the
 // config, so the policy is evaluated exactly once per pane.
 package backend
 

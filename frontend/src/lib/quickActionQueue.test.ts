@@ -7,7 +7,7 @@ import { sendQuickAction } from './quickActionQueue';
 
 describe('sendQuickAction', () => {
   it('forwards sessionId and prompt to App.AddToQueue', async () => {
-    await sendQuickAction(42, 'rebase feat/x onto alpha-main');
-    expect(addToQueue).toHaveBeenCalledWith(42, 'rebase feat/x onto alpha-main');
+    await sendQuickAction('h1:42', 'rebase feat/x onto alpha-main');
+    expect(addToQueue).toHaveBeenCalledWith('h1:42', 'rebase feat/x onto alpha-main');
   });
 });

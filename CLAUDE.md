@@ -196,6 +196,15 @@ structural fact about this codebase, and everything else follows from it.
   the empty ones, whose pane the frontend already drew. A map in the window cannot answer
   that any more: in daemon mode the session may predate this window. The idle-suspend gate
   keys off `OriginAgent` alone.
+- **The frontend holds a session as a `hub.Ref`, the string `"hub:id"`** (`''` = none). It is
+  opaque there: store it, compare it with `===`, hand it back; never compute with it. The
+  translation to the host's int ID happens in exactly one place, the exported wrappers in
+  `internal/backend/app_session_refs*.go`, which call the unexported int methods. Behind that
+  line the window, `hub.Host`, the wire protocol, `mt` and MCP stay int, because each of them
+  talks to exactly one hub. A new binding or event that names a session takes or carries a
+  `hub.Ref` (`a.ref(id)` out, `a.local(ref)` in); a ref for another hub resolves to 0, never
+  to the same number on this hub. Old session files with a bare number load as a legacy ref,
+  which only the restore matches (`sameSession` in `frontend/src/lib/sessionRef.ts`).
 - **`MTUI_PORT` is baked into a session's environment at launch** and can never be told a new
   one. That is why the shim endpoints belong to the host and not to a window: a session that
   outlives its window would otherwise post into a dead port for the rest of its life.
@@ -250,7 +259,8 @@ internal/
     app_stream.go                Output batching and coalescing toward the WebView
     app_scan.go                  applyScanResults: host scan results → UI (no loop here)
     app_queue.go                 Finish-flow guards around the host's queue
-    app_agent_wait.go            WaitForAgent binding over hub.WaitForAgent
+    app_session_refs*.go         Session bindings: hub.Ref in, host-local int behind it
+    app_agent_wait.go            waitForAgent over hub.WaitForAgent
     app_mcp_server.go            Where the MCP server is (internal/mcpsrv serves it)
     app_agent_panes.go           A pane for a session this window did not open
     launch_delegate.go           Delegates to internal/gitx and internal/launch

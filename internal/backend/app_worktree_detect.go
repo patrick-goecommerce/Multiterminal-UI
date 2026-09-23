@@ -60,7 +60,7 @@ func (a *AppService) handleWorktreeDetected(mtID int, worktreePath, worktreeBran
 
 	log.Printf("[worktree-detect] session %d entered %s on %s (target %s)", mtID, worktreePath, worktreeBranch, target)
 	a.emitWorktreeEventSafe("worktree:detected", WorktreeDetectedEvent{
-		ID: mtID, WorktreePath: worktreePath, WorktreeBranch: worktreeBranch, TargetBranch: target,
+		ID: a.ref(mtID), WorktreePath: worktreePath, WorktreeBranch: worktreeBranch, TargetBranch: target,
 	})
 }
 
@@ -121,7 +121,7 @@ func (a *AppService) handleWorktreeCwdUpdate(mtID int, cwd string) {
 	a.worktreeStateMu.Unlock()
 
 	log.Printf("[worktree-detect] session %d left %s", mtID, st.Path)
-	a.emitWorktreeEventSafe("worktree:cleared", WorktreeClearedEvent{ID: mtID})
+	a.emitWorktreeEventSafe("worktree:cleared", WorktreeClearedEvent{ID: a.ref(mtID)})
 }
 
 // pathWithin reports whether cwd is dir itself or below it. Case-insensitive:
@@ -172,5 +172,5 @@ func defaultWorktreeProbe(dir string) (path, branch string, ok bool) {
 // does not intervene beyond surfacing it to the user.
 func (a *AppService) onWorktreePathBlocked(mtID int, path, reason string) {
 	log.Printf("[worktree-detect] session %d blocked write to %s: %s", mtID, path, reason)
-	a.emitWorktreeEventSafe("worktree:path-blocked", WorktreePathBlockedEvent{ID: mtID, Path: path, Reason: reason})
+	a.emitWorktreeEventSafe("worktree:path-blocked", WorktreePathBlockedEvent{ID: a.ref(mtID), Path: path, Reason: reason})
 }
