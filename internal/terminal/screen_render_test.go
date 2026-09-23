@@ -178,3 +178,33 @@ func TestRenderRegion_OutOfBounds(t *testing.T) {
 		t.Errorf("RenderRegion out-of-bounds should still contain visible content")
 	}
 }
+
+// A negative endRow means "to the bottom". CheckAskUser asks for 0..-1 to mean
+// the whole screen, and the old bounds check turned that into a make with a
+// negative capacity, which panics rather than returning anything.
+func TestPlainTextRows_NegativeEndMeansToTheBottom(t *testing.T) {
+	s := NewScreen(4, 10)
+	s.Write([]byte("one\r\ntwo\r\nthree"))
+
+	rows := s.PlainTextRows(0, -1)
+	if len(rows) != 4 {
+		t.Fatalf("got %d rows, want 4: %q", len(rows), rows)
+	}
+	if rows[0] != "one" || rows[1] != "two" || rows[2] != "three" {
+		t.Errorf("rows = %q, want the written lines", rows)
+	}
+}
+
+// An endRow above the screen is clamped, and a range that ends before it
+// starts is empty rather than a panic.
+func TestPlainTextRows_OutOfRangeBoundsAreClamped(t *testing.T) {
+	s := NewScreen(3, 10)
+	s.Write([]byte("only"))
+
+	if rows := s.PlainTextRows(0, 99); len(rows) != 3 {
+		t.Errorf("clamped to %d rows, want 3", len(rows))
+	}
+	if rows := s.PlainTextRows(2, 1); len(rows) != 0 {
+		t.Errorf("inverted range returned %d rows, want 0", len(rows))
+	}
+}

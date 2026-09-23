@@ -16,7 +16,7 @@ import (
 // the engine package without import cycles.
 type DecisionBriefingStub struct {
 	FilesChanged   int    `json:"files_changed"`
-	ScopeStatus    string `json:"scope_status"`    // "within_limits" | "exceeded"
+	ScopeStatus    string `json:"scope_status"`   // "within_limits" | "exceeded"
 	Recommendation string `json:"recommendation"` // "proceed_to_qa" | "needs_human_review"
 }
 
@@ -71,8 +71,8 @@ func (o *Orchestrator) RunQA(ctx context.Context, dir, cardID string) error {
 	// 3. Check must_haves
 	passed, failures := checkMustHaves(dir, plan)
 	o.emitEvent(EventQAResult, map[string]string{
-		"card_id": cardID,
-		"result":  map[bool]string{true: "pass", false: "fail"}[passed],
+		"card_id":  cardID,
+		"result":   map[bool]string{true: "pass", false: "fail"}[passed],
 		"failures": fmt.Sprintf("%d", len(failures)),
 	})
 

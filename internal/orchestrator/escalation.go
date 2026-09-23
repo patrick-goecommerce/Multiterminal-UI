@@ -10,7 +10,7 @@ import (
 
 // EscalationResult describes the outcome of an escalation attempt.
 type EscalationResult struct {
-	Action   string     // "model_escalated" | "replanned" | "human_review"
+	Action   string // "model_escalated" | "replanned" | "human_review"
 	Reason   string
 	NewModel string     // set if Action == "model_escalated"
 	SubSteps []PlanStep // set if Action == "replanned"

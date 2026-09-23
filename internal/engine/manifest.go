@@ -27,8 +27,8 @@ const (
 )
 
 var (
-	goModLineRe    = regexp.MustCompile(`^\s*([\w./\-@]+)\s+(v[\d.].*)$`)
-	pkgJSONLineRe  = regexp.MustCompile(`"([@\w/.\-]+)"\s*:\s*"([^"]+)"`)
+	goModLineRe   = regexp.MustCompile(`^\s*([\w./\-@]+)\s+(v[\d.].*)$`)
+	pkgJSONLineRe = regexp.MustCompile(`"([@\w/.\-]+)"\s*:\s*"([^"]+)"`)
 )
 
 // ParseManifestChanges analyzes git diff for dependency manifest changes.

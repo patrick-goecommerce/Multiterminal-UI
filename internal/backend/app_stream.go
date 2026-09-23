@@ -6,26 +6,7 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
-
-// coalesceDelay returns the scan tick delay — kept for scanLoop reuse.
-func (a *AppService) coalesceDelay() time.Duration {
-	a.mu.Lock()
-	n := len(a.sessions)
-	a.mu.Unlock()
-	switch {
-	case n <= 2:
-		return 6 * time.Millisecond
-	case n <= 4:
-		return 10 * time.Millisecond
-	case n <= 6:
-		return 14 * time.Millisecond
-	default:
-		return 18 * time.Millisecond
-	}
-}
 
 // outputBatcher accumulates raw PTY bytes from all sessions and emits
 // them as a single batched Wails event per frame (≤16 ms).
@@ -44,7 +25,7 @@ func newOutputBatcher() *outputBatcher {
 
 // outputBatch returns the shared output batcher, initializing it on first use.
 // The batcher's lifecycle is the AppService's, not ServiceStartup's: sessions
-// (and thus collectOutput) can be created before ServiceStartup — e.g. scheduled
+// (and thus the output pump) can be created before ServiceStartup — e.g. scheduled
 // tasks in tests — so the batcher must never be nil.
 func (a *AppService) outputBatch() *outputBatcher {
 	a.batcherOnce.Do(func() {
@@ -125,61 +106,4 @@ func (a *AppService) batchLoop(ctx context.Context) {
 			a.app.Event.Emit("terminal:output-batch", items)
 		}
 	}
-}
-
-// collectOutput reads raw PTY bytes from the session's RawOutputCh and
-// hands them to the shared outputBatcher. It drains all currently
-// available bytes before yielding to reduce lock round-trips.
-func (a *AppService) collectOutput(id int, sess *terminal.Session, ctx context.Context) {
-	for {
-		select {
-		case data, ok := <-sess.RawOutputCh:
-			if !ok {
-				return
-			}
-			buf := append([]byte(nil), data...)
-			// Non-blocking drain: collect everything already in the buffer.
-		drain:
-			for {
-				select {
-				case more, ok := <-sess.RawOutputCh:
-					if !ok {
-						a.outputBatch().add(id, buf)
-						return
-					}
-					buf = append(buf, more...)
-				case <-ctx.Done():
-					a.outputBatch().add(id, buf)
-					return
-				default:
-					break drain
-				}
-			}
-			a.outputBatch().add(id, buf)
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// watchExit waits for a session to exit and notifies the frontend.
-//
-// A suspend kills the process on purpose (issue #180). Emitting terminal:exit
-// for it would drop the "Prozess beendet" overlay over a merely sleeping pane
-// and hide its scrollback, so the exit of a suspended generation is swallowed
-// and the watcher re-arms on the next generation's done channel.
-func (a *AppService) watchExit(id int, sess *terminal.Session) {
-	for {
-		<-sess.Done()
-		if !sess.IsSuspendedOrSuspending() {
-			break
-		}
-		if !sess.WaitAwake() {
-			return // closed for good while asleep — nothing to report
-		}
-	}
-	if a.app == nil {
-		return // no frontend to notify (e.g. before ServiceStartup, in tests)
-	}
-	a.app.Event.Emit("terminal:exit", TerminalExitEvent{ID: id, ExitCode: sess.ExitCode})
 }

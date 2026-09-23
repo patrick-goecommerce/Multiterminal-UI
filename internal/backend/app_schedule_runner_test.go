@@ -3,8 +3,6 @@ package backend
 import (
 	"testing"
 	"time"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // closeSpawnedSessions synchronously closes every session the app spawned so
@@ -13,14 +11,10 @@ import (
 func closeSpawnedSessions(t *testing.T, app *AppService) {
 	t.Helper()
 	t.Cleanup(func() {
-		app.mu.Lock()
-		sessions := make([]*terminal.Session, 0, len(app.sessions))
-		for _, s := range app.sessions {
-			sessions = append(sessions, s)
-		}
-		app.mu.Unlock()
-		for _, s := range sessions {
-			s.Close() // blocks until the process exits and the PTY closes
+		// Close through the host: it kills the process tree and blocks until
+		// the process is gone, which is what releases the handles.
+		for _, s := range app.sessionSummaries() {
+			_ = app.host.Close(s.ID)
 		}
 	})
 }

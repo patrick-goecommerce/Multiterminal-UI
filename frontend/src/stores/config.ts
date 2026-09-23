@@ -67,6 +67,41 @@ export interface MCPProfile {
   config_path?: string;
 }
 
+export interface IssueTrackingConfig {
+  auto_comment_on_start: boolean;
+  auto_comment_on_done: boolean;
+  auto_comment_on_close: boolean;
+  auto_close_issue: boolean;
+  include_cost_in_report: boolean;
+}
+
+export interface STTCloudConfig {
+  base_url: string;
+  model: string;
+  api_key: string;
+}
+
+export interface STTConfig {
+  provider: string;
+  language: string;
+  cloud: STTCloudConfig;
+}
+
+export interface AutoNamingConfig {
+  enabled?: boolean;
+  model: string;
+}
+
+export interface IdleSuspendConfig {
+  enabled?: boolean;
+  timeout_minutes: number;
+}
+
+export interface MCPServerConfig {
+  enabled?: boolean;
+  port: number;
+}
+
 export interface AppConfig {
   default_shell: string;
   default_dir: string;
@@ -106,6 +141,21 @@ export interface AppConfig {
   mcp_profiles: MCPProfile[];
   /** Profile preselected in the launch dialog ('' = all global MCP servers). */
   default_mcp_profile: string;
+  last_opened_dir: string;
+  issue_tracking: IssueTrackingConfig;
+  chat_style: string;
+  stt: STTConfig;
+  auto_naming: AutoNamingConfig;
+  mcp_server: MCPServerConfig;
+  idle_suspend: IdleSuspendConfig;
+  update_channel: string;
+  auto_update_check_minutes: number;
+  terminal_scrollback: number;
+  /**
+   * Where the sessions live. "daemon" hands them to mtuid so they survive
+   * closing the window; anything else keeps them in this process.
+   */
+  session_host: string;
 }
 
 export const config = writable<AppConfig>({
@@ -195,4 +245,28 @@ export const config = writable<AppConfig>({
     { name: 'Nur MTUI', servers: ['mtui'] },
   ],
   default_mcp_profile: '',
+  last_opened_dir: '',
+  issue_tracking: {
+    auto_comment_on_start: false,
+    auto_comment_on_done: false,
+    auto_comment_on_close: false,
+    auto_close_issue: false,
+    include_cost_in_report: false,
+  },
+  chat_style: '',
+  stt: {
+    provider: '',
+    language: '',
+    cloud: { base_url: '', model: '', api_key: '' },
+  },
+  auto_naming: { model: '' },
+  mcp_server: { port: 0 },
+  idle_suspend: { timeout_minutes: 0 },
+  update_channel: '',
+  auto_update_check_minutes: 0,
+  terminal_scrollback: 0,
+  // Empty rather than 'embedded': these defaults are only what the store holds
+  // before GetConfig answers, and the backend decides what an unset value
+  // means. Writing 'embedded' here would look like a decision this file made.
+  session_host: '',
 });

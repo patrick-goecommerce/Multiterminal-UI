@@ -12,8 +12,8 @@ import (
 
 func TestCSI_CursorUp(t *testing.T) {
 	s := NewScreen(10, 10)
-	s.Write([]byte("\x1b[5;5H"))  // move to (4,4)
-	s.Write([]byte("\x1b[2A"))    // cursor up 2
+	s.Write([]byte("\x1b[5;5H")) // move to (4,4)
+	s.Write([]byte("\x1b[2A"))   // cursor up 2
 
 	row, col := s.Cursor()
 	if row != 2 || col != 4 {
@@ -23,8 +23,8 @@ func TestCSI_CursorUp(t *testing.T) {
 
 func TestCSI_CursorUp_ClampsToZero(t *testing.T) {
 	s := NewScreen(10, 10)
-	s.Write([]byte("\x1b[2;1H"))  // row 1
-	s.Write([]byte("\x1b[99A"))   // up 99
+	s.Write([]byte("\x1b[2;1H")) // row 1
+	s.Write([]byte("\x1b[99A"))  // up 99
 
 	row, _ := s.Cursor()
 	if row != 0 {
@@ -34,8 +34,8 @@ func TestCSI_CursorUp_ClampsToZero(t *testing.T) {
 
 func TestCSI_CursorDown(t *testing.T) {
 	s := NewScreen(10, 10)
-	s.Write([]byte("\x1b[1;1H"))  // origin
-	s.Write([]byte("\x1b[3B"))    // down 3
+	s.Write([]byte("\x1b[1;1H")) // origin
+	s.Write([]byte("\x1b[3B"))   // down 3
 
 	row, col := s.Cursor()
 	if row != 3 || col != 0 {
@@ -65,8 +65,8 @@ func TestCSI_CursorForward(t *testing.T) {
 
 func TestCSI_CursorBackward(t *testing.T) {
 	s := NewScreen(10, 10)
-	s.Write([]byte("\x1b[1;6H"))  // col 5
-	s.Write([]byte("\x1b[3D"))    // back 3
+	s.Write([]byte("\x1b[1;6H")) // col 5
+	s.Write([]byte("\x1b[3D"))   // back 3
 
 	_, col := s.Cursor()
 	if col != 2 {
@@ -159,8 +159,8 @@ func TestCSI_VerticalPositionAbsolute(t *testing.T) {
 func TestCSI_EraseDisplay_CursorToEnd(t *testing.T) {
 	s := NewScreen(3, 5)
 	s.Write([]byte("AAAAAAAAAAAAA\r\n")) // fill
-	s.Write([]byte("\x1b[1;3H"))          // row 0, col 2
-	s.Write([]byte("\x1b[0J"))            // erase from cursor to end
+	s.Write([]byte("\x1b[1;3H"))         // row 0, col 2
+	s.Write([]byte("\x1b[0J"))           // erase from cursor to end
 
 	// Row 0, cols 0-1 should be preserved
 	if ch := s.CellAt(0, 0).Char; ch != 'A' {
@@ -193,8 +193,8 @@ func TestCSI_EraseDisplay_Full(t *testing.T) {
 func TestCSI_EraseLine_CursorToEnd(t *testing.T) {
 	s := NewScreen(3, 10)
 	s.Write([]byte("ABCDEFGHIJ"))
-	s.Write([]byte("\x1b[1;4H"))  // col 3
-	s.Write([]byte("\x1b[0K"))    // erase from cursor to end of line
+	s.Write([]byte("\x1b[1;4H")) // col 3
+	s.Write([]byte("\x1b[0K"))   // erase from cursor to end of line
 
 	r0 := s.PlainTextRow(0)
 	if r0 != "ABC" {
@@ -205,8 +205,8 @@ func TestCSI_EraseLine_CursorToEnd(t *testing.T) {
 func TestCSI_EraseLine_StartToCursor(t *testing.T) {
 	s := NewScreen(3, 10)
 	s.Write([]byte("ABCDEFGHIJ"))
-	s.Write([]byte("\x1b[1;4H"))  // col 3
-	s.Write([]byte("\x1b[1K"))    // erase from start to cursor
+	s.Write([]byte("\x1b[1;4H")) // col 3
+	s.Write([]byte("\x1b[1K"))   // erase from start to cursor
 
 	r0 := s.PlainTextRow(0)
 	// cols 0-3 erased, cols 4-9 preserved
@@ -426,8 +426,8 @@ func TestCSI_SaveRestoreCursor(t *testing.T) {
 
 func TestSGR_Reset(t *testing.T) {
 	s := NewScreen(3, 10)
-	s.Write([]byte("\x1b[1m"))  // bold
-	s.Write([]byte("\x1b[0m"))  // reset
+	s.Write([]byte("\x1b[1m")) // bold
+	s.Write([]byte("\x1b[0m")) // reset
 	s.Write([]byte("A"))
 
 	cell := s.CellAt(0, 0)
@@ -489,11 +489,11 @@ func TestSGR_Strike(t *testing.T) {
 func TestSGR_ResetAttributes(t *testing.T) {
 	s := NewScreen(3, 10)
 	s.Write([]byte("\x1b[1;2;3;4;7;9m")) // all on
-	s.Write([]byte("\x1b[22m"))            // bold+dim off
-	s.Write([]byte("\x1b[23m"))            // italic off
-	s.Write([]byte("\x1b[24m"))            // underline off
-	s.Write([]byte("\x1b[27m"))            // reverse off
-	s.Write([]byte("\x1b[29m"))            // strike off
+	s.Write([]byte("\x1b[22m"))          // bold+dim off
+	s.Write([]byte("\x1b[23m"))          // italic off
+	s.Write([]byte("\x1b[24m"))          // underline off
+	s.Write([]byte("\x1b[27m"))          // reverse off
+	s.Write([]byte("\x1b[29m"))          // strike off
 	s.Write([]byte("A"))
 
 	cell := s.CellAt(0, 0)
@@ -553,8 +553,8 @@ func TestSGR_BrightBG(t *testing.T) {
 
 func TestSGR_DefaultFG(t *testing.T) {
 	s := NewScreen(3, 10)
-	s.Write([]byte("\x1b[31m"))  // set FG
-	s.Write([]byte("\x1b[39m"))  // reset to default FG
+	s.Write([]byte("\x1b[31m")) // set FG
+	s.Write([]byte("\x1b[39m")) // reset to default FG
 	s.Write([]byte("A"))
 
 	cell := s.CellAt(0, 0)
@@ -565,8 +565,8 @@ func TestSGR_DefaultFG(t *testing.T) {
 
 func TestSGR_DefaultBG(t *testing.T) {
 	s := NewScreen(3, 10)
-	s.Write([]byte("\x1b[42m"))  // set BG
-	s.Write([]byte("\x1b[49m"))  // reset to default BG
+	s.Write([]byte("\x1b[42m")) // set BG
+	s.Write([]byte("\x1b[49m")) // reset to default BG
 	s.Write([]byte("A"))
 
 	cell := s.CellAt(0, 0)
@@ -637,8 +637,8 @@ func TestSGR_CombinedAttributes(t *testing.T) {
 
 func TestSGR_EmptyParams(t *testing.T) {
 	s := NewScreen(3, 10)
-	s.Write([]byte("\x1b[1m"))  // bold on
-	s.Write([]byte("\x1b[m"))   // bare 'm' = reset
+	s.Write([]byte("\x1b[1m")) // bold on
+	s.Write([]byte("\x1b[m"))  // bare 'm' = reset
 	s.Write([]byte("A"))
 
 	cell := s.CellAt(0, 0)

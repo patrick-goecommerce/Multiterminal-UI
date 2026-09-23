@@ -12,7 +12,7 @@ import (
 type RenderConfig struct {
 	Template      string // "minimal" | "standard" | "extended"
 	ShowModel     bool
-	ShowContext    bool
+	ShowContext   bool
 	ShowCost      bool
 	ShowGitBranch bool
 	ShowDuration  bool

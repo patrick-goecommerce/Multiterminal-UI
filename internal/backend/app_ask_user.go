@@ -20,17 +20,14 @@ type AskUserQuestion struct {
 // CheckAskUser analyzes a session's screen buffer for pending questions.
 // Called when activity transitions to waitingPermission or waitingAnswer.
 func (a *AppService) CheckAskUser(sessionID int) *AskUserQuestion {
-	a.mu.Lock()
-	sess := a.sessions[sessionID]
-	a.mu.Unlock()
-
-	if sess == nil {
+	summary, err := a.host.Get(sessionID)
+	if err != nil {
 		return nil
 	}
 
 	// Get the last few lines from the screen buffer
-	rows := sess.Screen.PlainTextRows(0, -1)
-	if len(rows) == 0 {
+	rows, err := a.host.PlainTextRows(sessionID, 0, -1)
+	if err != nil || len(rows) == 0 {
 		return nil
 	}
 
@@ -48,7 +45,7 @@ func (a *AppService) CheckAskUser(sessionID int) *AskUserQuestion {
 
 	return &AskUserQuestion{
 		SessionID:   sessionID,
-		SessionName: sess.Name(),
+		SessionName: summary.Name,
 		Question:    question,
 		Options:     options,
 		Timestamp:   time.Now().Format(time.RFC3339),
@@ -57,15 +54,11 @@ func (a *AppService) CheckAskUser(sessionID int) *AskUserQuestion {
 
 // AnswerAskUser sends a response to a session that is waiting for input.
 func (a *AppService) AnswerAskUser(sessionID int, answer string) error {
-	a.mu.Lock()
-	sess := a.sessions[sessionID]
-	a.mu.Unlock()
-
-	if sess == nil {
+	if !a.hasSession(sessionID) {
 		return nil
 	}
 
-	_, err := sess.Write([]byte(answer + "\r"))
+	err := a.host.Write(sessionID, []byte(answer+"\r"))
 	if err != nil {
 		log.Printf("[ask-user] write error for session %d: %v", sessionID, err)
 		return err

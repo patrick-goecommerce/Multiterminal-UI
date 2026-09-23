@@ -28,7 +28,7 @@ func (a *AppService) ensureMCPRegisteredWithClaude() {
 		return
 	}
 
-	rec, err := discovery.Resolve(discovery.ServiceMCP)
+	rec, err := resolveMCPRecord()
 	if err != nil {
 		log.Printf("[mcp-register] no usable MCP port record, skipping registration: %v", err)
 		return
@@ -66,3 +66,26 @@ func (a *AppService) ensureMCPRegisteredWithClaude() {
 	}
 	log.Printf("[mcp-register] registered mtui MCP server with claude CLI (user scope): %s", url)
 }
+
+// resolveMCPRecord reads the MCP port record, waiting briefly for it.
+//
+// The wait is for daemon mode: mtuid publishes the record while this window is
+// already starting up, so the first look can miss it by milliseconds and the
+// registration would then be skipped for the whole run. Bounded, because a
+// record that is not there after a few seconds is not coming.
+func resolveMCPRecord() (discovery.Record, error) {
+	deadline := time.Now().Add(mcpRecordWait)
+	for {
+		rec, err := discovery.Resolve(discovery.ServiceMCP)
+		if err == nil || time.Now().After(deadline) {
+			return rec, err
+		}
+		time.Sleep(mcpRecordPoll)
+	}
+}
+
+// How long to wait for the MCP port record, and how often to look.
+const (
+	mcpRecordWait = 5 * time.Second
+	mcpRecordPoll = 100 * time.Millisecond
+)

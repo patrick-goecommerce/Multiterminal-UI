@@ -1,13 +1,11 @@
 package backend
 
 import (
-	"context"
 	"fmt"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"log"
 	"sync"
 	"time"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 // ActivityInfo is sent to the frontend when a session's activity state changes.
@@ -24,149 +22,59 @@ type ActivityInfo struct {
 	ActivitySince int64 `json:"activitySince"`
 }
 
-// prevActivity tracks the last emitted state per session to avoid spamming.
+// The last values emitted per session, so an unchanged tick stays silent.
+//
+// Only cost and title live here now. Whether the ACTIVITY changed is decided
+// by the host (hub.ScanResult.Changed): the debounce that answers it belongs
+// next to the screen classifier it corrects for, and a queue that has to
+// advance with no window open cannot ask a window whether the state moved.
 var (
-	prevActivityMu sync.Mutex
-	prevActivity   = make(map[int]string)
-	prevCost       = make(map[int]string)
-	prevTitle      = make(map[int]string)
+	prevEmitMu sync.Mutex
+	prevCost   = make(map[int]string)
+	prevTitle  = make(map[int]string)
 )
 
-// scanInterval returns the scan tick duration based on the number of active sessions.
-// More sessions → slower ticks to reduce overhead.
-func (a *AppService) scanInterval() time.Duration {
-	a.mu.Lock()
-	n := len(a.sessions)
-	a.mu.Unlock()
-	switch {
-	case n <= 3:
-		return 500 * time.Millisecond
-	case n <= 6:
-		return 600 * time.Millisecond
-	default:
-		return 750 * time.Millisecond
-	}
-}
-
-// scanLoop periodically scans all sessions for activity changes and token info.
-// The interval adapts to the number of active sessions.
-func (a *AppService) scanLoop(ctx context.Context) {
-	interval := a.scanInterval()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			a.scanAllSessions()
-			// Re-check if interval should change
-			if newInterval := a.scanInterval(); newInterval != interval {
-				interval = newInterval
-				ticker.Reset(interval)
-			}
-		}
-	}
-}
-
-func activityString(a terminal.ActivityState) string {
-	switch a {
-	case terminal.ActivityActive:
-		return "active"
-	case terminal.ActivityDone:
-		return "done"
-	case terminal.ActivityWaitingPermission:
-		return "waitingPermission"
-	case terminal.ActivityWaitingAnswer:
-		return "waitingAnswer"
-	case terminal.ActivityError:
-		return "error"
-	default:
-		return "idle"
-	}
-}
-
 // cleanupActivityTracking removes stale tracking data for a closed session.
+// The host forgets its own half when the session goes.
 func cleanupActivityTracking(id int) {
-	prevActivityMu.Lock()
-	delete(prevActivity, id)
+	prevEmitMu.Lock()
 	delete(prevCost, id)
 	delete(prevTitle, id)
-	cleanupActivityDebounce(id)
-	prevActivityMu.Unlock()
+	prevEmitMu.Unlock()
 }
 
-// scanAllSessions checks each session for activity and token updates.
-func (a *AppService) scanAllSessions() {
-	a.mu.Lock()
-	ids := make([]int, 0, len(a.sessions))
-	sessions := make([]*terminal.Session, 0, len(a.sessions))
-	for id, s := range a.sessions {
-		ids = append(ids, id)
-		sessions = append(sessions, s)
-	}
-	a.mu.Unlock()
-
-	for i, sess := range sessions {
-		id := ids[i]
-
-		// A sleeping pane has a frozen screen (issue #180). Classifying it would
-		// re-emit the state it had before falling asleep and overwrite the
-		// "schläft" badge on every tick; its tokens cannot change either.
-		if sess.IsSuspendedOrSuspending() {
+// applyScanResults turns one scan tick into what the UI, the queue and the
+// issue reporting do about it.
+//
+// The host decides what each session is doing and ticks on its own; this is
+// the other half, and it runs wherever the window is. See
+// hub.Embedded.scanLoop.
+func (a *AppService) applyScanResults(results []hub.ScanResult) {
+	for _, r := range results {
+		id := r.ID
+		if r.Asleep {
 			continue
 		}
 
-		sess.ScanTokens() // always scan for token/cost data
-
-		var activity terminal.ActivityState
-		if sess.HasHookData() {
-			// Hook events drive activity state for Claude panes — skip PTY regex scan
-			activity = sess.GetActivity()
-			// Exception: when hook says "done", cross-check screen for a trailing
-			// question (e.g. Claude ended with "Was liegt an?"). The Stop hook fires
-			// before the PTY scanner can see the question, so we do it here.
-			if activity == terminal.ActivityDone {
-				if screen := sess.ClassifyScreenState(); screen == terminal.ActivityWaitingAnswer {
-					activity = terminal.ActivityWaitingAnswer
-				}
-			}
-			// Exception: when hook says "active" but the PTY has been quiet well
-			// past the normal detection threshold AND the screen already shows a
-			// completed prompt, the terminating hook event (Stop) was lost or
-			// delayed. Without this, a pane — and any pipeline queue waiting on
-			// it via the "done" transition below — would hang forever, since
-			// hook-driven sessions never fall back to the PTY scan otherwise.
-			if activity == terminal.ActivityActive {
-				if lastOutput := sess.GetLastOutputAt(); !lastOutput.IsZero() && time.Since(lastOutput) > terminal.ActivityStaleThreshold {
-					if screen := sess.ClassifyScreenState(); screen == terminal.ActivityDone || screen == terminal.ActivityWaitingAnswer {
-						activity = screen
-					}
-				}
-			}
-		} else {
-			activity = sess.DetectActivity()
-		}
-		actStr := activityString(activity)
-
-		tokens := sess.GetTokens()
+		actStr := string(r.Activity)
 		costStr := ""
-		if tokens.TotalCost > 0 {
-			costStr = fmt.Sprintf("$%.2f", tokens.TotalCost)
+		if r.Cost > 0 {
+			costStr = fmt.Sprintf("$%.2f", r.Cost)
 		}
-
-		ctxPct, model, _ := sess.StatuslineInfo()
-
-		title := sess.GetTitle()
+		ctxPct, model := r.ContextPct, r.Model
+		title := r.Title
 
 		// Only emit when state, cost, or title actually changed. The activity
 		// half runs through confirmActivity, so a one-tick flicker never
 		// reaches the UI — nor the queue, orchestrator and issue reporting
 		// below, which all key off activityChanged.
-		now := time.Now()
-		prevActivityMu.Lock()
-		activityChanged := confirmActivity(id, actStr, now)
+		// The host already applied the debounce: r.Activity is the confirmed
+		// state and r.Changed says whether this tick is the transition. Every
+		// side effect below keys off r.Changed and never off comparing the
+		// activity, which would react to a repaint (#188).
+		activityChanged := r.Changed
+		confirmedActivity := actStr
+		prevEmitMu.Lock()
 		costChanged := prevCost[id] != costStr
 		titleChanged := prevTitle[id] != title
 		changed := activityChanged || costChanged || titleChanged
@@ -176,18 +84,7 @@ func (a *AppService) scanAllSessions() {
 		if titleChanged {
 			prevTitle[id] = title
 		}
-		confirmedActivity := prevActivity[id]
-		if confirmedActivity == "" {
-			// No confirmed state yet (session just started, still on its
-			// first candidate). Fall back to the raw observation instead of
-			// emitting "" — outside the documented enum — when only cost or
-			// title changed on this tick. activityString never returns "",
-			// so this is always a valid value; it does not weaken the
-			// debounce guarantee because activityChanged is false here, so
-			// none of the confirmed-transition side effects below fire.
-			confirmedActivity = actStr
-		}
-		prevActivityMu.Unlock()
+		prevEmitMu.Unlock()
 
 		if changed && a.app != nil {
 			log.Printf("[scan] session %d: activity=%s cost=%s title=%q", id, confirmedActivity, costStr, title)
@@ -198,7 +95,7 @@ func (a *AppService) scanAllSessions() {
 				Title:         title,
 				ContextPct:    ctxPct,
 				Model:         model,
-				ActivitySince: activitySinceUnix(id),
+				ActivitySince: unixOrZero(r.Since),
 			})
 		}
 
@@ -210,21 +107,22 @@ func (a *AppService) scanAllSessions() {
 		// None of it is gated on a.app: the event emitter is display, and its
 		// absence says nothing about whether the queue must advance.
 
-		// Trigger pipeline queue on fresh "done" transition
+		// The queue advances on the host, which also runs with no window open.
+		// What is left here is telling the orchestrator.
 		if activityChanged && confirmedActivity == "done" {
-			a.processQueue(id)
-			// Notify orchestrator that this agent finished
 			a.notifyOrchestratorDone(id)
 		}
 
-		// A settled-"idle" pane (output stopped, no recognizable prompt) with an
-		// active finish prep must still advance the queue: the "done" trigger
-		// above never fires when Claude finishes without a visible ❯ prompt, which
-		// would otherwise strand the finish prep as "pending" forever. Scoped to a
-		// preparing finish flow so general pipeline timing is unaffected.
+		// A settled "idle" pane (output stopped, no recognisable prompt) with an
+		// active finish prep still has to advance: the "done" trigger never
+		// fires when the agent finishes without drawing a visible prompt, which
+		// would strand the prep item as pending forever. The host deliberately
+		// does not do this for every session, because "idle" also means the
+		// classifier did not recognise the screen and typing into a pager is
+		// worse than waiting. Only this flow knows better, so only it nudges.
 		if activityChanged && confirmedActivity == "idle" {
 			if st := a.getFinishState(id); st != nil && st.Phase == "preparing" {
-				a.processQueue(id)
+				a.host.QueueAdvance(id)
 			}
 		}
 
@@ -246,4 +144,13 @@ func (a *AppService) onActivityChangeForIssue(sessionID int, newActivity string,
 	if newActivity == "done" {
 		a.reportIssueProgress(sessionID, progressDone, cost)
 	}
+}
+
+// unixOrZero renders a timestamp for the frontend, which reads 0 as "show the
+// state without a duration" rather than rendering an epoch date.
+func unixOrZero(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
 }

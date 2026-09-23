@@ -33,36 +33,6 @@ func repoRoot(dir string) (string, error) {
 	return filepath.FromSlash(strings.TrimSpace(string(out))), nil
 }
 
-// parseWorktreePorcelain returns raw WorktreeInfo entries from git --porcelain output.
-// Only Path and Branch are populated.
-func parseWorktreePorcelain(output string) []WorktreeInfo {
-	var result []WorktreeInfo
-	var current WorktreeInfo
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			if current.Path != "" {
-				result = append(result, current)
-			}
-			current = WorktreeInfo{}
-			continue
-		}
-		if strings.HasPrefix(line, "worktree ") {
-			current.Path = filepath.FromSlash(strings.TrimPrefix(line, "worktree "))
-		}
-		if strings.HasPrefix(line, "branch refs/heads/") {
-			current.Branch = strings.TrimPrefix(line, "branch refs/heads/")
-		}
-		if line == "detached" {
-			current.Branch = "(detached)"
-		}
-	}
-	if current.Path != "" {
-		result = append(result, current)
-	}
-	return result
-}
-
 // ListAllWorktrees returns ALL git worktrees categorized as "main", "terminal", or "issue".
 func (a *AppService) ListAllWorktrees(dir string) []WorktreeInfo {
 	root, err := repoRoot(dir)

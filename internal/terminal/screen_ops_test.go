@@ -147,8 +147,8 @@ func TestFullReset(t *testing.T) {
 	s := NewScreen(5, 10)
 	s.Write([]byte("Hello World"))
 	s.Write([]byte("\x1b]0;My Title\x07")) // set title
-	s.Write([]byte("\x1b[1;31m"))           // set style
-	s.Write([]byte("\x1b[3;4r"))            // set scroll region
+	s.Write([]byte("\x1b[1;31m"))          // set style
+	s.Write([]byte("\x1b[3;4r"))           // set scroll region
 
 	// Full reset
 	s.Write([]byte("\x1bc"))
@@ -183,8 +183,8 @@ func TestFullReset(t *testing.T) {
 func TestClampCursor_Negative(t *testing.T) {
 	s := NewScreen(5, 5)
 	// Force cursor to negative via a sequence that sets it directly
-	s.Write([]byte("\x1b[1;1H"))  // origin (0,0)
-	s.Write([]byte("\x1b[99D"))   // back 99 → clamped to 0
+	s.Write([]byte("\x1b[1;1H")) // origin (0,0)
+	s.Write([]byte("\x1b[99D"))  // back 99 → clamped to 0
 
 	_, col := s.Cursor()
 	if col != 0 {

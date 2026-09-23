@@ -49,7 +49,9 @@ func (a *AppService) GetLastCommitDiff(dir string) string {
 	if err != nil {
 		return ""
 	}
-	if s := string(out); len(s) > 8000 { return s[:8000] }
+	if s := string(out); len(s) > 8000 {
+		return s[:8000]
+	}
 	return string(out)
 }
 

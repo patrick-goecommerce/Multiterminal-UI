@@ -11,8 +11,8 @@ import (
 func TestMockEngine_ReturnsResultForStepID(t *testing.T) {
 	m := NewMockEngine()
 	expected := orchestrator.ExecutionResult{
-		StepID: "step-1",
-		Status: orchestrator.StepSuccess,
+		StepID:  "step-1",
+		Status:  orchestrator.StepSuccess,
 		CostUSD: 0.05,
 	}
 	m.SetResult("step-1", expected)
@@ -29,7 +29,7 @@ func TestMockEngine_ReturnsResultForStepID(t *testing.T) {
 func TestMockEngine_ReturnsDefaultForUnknownStepID(t *testing.T) {
 	m := NewMockEngine()
 	m.DefaultResult = orchestrator.ExecutionResult{
-		Status: orchestrator.StepSuccess,
+		Status:  orchestrator.StepSuccess,
 		CostUSD: 0.01,
 	}
 

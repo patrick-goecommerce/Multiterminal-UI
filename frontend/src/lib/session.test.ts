@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, linkSessionIssue, resolveMCPProfile, seedActivitySince } = vi.hoisted(() => ({
+const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, linkSessionIssue, resolveMCPProfile, seedActivitySince, listLiveSessions, attachSession } = vi.hoisted(() => ({
   loadTabs: vi.fn(),
   ensureProjectWorktreeSetup: vi.fn(),
   createSession: vi.fn(),
@@ -8,6 +8,8 @@ const { loadTabs, ensureProjectWorktreeSetup, createSession, worktreeDirExists, 
   linkSessionIssue: vi.fn(),
   resolveMCPProfile: vi.fn(),
   seedActivitySince: vi.fn(),
+  listLiveSessions: vi.fn(),
+  attachSession: vi.fn(),
 }));
 
 vi.mock('../../wailsjs/go/backend/App', () => ({
@@ -18,9 +20,12 @@ vi.mock('../../wailsjs/go/backend/App', () => ({
   LinkSessionIssue: linkSessionIssue,
   ResolveMCPProfile: resolveMCPProfile,
   SeedActivitySince: seedActivitySince,
+  ListLiveSessions: listLiveSessions,
+  AttachSession: attachSession,
 }));
 
-import { paneToSaved, restoreSession } from './session';
+import { paneToSaved, restoreSession, dirLabel } from './session';
+import { tabStore } from '../stores/tabs';
 
 describe('paneToSaved', () => {
   it('serialisiert Worktree-Felder', () => {
@@ -215,5 +220,120 @@ describe('restoreSession activitySince seeding', () => {
     seedActivitySince.mockRejectedValue(new Error('boom'));
 
     await expect(restoreWith({ activity_since: 1700000000, activity_state: 'done' })).resolves.toBe(true);
+  });
+});
+
+// With the session daemon the agents keep running while no window is open. A
+// restore that launched them again would leave two agents per pane, one of
+// them invisible.
+describe('restoreSession with a session daemon', () => {
+  beforeEach(() => {
+    loadTabs.mockReset();
+    ensureProjectWorktreeSetup.mockReset().mockResolvedValue(undefined);
+    createSession.mockReset().mockResolvedValue(99);
+    worktreeDirExists.mockReset().mockResolvedValue(false);
+    linkSessionIssue.mockReset();
+    resolveMCPProfile.mockReset().mockResolvedValue('');
+    seedActivitySince.mockReset().mockResolvedValue(undefined);
+    listLiveSessions.mockReset().mockResolvedValue([]);
+    attachSession.mockReset().mockResolvedValue(true);
+  });
+
+  function tabWith(pane: Record<string, unknown>) {
+    return {
+      active_tab: 0,
+      tabs: [{
+        name: 't', dir: 'D:/repos/foo', focus_idx: 0,
+        panes: [{
+          name: 'p', mode: 1, model: '', display: 'terminal', conversation_id: '',
+          claude_session_id: '', user_renamed: false, worktree_path: '',
+          worktree_branch: '', target_branch: '', issue_number: 0, issue_branch: '',
+          zoom_delta: 0, ...pane,
+        }],
+      }],
+    };
+  }
+
+  it('re-attaches a pane whose session is still running', async () => {
+    listLiveSessions.mockResolvedValue([{ id: 7, name: 'p', dir: 'D:/repos/foo', mode: 'claude', running: true }]);
+    loadTabs.mockResolvedValue(tabWith({ session_id: 7 }));
+
+    await restoreSession('claude');
+
+    expect(attachSession).toHaveBeenCalledWith(7, 24, 80);
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  // The saved id is meaningless once the session is gone, which is every
+  // restart without the daemon.
+  it('launches when the saved session is no longer alive', async () => {
+    listLiveSessions.mockResolvedValue([]);
+    loadTabs.mockResolvedValue(tabWith({ session_id: 7 }));
+
+    await restoreSession('claude');
+
+    expect(attachSession).not.toHaveBeenCalled();
+    expect(createSession).toHaveBeenCalledTimes(1);
+  });
+
+  // A re-attached session never stopped, so the backend's state is current and
+  // the saved one would only drag it backwards.
+  it('does not seed a stale activity onto a re-attached pane', async () => {
+    listLiveSessions.mockResolvedValue([{ id: 7, name: 'p', dir: 'D:/repos/foo', mode: 'claude', running: true }]);
+    loadTabs.mockResolvedValue(tabWith({ session_id: 7, activity_since: 1700000000, activity_state: 'done' }));
+
+    await restoreSession('claude');
+
+    expect(seedActivitySince).not.toHaveBeenCalled();
+  });
+
+  it('still seeds a relaunched pane', async () => {
+    listLiveSessions.mockResolvedValue([]);
+    loadTabs.mockResolvedValue(tabWith({ session_id: 7, activity_since: 1700000000, activity_state: 'done' }));
+
+    await restoreSession('claude');
+
+    expect(seedActivitySince).toHaveBeenCalledWith(99, 1700000000, 'done');
+  });
+
+  // A session no saved pane claims would otherwise keep running with nothing
+  // on screen pointing at it.
+  it('gives a leftover session a pane of its own', async () => {
+    listLiveSessions.mockResolvedValue([
+      { id: 12, name: 'agent', dir: 'D:/repos/bar', mode: 'claude', running: true },
+    ]);
+    loadTabs.mockResolvedValue({ active_tab: 0, tabs: [] });
+
+    // The store is shared across tests in this file, so compare the delta
+    // rather than the total.
+    const before = tabStore.getState().tabs.length;
+    const restored = await restoreSession('claude');
+
+    expect(restored).toBe(true);
+    expect(attachSession).toHaveBeenCalledWith(12, 24, 80);
+    const tabs = tabStore.getState().tabs;
+    expect(tabs).toHaveLength(before + 1);
+    const added = tabs[tabs.length - 1];
+    expect(added.name).toBe('bar');
+    expect(added.panes[0].sessionId).toBe(12);
+  });
+
+  it('reports nothing to restore when there are neither tabs nor live sessions', async () => {
+    listLiveSessions.mockResolvedValue([]);
+    loadTabs.mockResolvedValue({ active_tab: 0, tabs: [] });
+
+    expect(await restoreSession('claude')).toBe(false);
+  });
+});
+
+describe('dirLabel', () => {
+  it('names a tab after the last path segment', () => {
+    expect(dirLabel('D:/repos/foo')).toBe('foo');
+    expect(dirLabel('D:\\repos\\foo\\')).toBe('foo');
+    expect(dirLabel('/home/p/bar')).toBe('bar');
+  });
+
+  it('falls back when there is no directory', () => {
+    expect(dirLabel('')).toBe('Wiederhergestellt');
   });
 });

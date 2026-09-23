@@ -266,10 +266,10 @@ func TestResize_ClampsCursor(t *testing.T) {
 
 func TestESC_SaveRestoreCursor(t *testing.T) {
 	s := NewScreen(10, 10)
-	s.Write([]byte("ABC"))        // cursor at (0,3)
-	s.Write([]byte("\x1b7"))      // save cursor
-	s.Write([]byte("\x1b[5;5H"))  // move to (4,4)
-	s.Write([]byte("\x1b8"))      // restore cursor
+	s.Write([]byte("ABC"))       // cursor at (0,3)
+	s.Write([]byte("\x1b7"))     // save cursor
+	s.Write([]byte("\x1b[5;5H")) // move to (4,4)
+	s.Write([]byte("\x1b8"))     // restore cursor
 
 	row, col := s.Cursor()
 	if row != 0 || col != 3 {

@@ -271,4 +271,3 @@ func TestGetTaskNotFound(t *testing.T) {
 		t.Errorf("expected ErrRefNotFound, got: %v", err)
 	}
 }
-

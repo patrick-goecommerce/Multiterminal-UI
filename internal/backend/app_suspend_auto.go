@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // suspendCheckInterval is how often idle panes are looked for. The timeout is
@@ -38,56 +38,51 @@ func (a *AppService) idleSuspendTimeout() time.Duration {
 //     "idle" in particular is not a safe signal.
 //   - A queued prompt, a running finish flow, an orchestrator card or an
 //     agent-control session all mean something is about to write to this pane.
-func (a *AppService) suspendBlocker(id int, sess *terminal.Session, timeout time.Duration, now time.Time) string {
+func (a *AppService) suspendBlocker(id int, s hub.SessionSummary, timeout time.Duration, now time.Time) string {
 	if timeout <= 0 {
 		return "feature disabled"
 	}
-	if sess == nil {
+	if s.ID == 0 {
 		return "no session"
 	}
-	if sess.IsSuspendedOrSuspending() {
+	if s.Asleep() {
 		return "already suspended"
 	}
-	if !sess.IsRunning() {
+	if s.Status != hub.StatusRunning {
 		return "not running"
 	}
 
 	a.mu.Lock()
 	mode := a.sessionMode[id]
-	queue := a.queues[id]
-	_, isAgent := a.agentSessions[id]
 	finish := a.finishStates[id]
 	a.mu.Unlock()
 
 	if !isClaudeMode(mode) {
 		return "not a claude pane"
 	}
-	if isAgent {
+	if s.Origin == hub.OriginAgent {
 		return "agent-control session"
 	}
 	if finish != nil {
 		return "worktree finish in progress"
 	}
-	if resumeIDFor(sess) == "" {
+	if s.ResumeID == "" {
 		return "no resume id"
 	}
-	if !sess.HasHookData() {
+	if !s.HasHookData {
 		return "no hook data yet"
 	}
-	if queue != nil && (queueHasStatus(queue.items, "pending") || queueHasStatus(queue.items, "sent")) {
+	if a.queueBusy(id) {
 		return "queued prompts waiting"
 	}
 	if orchestratorHolds(id) {
 		return "orchestrator is using this pane"
 	}
 
-	prevActivityMu.Lock()
-	state := prevActivity[id]
-	since := activitySince[id]
-	prevActivityMu.Unlock()
+	state, since := a.host.ConfirmedActivity(id)
 
-	if state != "done" {
-		return "state is " + stateOrUnknown(state)
+	if state != hub.ActivityDone {
+		return "state is " + stateOrUnknown(string(state))
 	}
 	if since.IsZero() {
 		return "no confirmed state yet"
@@ -118,18 +113,9 @@ func (a *AppService) suspendIdleSessions(now time.Time) {
 		return
 	}
 
-	a.mu.Lock()
-	ids := make([]int, 0, len(a.sessions))
-	sessions := make([]*terminal.Session, 0, len(a.sessions))
-	for id, s := range a.sessions {
-		ids = append(ids, id)
-		sessions = append(sessions, s)
-	}
-	a.mu.Unlock()
-
-	for i, sess := range sessions {
-		id := ids[i]
-		if reason := a.suspendBlocker(id, sess, timeout, now); reason != "" {
+	for _, s := range a.sessionSummaries() {
+		id := s.ID
+		if reason := a.suspendBlocker(id, s, timeout, now); reason != "" {
 			continue
 		}
 		log.Printf("[idle-suspend] session %d idle past %s, suspending", id, timeout)

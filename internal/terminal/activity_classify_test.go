@@ -52,15 +52,15 @@ func TestNeedsInputPattern(t *testing.T) {
 
 func TestPromptPattern(t *testing.T) {
 	shouldMatch := []string{
-		"$ ",                      // bare $ prompt
-		"% ",                      // zsh prompt
-		"# ",                      // root prompt
-		"> ",                      // generic prompt
-		"❯ ",                      // Claude Code prompt
-		"❯",                       // Claude Code prompt (no trailing space)
-		`C:\Users\test>`,          // Windows cmd
-		`C:\Windows\System32>`,    // Windows cmd
-		"user@host ~ $ ",          // prompt with space before $
+		"$ ",                   // bare $ prompt
+		"% ",                   // zsh prompt
+		"# ",                   // root prompt
+		"> ",                   // generic prompt
+		"❯ ",                   // Claude Code prompt
+		"❯",                    // Claude Code prompt (no trailing space)
+		`C:\Users\test>`,       // Windows cmd
+		`C:\Windows\System32>`, // Windows cmd
+		"user@host ~ $ ",       // prompt with space before $
 	}
 	for _, s := range shouldMatch {
 		if !promptPattern.MatchString(s) {

@@ -9,6 +9,8 @@ import (
 	"log"
 	"runtime/debug"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // recoverFinishPanic keeps a panic inside a finish goroutine from taking down
@@ -118,20 +120,20 @@ func (a *AppService) StartWorktreeFinish(sessionId int, worktreePath, branch, ta
 		// the retry in "preparing" forever.
 		delete(a.finishStates, sessionId)
 	}
-	q := a.queues[sessionId]
+	// The queue is the host's, and reading it does not need this lock. It is
+	// read while holding it anyway: the finish state was just changed above,
+	// and dropping the lock here would let another finish attempt in between.
 	pending := 0
-	if q != nil {
-		for _, it := range q.items {
-			// Exclude the previous attempt's own prep item: it belongs to the
-			// flow being retried, not to unrelated user prompts, and should
-			// never block its own retry (regressed even if still "sent" —
-			// e.g. Claude hasn't flipped it to "done" yet).
-			if prevPrepID != 0 && it.ID == prevPrepID {
-				continue
-			}
-			if it.Status == "pending" || it.Status == "sent" {
-				pending++
-			}
+	for _, it := range a.host.QueueList(sessionId) {
+		// Exclude the previous attempt's own prep item: it belongs to the flow
+		// being retried, not to unrelated user prompts, and should never block
+		// its own retry (even when still "sent", because the agent may not
+		// have flipped it to "done" yet).
+		if prevPrepID != 0 && it.ID == prevPrepID {
+			continue
+		}
+		if it.Status == hub.QueuePending || it.Status == hub.QueueSent {
+			pending++
 		}
 	}
 	if pending > 0 {
@@ -201,18 +203,9 @@ func (a *AppService) CancelWorktreeFinish(sessionId int) {
 // already sit in the pane, but no purpose is served by leaving a stale
 // tracking row behind once the flow itself is torn down.
 func (a *AppService) forceRemoveQueueItem(sessionId, itemId int) {
-	a.mu.Lock()
-	q := a.queues[sessionId]
-	if q != nil {
-		for i, it := range q.items {
-			if it.ID == itemId {
-				q.items = append(q.items[:i], q.items[i+1:]...)
-				break
-			}
-		}
+	if _, err := a.host.QueueRemove(sessionId, itemId, true); err != nil {
+		log.Printf("[finish] session %d: removing prep item %d: %v", sessionId, itemId, err)
 	}
-	a.mu.Unlock()
-	a.emitQueueUpdate(sessionId)
 }
 
 // CheckWorktreeFinish runs the verification gate and moves preparing→ready/blocked.

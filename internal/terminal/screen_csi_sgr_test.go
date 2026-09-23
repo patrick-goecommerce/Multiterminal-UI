@@ -63,8 +63,8 @@ func TestSGR_StandardBackgroundAllColors(t *testing.T) {
 
 func TestSGR_DefaultFGResets(t *testing.T) {
 	s := NewScreen(3, 20)
-	s.Write([]byte("\x1b[31m"))   // red FG
-	s.Write([]byte("\x1b[39mX"))  // reset FG to default
+	s.Write([]byte("\x1b[31m"))  // red FG
+	s.Write([]byte("\x1b[39mX")) // reset FG to default
 
 	cell := s.CellAt(0, 0)
 	if cell.Style.FG != 0 {
@@ -74,8 +74,8 @@ func TestSGR_DefaultFGResets(t *testing.T) {
 
 func TestSGR_DefaultBGResets(t *testing.T) {
 	s := NewScreen(3, 20)
-	s.Write([]byte("\x1b[42m"))   // green BG
-	s.Write([]byte("\x1b[49mX"))  // reset BG to default
+	s.Write([]byte("\x1b[42m"))  // green BG
+	s.Write([]byte("\x1b[49mX")) // reset BG to default
 
 	cell := s.CellAt(0, 0)
 	if cell.Style.BG != 0 {
@@ -85,8 +85,8 @@ func TestSGR_DefaultBGResets(t *testing.T) {
 
 func TestSGR_EmptyParamsResetsAll(t *testing.T) {
 	s := NewScreen(3, 20)
-	s.Write([]byte("\x1b[1;3;31m"))  // bold + italic + red
-	s.Write([]byte("\x1b[mX"))       // empty SGR = reset
+	s.Write([]byte("\x1b[1;3;31m")) // bold + italic + red
+	s.Write([]byte("\x1b[mX"))      // empty SGR = reset
 
 	cell := s.CellAt(0, 0)
 	if cell.Style.Bold || cell.Style.Italic || cell.Style.FG != 0 {

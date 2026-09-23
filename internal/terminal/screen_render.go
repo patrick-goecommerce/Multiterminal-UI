@@ -101,14 +101,21 @@ func (s *Screen) PlainTextRow(row int) string {
 // PlainTextRows returns plain text for rows [startRow, endRow) under a single
 // lock acquisition. This dramatically reduces lock contention compared to
 // calling PlainTextRow in a loop.
+//
+// A negative endRow means "to the bottom of the screen". Callers already wrote
+// it that way (CheckAskUser asks for 0..-1 to mean the whole screen), and the
+// old code turned that into make([]string, 0, -1), which panics.
 func (s *Screen) PlainTextRows(startRow, endRow int) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if startRow < 0 {
 		startRow = 0
 	}
-	if endRow > s.rows {
+	if endRow < 0 || endRow > s.rows {
 		endRow = s.rows
+	}
+	if endRow < startRow {
+		return nil
 	}
 	result := make([]string, 0, endRow-startRow)
 	var b strings.Builder

@@ -94,9 +94,9 @@ func TestCostPattern_NoMatch(t *testing.T) {
 	tests := []string{
 		"no cost here",
 		"$abc",
-		"$ 1.00",   // space after $
-		"$100",     // no decimal
-		"100.00",   // no $
+		"$ 1.00", // space after $
+		"$100",   // no decimal
+		"100.00", // no $
 	}
 	for _, input := range tests {
 		if costPattern.MatchString(input) {

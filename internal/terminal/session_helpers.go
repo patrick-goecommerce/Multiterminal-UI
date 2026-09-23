@@ -58,3 +58,26 @@ func (s *Session) SetLastOutputAtForTest(t time.Time) {
 	s.LastOutputAt = t
 	s.mu.Unlock()
 }
+
+// GetStatus returns the session's lifecycle status under lock. Reading the
+// Status field directly races with the read and wait loops that write it.
+func (s *Session) GetStatus() SessionStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Status
+}
+
+// GetDir returns the working directory the session was started in.
+func (s *Session) GetDir() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Dir
+}
+
+// GetExitCode returns the process exit code. It is only meaningful once the
+// status is StatusExited.
+func (s *Session) GetExitCode() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ExitCode
+}

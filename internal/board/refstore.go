@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
-	"runtime"
 	"strings"
-	"syscall"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/procs"
 )
 
 // ErrRefNotFound is returned when a git ref does not exist.
@@ -44,13 +44,13 @@ func ValidateGitRepo(dir string) error {
 }
 
 // hideWindowCmd prevents a console window from flashing on Windows.
+//
+// It delegates to internal/procs rather than setting SysProcAttr here: a
+// runtime check cannot hide fields that only exist on Windows, so this file
+// did not compile anywhere else, and a third copy of the same two flags is how
+// the flash keeps coming back (see CLAUDE.md).
 func hideWindowCmd(cmd *exec.Cmd) {
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    true,
-			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
-		}
-	}
+	procs.HideConsole(cmd)
 }
 
 // WriteRef stores content as a blob in a git ref.

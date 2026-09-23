@@ -3,6 +3,7 @@ package backend
 
 import (
 	"fmt"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,8 +43,8 @@ func (a *AppService) GetDashboardStats() DashboardStats {
 	var totalCost float64
 	totalSessions := 0
 
-	for _, sess := range a.sessions {
-		dir := sess.Dir
+	for _, s := range a.sessionSummaries() {
+		dir := s.Dir
 		if dir == "" {
 			continue
 		}
@@ -57,18 +58,15 @@ func (a *AppService) GetDashboardStats() DashboardStats {
 		di.sessions++
 		totalSessions++
 
-		// Accumulate cost from token info (Session.GetTokens locks internally)
-		tokens := sess.GetTokens()
-		if tokens.TotalCost > 0 {
-			di.cost += tokens.TotalCost
-			totalCost += tokens.TotalCost
+		if s.Cost > 0 {
+			di.cost += s.Cost
+			totalCost += s.Cost
 		}
 
 		// Aggregate queue depth
-		q := a.queues[sess.ID]
-		if q != nil {
-			for _, item := range q.items {
-				if item.Status == "pending" || item.Status == "sent" {
+		{
+			for _, item := range a.host.QueueList(s.ID) {
+				if item.Status == hub.QueuePending || item.Status == hub.QueueSent {
 					di.queuePend++
 				}
 			}
@@ -143,25 +141,23 @@ func (a *AppService) GetDashboardPanes() []DashboardPane {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	panes := make([]DashboardPane, 0, len(a.sessions))
-	for id, sess := range a.sessions {
-		activity := activityString(sess.GetActivity())
-		running := sess.IsRunning()
-
-		tokens := sess.GetTokens()
+	summaries := a.sessionSummaries()
+	panes := make([]DashboardPane, 0, len(summaries))
+	for _, s := range summaries {
+		id := s.ID
 		costStr := ""
-		if tokens.TotalCost > 0 {
-			costStr = fmt.Sprintf("$%.2f", tokens.TotalCost)
+		if s.Cost > 0 {
+			costStr = fmt.Sprintf("$%.2f", s.Cost)
 		}
 
 		dp := DashboardPane{
 			SessionID: id,
-			Name:      sess.Name(),
-			Activity:  activity,
+			Name:      s.Name,
+			Activity:  string(s.Activity),
 			Cost:      costStr,
-			Dir:       sess.Dir,
-			Branch:    readGitHeadBranch(sess.Dir),
-			Running:   running,
+			Dir:       s.Dir,
+			Branch:    readGitHeadBranch(s.Dir),
+			Running:   s.Status == hub.StatusRunning,
 		}
 
 		if dp.Name == "" {

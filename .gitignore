@@ -1,7 +1,12 @@
-multiterminal
-multiterminal.exe
-mtui
-mtui.exe
+# Built binaries at the repo root. Anchored with a leading slash: a bare
+# "mtui" also matches the cmd/mtui source directory, which is how the CLI's
+# entire package went missing from a commit once.
+/multiterminal
+/multiterminal.exe
+/mtui
+/mtui.exe
+/mtuid
+/mtuid.exe
 
 # Logs
 *.log

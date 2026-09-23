@@ -145,7 +145,7 @@ func (a *AppService) FinishWorktree(sessionId int) {
 	}
 	st.Phase = "merging"
 	cp := *st
-	sess := a.sessions[sessionId]
+	hasSession := a.hasSession(sessionId)
 	a.mu.Unlock()
 
 	go func() {
@@ -180,10 +180,12 @@ func (a *AppService) FinishWorktree(sessionId int) {
 		}
 		a.mu.Unlock()
 
-		// Kill the whole tree BEFORE Close (spec 5.2), then close synchronously.
-		if sess != nil {
-			killProcessTree(sess.Pid())
-			sess.Close()
+		// Kill the whole tree BEFORE Close (spec 5.2), then close
+		// synchronously. The host does both and forgets the session; a retry
+		// that lands here again finds no session and skips straight to the
+		// cleanup, which is what the phase table expects (spec 4.3).
+		if hasSession {
+			_ = a.host.Close(sessionId)
 		}
 		if err := cleanupWorktree(root, cp.WorktreePath, cp.Branch); err != nil {
 			// Merge is through and the marker persists — only the worktree
@@ -197,9 +199,8 @@ func (a *AppService) FinishWorktree(sessionId int) {
 		_ = deleteFinishMarker(finishMarkerPath(), cp.WorktreePath)
 		a.mu.Lock()
 		delete(a.finishStates, sessionId)
-		delete(a.sessions, sessionId)
-		delete(a.queues, sessionId)
 		a.mu.Unlock()
+		_ = a.host.QueueClear(sessionId, false)
 		if a.app != nil {
 			a.app.Event.Emit("worktree:finish-done", WorktreeFinishDoneEvent{
 				SessionID: sessionId, MainRoot: root,
