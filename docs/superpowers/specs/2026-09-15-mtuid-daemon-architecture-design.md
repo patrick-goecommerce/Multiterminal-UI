@@ -227,6 +227,17 @@ Er beendet sich, wenn er keine Sessions mehr hat und seit `daemon_idle_shutdown`
 Sessions laufen also nur, solange es Sessions gibt, und ein leerer Daemon bleibt nicht
 für immer im Speicher stehen.
 
+**Absturz des Besitzers.** Jede PTY-Session liegt auf Windows in einem eigenen Job-Objekt
+mit `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, dessen Handle nur der Prozess hält, dem die
+Session gehört (`internal/procs/job_windows.go`). Stirbt dieser Prozess, ohne aufzuräumen
+(Absturz, „Task beenden"), schließt der Kernel das Handle und beendet jeden Prozess im Job.
+Im Embedded-Modus ist das die App, im Daemon-Modus `mtuid`. Sessions überleben also das
+Fenster, aber nicht den Daemon, und das war schon vorher die Absicht. Neu ist nur, dass
+ein toter Daemon keine verwaisten claude-Bäume mehr hinterlässt. Beim gewollten Schließen
+läuft zuerst wie bisher `taskkill /T`; danach werden Prozesse, die noch im Job sind und
+kein sichtbares Fenster haben, beendet. Das trifft Konsolenkinder, deren Elternprozess
+schon weg war. Ein aus dem Pane gestarteter Editor oder Browser bleibt offen.
+
 **Neustart des Rechners** beendet die PTYs ohnehin. Der Daemon persistiert daher keine
 Prozesse, sondern nur seinen ID-Zähler und die Startspezifikation je Session, damit ein
 neu gestarteter Daemon für Claude-Panes `--resume` anbieten kann. Das ist genau die

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	gopty "github.com/aymanbagabas/go-pty"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/procs"
 )
 
 // spawnLocked starts one process generation into this session. The caller must
@@ -71,6 +73,12 @@ func (s *Session) spawnLocked(argv []string, dir string, env []string) error {
 
 	s.p = p
 	s.cmd = cmd
+	// Into a job right away, so the tree can still be ended if this process
+	// dies before it gets to close the session.
+	if s.job == nil {
+		s.job = procs.NewJob()
+	}
+	s.job.Assign(cmd.Process.Pid)
 
 	gen := s.sus.gen
 	done := s.done
