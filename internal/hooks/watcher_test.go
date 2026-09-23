@@ -179,3 +179,39 @@ func TestWatcher_ForgetRemovesTheFile(t *testing.T) {
 		t.Errorf("file still there after Forget: %v", err)
 	}
 }
+
+// The poll interval keys off whether a pass found anything, so a pass has to
+// say so, and only when there was really something new.
+func TestProcessDirectory_ReportsWhetherItFoundAnything(t *testing.T) {
+	dir := t.TempDir()
+	w := NewWatcher(dir, nil)
+
+	if w.processDirectory() {
+		t.Error("an empty directory reported news")
+	}
+	write(t, dir, "claude-abc", Event{Event: "Stop", SessionID: "claude-abc", MtID: 1})
+	if !w.processDirectory() {
+		t.Error("a new event was not reported")
+	}
+	if w.processDirectory() {
+		t.Error("a file already read was reported again")
+	}
+}
+
+// Fast while hooks fire, slow once they have stopped for a while.
+func TestPollInterval_BacksOffWhenQuiet(t *testing.T) {
+	cases := []struct {
+		since time.Duration
+		want  time.Duration
+	}{
+		{0, pollFast},
+		{pollIdleAfter - time.Millisecond, pollFast},
+		{pollIdleAfter, pollIdle},
+		{time.Hour, pollIdle},
+	}
+	for _, c := range cases {
+		if got := pollInterval(c.since); got != c.want {
+			t.Errorf("pollInterval(%s) = %s, want %s", c.since, got, c.want)
+		}
+	}
+}

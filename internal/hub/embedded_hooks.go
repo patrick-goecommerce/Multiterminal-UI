@@ -20,6 +20,7 @@ func (h *Embedded) startHookReader(dir string) {
 	// assigned before Start, which is what any of it runs from.
 	var w *hooks.Watcher
 	w = hooks.NewWatcher(dir, func(ev hooks.Event) { h.applyHookEvent(w, ev) })
+	h.hookWatcher = w
 	go w.Start(stopContext(h.stop))
 }
 

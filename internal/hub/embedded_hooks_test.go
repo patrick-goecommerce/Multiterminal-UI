@@ -1,6 +1,8 @@
 package hub
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hooks"
@@ -115,5 +117,25 @@ func TestApplyHookEvent_IgnoresAnUnknownSession(t *testing.T) {
 	case name := <-sink.got:
 		t.Errorf("reported %q for a session the host does not have", name)
 	default:
+	}
+}
+
+// A pane that is closed rather than exited never writes a SessionEnd, which
+// was the only thing that removed its hook file.
+func TestClose_RemovesTheSessionsHookFile(t *testing.T) {
+	h, sess, _ := hookTestHost(t, 42)
+	dir := t.TempDir()
+	h.hookWatcher = hooks.NewWatcher(dir, nil)
+	file := filepath.Join(dir, "claude-abc.jsonl")
+	if err := os.WriteFile(file, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sess.SetHookSessionID("claude-abc")
+
+	if err := h.Close(42); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Errorf("hook file survived the close (stat err = %v)", err)
 	}
 }
