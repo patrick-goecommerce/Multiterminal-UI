@@ -18,7 +18,6 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -81,8 +80,13 @@ type preToolUseOutput struct {
 	HookSpecificOutput hookSpecificOutput `json:"hookSpecificOutput"`
 }
 
+// hookDeadline bounds a hook's whole run. A hook that hangs keeps its exe
+// locked, and Windows then refuses every later build's copy of it.
+const hookDeadline = 30 * time.Second
+
 func main() {
 	defer func() { _ = recover() }() // never surface a panic to Claude
+	time.AfterFunc(hookDeadline, func() { os.Exit(0) })
 	run()
 }
 
@@ -92,9 +96,12 @@ func run() {
 		eventType = os.Args[1]
 	}
 
-	data, _ := io.ReadAll(os.Stdin)
+	// Decode one JSON value instead of reading to EOF: the payload is complete
+	// once its closing brace arrives, while EOF only comes when every holder
+	// of the pipe's write end closes it. A child that inherited that end kept
+	// a SessionEnd hook waiting for a month.
 	var ev claudeEvent
-	_ = json.Unmarshal(data, &ev)
+	_ = json.NewDecoder(os.Stdin).Decode(&ev)
 	ev.SessionID = firstNonEmpty(ev.SessionID, "unknown")
 
 	sessionID := ev.SessionID

@@ -17,8 +17,17 @@ import (
 // worktree detection, and leaves the hook directory to grow unswept (#192).
 // Until now the only trace was a single log line, which is how a two-week
 // outage went unnoticed on a real installation.
+//
+// An outdated copy is used but reported too: it keeps the hooks running while
+// silently dropping whatever this build's hook added.
 func (a *AppService) resolveHookBinary(name string, embedded []byte) string {
-	exe := resolveBundledBinary(name, embedded)
+	exe, err := resolveBundledBinaryChecked(name, embedded)
+	if exe != "" && err != nil {
+		a.recordBindWarning("hooks", fmt.Errorf(
+			"%s konnte nicht aktualisiert werden (%v) — die alte Version bleibt aktiv, "+
+				"Fragen am Ende einer Antwort werden eventuell nicht erkannt. "+
+				"Läuft noch ein hängender %s-Prozess?", name, err, name))
+	}
 	if exe == "" {
 		a.recordBindWarning("hooks", fmt.Errorf(
 			"%s nicht gefunden — Hook-Integration übersprungen: "+
