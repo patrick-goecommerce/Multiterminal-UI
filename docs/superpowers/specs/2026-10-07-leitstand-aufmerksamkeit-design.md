@@ -1,6 +1,6 @@
 # Leitstand, Teil 1: Was wartet auf mich, über alle Projekte — Design
 
-**Status:** Entwurf zur Durchsicht, Design in vier Teilen im Gespräch freigegeben
+**Status:** Freigegeben am 2026-10-07 (Spec und Prototyp), Umsetzungsplan folgt
 **Worktree:** C:\Users\Patrick.Hennig\repos\Multiterminal-UI\.claude\worktrees\leitstand-aufmerksamkeit
 **Betrifft:** neu `internal/hub/attention*.go`, `internal/hub` (Scan, Hooks, Summary, Wire), `cmd/mtui-hook`,
 `internal/backend` (Scan, Notify, Session-Spawn, Dashboard), `frontend/src/lib/focusLayout.ts`,
@@ -298,8 +298,8 @@ Die Statusfarben kommen aus der vorhandenen, theme-übergreifenden Statussprache
 | fertig, ungesehen | **neu** `--status-done` und `--status-done-tint` |
 
 `--status-done` muss sich in allen sechs Themes (`konzept`, `dark`, `light`, `dracula`, `nord`,
-`solarized`) deutlich von `--status-running` unterscheiden, auch im hellen Theme. Den Wert
-liefert der Prototyp.
+`solarized`) deutlich von `--status-running` unterscheiden, auch im hellen Theme. Gewählt nach
+dem Prototyp: **Blau, `--status-done: #4f9cf0`, `--status-done-tint: rgba(79,156,240,.16)`**.
 
 ### C7 Verträglichkeit
 
