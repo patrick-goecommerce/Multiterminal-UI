@@ -57,7 +57,7 @@ abgeleitete Ansicht aus 2 und 4 zurück.
 | 8 | Die Liste verschwindet bei maximiertem Pane; ein frischer Hook-Zustand hat `since=0` und rutscht ganz nach unten. | `PaneGrid.svelte:452`, `focusLayout.ts:78-80` |
 | 9 | Das Dashboard liest den rohen statt des bestätigten Zustands; zwei Anzeigen, zwei Logiken. | `internal/hub/embedded_summary.go:32` |
 | 10 | Was der Agent will, erreicht das Frontend nie: `tool_input` liest `mtui-hook`, gibt es aber nicht weiter; der Stop-Text dient nur der Fragenerkennung. | `cmd/mtui-hook/main.go` (`claudeEvent`, `hookLine`), `internal/backend/app_hooks.go:26-28` |
-| 11 | Im Standard-Theme `konzept` sind Akzent und Erfolg dasselbe Grün, es gibt nur drei Statusfarben. | `frontend/src/stores/theme.ts:34-55` |
+| 11 | Die theme-übergreifende Statussprache kennt grün = läuft, bernstein = wartet, rot = Gefahr, grau = ruht, aber **keine Farbe für „fertig“**. Im Standard-Theme `konzept` sind dazu Akzent und Erfolg dasselbe Grün wie „läuft“. | `frontend/src/stores/theme.ts:34-55`, `:170-194` |
 | 12 | Eine beim Update nicht ersetzte `mtui-hook.exe` schickte bei Stop keinen Text; jede Schlussfrage wurde „fertig“. **Auf `alpha-main` behoben** (#213, `acb7f6b`), in alpha.30 noch nicht. Das erklärt den Screenshot-Fall. | `internal/backend/app_hooks_setup.go` |
 
 Der Fragenerkenner selbst trifft den Screenshot-Fall: `sentenceQuestion` zählt ein „?“ mitten im
@@ -177,7 +177,8 @@ Das Fokus-Layout bleibt: zwei große Panes in der Mitte, kleine Panes rechts, de
 | Ctrl+Shift+J | nächster Eintrag in Rangfolge, im Fokus-Layout als Vorschau, im Grid als Sprung; wiederholt geht es weiter, am Ende von vorn |
 | Ctrl+Shift+K | zurück zu dem Pane, in dem Patrick vor dem ersten Ctrl+Shift+J bzw. Sprung war |
 | Ctrl+W in der Vorschau | schließt sie, wie heute |
-| Rechtsklick | „Als ungelesen markieren“, „Alle fertigen als gesehen markieren“ |
+| Rechtsklick auf einen Eintrag | „Hingehen“, „Vorschau öffnen“, „Als gesehen markieren“, „Alle fertigen als gesehen markieren“ |
+| Rechtsklick auf die Titelleiste eines Panes | „Als ungelesen markieren“ (bei fertig oder Fehler, schon gesehen), „Als gesehen markieren“ |
 
 Die Vorschau gibt es nur im Fokus-Layout, wie heute. Im Grid springt der Eintrag hin. (Im
 Gespräch war die Vorschau auch fürs Grid genannt; Patrick nutzt das Fokus-Layout, deshalb
@@ -285,10 +286,20 @@ Warum auf dem Host und nicht im Fenster: Im Daemon-Modus überlebt der Zustand d
 
 ### C6 Theme
 
-Neue Farben je Theme, als CSS-Variablen `--status-permission`, `--status-question`,
-`--status-error`, `--status-done`, `--status-running`, `--status-idle`, für alle sechs Themes
-(`konzept`, `dark`, `light`, `dracula`, `nord`, `solarized`). Die Werte liefert der Prototyp.
-In `konzept` müssen sich „läuft“ und „fertig“ deutlich unterscheiden.
+Die Statusfarben kommen aus der vorhandenen, theme-übergreifenden Statussprache
+(`SEMANTIC` in `stores/theme.ts:170-194`), nicht aus neuen Farben je Theme:
+
+| Zustand | Variable |
+|---|---|
+| Freigabe, Frage | `--status-waiting` (bernstein); unterschieden durch die Form |
+| Fehler | `--status-danger` |
+| läuft | `--status-running` |
+| ruht, fertig gesehen | `--status-idle` |
+| fertig, ungesehen | **neu** `--status-done` und `--status-done-tint` |
+
+`--status-done` muss sich in allen sechs Themes (`konzept`, `dark`, `light`, `dracula`, `nord`,
+`solarized`) deutlich von `--status-running` unterscheiden, auch im hellen Theme. Den Wert
+liefert der Prototyp.
 
 ### C7 Verträglichkeit
 
@@ -299,14 +310,15 @@ alter Einträge.
 ## Teil D: Design-Briefing und Prototyp
 
 Der erste Schritt der Umsetzung ist ein **klickbarer HTML/CSS-Prototyp**, den Patrick freigibt,
-bevor Svelte-Code entsteht. Das Briefing gilt für den Prototyp, egal ob ihn Claude Code baut oder
+bevor Svelte-Code entsteht. Ein erster Stand liegt unter
+`docs/superpowers/specs/assets/2026-10-07-leitstand-prototyp.html`. Das Briefing gilt für den Prototyp, egal ob ihn Claude Code baut oder
 Claude Design als zweite Meinung.
 
 **Ergebnis**
 - Eine HTML-Datei, 1920×1080, kein Figma.
 - Farben ausschließlich als CSS-Variablen nach MTUI-Schema (`--bg`, `--fg-muted`, `--accent` …)
-  plus die Statusfarben aus C6, umschaltbar für alle sechs Themes mit den echten Werten aus
-  `stores/theme.ts`.
+  plus die Statussprache aus C6 mit dem neuen `--status-done`, umschaltbar für alle sechs Themes
+  mit den echten Werten aus `stores/theme.ts`.
 - Je Ansicht ein PNG als Referenz.
 
 **Ansichten**
@@ -323,7 +335,8 @@ Claude Design als zweite Meinung.
 - Maße: Tab etwa 190 px bei zehn Tabs, rechte Spalte etwa 380 px, Kasteneintrag zwei Zeilen.
 - Bewegung: einmaliges Aufleuchten bei neuem Rang 0–1; das bisherige Aufleuchten des
   Pane-Rahmens bleibt.
-- Deutsche Texte; Segoe UI für die Oberfläche, Monospace nur im Terminal.
+- Deutsche Texte; `--font-sans` (IBM Plex Sans) für die Oberfläche, `--font-mono`
+  (JetBrains Mono) nur im Terminal und für Zahlen wie Kosten und Wartezeit.
 
 ## Nicht im Umfang
 
