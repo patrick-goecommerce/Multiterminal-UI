@@ -132,5 +132,8 @@ export function shouldToast(before: PaneAttention | undefined, next: PaneAttenti
   // No earlier record: a state that began before this window started (a
   // reattach re-sends it) or of unknown start shows in the box, not as a toast.
   if (!before) return next.since > 0 && next.since >= notBefore;
+  // The same state since the same moment: only "seen" changed, e.g. after
+  // "Als ungelesen markieren". The user put it back on purpose.
+  if (before.state === next.state && before.since === next.since) return false;
   return before.rank !== next.rank || before.since !== next.since;
 }

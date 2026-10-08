@@ -95,7 +95,8 @@ describe('tabRank and tabGlyphs', () => {
 });
 
 describe('shouldToast', () => {
-  const att = (rank: number, since = 1, seen = false) => ({ state: '', rank, seen, detail: '', source: '', since });
+  const STATE = ['waitingPermission', 'waitingAnswer', 'error', 'done', 'active', 'idle'];
+  const att = (rank: number, since = 1, seen = false, state = STATE[rank]) => ({ state, rank, seen, detail: '', source: '', since });
   it('toasts a new permission, question or error', () => {
     expect(shouldToast(undefined, att(0), false)).toBe(true);
     expect(shouldToast(att(4), att(2), false)).toBe(true);
@@ -112,5 +113,11 @@ describe('shouldToast', () => {
   });
   it('with a record, notBefore changes nothing', () => {
     expect(shouldToast(att(4, 50), att(0, 100), false, 200)).toBe(true);
+  });
+  it('not when only "seen" changed: an error marked unread again', () => {
+    expect(shouldToast(att(5, 10, true, 'error'), att(2, 10, false, 'error'), false)).toBe(false);
+  });
+  it('a new error after a seen one still toasts', () => {
+    expect(shouldToast(att(5, 10, true, 'error'), att(2, 20, false, 'error'), false)).toBe(true);
   });
 });
