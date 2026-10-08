@@ -47,6 +47,7 @@
   import { subscribeChatEvents } from './lib/chat-events';
   import { sendQuickAction } from './lib/quickActionQueue';
   import { tabForProject } from './lib/projectTabs';
+  import { createSeenTracker, seenTargetOf } from './lib/seenTracker';
   import { layoutModeOf, waitingElsewhere, nextWaiting, floatingStillValid, type LayoutMode } from './lib/focusLayout';
   import { floatingPane, focusOrders, placePane, slotIndexOf } from './stores/focusLayout';
 
@@ -1057,6 +1058,30 @@
   // palette, rename) take focus without changing it, so a command sent from
   // the palette still goes where the user was typing.
   let floatHasKeyboard = false;
+
+  const seenTracker = createSeenTracker((ref) => { App.MarkSessionSeen(ref).catch(() => {}); });
+  // The ref of the pane the user is looking at; '' for none. Read by the
+  // toast rule, which never fires for this pane.
+  let lookedAtRef = '';
+  // The pane being looked at: the floating one while it has the keyboard,
+  // otherwise the active tab's focused pane. A function call, so only the
+  // arguments are dependencies (CLAUDE.md).
+  $: trackLookedAt($allTabs, $activeTab, $floatingPane, floatHasKeyboard);
+  function trackLookedAt(tabs: typeof $allTabs, tab: typeof $activeTab, float: typeof $floatingPane, floatKeys: boolean) {
+    let pane = null;
+    if (float && floatKeys) pane = tabs.find((t) => t.id === float.tabId)?.panes.find((p) => p.id === float.paneId) ?? null;
+    else if (tab) pane = tab.panes.find((p) => p.id === tab.focusedPaneId) ?? null;
+    lookedAtRef = pane?.sessionId ?? '';
+    seenTracker.look(seenTargetOf(pane));
+  }
+  onMount(() => {
+    const onFocus = () => seenTracker.windowFocus(true);
+    const onBlur = () => seenTracker.windowFocus(false);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', onBlur);
+    seenTracker.windowFocus(document.hasFocus());
+    return () => { window.removeEventListener('focus', onFocus); window.removeEventListener('blur', onBlur); };
+  });
   function trackKeyboardOwner(e: FocusEvent) {
     const el = e.target as HTMLElement | null;
     if (!el?.closest) return;
