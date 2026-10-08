@@ -4,12 +4,15 @@ import (
 	"bufio"
 	"crypto/subtle"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/discovery"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // focusHandshakeTimeout bounds how long the listener waits for a client to
@@ -26,7 +29,22 @@ const focusTokenMaxLen = 128
 // Windows-only and importing it unconditionally kept this whole package from
 // building anywhere else.
 func (a *AppService) SendNotification(title string, body string) {
-	sendDesktopNotification(title, body)
+	sendDesktopNotification(title, body, focusActivation)
+}
+
+// focusActivation is what a toast click runs: mtui.exe with this argument,
+// which signals the running instance (main.go, signalFocus).
+const focusActivation = "multiterminal:focus"
+
+// SendPaneNotification is SendNotification for a toast about one pane: a
+// click raises the window and jumps to that pane.
+func (a *AppService) SendPaneNotification(title string, body string, r hub.Ref) {
+	sendDesktopNotification(title, body, focusActivation+"/"+r.String())
+}
+
+// FocusSessionEvent asks the frontend to show one pane (a toast was clicked).
+type FocusSessionEvent struct {
+	ID hub.Ref `json:"id" yaml:"id"`
 }
 
 // startFocusListener starts a TCP listener that brings the window to the
@@ -73,25 +91,44 @@ func (a *AppService) acceptFocusSignals(ln net.Listener, token string) {
 // handleFocusSignal validates one focus request and raises the main window.
 func (a *AppService) handleFocusSignal(conn net.Conn, token string) {
 	defer conn.Close()
-	if !readFocusToken(conn, token) {
+	ok, ref := readFocusRequest(conn, token)
+	if !ok {
 		log.Printf("[focusListener] rejected focus request from %s: bad token", conn.RemoteAddr())
 		return
 	}
 	a.focusMainWindow()
+	if !ref.IsZero() && a.app != nil {
+		a.app.Event.Emit("mtui:focus-session", FocusSessionEvent{ID: ref})
+	}
 }
 
-// readFocusToken reads the client's token line and reports whether it matches.
-func readFocusToken(conn net.Conn, want string) bool {
+// focusRefPattern is what a focus request may name: a hub.Ref, "hubid:number".
+var focusRefPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}:[0-9]{1,9}$`)
+
+// readFocusRequest reads the token line and an optional pane line. ok is false
+// when the token does not match; ref is zero when no valid pane was named. The
+// token is checked first: nothing after it is looked at for a wrong caller.
+func readFocusRequest(conn net.Conn, want string) (ok bool, ref hub.Ref) {
 	_ = conn.SetReadDeadline(time.Now().Add(focusHandshakeTimeout))
-	line, err := bufio.NewReaderSize(conn, focusTokenMaxLen).ReadString('\n')
+	rd := bufio.NewReaderSize(io.LimitReader(conn, 2*focusTokenMaxLen), focusTokenMaxLen)
+	line, err := rd.ReadString('\n')
 	if err != nil && line == "" {
-		return false
+		return false, hub.Ref{}
 	}
 	got := strings.TrimSpace(line)
-	if got == "" || want == "" {
-		return false
+	if got == "" || want == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+		return false, hub.Ref{}
 	}
-	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
+	next, _ := rd.ReadString('\n')
+	r := strings.TrimSpace(next)
+	if !focusRefPattern.MatchString(r) {
+		return true, hub.Ref{}
+	}
+	parsed, err := hub.ParseRef(r)
+	if err != nil || parsed.IsZero() {
+		return true, hub.Ref{}
+	}
+	return true, parsed
 }
 
 // focusMainWindow raises and un-minimises the main window.

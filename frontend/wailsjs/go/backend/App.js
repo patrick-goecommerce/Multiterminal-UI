@@ -439,6 +439,10 @@ export function SendNotification(arg1, arg2) {
   return $Call.ByID(855829018, arg1, arg2);
 }
 
+export function SendPaneNotification(arg1, arg2, arg3) {
+  return $Call.ByID(3894238824, arg1, arg2, arg3);
+}
+
 export function StageFiles(arg1, arg2) {
   return $Call.ByID(2458453226, arg1, arg2);
 }
