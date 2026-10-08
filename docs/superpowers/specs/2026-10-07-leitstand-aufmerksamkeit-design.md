@@ -122,7 +122,8 @@ Sekunde lang den Tastaturfokus hatte**, oder sobald Patrick in das Pane tippt. V
 „als ungelesen markieren“ und „alle fertigen als gesehen markieren“.
 
 Jeder Zustand eines Panes wird nur **einmal** als gesehen gemeldet (Schlüssel: Pane, Rang,
-Startzeit). Tippen und Hinsehen laufen über **einen** gemeinsamen Melder.
+Startzeit). Tippen und Hinsehen laufen über **einen** gemeinsamen Melder. Nach einem Neustart im
+Embedded-Modus gilt eine Sonderregel für wiederhergestellte Panes (offener Punkt 4).
 
 ### Fehler und „hängt“
 
@@ -133,7 +134,7 @@ Startzeit). Tippen und Hinsehen laufen über **einen** gemeinsamen Melder.
 - **Hängt:** Nur für Agent-Panes (Claude, Codex), nicht für Shell-Panes. Der Zustand ist
   „läuft“, aber seit 10 Minuten gab es weder Ausgabe noch ein Hook-Ereignis. Claude Code
   zeichnet während der Arbeit laufend seinen Spinner; zehn Minuten Stille heißt deshalb wirklich
-  Stillstand.
+  Stillstand. Ein mit Esc abgebrochener Turn hängt nicht: Er endet als „fertig“ (siehe C4).
 - `PostToolUseFailure` ist **kein** Fehler mehr, sondern „läuft“: Ein roter Test gehört zur
   Arbeit des Agents.
 
@@ -141,6 +142,15 @@ Startzeit). Tippen und Hinsehen laufen über **einen** gemeinsamen Melder.
 
 Auto-Suspend lässt den Datensatz stehen. Ein fertiges, ungesehenes Pane bleibt Rang 3, auch
 wenn sein Prozess schläft.
+
+### Keep-alive
+
+Der Turn, den der Keep-alive auslöst („Hi!“ in ein ruhendes Pane), ist keine Frage an Patrick,
+auch wenn die Antwort mit „Wie kann ich helfen?“ endet. Der Host markiert die Session beim
+Senden. „läuft“ lässt die Markierung stehen; endet der Turn als „fertig“ oder „Frage“, wird er
+als **fertig und gesehen** (Rang 5) eingetragen, mit `Source` „Keep-alive, …“, und die
+Markierung ist weg. Jeder andere Zustand beendet die Markierung ohne Änderung. Die nächste
+echte Frage zählt wieder als Rang 1.
 
 ## Teil B: die Oberfläche
 
@@ -206,15 +216,18 @@ und nimmt keinen Platz ein.
 
 ### B5 Außerhalb des Fensters
 
-- **Taskleiste:** die Zahl der blockierenden Einträge (Rang 0–1) als Overlay am Symbol.
-  Rückfall, falls die API unter Wails v3 nicht erreichbar ist: „(3) Multiterminal“ im Fenstertitel.
-  Umgesetzt über das Wails-Paket `pkg/w32` (`ITaskbarList3::SetOverlayIcon`); nur das
-  Hauptfenster setzt das Overlay, Fehler werden protokolliert. Sichtprüfung offen (offener
+- **Fenstertitel und Taskleiste:** Die Zahl der blockierenden Einträge (Rang 0–1) steht immer
+  im Fenstertitel, etwa „(3) Multiterminal“. Der sichtbare Zähler an der Taskleiste ist das
+  Overlay am Symbol, umgesetzt über das Wails-Paket `pkg/w32` (`ITaskbarList3::SetOverlayIcon`);
+  nur das Hauptfenster setzt es, Fehler werden protokolliert. Sichtprüfung offen (offener
   Punkt 2).
 - **Toast:** nur für Rang 0–2, nie für das Pane mit Tastaturfokus in einem fokussierten Fenster.
   Ein Klick holt das Fenster nach vorn **und springt zum Pane**. Der Toast feuert nur für
   Zustände, die nach dem Öffnen des Fensters begannen, wenn es keinen früheren Datensatz gab
-  (kein Schwall nach einem Neustart). Der Text wird gegen PowerShell abgesichert, weil go-toast
+  (kein Schwall beim Wiederanhängen). Der erste beruhigte Zustand eines nach einem Neustart
+  wiederhergestellten Panes toastet nie (offener Punkt 4). Ein Datensatz, an dem sich nur
+  „gesehen“ geändert hat (gleicher Zustand, gleiche Startzeit, etwa nach „Als ungelesen
+  markieren“), toastet ebenfalls nicht. Der Text wird gegen PowerShell abgesichert, weil go-toast
   ihn in einen erweiterbaren Here-String einbettet: Leerraum zusammengezogen, Backtick und `$`
   maskiert, `]]>` entschärft; das Startargument ist XML-maskiert und wird nur aus einem gültigen
   Pane-Ref gebaut.
@@ -260,9 +273,12 @@ Warum auf dem Host und nicht im Fenster: Im Daemon-Modus überlebt der Zustand d
 
 ### C3 `mtui-hook` liefert den Kurztext
 
-- `hookLine` bekommt `detail`, gefüllt aus `tool_input`: Bash `command`; Edit, Write, MultiEdit,
-  NotebookEdit `file_path`; AskUserQuestion `questions[0].question`; WebFetch `url`; sonst leer.
-  Gekürzt auf 200 Zeichen.
+- `hookLine` bekommt `detail`, gefüllt aus `tool_input`: das erste nicht leere Feld aus
+  `command` (Bash), `file_path` (Edit, Write, MultiEdit), `notebook_path` (NotebookEdit), `url`
+  (WebFetch) und `pattern` (Grep, Glob), als „Tool: Wert“; bei AskUserQuestion
+  `questions[0].question`. Hat die Eingabe keines dieser Felder, steht der Tool-Name allein da;
+  leer bleibt der Kurztext nur bei fehlendem oder unlesbarem `tool_input`. Gekürzt auf 200
+  Zeichen.
 - Bei Stop bleibt es bei den letzten 600 Zeichen der Antwort; den letzten Absatz bzw. den
   Fragesatz schneidet der Host heraus (neben `endsWithQuestion`, gleiche Absatzlogik).
 - Die Umsetzung basiert auf `origin/alpha-main` mit #213, damit die neue Hook-Binary sicher
@@ -273,7 +289,14 @@ Warum auf dem Host und nicht im Fenster: Im Daemon-Modus überlebt der Zustand d
 - **Esc bei Freigabe:** `classifyForScan` setzt `waitingPermission` nur bei **positivem Beleg**
   auf `done`: „Interrupted“ steht in den untersten 8 Zeilen, kein Freigabedialog ist zu sehen
   und der letzte Hook ist älter als 2 Sekunden. Eine Ruhezeit wird nicht verlangt. Ein nicht
-  erkannter Dialog bleibt bis zum nächsten Hook stehen.
+  erkannter Dialog bleibt bis zum nächsten Hook stehen. Die untersten Zeilen zählen ab der
+  letzten nicht leeren Zeile: Leerzeichen und leere Zeilen am Ende werden vorher abgeschnitten,
+  sonst sähe ein junges Pane, dessen Inhalt den unteren Rand noch nicht erreicht, nur leere
+  Zeilen.
+- **Esc während der Arbeit:** Ein abgebrochener Turn bekommt keinen Stop-Hook. Steht der Zustand
+  auf `active`, ist „Interrupted“ in den untersten 8 Zeilen zu sehen und kam seit mindestens
+  2 Sekunden keine Ausgabe, gilt das Pane als `done`. Ohne das bliebe es auf „läuft“ und würde
+  nach 10 Minuten fälschlich als „hängt“ gemeldet.
 - **`PostToolUseFailure`** → `active`.
 - **Hängt und Exit ≠ 0** → `error`, mit `Source` wie in Teil A.
 - **Hintergrund-Ereignisse:** Pre-/PostToolUse eines Hintergrund-Agents oder -Befehls dürfen einen
@@ -296,8 +319,11 @@ Warum auf dem Host und nicht im Fenster: Im Daemon-Modus überlebt der Zustand d
   `collapseDone(list, 3)`, `nextEntry(list, current)`, `tabRank(panes)`.
 - `components/WaitingPanel.svelte`: der Kasten; dieselbe Komponente im Aufklapper der
   Werkzeugzeile.
-- Gesehen-Melder: Fensterfokus plus fokussiertes Pane, Timer 1000 ms, oder Eingabe über `onData`.
-  Er ruft `MarkSessionSeen` nur für Rang 2–3 mit `seen=false`, damit kein Aufrufregen entsteht.
+- Gesehen-Melder: Fensterfokus plus fokussiertes Pane, Timer 1000 ms, oder Eingabe: ein
+  Tastendruck (xterms `onKey`), Einfügen oder Ablegen. Nicht `onData`: Darüber laufen auch die
+  automatischen Antworten des Terminals (Fokusmeldungen bei CSI ?1004h, DA/DSR), und ein Pane,
+  das nur den Fokus bekommt, gälte sofort als gesehen. Er ruft `MarkSessionSeen` nur für
+  Rang 2–3 mit `seen=false`, damit kein Aufrufregen entsteht.
 - `TabBar.svelte`: Pane-Zeichen, Rangfarbe, × beim Überfahren, Tooltip.
 - `Toolbar.svelte`: Zähler und Aufklapper.
 - Toast mit Sprung: Der Toast trägt den `hub.Ref`; der Klick läuft über den Fokus-Listener
@@ -380,8 +406,11 @@ Claude Design als zweite Meinung.
 - Zustandswechsel setzt `Seen=false` und `Since`; `MarkSeen`/`MarkUnseen`; über `Remote` und `mtuid`
 - `detail` aus `tool_input` je Tool, Kürzung, kaputtes JSON
 - Fragesatz bzw. letzter Absatz aus dem Stop-Text, inklusive des Screenshot-Falls
-- Esc-Rückfall von `waitingPermission`; `PostToolUseFailure` → `active`; hängt nach 10 min; Exit ≠ 0
+- Esc-Rückfall von `waitingPermission`, auch in einem jungen Pane ohne Polsterung;
+  `PostToolUseFailure` → `active`; hängt nach 10 min; mit Esc abgebrochener Turn → `done`, nicht
+  hängt; Exit ≠ 0
 - Hintergrund-Ereignis nach Stop setzt nicht auf `active` zurück
+- Keep-alive-Turn → fertig und gesehen; die nächste echte Frage wieder Rang 1
 - Auto-Suspend behält `Attention`
 - `go test ./internal/tsmodels/`
 
@@ -390,6 +419,9 @@ Claude Design als zweite Meinung.
 - `tabRank` in beiden Reihenfolgen ([Frage, läuft] und [läuft, Frage])
 - `nextEntry` mit Umlauf, Ctrl+Shift+K-Rücksprung
 - Gesehen-Melder: 1 s Fokus, Eingabe, kein Aufruf bei schon gesehen
+- `shouldToast`: kein Toast, wenn sich nur „gesehen“ geändert hat
+- Wiederherstellung (`restoreSettle`): erster beruhigter Datensatz ohne Toast, fertig und Fehler
+  gesehen, Frage bleibt
 - Agent-Pane landet im Tab mit passendem `projectRoot`, ohne Tab-Wechsel
 
 ## Abnahme (E2E mit echtem Claude CLI)
@@ -422,12 +454,19 @@ Bis diese Abnahme gelaufen ist, trägt das Issue `needs-e2e-testing`.
    weiterarbeitet, steht dann bis zum nächsten Stop als „fertig“ da; das ist das kleinere Übel
    als eine verschluckte Frage.
 2. **Taskleisten-Overlay:** Umgesetzt über `pkg/w32` (`ITaskbarList3::SetOverlayIcon`), nur im
-   Hauptfenster. **Offen bleibt die Sichtprüfung** am echten Fenster; schlägt sie fehl, gilt der
-   Titel-Rückfall aus B5.
+   Hauptfenster. **Offen bleibt die Sichtprüfung** am echten Fenster; schlägt sie fehl, bleibt
+   die Zahl im Fenstertitel (B5).
 3. **Freigabedialog am Bildschirm erkennen** für den Esc-Rückfall: welches Muster der aktuellen
    Claude-Code-Version zuverlässig ist.
-4. **Gesehen nach Neustart:** Im Embedded-Modus starten Panes nach einem App-Neustart neu; ihr
-   Zustand gilt dann als gesehen. Im Daemon-Modus behält der Host das Flag.
+4. **Erledigt. Gesehen nach Neustart:** Im Embedded-Modus starten Panes nach einem App-Neustart
+   neu (`--resume`, noch ohne Hook-Daten), und der Bildschirm-Scan bestätigt den letzten Stand des
+   Verlaufs: „fertig“ bei sichtbarem Prompt, „Frage“ bei einem „?“ über der Eingabe. Ohne
+   Sonderregel stünde fast jedes wiederhergestellte Pane ungesehen im Kasten, und jede Frage
+   toastete. Die Wiederherstellung merkt sich deshalb jede neu gestartete Session
+   (`lib/restoreSettle.ts`). Deren erster beruhigter Datensatz (Rang ≠ 4) toastet nie; ist es
+   „fertig“ oder „Fehler“, wird er sofort als gesehen gemeldet; eine Frage bleibt ohne Toast im
+   Kasten stehen. Danach gilt das Pane wie jedes andere. Im Daemon-Modus hängt sich das Fenster
+   wieder an, und der Host behält das Flag.
 
 ## Marktbild (Quellen der Recherche, Stand Oktober 2026)
 
