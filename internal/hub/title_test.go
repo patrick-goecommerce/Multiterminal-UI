@@ -63,7 +63,7 @@ func TestShimStatusline_KeepsTheSessionName(t *testing.T) {
 		t.Errorf("name forgotten: %q", got)
 	}
 	r5, _ := scanOne(5, sess)
-	if got := r5.Name; got !="Datenbankverbindung live" {
+	if got := r5.Name; got != "Datenbankverbindung live" {
 		t.Errorf("scan result Name = %q", got)
 	}
 	s, err := h.Get(5)

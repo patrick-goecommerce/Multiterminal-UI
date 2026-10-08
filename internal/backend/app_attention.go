@@ -1,6 +1,10 @@
 package backend
 
-import "github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
+import (
+	"log"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
+)
 
 // AttentionInfo is what the frontend learns about a session's attention
 // record (terminal:attention). An event payload: it needs no models.ts mirror.
@@ -38,18 +42,24 @@ func (a *AppService) emitAttention(id int, att hub.Attention) {
 	a.app.Event.Emit("terminal:attention", attentionInfo(a.ref(id), att))
 }
 
-// MarkSessionSeen tells the host the person looked at a pane: a finished or
-// failed pane leaves the waiting list.
-func (a *AppService) MarkSessionSeen(r hub.Ref) {
-	if id := a.local(r); id != 0 {
-		_ = a.host.MarkSeen(id)
+// markSessionSeen asks the host to mark a session seen (MarkSessionSeen). 0
+// is a ref this window cannot resolve: nothing to mark.
+func (a *AppService) markSessionSeen(id int) {
+	if id == 0 {
+		return
+	}
+	if err := a.host.MarkSeen(id); err != nil {
+		log.Printf("[attention] MarkSeen %d: %v", id, err)
 	}
 }
 
-// MarkSessionUnseen puts a finished or failed pane back on the waiting list.
-func (a *AppService) MarkSessionUnseen(r hub.Ref) {
-	if id := a.local(r); id != 0 {
-		_ = a.host.MarkUnseen(id)
+// markSessionUnseen is markSessionSeen's way back (MarkSessionUnseen).
+func (a *AppService) markSessionUnseen(id int) {
+	if id == 0 {
+		return
+	}
+	if err := a.host.MarkUnseen(id); err != nil {
+		log.Printf("[attention] MarkUnseen %d: %v", id, err)
 	}
 }
 
