@@ -140,6 +140,9 @@ func (h *Embedded) sendKeepAlive(id int) {
 		log.Printf("[keepalive] session %d: submitting: %v", id, err)
 		return
 	}
+	// The reply to a greeting is not something to answer: it settles as done
+	// and seen instead of an hourly question in every pane.
+	h.attention.keepAlive(id)
 	log.Printf("[keepalive] nudged session %d after %s of silence", id, policy.Every)
 }
 

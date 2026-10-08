@@ -132,6 +132,50 @@ func TestAttentionBook_MarkSeenUnknownIsQuiet(t *testing.T) {
 	}
 }
 
+// The keep-alive's "Hi!" gets "Wie kann ich helfen?". That turn is nobody's
+// question: it settles as done and seen. The next real question counts again.
+func TestAttentionBook_KeepAliveTurnSettlesSeen(t *testing.T) {
+	b := newAttentionBook()
+	b.confirmed(1, ActivityDone, time.Unix(1, 0))
+	b.keepAlive(1)
+	if a, _ := b.confirmed(1, ActivityActive, time.Unix(2, 0)); a.Rank != RankWorking {
+		t.Fatalf("keep-alive turn running: %+v, want working", a)
+	}
+	if !b.nudged[1] {
+		t.Fatal("active cleared the keep-alive mark")
+	}
+	b.noteHook(1, ActivityWaitingAnswer, "Stop", "Hallo! Wie kann ich helfen?")
+	a, _ := b.confirmed(1, ActivityWaitingAnswer, time.Unix(3, 0))
+	if a.State != ActivityDone || !a.Seen || a.Rank != RankQuiet || !strings.HasPrefix(a.Source, "Keep-alive") {
+		t.Errorf("keep-alive reply: %+v, want done, seen, quiet", a)
+	}
+	if b.nudged[1] {
+		t.Error("the mark outlived the turn it was for")
+	}
+	b.confirmed(1, ActivityActive, time.Unix(4, 0))
+	if a, _ := b.confirmed(1, ActivityWaitingAnswer, time.Unix(5, 0)); a.Rank != RankQuestion || a.Seen {
+		t.Errorf("next real question: %+v, want rank %d, unseen", a, RankQuestion)
+	}
+}
+
+// A state the greeting did not cause ends the mark: a permission request is
+// real, and so is everything after it.
+func TestAttentionBook_KeepAliveMarkEndsOnAnyOtherState(t *testing.T) {
+	b := newAttentionBook()
+	b.keepAlive(1)
+	if a, _ := b.confirmed(1, ActivityWaitingPermission, time.Unix(1, 0)); a.Rank != RankPermission {
+		t.Errorf("permission after a keep-alive: %+v, want rank %d", a, RankPermission)
+	}
+	if a, _ := b.confirmed(1, ActivityDone, time.Unix(2, 0)); a.Seen || a.Rank != RankDone {
+		t.Errorf("done after the mark ended: %+v, want unseen", a)
+	}
+	b.keepAlive(2)
+	b.forget(2)
+	if b.nudged[2] {
+		t.Error("forget left the keep-alive mark")
+	}
+}
+
 func TestClipDetail_CollapsesAndCuts(t *testing.T) {
 	if got := clipDetail("  a \n\n b\tc  "); got != "a b c" {
 		t.Errorf("collapse: %q", got)

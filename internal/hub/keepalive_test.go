@@ -177,6 +177,23 @@ func TestKeepAlive_LeavesAgentSessionsAlone(t *testing.T) {
 	}
 }
 
+// A greeting that reached the session marks it, so the reply settles as done
+// and seen (attentionBook.settleNudge) instead of an hourly question.
+func TestKeepAlive_SendingMarksTheSession(t *testing.T) {
+	h := policyFor(t, claudePolicy())
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.sendKeepAlive(id)
+	h.attention.mu.Lock()
+	marked := h.attention.nudged[id]
+	h.attention.mu.Unlock()
+	if !marked {
+		t.Error("the keep-alive typed into the session without marking it")
+	}
+}
+
 // adoptForKeepAlive registers a session with a known mode and last-output
 // time.
 //

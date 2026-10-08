@@ -95,10 +95,22 @@ type attentionBook struct {
 	mu      sync.Mutex
 	entries map[int]Attention
 	notes   map[int]attentionNote
+	// nudged holds the sessions the keep-alive just typed into. The turn it
+	// starts is nobody's question: "Hi!" gets "Wie kann ich helfen?".
+	nudged map[int]bool
 }
 
 func newAttentionBook() *attentionBook {
-	return &attentionBook{entries: map[int]Attention{}, notes: map[int]attentionNote{}}
+	return &attentionBook{entries: map[int]Attention{}, notes: map[int]attentionNote{}, nudged: map[int]bool{}}
+}
+
+// keepAlive marks a session the keep-alive typed into. The turn that follows
+// settles as done and seen (see confirmed), so the hourly greeting puts no
+// question in the list, on the taskbar or in a toast.
+func (b *attentionBook) keepAlive(id int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.nudged[id] = true
 }
 
 // noteHook records what a lifecycle hook said. A Notification for the state
@@ -146,9 +158,27 @@ func (b *attentionBook) confirmed(id int, state Activity, since time.Time) (Atte
 			delete(b.notes, id)
 		}
 	}
-	a.Rank = AttentionRank(a.State, false)
+	if b.nudged[id] {
+		b.settleNudge(id, &a)
+	}
+	a.Rank = AttentionRank(a.State, a.Seen)
 	b.entries[id] = a
 	return a, true
+}
+
+// settleNudge applies a keep-alive mark to the state its turn confirmed. The
+// turn's own "active" keeps the mark; its end, an answer or a question, is
+// recorded as done and seen. Anything else is not the greeting's doing and
+// ends the mark. Called with b.mu held.
+func (b *attentionBook) settleNudge(id int, a *Attention) {
+	switch a.State {
+	case ActivityActive:
+		return
+	case ActivityDone, ActivityWaitingAnswer:
+		a.State, a.Seen = ActivityDone, true
+		a.Source = "Keep-alive, " + a.Source
+	}
+	delete(b.nudged, id)
 }
 
 // markSeen sets or clears the seen flag and reports whether it changed.
@@ -184,4 +214,5 @@ func (b *attentionBook) forget(id int) {
 	defer b.mu.Unlock()
 	delete(b.entries, id)
 	delete(b.notes, id)
+	delete(b.nudged, id)
 }
