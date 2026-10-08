@@ -14,10 +14,10 @@ import (
 func sendDesktopNotification(title, body, activation string) {
 	n := toast.Notification{
 		AppID:               "Multiterminal",
-		Title:               title,
-		Message:             body,
+		Title:               toastSafe(title),
+		Message:             toastSafe(body),
 		ActivationType:      "protocol",
-		ActivationArguments: activation,
+		ActivationArguments: toastAttr(activation),
 	}
 	if err := n.Push(); err != nil {
 		log.Printf("[SendNotification] failed: %v", err)

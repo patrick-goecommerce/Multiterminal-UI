@@ -39,7 +39,16 @@ const focusActivation = "multiterminal:focus"
 // SendPaneNotification is SendNotification for a toast about one pane: a
 // click raises the window and jumps to that pane.
 func (a *AppService) SendPaneNotification(title string, body string, r hub.Ref) {
-	sendDesktopNotification(title, body, focusActivation+"/"+r.String())
+	sendDesktopNotification(title, body, paneActivation(r))
+}
+
+// paneActivation names the pane in the activation argument, but only a ref the
+// focus listener would accept; anything else falls back to a plain focus click.
+func paneActivation(r hub.Ref) string {
+	if !r.IsZero() && focusRefPattern.MatchString(r.String()) {
+		return focusActivation + "/" + r.String()
+	}
+	return focusActivation
 }
 
 // FocusSessionEvent asks the frontend to show one pane (a toast was clicked).
