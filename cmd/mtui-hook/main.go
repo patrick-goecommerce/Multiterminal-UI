@@ -32,6 +32,8 @@ type claudeEvent struct {
 	Cwd          string          `json:"cwd"`
 	ToolInput    json.RawMessage `json:"tool_input"`
 	ToolResponse json.RawMessage `json:"tool_response"`
+	// AgentID is set when the hook fires inside a subagent.
+	AgentID string `json:"agent_id"`
 	// NotificationType says what a Notification is about (permission_prompt,
 	// elicitation_dialog, idle_prompt, ...). The message text is for people
 	// and was the only thing MTUI looked at before, by searching it for "?".
@@ -66,6 +68,8 @@ type hookLine struct {
 	BlockReason    string `json:"block_reason,omitempty"`
 	// NotificationType is copied from a Notification event.
 	NotificationType string `json:"notification_type,omitempty"`
+	Detail           string `json:"detail,omitempty"`
+	AgentID          string `json:"agent_id,omitempty"`
 }
 
 // hookSpecificOutput / preToolUseOutput implement Claude Code's documented
@@ -155,6 +159,11 @@ func run() {
 		}
 	}
 
+	detail := ""
+	if eventType == "PreToolUse" || eventType == "PermissionRequest" {
+		detail = toolDetail(ev.ToolName, ev.ToolInput)
+	}
+
 	line, err := json.Marshal(hookLine{
 		Ts:             time.Now().Unix(),
 		Event:          eventType,
@@ -169,6 +178,8 @@ func run() {
 		BlockReason:    blockReason,
 
 		NotificationType: ev.NotificationType,
+		Detail:           detail,
+		AgentID:          ev.AgentID,
 	})
 	if err == nil {
 		if f, ferr := os.OpenFile(
