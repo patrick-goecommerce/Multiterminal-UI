@@ -50,6 +50,7 @@
   import { seenTargetOf } from './lib/seenTracker';
   import { seenTracker } from './lib/seen';
   import { layoutModeOf, floatingStillValid, type LayoutMode } from './lib/focusLayout';
+  import { attentionList } from './lib/attention';
   import { next as nextAttention, back as backFromAttention } from './lib/attentionNav';
   import { floatingPane, focusOrders, placePane, slotIndexOf } from './stores/focusLayout';
 
@@ -1056,6 +1057,8 @@
   $: tabInfo = `Tab ${($allTabs.findIndex((t) => t.id === $activeTab?.id) ?? 0) + 1}/${$allTabs.length}  Pane ${currentPanes}/${MAX_PANES_PER_TAB}`;
 
   $: layoutMode = layoutModeOf($config.layout?.mode);
+  $: waitingAll = attentionList($allTabs, $activeTab?.id ?? '');
+  $: showWaitCounter = layoutMode !== 'focus' || !!$activeTab?.panes.some((p) => p.maximized);
 
   // Whether the keyboard was last in the floating pane. Dialogs (command
   // palette, rename) take focus without changing it, so a command sent from
@@ -1416,6 +1419,9 @@
     maxPanes={MAX_PANES_PER_TAB}
     tabDir={$activeTab?.dir ?? ''}
     {canChangeDir}
+    waiting={waitingAll}
+    showCounter={showWaitCounter}
+    {layoutMode}
     on:newTerminal={() => (showLaunchDialog = true)}
     on:toggleSidebar={() => workspace.toggleSidebar()}
     on:changeDir={handleChangeDir}
