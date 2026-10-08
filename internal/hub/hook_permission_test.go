@@ -56,9 +56,18 @@ func TestClassifyForScan_QuietPermissionStays(t *testing.T) {
 func TestClassifyForScan_DeclinedPermissionLetsGo(t *testing.T) {
 	sess := permissionSession(t,
 		"● Bash(rm -rf build)\r\n  ⎿  Interrupted · What should Claude do instead?\r\n\x1b[1;35m❯\x1b[0m ",
-		30*time.Second, 10*time.Second)
-	if got := classifyForScan(sess); got != terminal.ActivityWaitingAnswer {
-		t.Errorf("declined and quiet: got %v, want waitingAnswer", got)
+		30*time.Second, 500*time.Millisecond)
+	if got := classifyForScan(sess); got != terminal.ActivityDone {
+		t.Errorf("declined: got %v, want done", got)
+	}
+}
+
+func TestClassifyForScan_UnknownDialogStillWaits(t *testing.T) {
+	sess := permissionSession(t,
+		"Would you like to proceed?\r\n❯ 1. Yes, and auto-accept edits\r\n  2. No, keep planning\r\n",
+		30*time.Second, 20*time.Second)
+	if got := classifyForScan(sess); got != terminal.ActivityWaitingPermission {
+		t.Errorf("unrecognised dialog: got %v, want waitingPermission", got)
 	}
 }
 

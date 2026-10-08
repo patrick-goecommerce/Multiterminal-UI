@@ -158,6 +158,20 @@ func TestEmbedded_FailedExitIsAnError(t *testing.T) {
 	}
 }
 
+func TestEmbedded_CleanExitIsDone(t *testing.T) {
+	sink := newAttentionSink()
+	h := newTestHost(t, sink)
+	id, err := h.Create(CreateSpec{Argv: exitArgv(0), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink.await(t, EventSessionExited)
+	got, _ := h.Get(id)
+	if got.Attention.State != ActivityDone || got.Attention.Source != "Prozess beendet (Exit 0)" {
+		t.Errorf("after exit 0: %+v", got.Attention)
+	}
+}
+
 func TestEmbedded_CloseIsNotAnError(t *testing.T) {
 	sink := newAttentionSink()
 	h := newTestHost(t, sink)

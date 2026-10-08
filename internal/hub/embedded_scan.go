@@ -167,13 +167,11 @@ func classifyForScan(sess *terminal.Session) terminal.ActivityState {
 			return terminal.ActivityActive
 		}
 		// Declined with Esc: Claude Code prints "Interrupted" and its prompt,
-		// and no hook follows until the user types. Once the dialog is gone
-		// and the pane is quiet, the screen's reading wins, so the pane stops
-		// asking for a permission nobody can give any more.
-		if settled && time.Since(lastOutput) >= permissionSettle && !permissionDialogVisible(sess) {
-			if screen := sess.ClassifyScreenState(); screen == terminal.ActivityDone || screen == terminal.ActivityWaitingAnswer {
-				return screen
-			}
+		// and no hook follows until the user types. The decline mark with the
+		// dialog gone is positive evidence; the pane stops asking for a
+		// permission nobody can give any more and counts as done.
+		if settled && !permissionDialogVisible(sess) && declineVisible(sess) {
+			return terminal.ActivityDone
 		}
 		return activity
 	}

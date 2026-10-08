@@ -35,10 +35,17 @@ func (h *Embedded) watchExit(id int, sess *terminal.Session) {
 			return // closed for good while asleep, nothing to report
 		}
 	}
-	if code := sess.GetExitCode(); code != 0 && !h.isClosing(id) {
-		reason := fmt.Sprintf("Prozess beendet (Exit %d)", code)
-		h.attention.noteFact(id, ActivityError, reason, reason)
-		_ = h.ForceActivity(id, ActivityError, time.Now())
+	if !h.isClosing(id) {
+		// The scan skips an exited session, so its last state would freeze
+		// ("active" for a process that finished cleanly). Force a final one.
+		if code := sess.GetExitCode(); code != 0 {
+			reason := fmt.Sprintf("Prozess beendet (Exit %d)", code)
+			h.attention.noteFact(id, ActivityError, reason, reason)
+			_ = h.ForceActivity(id, ActivityError, time.Now())
+		} else {
+			h.attention.noteFact(id, ActivityDone, "Prozess beendet (Exit 0)", "Prozess beendet")
+			_ = h.ForceActivity(id, ActivityDone, time.Now())
+		}
 	}
 	h.emit(EventSessionExited, SessionExited{ID: id, ExitCode: sess.GetExitCode()})
 }
