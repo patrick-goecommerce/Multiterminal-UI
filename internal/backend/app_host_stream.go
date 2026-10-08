@@ -115,6 +115,13 @@ func (a *AppService) onHostEvent(name string, payload any) {
 		}
 		a.app.Event.Emit("terminal:exit", TerminalExitEvent{ID: a.ref(ev.ID), ExitCode: ev.ExitCode})
 
+	case hub.EventSessionAttention:
+		ev, ok := hub.DecodePayload[hub.AttentionUpdate](payload)
+		if !ok {
+			return
+		}
+		a.emitAttention(ev.ID, ev.Attention)
+
 	case hub.EventSessionSuspended:
 		ev, ok := hub.DecodePayload[hub.SessionSuspended](payload)
 		if !ok {

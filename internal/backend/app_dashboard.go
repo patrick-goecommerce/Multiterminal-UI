@@ -154,7 +154,7 @@ func (a *AppService) GetDashboardPanes() []DashboardPane {
 		dp := DashboardPane{
 			SessionID: a.ref(id),
 			Name:      s.Name,
-			Activity:  string(s.Activity),
+			Activity:  dashboardActivity(s),
 			Cost:      costStr,
 			Dir:       s.Dir,
 			Branch:    readGitHeadBranch(s.Dir),

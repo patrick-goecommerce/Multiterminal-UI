@@ -319,6 +319,14 @@ export function LoadTabs() {
   return $Call.ByID(542856639);
 }
 
+export function MarkSessionSeen(arg1) {
+  return $Call.ByID(2450841005, arg1);
+}
+
+export function MarkSessionUnseen(arg1) {
+  return $Call.ByID(1453842906, arg1);
+}
+
 export function OpenDashboardWindow() {
   return $Call.ByID(4209662349);
 }

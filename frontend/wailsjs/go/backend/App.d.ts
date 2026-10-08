@@ -174,6 +174,10 @@ export function MergeWindowToMain(arg1:string,arg2:string):Promise<void>;
 
 export function LoadTabs():Promise<config.SessionState>;
 
+export function MarkSessionSeen(arg1:string):Promise<void>;
+
+export function MarkSessionUnseen(arg1:string):Promise<void>;
+
 export function OpenDashboardWindow():Promise<string>;
 
 export function OpenDirectory(arg1:string):Promise<string>;
