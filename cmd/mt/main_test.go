@@ -85,7 +85,7 @@ func TestLs_ShowsASession(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("exit = %d, stderr = %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "ZUSTAND") {
+	if !strings.Contains(stdout, "ZUSTAND") || !strings.Contains(stdout, "WARTET") {
 		t.Errorf("stdout has no header:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, strconv.Itoa(id)) {
