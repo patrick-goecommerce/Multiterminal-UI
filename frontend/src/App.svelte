@@ -1144,7 +1144,9 @@
     _lastBadge = n;
     App.SetAttentionBadge(n).catch(() => {});
   }
-  $: syncBadge(blockingCount);
+  // Only the main window: the overlay sits on its button, and a detached window
+  // counts only its own tabs.
+  $: if (_isMain) syncBadge(blockingCount);
 
   async function handleChangeDir() {
     const tab = $activeTab;
