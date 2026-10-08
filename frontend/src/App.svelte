@@ -48,7 +48,8 @@
   import { sendQuickAction } from './lib/quickActionQueue';
   import { tabForProject } from './lib/projectTabs';
   import { seenTargetOf } from './lib/seenTracker';
-  import { seenTracker } from './lib/seen';
+  import { seenTracker, markSessionSeen } from './lib/seen';
+  import { settleRestored } from './lib/restoreSettle';
   import { layoutModeOf, floatingStillValid, type LayoutMode } from './lib/focusLayout';
   import { attentionList, shouldToast, ENTRY_LABEL } from './lib/attention';
   import { next as nextAttention, back as backFromAttention, jumpToSession } from './lib/attentionNav';
@@ -362,8 +363,12 @@
         detail: info.detail ?? '', source: info.source ?? '', since: info.since ?? 0,
       };
       tabStore.applyAttention(info.id, next);
+      // A restored pane's first settled state is the transcript's last one:
+      // no toast, and a finished or failed one counts as seen at once.
+      const settle = settleRestored(info.id, next);
+      if (settle.markSeen) markSessionSeen(info.id);
       const lookedAt = document.hasFocus() && lookedAtRef === info.id;
-      if (tab && pane && shouldToast(before, next, lookedAt, windowStartedAt)) {
+      if (settle.toast && tab && pane && shouldToast(before, next, lookedAt, windowStartedAt)) {
         App.SendPaneNotification(`${ENTRY_LABEL[next.rank]} · ${tab.name}`,
           `${paneDisplayName(pane)}${next.detail ? ': ' + next.detail : ''}`, info.id).catch(() => {});
       }
