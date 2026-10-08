@@ -139,9 +139,11 @@ func (b *attentionBook) confirmed(id int, state Activity, since time.Time) (Atte
 		switch {
 		case n.state == state:
 			a.Source, a.Detail = n.source, n.detail
+			delete(b.notes, id) // a note is used by the one confirmation it describes
 		case state == ActivityWaitingAnswer && n.state == ActivityDone:
 			// The screen saw a question the Stop text did not end with.
 			a.Source, a.Detail = "Bildschirm-Scan nach "+n.source, n.detail
+			delete(b.notes, id)
 		}
 	}
 	a.Rank = AttentionRank(a.State, false)
@@ -154,7 +156,10 @@ func (b *attentionBook) markSeen(id int, seen bool) (Attention, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	a, ok := b.entries[id]
-	if !ok || a.Seen == seen {
+	if !ok {
+		return Attention{Rank: RankQuiet}, false
+	}
+	if a.Seen == seen {
 		return a, false
 	}
 	a.Seen = seen

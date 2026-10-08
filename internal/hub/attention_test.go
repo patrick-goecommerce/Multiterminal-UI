@@ -103,6 +103,35 @@ func TestAttentionBook_UnknownSessionIsQuiet(t *testing.T) {
 	}
 }
 
+func TestAttentionBook_ANoteIsUsedOnce(t *testing.T) {
+	b := newAttentionBook()
+	b.noteHook(1, ActivityWaitingPermission, "PermissionRequest", "Bash: rm -rf build")
+	if a, _ := b.confirmed(1, ActivityWaitingPermission, time.Unix(1, 0)); a.Detail != "Bash: rm -rf build" {
+		t.Fatalf("first confirmation: detail %q, want the command", a.Detail)
+	}
+	b.confirmed(1, ActivityActive, time.Unix(2, 0))
+	a, _ := b.confirmed(1, ActivityWaitingPermission, time.Unix(3, 0))
+	if a.Detail != "" || a.Source != "Bildschirm-Scan" {
+		t.Errorf("later confirmation reused a consumed note: %+v", a)
+	}
+}
+
+func TestAttentionBook_ANonMatchingNoteSurvives(t *testing.T) {
+	b := newAttentionBook()
+	b.noteHook(1, ActivityDone, "Stop", "x")
+	b.confirmed(1, ActivityActive, time.Unix(1, 0))
+	if a, _ := b.confirmed(1, ActivityDone, time.Unix(2, 0)); a.Detail != "x" {
+		t.Errorf("done after active: detail %q, want the surviving note %q", a.Detail, "x")
+	}
+}
+
+func TestAttentionBook_MarkSeenUnknownIsQuiet(t *testing.T) {
+	a, changed := newAttentionBook().markSeen(99, true)
+	if a.Rank != RankQuiet || changed {
+		t.Errorf("markSeen on unknown id: %+v changed=%v, want quiet and unchanged", a, changed)
+	}
+}
+
 func TestClipDetail_CollapsesAndCuts(t *testing.T) {
 	if got := clipDetail("  a \n\n b\tc  "); got != "a b c" {
 		t.Errorf("collapse: %q", got)
