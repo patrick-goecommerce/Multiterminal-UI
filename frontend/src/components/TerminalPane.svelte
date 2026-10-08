@@ -153,6 +153,7 @@
         void copySelection(termInstance.terminal);
         break;
       case 'paste':
+        markTyped();
         pasteToSession(pane.sessionId, termInstance?.terminal ?? null);
         break;
       case 'selectAll':
@@ -457,6 +458,7 @@
         if (e.type !== 'keydown') return true;
         if (e.ctrlKey && e.key === 'v') {
           e.preventDefault();
+          markTyped();
           pasteToSession(pane.sessionId, termInstance?.terminal ?? null);
           return false;
         }
@@ -479,6 +481,9 @@
         return true;
       });
 
+      // A real keystroke; onData below also carries the terminal's own replies.
+      termInstance.terminal.onKey(() => markTyped());
+
       termInstance.terminal.onData((data: string) => {
         // Typing into a sleeping pane means "I want it back". The keystroke is
         // dropped on purpose: it would land in a TUI that is still replaying.
@@ -486,8 +491,6 @@
           void wakePane();
           return;
         }
-        // Typing into a finished or failed pane means it has been seen.
-        seenTracker.typed(seenTargetOf(pane));
         App.WriteToSession(pane.sessionId, encodeForPty(data));
       });
     }
@@ -613,7 +616,19 @@
     dropHighlight = false;
     if (!e.dataTransfer) return;
     const text = e.dataTransfer.getData('text/plain');
-    if (text) writeTextToSession(pane.sessionId, text);
+    if (text) {
+      markTyped();
+      writeTextToSession(pane.sessionId, text);
+    }
+  }
+
+  // Input from the user means a finished or failed pane has been seen: a
+  // keystroke (xterm's onKey), a paste or a drop. Not onData: it also carries
+  // the terminal's automatic replies (focus reports under CSI ?1004h, DA/DSR
+  // answers), so a pane that merely got the focus would count as seen at
+  // once, before the 1 s rule. A sleeping pane is woken by typing, not seen.
+  function markTyped() {
+    if (pane.activity !== 'sleeping') seenTracker.typed(seenTargetOf(pane));
   }
 
   let lastNotifiedActivity = '';
