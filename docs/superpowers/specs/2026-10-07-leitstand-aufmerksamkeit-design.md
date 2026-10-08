@@ -1,6 +1,6 @@
 # Leitstand, Teil 1: Was wartet auf mich, über alle Projekte — Design
 
-**Status:** Freigegeben am 2026-10-07 (Spec und Prototyp), Umsetzungsplan folgt
+**Status:** Umgesetzt auf `worktree-leitstand-aufmerksamkeit`, E2E-Abnahme und Sichtprüfung offen
 **Worktree:** C:\Users\Patrick.Hennig\repos\Multiterminal-UI\.claude\worktrees\leitstand-aufmerksamkeit
 **Betrifft:** neu `internal/hub/attention*.go`, `internal/hub` (Scan, Hooks, Summary, Wire), `cmd/mtui-hook`,
 `internal/backend` (Scan, Notify, Session-Spawn, Dashboard), `frontend/src/lib/focusLayout.ts`,
@@ -121,9 +121,15 @@ Ein Zustand gilt als gesehen, wenn **das Fenster den Fokus hat und das Pane mind
 Sekunde lang den Tastaturfokus hatte**, oder sobald Patrick in das Pane tippt. Von Hand:
 „als ungelesen markieren“ und „alle fertigen als gesehen markieren“.
 
+Jeder Zustand eines Panes wird nur **einmal** als gesehen gemeldet (Schlüssel: Pane, Rang,
+Startzeit). Tippen und Hinsehen laufen über **einen** gemeinsamen Melder.
+
 ### Fehler und „hängt“
 
 - **Fehler:** Der Prozess endet mit Exit-Code ≠ 0.
+- **Sauberes Ende:** Endet der Prozess mit Exit 0 und hat Patrick das Pane nicht selbst
+  geschlossen, wird der Zustand „fertig“ mit `Source` „Prozess beendet (Exit 0)“. Ein Pane, das
+  Patrick selbst schließt, erzeugt nie einen Fehler.
 - **Hängt:** Nur für Agent-Panes (Claude, Codex), nicht für Shell-Panes. Der Zustand ist
   „läuft“, aber seit 10 Minuten gab es weder Ausgabe noch ein Hook-Ereignis. Claude Code
   zeichnet während der Arbeit laufend seinen Spinner; zehn Minuten Stille heißt deshalb wirklich
@@ -175,7 +181,7 @@ Das Fokus-Layout bleibt: zwei große Panes in der Mitte, kleine Panes rechts, de
 | Klick auf einen Eintrag | Tab wechseln, Pane fokussieren |
 | Alt+Klick | Vorschau: das vorhandene schwebende Fenster über dem aktuellen Tab |
 | Ctrl+Shift+J | nächster Eintrag in Rangfolge, im Fokus-Layout als Vorschau, im Grid als Sprung; wiederholt geht es weiter, am Ende von vorn |
-| Ctrl+Shift+K | zurück zu dem Pane, in dem Patrick vor dem ersten Ctrl+Shift+J bzw. Sprung war |
+| Ctrl+Shift+K | zurück zu dem Pane, in dem Patrick vor dem ersten Ctrl+Shift+J bzw. Sprung war; gilt nur, solange Patrick noch dort ist, wohin ihn der Lauf gebracht hat (Vorschau offen oder auf dem angesprungenen Pane). Nach jeder anderen Navigation ist der Lauf beendet. Sprünge tauschen die zwei großen Panes nie. |
 | Ctrl+W in der Vorschau | schließt sie, wie heute |
 | Rechtsklick auf einen Eintrag | „Hingehen“, „Vorschau öffnen“, „Als gesehen markieren“, „Alle fertigen als gesehen markieren“ |
 | Rechtsklick auf die Titelleiste eines Panes | „Als ungelesen markieren“ (bei fertig oder Fehler, schon gesehen), „Als gesehen markieren“ |
@@ -202,8 +208,16 @@ und nimmt keinen Platz ein.
 
 - **Taskleiste:** die Zahl der blockierenden Einträge (Rang 0–1) als Overlay am Symbol.
   Rückfall, falls die API unter Wails v3 nicht erreichbar ist: „(3) Multiterminal“ im Fenstertitel.
+  Umgesetzt über das Wails-Paket `pkg/w32` (`ITaskbarList3::SetOverlayIcon`); nur das
+  Hauptfenster setzt das Overlay, Fehler werden protokolliert. Sichtprüfung offen (offener
+  Punkt 2).
 - **Toast:** nur für Rang 0–2, nie für das Pane mit Tastaturfokus in einem fokussierten Fenster.
-  Ein Klick holt das Fenster nach vorn **und springt zum Pane**.
+  Ein Klick holt das Fenster nach vorn **und springt zum Pane**. Der Toast feuert nur für
+  Zustände, die nach dem Öffnen des Fensters begannen, wenn es keinen früheren Datensatz gab
+  (kein Schwall nach einem Neustart). Der Text wird gegen PowerShell abgesichert, weil go-toast
+  ihn in einen erweiterbaren Here-String einbettet: Leerraum zusammengezogen, Backtick und `$`
+  maskiert, `]]>` entschärft; das Startargument ist XML-maskiert und wird nur aus einem gültigen
+  Pane-Ref gebaut.
 - **Fertig:** nur der vorhandene Ton.
 
 ### B6 Was wegfällt oder sich ändert
@@ -233,9 +247,11 @@ Warum auf dem Host und nicht im Fenster: Im Daemon-Modus überlebt der Zustand d
 
 ### C2 Transport
 
-- Das Scan-Ereignis (`EventSessionScan` → `applyScanResults` → `terminal:activity`) trägt bei
-  Änderung `rank`, `seen`, `detail`, `source` und `since`. `since` ist immer gesetzt; der Hook-Pfad
-  (`onHookActivity`) schickt nicht mehr `since=0`.
+- Der Datensatz reist **nicht** im Scan-Ereignis mit, sondern als eigenes `EventSessionAttention`
+  → `terminal:attention` (`rank`, `seen`, `detail`, `source`, `since`). Der Grund: „gesehen“
+  ändert sich ohne Zustandswechsel und braucht ohnehin ein eigenes Ereignis. `since` ist im
+  Datensatz immer gesetzt; der Hook-Pfad von `terminal:activity` (`onHookActivity`) schickt
+  weiter `since=0`, die Sortierung liest aber den Datensatz.
 - `SessionSummary` bekommt die `Attention`; `ResendActivity` schickt sie beim Wiederanhängen mit.
 - Neue Bindings: `MarkSessionSeen(ref)`, `MarkSessionUnseen(ref)`, beide nehmen einen `hub.Ref`.
 - Beide Spiegel (`frontend/wailsjs/go/models.ts`, bei Config-Feldern `stores/config.ts`) werden
@@ -254,8 +270,10 @@ Warum auf dem Host und nicht im Fenster: Im Daemon-Modus überlebt der Zustand d
 
 ### C4 Zustandskorrekturen
 
-- **Esc bei Freigabe:** `classifyForScan` setzt `waitingPermission` auf `done`, wenn der Prompt
-  wieder zu sehen ist, kein Freigabedialog mehr und seit 2 Sekunden keine Ausgabe kam.
+- **Esc bei Freigabe:** `classifyForScan` setzt `waitingPermission` nur bei **positivem Beleg**
+  auf `done`: „Interrupted“ steht in den untersten 8 Zeilen, kein Freigabedialog ist zu sehen
+  und der letzte Hook ist älter als 2 Sekunden. Eine Ruhezeit wird nicht verlangt. Ein nicht
+  erkannter Dialog bleibt bis zum nächsten Hook stehen.
 - **`PostToolUseFailure`** → `active`.
 - **Hängt und Exit ≠ 0** → `error`, mit `Source` wie in Teil A.
 - **Hintergrund-Ereignisse:** Pre-/PostToolUse eines Hintergrund-Agents oder -Befehls dürfen einen
@@ -267,7 +285,8 @@ Warum auf dem Host und nicht im Fenster: Im Daemon-Modus überlebt der Zustand d
   (`gitx.MainRepoRoot` auf dem Host; ein Worktree zählt zu seinem Repo). Das Frontend ermittelt
   für jeden Tab einmal dessen `projectRoot` (Binding, im Tab zwischengespeichert, nicht
   persistiert) und legt das Pane in den passenden Tab. Ohne Treffer entsteht ein neuer Tab, **ohne
-  den aktiven Tab zu wechseln**.
+  den aktiven Tab zu wechseln**. Dessen Verzeichnis ist der `projectRoot`; das eigene
+  Verzeichnis des Agents nur, wenn es keinen `projectRoot` gibt.
 
 ### C5 Frontend
 
@@ -347,6 +366,8 @@ Claude Design als zweite Meinung.
 - Codex-Hooks (Codex hat laut Doku `PermissionRequest` und `Stop`), eigenes Issue
 - Projekt-Hotkeys, Stummschalten je Projekt, Push aufs Handy
 - Vorschau im Grid-Modus
+- Der Toast „Issue fertig“ (`app.agentDone`) bleibt unverändert; er gehört zur Issue-Verknüpfung,
+  nicht zum Leitstand.
 - Toter Code, nur notiert: `AskUserDialog` (`emitAskUserQuestion` ohne Aufrufer),
   `QueueOverview.svelte`, `lib/dashboard.ts`
 
@@ -373,8 +394,9 @@ Claude Design als zweite Meinung.
 
 Drei Projekte als Tabs, Fokus-Layout:
 
-1. Projekt A fordert eine Bash-Freigabe an → Eintrag ▲ mit Befehl erscheint binnen 2 s, Toast,
-   Taskleiste zeigt 1. Esc im Pane → der Eintrag verschwindet binnen 3 s.
+1. Projekt A fordert eine Bash-Freigabe an → Eintrag ▲ mit Befehl erscheint binnen 3 s, Toast,
+   Taskleiste zeigt 1. Esc im Pane → der Eintrag verschwindet binnen 3 s. (Die 3 s: Debounce
+   1,2 s plus bis zu einem Scan-Takt (0,75 s) plus Ereignisweg.)
 2. Projekt B endet mit einer Frage, auf die noch ein Satz folgt → Eintrag ? mit dem Fragesatz.
 3. Projekt C wird fertig → Eintrag ✓; nach einer Sekunde Fokus auf dem Pane ist er weg.
 4. Ein Pane wird hart beendet (Exit ≠ 0) → Eintrag ✕.
@@ -390,14 +412,16 @@ Bis diese Abnahme gelaufen ist, trägt das Issue `needs-e2e-testing`.
 
 ## Offene Punkte für die Umsetzung
 
-1. **Hintergrund-Ereignisse erkennen:** Woran im Hook-Payload ein Ereignis eines
-   Hintergrund-Agents oder -Befehls zu erkennen ist (etwa ein `agent_id`), mit einem echten
-   Mitschnitt klären, nicht annehmen. Lässt es sich nicht unterscheiden, setzt nach Stop nur
+1. **Erledigt.** Subagent-Ereignisse tragen `agent_id` (Claude-Code-Hook-Doku); umgesetzt als
+   `subagentWorkAfterTurn`. Ursprüngliche Frage, zur Nachvollziehbarkeit: Woran im Hook-Payload
+   ein Ereignis eines Hintergrund-Agents oder -Befehls zu erkennen ist (etwa ein `agent_id`), mit
+   einem echten Mitschnitt klären, nicht annehmen. Lässt es sich nicht unterscheiden, setzt nach Stop nur
    `UserPromptSubmit` den Zustand auf `active` zurück. Ein Pane, das danach von selbst
    weiterarbeitet, steht dann bis zum nächsten Stop als „fertig“ da; das ist das kleinere Übel
    als eine verschluckte Frage.
-2. **Taskleisten-Overlay:** ob Wails v3 beta.25 den Fenster-Handle für `ITaskbarList3` hergibt;
-   sonst der Titel-Rückfall aus B5.
+2. **Taskleisten-Overlay:** Umgesetzt über `pkg/w32` (`ITaskbarList3::SetOverlayIcon`), nur im
+   Hauptfenster. **Offen bleibt die Sichtprüfung** am echten Fenster; schlägt sie fehl, gilt der
+   Titel-Rückfall aus B5.
 3. **Freigabedialog am Bildschirm erkennen** für den Esc-Rückfall: welches Muster der aktuellen
    Claude-Code-Version zuverlässig ist.
 4. **Gesehen nach Neustart:** Im Embedded-Modus starten Panes nach einem App-Neustart neu; ihr
