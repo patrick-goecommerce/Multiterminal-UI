@@ -113,7 +113,7 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **Ein Issue ist erst "done" wenn:** (1) Code implementiert, (2) Tests geschrieben UND grün, (3) E2E-getestet oder als `needs-e2e-testing` getaggt, (4) Commit mit `Closes #N` referenziert das Issue.
 - **Nie Issues manuell schließen** ohne zugehörigen Commit. Ausnahme: Duplikate, obsolete Issues.
 - **`needs-e2e-testing` Label** bedeutet: Unit Tests passen, aber der Feature-Flow wurde nie real (mit echtem Claude CLI, echtem Git-Repo, echtem UI) getestet.
-- **Spec vs. Implementation:** Design Specs sind die Quelle der Wahrheit. Wenn Code abweicht, entweder Code anpassen oder Spec updaten — nie still divergieren. Das gilt in beide Richtungen: eine Behauptung in der Spec, die sich beim Nachmessen als falsch herausstellt, wird korrigiert und nicht stillschweigend überschrieben. Die beiden aktiven Specs:
+- **Spec vs. Implementation:** Design Specs sind die Quelle der Wahrheit. Wenn Code abweicht, entweder Code anpassen oder Spec updaten — nie still divergieren. Das gilt in beide Richtungen: eine Behauptung in der Spec, die sich beim Nachmessen als falsch herausstellt, wird korrigiert und nicht stillschweigend überschrieben. Die aktiven Specs:
   - `docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md` — Daemon, Host-Seam, CLI, Phasenplan
   - `docs/superpowers/specs/2026-04-01-kanban-orchestration-v3-design.md` — Kanban-Orchestrierung
   - `docs/superpowers/specs/2026-10-07-leitstand-aufmerksamkeit-design.md` — Leitstand Teil 1: Aufmerksamkeit über alle Projekte
@@ -240,8 +240,11 @@ Design: `docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md`
   - `Notification` goes by `notification_type` (`permission_prompt`, `elicitation_dialog`, …),
     not by a "?" in the text; the "?" reading is only the fallback for older Claude Code.
   - `AskUserQuestion` (PreToolUse/PermissionRequest) is "waitingAnswer", not work.
-  - "waitingPermission" falls back to "active" once the dialog is gone and output flows
-    (`classifyForScan`), because the next hook, PostToolUse, only comes when the tool is done.
+  - "waitingPermission" has two fallbacks in `classifyForScan`: dialog gone and output
+    flowing within `ActivityStaleThreshold` → "active" (approved; PostToolUse only comes when
+    the tool is done); declined with Esc → "done", only on positive evidence ("Interrupted"
+    in the bottom 8 rows, no permission dialog visible, hook older than 2 s). An unrecognised
+    dialog keeps waiting for the next hook.
   - No hook events beyond the eight in `hookEvents` are registered: the hooks live in the
     user's global settings.json, and how older Claude Code versions react to unknown event
     names is undocumented.

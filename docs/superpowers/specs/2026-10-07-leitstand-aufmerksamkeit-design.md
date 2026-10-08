@@ -277,8 +277,10 @@ Warum auf dem Host und nicht im Fenster: Im Daemon-Modus überlebt der Zustand d
 - **`PostToolUseFailure`** → `active`.
 - **Hängt und Exit ≠ 0** → `error`, mit `Source` wie in Teil A.
 - **Hintergrund-Ereignisse:** Pre-/PostToolUse eines Hintergrund-Agents oder -Befehls dürfen einen
-  beendeten Turn (`done`, `waitingAnswer`) nicht auf `active` zurücksetzen. Wie sich diese
-  Ereignisse erkennen lassen, klärt ein echter Hook-Mitschnitt (offener Punkt 1).
+  beendeten Turn (`done`, `waitingAnswer`) nicht auf `active` zurücksetzen. Subagent-Ereignisse
+  tragen `agent_id` und werden von `subagentWorkAfterTurn` gefiltert: Tool-Arbeit eines Subagents
+  nach Ende des Haupt-Turns setzt den Zustand nicht zurück; eine Freigabe-Anfrage oder Frage eines
+  Subagents zählt weiter (offener Punkt 1, erledigt).
 - **Auto-Suspend** lässt `Attention` unverändert.
 - **Dashboard:** `ConfirmedActivity` statt `GetActivity`.
 - **Agent-Panes ins richtige Projekt:** `mtui:session-spawned` trägt `projectRoot`
