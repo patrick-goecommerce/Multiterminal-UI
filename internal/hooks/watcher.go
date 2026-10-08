@@ -36,6 +36,13 @@ type Event struct {
 	// NotificationType is set on Notification events (permission_prompt,
 	// elicitation_dialog, ...); empty from Claude Code versions without it.
 	NotificationType string `json:"notification_type"`
+	// Detail is what the agent is about to do, as mtui-hook read it from
+	// tool_input: "Bash: npm install", "Edit: src/app.ts", the question of an
+	// AskUserQuestion. Empty for events without a tool.
+	Detail string `json:"detail"`
+	// AgentID is set when the event comes from a subagent, not from the main
+	// conversation (Claude Code's agent_id).
+	AgentID string `json:"agent_id"`
 }
 
 // Watcher tails a hooks directory and reports what it finds.
