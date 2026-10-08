@@ -69,6 +69,11 @@ func (h *Embedded) applyHookEvent(w *hooks.Watcher, ev hooks.Event) {
 	}
 
 	if activity, ok := hookActivity(ev); ok {
+		if subagentWorkAfterTurn(ev, activity, m.sess.GetActivity()) {
+			h.emit(EventSessionHook, report)
+			return
+		}
+		h.attention.noteHook(ev.MtID, activity, ev.Event, hookDetail(ev))
 		m.sess.SetHookActivity(terminalActivity(activity))
 		report.Activity = activity
 	}

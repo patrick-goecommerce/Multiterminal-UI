@@ -185,6 +185,10 @@ type SessionSummary struct {
 	// A client that reconnects passes the last offset it applied back to
 	// Attach and continues without a hole.
 	Offset int64 `json:"offset" yaml:"offset"`
+	// Attention is what the session wants from the person (attention.go). A
+	// daemon from before it sends a zero record; read the rank with
+	// AttentionRank(State, Seen), which is quiet for the empty state.
+	Attention Attention `json:"attention" yaml:"attention"`
 }
 
 // Asleep reports whether the session is suspended, or on its way there. A

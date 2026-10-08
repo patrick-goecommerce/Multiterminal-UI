@@ -29,6 +29,9 @@ func (h *Embedded) ScanActivity() []ScanResult {
 		changed, confirmed, began := h.activity.confirm(r.ID, r.Activity, now)
 		r.Changed = changed
 		r.Since = began
+		if changed {
+			h.recordConfirmed(r.ID, confirmed, began)
+		}
 		if confirmed != "" {
 			// Report the confirmed state; fall back to the raw reading only
 			// while the session has never confirmed one, so a caller never
@@ -57,6 +60,7 @@ func (h *Embedded) ForceActivity(id int, state Activity, at time.Time) error {
 		return err
 	}
 	h.activity.force(id, state, at)
+	h.recordConfirmed(id, state, at)
 	return nil
 }
 

@@ -33,6 +33,9 @@ const (
 	EventQueueItemDone    = "queue.item_done"
 	EventSessionSuspended = "session.suspended"
 	EventSessionResumed   = "session.resumed"
+	// EventSessionAttention carries a session's attention record after any
+	// change: a newly confirmed state, a person looking at the pane.
+	EventSessionAttention = "session.attention"
 )
 
 // SessionCreated is the payload of EventSessionCreated.
@@ -142,4 +145,10 @@ type QueueUpdate struct {
 type QueueItemDone struct {
 	SessionID int `json:"session_id" yaml:"session_id"`
 	ItemID    int `json:"item_id" yaml:"item_id"`
+}
+
+// AttentionUpdate is the payload of EventSessionAttention.
+type AttentionUpdate struct {
+	ID        int       `json:"id" yaml:"id"`
+	Attention Attention `json:"attention" yaml:"attention"`
 }

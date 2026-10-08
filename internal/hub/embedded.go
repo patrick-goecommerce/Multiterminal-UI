@@ -31,6 +31,7 @@ type Embedded struct {
 	killTree    func(pid int)
 	launcher    Launcher
 	activity    *activityDebouncer
+	attention   *attentionBook
 	queueMu     sync.Mutex
 	queues      map[int]*sessionQueue
 	keepAliveFn func() KeepAlive
@@ -75,6 +76,7 @@ func NewEmbedded(opts Options) *Embedded {
 		killTree:    opts.KillTree,
 		launcher:    opts.Launcher,
 		activity:    newActivityDebouncer(),
+		attention:   newAttentionBook(),
 		queues:      make(map[int]*sessionQueue),
 		keepAliveFn: opts.KeepAlive,
 		startedAt:   time.Now(),
@@ -187,6 +189,7 @@ func (h *Embedded) Close(id int) error {
 	// leaves five map entries behind for the life of the process, and a reused
 	// ID would inherit a stranger's confirmed state.
 	h.activity.forget(id)
+	h.attention.forget(id)
 	h.forgetQueue(id)
 	return nil
 }
@@ -196,7 +199,9 @@ func (h *Embedded) List() []SessionSummary {
 	h.mu.Lock()
 	out := make([]SessionSummary, 0, len(h.sessions))
 	for id, m := range h.sessions {
-		out = append(out, summarize(id, m))
+		s := summarize(id, m)
+		s.Attention = h.attention.get(id)
+		out = append(out, s)
 	}
 	h.mu.Unlock()
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
@@ -209,7 +214,9 @@ func (h *Embedded) Get(id int) (SessionSummary, error) {
 	if err != nil {
 		return SessionSummary{}, err
 	}
-	return summarize(id, m), nil
+	s := summarize(id, m)
+	s.Attention = h.attention.get(id)
+	return s, nil
 }
 
 // Repaint implements Host.
