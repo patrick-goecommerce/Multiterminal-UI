@@ -16,6 +16,9 @@ describe('tabForProject', () => {
   it('falls back to the tab dir while its root is unknown', () => {
     expect(tabForProject([tab('c', 'D:\\x')], {}, 'd:\\x')?.id).toBe('c');
   });
+  it('finds a tab whose dir is the project root itself', () => {
+    expect(tabForProject([tab('n', 'C:\\repos\\proj')], {}, 'c:/repos/proj')?.id).toBe('n');
+  });
   it('normalises paths', () => {
     expect(normPath('C:\\A\\b\\')).toBe('c:/a/b');
   });

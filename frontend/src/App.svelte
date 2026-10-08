@@ -458,8 +458,12 @@
       const roots = await resolveProjectRoots(get(allTabs));
       let tab = tabForProject(get(allTabs), roots, info.projectRoot || info.dir);
       if (!tab) {
-        const dirName = String(info.dir || '').replace(/\\/g, '/').split('/').pop() || 'Agent';
-        const id = tabStore.addTab(dirName, info.dir, !get(activeTab));
+        // The project root is the tab's identity, so a second spawn for the
+        // same project finds this tab instead of creating another.
+        const newDir = info.projectRoot || info.dir;
+        const dirName = String(newDir || '').replace(/\\/g, '/').split('/').pop() || 'Agent';
+        const id = tabStore.addTab(dirName, newDir, !get(activeTab));
+        projectRoots[newDir] = newDir;
         tab = get(allTabs).find((t) => t.id === id) ?? null;
       }
       if (!tab) return;
