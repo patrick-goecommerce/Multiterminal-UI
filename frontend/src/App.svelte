@@ -347,6 +347,14 @@
       }
     });
 
+    EventsOn('terminal:attention', (event: any) => {
+      const info = event.data; // AttentionInfo { id, state, rank, seen, detail, source, since }
+      tabStore.applyAttention(info.id, {
+        state: info.state, rank: info.rank, seen: info.seen,
+        detail: info.detail ?? '', source: info.source ?? '', since: info.since ?? 0,
+      });
+    });
+
     // Wails v3: event handlers receive a WailsEvent object; payload is in event.data
     EventsOn('terminal:activity', (event: any) => {
       const info = event.data; // ActivityInfo { id, activity, cost, activitySince, title }

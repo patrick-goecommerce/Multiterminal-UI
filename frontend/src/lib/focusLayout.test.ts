@@ -16,7 +16,7 @@ function pane(id: string, activity: Pane['activity'] = 'idle', activitySince = 0
 }
 
 function tab(id: string, panes: Pane[]): Tab {
-  return { id, name: `Projekt ${id}`, dir: '/p', panes, focusedPaneId: '', unreadActivity: null };
+  return { id, name: `Projekt ${id}`, dir: '/p', panes, focusedPaneId: '' };
 }
 
 describe('layoutModeOf', () => {

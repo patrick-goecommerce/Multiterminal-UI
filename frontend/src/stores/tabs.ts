@@ -3,6 +3,19 @@ import type { SessionRef } from '../lib/sessionRef';
 
 export type PaneMode = 'shell' | 'claude' | 'claude-auto' | 'claude-yolo' | 'codex' | 'codex-auto' | 'gemini' | 'gemini-yolo';
 
+/** What the host says a pane wants from the user (terminal:attention).
+ *  Absent until the host sent one; a daemon from before never does. */
+export interface PaneAttention {
+  state: string;
+  /** 0 permission, 1 question, 2 error, 3 done unseen, 4 working, 5 quiet. */
+  rank: number;
+  seen: boolean;
+  detail: string;
+  source: string;
+  /** Unix seconds; 0 = unknown. */
+  since: number;
+}
+
 export interface Pane {
   id: string;
   /** The backend's name for this pane's session; '' for a chat pane. */
@@ -52,6 +65,7 @@ export interface Pane {
   finishPhase: '' | 'preparing' | 'ready' | 'blocked' | 'merging' | 'cleanup';
   /** Unix seconds when the current activity state began; 0 = unknown. */
   activitySince: number;
+  attention?: PaneAttention;
 }
 
 /** Resolve the name shown in a pane titlebar.
@@ -86,7 +100,6 @@ export interface Tab {
   panes: Pane[];
   focusedPaneId: string;
   _highlight?: boolean;
-  unreadActivity: 'waitingPermission' | 'waitingAnswer' | 'error' | 'active' | 'done' | null;
   /** Relative column-width / row-height weights for the pane grid (resize
    *  handles). Applied only while their length matches the tab's current
    *  grid shape (see PaneGrid.svelte) — a mismatch (pane added/removed)
@@ -98,22 +111,6 @@ export interface Tab {
 /** Whether closing this tab should first ask for confirmation (it still has open panes). */
 export function tabNeedsCloseConfirm(tab: Tab): boolean {
   return tab.panes.length > 0;
-}
-
-/** Roll the panes' activity up into the tab badge.
- *  'sleeping' and 'resuming' are deliberately not mapped: a sleeping pane is
- *  waiting for nobody, so it must never make an inactive tab look like it
- *  needs attention. */
-export function computeTabActivity(panes: Pane[]): Tab['unreadActivity'] {
-  let result: Tab['unreadActivity'] = null;
-  for (const pane of panes) {
-    if (pane.activity === 'waitingPermission') return 'waitingPermission';
-    if (pane.activity === 'waitingAnswer') result = 'waitingAnswer';
-    else if (pane.activity === 'error' && result !== 'waitingAnswer') result = 'error';
-    else if (pane.activity === 'active' && result !== 'error') result = 'active';
-    else if (pane.activity === 'done' && result === null) result = 'done';
-  }
-  return result;
 }
 
 function createTabStore() {
@@ -148,9 +145,6 @@ function createTabStore() {
               pane.activitySince = activitySince;
             }
             if (cost) pane.cost = cost;
-            if (tab.id !== state.activeTabId) {
-              tab.unreadActivity = computeTabActivity(tab.panes);
-            }
             return state;
           }
         }
@@ -172,7 +166,6 @@ function createTabStore() {
           dir: dir || '',
           panes: [],
           focusedPaneId: '',
-          unreadActivity: null,
         });
         if (setActive) state.activeTabId = id;
         return state;
@@ -196,8 +189,6 @@ function createTabStore() {
     setActiveTab(tabId: string) {
       update((state) => {
         state.activeTabId = tabId;
-        const tab = state.tabs.find((t) => t.id === tabId);
-        if (tab) tab.unreadActivity = null;
         return state;
       });
     },
@@ -313,9 +304,6 @@ function createTabStore() {
         const idx = tab.panes.findIndex((p) => p.id === paneId);
         if (idx === -1) return state;
         tab.panes.splice(idx, 1);
-        if (tab.id !== state.activeTabId) {
-          tab.unreadActivity = computeTabActivity(tab.panes);
-        }
         if (tab.focusedPaneId === paneId && tab.panes.length > 0) {
           const newIdx = Math.min(idx, tab.panes.length - 1);
           tab.panes.forEach((p) => (p.focused = false));
@@ -368,6 +356,19 @@ function createTabStore() {
 
     updateActivity(sessionId: SessionRef, activity: string, cost: string, activitySince: number) {
       applyActivity(sessionId, activity, cost, activitySince);
+    },
+
+    applyAttention(sessionId: SessionRef, att: PaneAttention) {
+      update((state) => {
+        for (const tab of state.tabs) {
+          const pane = tab.panes.find((p) => p.sessionId === sessionId);
+          if (pane) {
+            pane.attention = att;
+            return state;
+          }
+        }
+        return state;
+      });
     },
 
     setWorktree(sessionId: SessionRef, path: string, branch: string, targetBranch: string) {
@@ -446,7 +447,7 @@ function createTabStore() {
     importTab(tab: Tab) {
       update((s) => ({
         ...s,
-        tabs: [...s.tabs, { ...tab, _highlight: true, unreadActivity: null }],
+        tabs: [...s.tabs, { ...tab, _highlight: true }],
         activeTabId: tab.id,
       }));
       setTimeout(() => {

@@ -2,6 +2,7 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { tabStore, allTabs } from '../stores/tabs';
   import { t } from '../stores/i18n';
+  import { tabRank } from '../lib/attention';
   import * as App from '../../wailsjs/go/backend/App';
   import { EventsOn } from '../../wailsjs/runtime/runtime';
   import { getWindowId, isMainWindow } from '../lib/window';
@@ -177,8 +178,9 @@
         {#if tab.panes.length > 0}
           <span class="tab-count">{tab.panes.length}</span>
         {/if}
-        {#if tab.unreadActivity}
-          <span class="tab-activity-dot tab-dot-{tab.unreadActivity}"></span>
+        {#if tab.id !== activeTabId && tabRank(tab.panes) <= 3}
+          {@const r = tabRank(tab.panes)}
+          <span class="tab-activity-dot {r <= 1 ? 'tab-dot-waitingAnswer' : r === 2 ? 'tab-dot-error' : 'tab-dot-done'}"></span>
         {/if}
         <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
         <span class="tab-close" role="button" tabindex="-1" on:click={(e) => handleCloseTab(e, tab.id)}>
