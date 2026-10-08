@@ -1,6 +1,8 @@
 import type { SessionRef } from './sessionRef';
 
-export interface SeenTarget { ref: SessionRef; rank: number; seen: boolean }
+export interface SeenTarget { ref: SessionRef; rank: number; seen: boolean; since: number }
+
+const keyOf = (t: SeenTarget) => `${t.ref}|${t.rank}|${t.since}`;
 
 /** Only "error" and "done" are cleared by looking; a permission or a question
  *  stays until the agent moves on (spec Teil A). */
@@ -9,9 +11,9 @@ export function needsSeen(t: SeenTarget | null | undefined): t is SeenTarget {
 }
 
 /** The seen target for a pane, null without an attention record. */
-export function seenTargetOf(pane: { sessionId: SessionRef; attention?: { rank: number; seen: boolean } } | null | undefined): SeenTarget | null {
+export function seenTargetOf(pane: { sessionId: SessionRef; attention?: { rank: number; seen: boolean; since: number } } | null | undefined): SeenTarget | null {
   if (!pane || !pane.sessionId || !pane.attention) return null;
-  return { ref: pane.sessionId, rank: pane.attention.rank, seen: pane.attention.seen };
+  return { ref: pane.sessionId, rank: pane.attention.rank, seen: pane.attention.seen, since: pane.attention.since };
 }
 
 export interface Timers { set: (fn: () => void, ms: number) => unknown; clear: (h: unknown) => void }
@@ -24,16 +26,22 @@ export function createSeenTracker(markSeen: (ref: SessionRef) => void, delayMs =
   let target: SeenTarget | null = null;
   let windowFocused = true;
   let timer: unknown = null;
+  // Key of the state last reported, so one state is reported once however
+  // long the host takes to confirm it.
+  let lastMarked = '';
 
   const disarm = () => {
     if (timer !== null) { timers.clear(timer); timer = null; }
   };
   const arm = () => {
-    if (timer !== null || !windowFocused || !needsSeen(target)) return;
-    const ref = target.ref;
+    if (timer !== null || !windowFocused || !needsSeen(target) || keyOf(target) === lastMarked) return;
+    const key = keyOf(target);
     timer = timers.set(() => {
       timer = null;
-      if (windowFocused && target?.ref === ref && needsSeen(target)) markSeen(ref);
+      if (windowFocused && needsSeen(target) && keyOf(target) === key) {
+        lastMarked = key;
+        markSeen(target.ref);
+      }
     }, delayMs);
   };
 
@@ -49,7 +57,9 @@ export function createSeenTracker(markSeen: (ref: SessionRef) => void, delayMs =
       if (focused) arm(); else disarm();
     },
     typed(t: SeenTarget | null) {
-      if (needsSeen(t)) markSeen(t.ref);
+      if (!needsSeen(t) || keyOf(t) === lastMarked) return;
+      lastMarked = keyOf(t);
+      markSeen(t.ref);
     },
   };
 }

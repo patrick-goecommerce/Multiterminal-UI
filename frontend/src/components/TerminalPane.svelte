@@ -9,7 +9,8 @@
   import { playBell, audioMuted } from '../lib/audio';
   import { tabStore, type Pane } from '../stores/tabs';
   import { sessionNumber, type SessionRef } from '../lib/sessionRef';
-  import { needsSeen, seenTargetOf } from '../lib/seenTracker';
+  import { seenTargetOf } from '../lib/seenTracker';
+  import { seenTracker } from '../lib/seen';
   import { currentTheme } from '../stores/theme';
   import { config } from '../stores/config';
   import * as App from '../../wailsjs/go/backend/App';
@@ -484,8 +485,7 @@
           return;
         }
         // Typing into a finished or failed pane means it has been seen.
-        const target = seenTargetOf(pane);
-        if (needsSeen(target)) App.MarkSessionSeen(pane.sessionId).catch(() => {});
+        seenTracker.typed(seenTargetOf(pane));
         App.WriteToSession(pane.sessionId, encodeForPty(data));
       });
     }
