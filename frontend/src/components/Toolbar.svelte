@@ -21,9 +21,19 @@
   export let layoutMode: LayoutMode = 'grid';
 
   let open = false;
+  let wrap: HTMLElement | undefined;
   let expanded = false;
   let menuFor: { entry: AttentionEntry; x: number; y: number } | null = null;
   $: rows = panelRows(waiting, expanded);
+
+  /** A click outside the counter, its popover and the context menu closes the popover. */
+  function onWindowClick(e: MouseEvent) {
+    if (!open) return;
+    const target = e.target as Element | null;
+    if (wrap && target && wrap.contains(target)) return;
+    if (target?.closest?.('.am, .am-overlay')) return;
+    open = false;
+  }
 
   function newTerminal() {
     dispatch('newTerminal');
@@ -45,7 +55,7 @@
   $: atLimit = paneCount >= maxPanes;
 </script>
 
-<svelte:window on:keydown={(e) => e.key === 'Escape' && (open = false)} />
+<svelte:window on:keydown={(e) => e.key === 'Escape' && (open = false)} on:click={onWindowClick} />
 
 <div class="toolbar">
   <div class="toolbar-left">
@@ -70,7 +80,7 @@
   </div>
   <div class="toolbar-right">
     {#if showCounter && waiting.length > 0}
-      <div class="wait-wrap">
+      <div class="wait-wrap" bind:this={wrap}>
         <button class="wait-counter rank-{waiting[0].rank}" aria-expanded={open} on:click={() => (open = !open)}>
           <StatusGlyph kind={glyphKind(waiting[0].pane)} /> {waiting.length} warten
         </button>
@@ -106,7 +116,7 @@
 </div>
 
 {#if menuFor}
-  <AttentionMenu entry={menuFor.entry} x={menuFor.x} y={menuFor.y} {layoutMode} on:close={() => (menuFor = null)} />
+  <AttentionMenu entry={menuFor.entry} x={menuFor.x} y={menuFor.y} {layoutMode} on:close={() => { menuFor = null; open = false; }} />
 {/if}
 
 <style>
