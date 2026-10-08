@@ -184,6 +184,14 @@ func classifyForScan(sess *terminal.Session) terminal.ActivityState {
 	// otherwise.
 	if activity == terminal.ActivityActive {
 		lastOutput := sess.GetLastOutputAt()
+		// Interrupted with Esc mid-turn: no Stop hook follows, and in a pane
+		// whose content does not reach the bottom the prompt check below sees
+		// blank rows. Without this the turn stayed "active" and became a
+		// false "hängt" ten minutes later. The decline mark is the evidence,
+		// the quiet keeps a spinner that is still drawing from counting.
+		if !lastOutput.IsZero() && time.Since(lastOutput) >= permissionSettle && declineVisible(sess) {
+			return terminal.ActivityDone
+		}
 		if !lastOutput.IsZero() && time.Since(lastOutput) > terminal.ActivityStaleThreshold {
 			if screen := sess.ClassifyScreenState(); screen == terminal.ActivityDone || screen == terminal.ActivityWaitingAnswer {
 				return screen

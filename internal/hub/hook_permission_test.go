@@ -98,3 +98,49 @@ func TestScanOne_ShellIsNeverHung(t *testing.T) {
 		t.Error("a session without hooks counted as hung")
 	}
 }
+
+// youngSession is a 40-row pane whose content stops well above the bottom: a
+// session a few turns old. The bottom rows of the screen are blank there, and
+// no padding pushes the text down.
+func youngSession(t *testing.T, state terminal.ActivityState, hookAge, outputAge time.Duration) *terminal.Session {
+	t.Helper()
+	sess := terminal.NewSession(1, 40, 100)
+	sess.Screen.Write([]byte(
+		" ✻ Welcome to Claude Code!\r\n\r\n   cwd: C:\\repos\\a\r\n\r\n" +
+			"> lösch den build ordner\r\n\r\n" +
+			"● Bash(rm -rf build)\r\n" +
+			"  ⎿  Interrupted · What should Claude do instead?\r\n\r\n" +
+			"────────────────────\r\n\x1b[1;35m❯\x1b[0m \r\n────────────────────\r\n  ? for shortcuts"))
+	sess.SetHookActivity(state)
+	sess.SetHookActivityAtForTest(time.Now().Add(-hookAge))
+	sess.SetLastOutputAtForTest(time.Now().Add(-outputAge))
+	return sess
+}
+
+func TestClassifyForScan_DeclineInAYoungSessionLetsGo(t *testing.T) {
+	sess := youngSession(t, terminal.ActivityWaitingPermission, 30*time.Second, 20*time.Second)
+	if got := classifyForScan(sess); got != terminal.ActivityDone {
+		t.Errorf("declined in a half-empty pane: got %v, want done", got)
+	}
+}
+
+// Esc during a working turn: no Stop hook follows. The turn ends as done and
+// never reaches the ten-minute hang.
+func TestScanOne_InterruptedTurnIsDoneNotHung(t *testing.T) {
+	sess := youngSession(t, terminal.ActivityActive, 11*time.Minute, 11*time.Minute)
+	if got := classifyForScan(sess); got != terminal.ActivityDone {
+		t.Errorf("interrupted turn: got %v, want done", got)
+	}
+	r, isHung := scanOne(1, sess)
+	if isHung || r.Activity != ActivityDone {
+		t.Errorf("interrupted turn 11 min later: got %v hung=%v, want done, not hung", r.Activity, isHung)
+	}
+}
+
+// A turn that still draws is working, whatever an older line says.
+func TestClassifyForScan_InterruptMarkWhileDrawingStaysActive(t *testing.T) {
+	sess := youngSession(t, terminal.ActivityActive, time.Second, 100*time.Millisecond)
+	if got := classifyForScan(sess); got != terminal.ActivityActive {
+		t.Errorf("output still flowing: got %v, want active", got)
+	}
+}

@@ -25,9 +25,19 @@ const (
 	declineRows = 8
 )
 
-// bottomRows returns the last n rows of the session's screen as text.
+// bottomRows returns the last n rows of the session's content as text.
+//
+// The content, not the screen: a young session's text does not reach the
+// bottom of the pane, and the screen's last n rows are then blank. Trailing
+// blank rows are cut first, so a decline in a half-empty pane is seen too.
 func bottomRows(sess *terminal.Session, n int) string {
 	lines := strings.Split(sess.Screen.PlainText(), "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " ")
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
 	if len(lines) > n {
 		lines = lines[len(lines)-n:]
 	}
