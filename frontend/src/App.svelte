@@ -22,7 +22,7 @@
   import WorktreeFinishDialog from './components/WorktreeFinishDialog.svelte';
   import CloseTabConfirmDialog from './components/CloseTabConfirmDialog.svelte';
   import { get } from 'svelte/store';
-  import { tabStore, activeTab, allTabs, windowTitle, tabNeedsCloseConfirm } from './stores/tabs';
+  import { tabStore, activeTab, allTabs, windowTitle, paneDisplayName, tabNeedsCloseConfirm } from './stores/tabs';
   import { workspace } from './stores/workspace';
   import { kanban } from './stores/kanban';
   import { config } from './stores/config';
@@ -50,8 +50,8 @@
   import { seenTargetOf } from './lib/seenTracker';
   import { seenTracker } from './lib/seen';
   import { layoutModeOf, floatingStillValid, type LayoutMode } from './lib/focusLayout';
-  import { attentionList } from './lib/attention';
-  import { next as nextAttention, back as backFromAttention } from './lib/attentionNav';
+  import { attentionList, shouldToast, ENTRY_LABEL } from './lib/attention';
+  import { next as nextAttention, back as backFromAttention, jumpToSession } from './lib/attentionNav';
   import { floatingPane, focusOrders, placePane, slotIndexOf } from './stores/focusLayout';
 
   const MAX_PANES_PER_TAB = 10;
@@ -354,10 +354,23 @@
 
     EventsOn('terminal:attention', (event: any) => {
       const info = event.data; // AttentionInfo { id, state, rank, seen, detail, source, since }
-      tabStore.applyAttention(info.id, {
+      const tab = $allTabs.find((t) => t.panes.some((p) => p.sessionId === info.id));
+      const pane = tab?.panes.find((p) => p.sessionId === info.id);
+      const before = pane?.attention;
+      const next = {
         state: info.state, rank: info.rank, seen: info.seen,
         detail: info.detail ?? '', source: info.source ?? '', since: info.since ?? 0,
-      });
+      };
+      tabStore.applyAttention(info.id, next);
+      const lookedAt = document.hasFocus() && lookedAtRef === info.id;
+      if (tab && pane && shouldToast(before, next, lookedAt)) {
+        App.SendPaneNotification(`${ENTRY_LABEL[next.rank]} · ${tab.name}`,
+          `${paneDisplayName(pane)}${next.detail ? ': ' + next.detail : ''}`, info.id).catch(() => {});
+      }
+    });
+    // A toast about one pane was clicked: the backend raised the window.
+    EventsOn('mtui:focus-session', (event: any) => {
+      if (event.data?.id) jumpToSession(event.data.id);
     });
 
     // Wails v3: event handlers receive a WailsEvent object; payload is in event.data
@@ -1112,13 +1125,14 @@
   // Only $activeTab is a reactive dependency; the dedup lives inside the function so
   // Svelte does not track _lastWindowTitle (see CLAUDE.md $: footgun note).
   let _lastWindowTitle = '';
-  function syncWindowTitle(tab: typeof $activeTab, version: string) {
-    const title = windowTitle(tab, version);
+  function syncWindowTitle(tab: typeof $activeTab, version: string, blocking: number) {
+    const title = windowTitle(tab, version, blocking);
     if (title === _lastWindowTitle) return;
     _lastWindowTitle = title;
     Window.SetTitle(title).catch(() => {});
   }
-  $: syncWindowTitle($activeTab, appVersion);
+  $: blockingCount = waitingAll.filter((e) => e.rank <= 1).length;
+  $: syncWindowTitle($activeTab, appVersion, blockingCount);
 
   async function handleChangeDir() {
     const tab = $activeTab;

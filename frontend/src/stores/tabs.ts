@@ -85,8 +85,8 @@ export function paneDisplayName(pane: Pane): string {
  *  (so multi-window setups are distinguishable), falling back to the tab name.
  *  version is optional (appended so the running build stays visible in the
  *  title bar even once a tab/pane overwrites the initial main.go-set title). */
-export function windowTitle(tab: Tab | null | undefined, version: string = ''): string {
-  const base = version ? `Multiterminal v${version}` : 'Multiterminal';
+export function windowTitle(tab: Tab | null | undefined, version: string = '', blocking: number = 0): string {
+  const base = (blocking > 0 ? `(${blocking}) ` : '') + (version ? `Multiterminal v${version}` : 'Multiterminal');
   if (!tab) return base;
   const focused = tab.panes.find((p) => p.id === tab.focusedPaneId);
   const ctx = focused ? paneDisplayName(focused) : tab.name;

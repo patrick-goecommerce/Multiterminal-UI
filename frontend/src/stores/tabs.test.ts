@@ -471,6 +471,11 @@ describe('windowTitle', () => {
     const tab = { name: 'Backend', focusedPaneId: '', panes: [] } as any;
     expect(windowTitle(tab, '2.0.0-alpha.25')).toBe('Backend — Multiterminal v2.0.0-alpha.25');
   });
+
+  it('windowTitle puts the number of blocked panes in front', () => {
+    expect(windowTitle(null, '2.0', 3)).toBe('(3) Multiterminal v2.0');
+    expect(windowTitle(null, '2.0', 0)).toBe('Multiterminal v2.0');
+  });
 });
 
 describe('tabNeedsCloseConfirm', () => {

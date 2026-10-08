@@ -628,16 +628,11 @@
       const shouldPlayAudio = audio.enabled && !$audioMuted &&
         (audio.when_focused || !document.hasFocus());
 
+      // Toasts come from the attention model (App.svelte); the pane only rings.
       if (pane.activity === 'done' && prev === 'active') {
-        if (!document.hasFocus()) {
-          sendNotification($t('app.notifyDone', { name: pane.name }), $t('app.notifyDoneBody'));
-        }
         if (shouldPlayAudio) playBell('done', audio.volume, audio.done_sound || undefined);
       } else if ((pane.activity === 'waitingPermission' || pane.activity === 'waitingAnswer') && !needsInputAlerted) {
         needsInputAlerted = true;
-        if (!document.hasFocus()) {
-          sendNotification($t('app.notifyInput', { name: pane.name }), $t('app.notifyInputBody'));
-        }
         if (shouldPlayAudio) playBell('needsInput', audio.volume, audio.input_sound || undefined);
       }
     }
