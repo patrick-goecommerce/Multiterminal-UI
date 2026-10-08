@@ -9,6 +9,9 @@
   import { config } from '../stores/config';
   import { now } from '../stores/clock';
   import { formatDuration, formatClockTime } from '../lib/duration';
+  import StatusGlyph from './StatusGlyph.svelte';
+  import AttentionMenu from './AttentionMenu.svelte';
+  import { glyphKind } from '../lib/attention';
 
   export let pane: Pane;
   export let paneIndex: number = 0;
@@ -114,20 +117,6 @@
     }
   }
 
-  function getActivityDot(activity: string): string {
-    switch (activity) {
-      case 'active': return 'dot-active';
-      case 'done': return 'dot-done';
-      case 'waitingPermission': return 'dot-waiting-permission';
-      case 'waitingAnswer': return 'dot-waiting-answer';
-      case 'error': return 'dot-error';
-      // A sleeping pane is a calm, static state — no pulse, no glow.
-      case 'sleeping': return 'dot-sleeping';
-      case 'resuming': return 'dot-resuming';
-      default: return 'dot-idle';
-    }
-  }
-
   // Status badge: the state spelled out so the grid is scannable at a glance.
   $: statusLabel = (() => {
     switch (pane.activity) {
@@ -177,6 +166,7 @@
   $: canChat = chatModes.includes(pane.mode);
 
   let showIssueActions = false;
+  let titleMenu: { x: number; y: number } | null = null;
 
   function issueAction(action: string) {
     showIssueActions = false;
@@ -191,12 +181,13 @@
   class:titlebar-waiting-permission={pane.activity === 'waitingPermission'}
   class:titlebar-waiting-answer={pane.activity === 'waitingAnswer'}
   class:titlebar-error={pane.activity === 'error'}
+  on:contextmenu|preventDefault={(e) => (titleMenu = { x: e.clientX, y: e.clientY })}
 >
   <div class="pane-title-left">
     {#if paneIndex > 0}
       <span class="pane-index" title="Ctrl+{paneIndex}">{paneIndex}</span>
     {/if}
-    <span class="status-dot {getActivityDot(pane.activity)}"></span>
+    <StatusGlyph kind={glyphKind(pane)} size={11} />
     {#if editing}
       <input
         class="rename-input"
@@ -297,6 +288,10 @@
   </div>
 </div>
 
+{#if titleMenu}
+  <AttentionMenu {pane} x={titleMenu.x} y={titleMenu.y} on:close={() => (titleMenu = null)} />
+{/if}
+
 <style>
   .pane-titlebar {
     display: flex;
@@ -329,34 +324,6 @@
 
   .pane-title-left { display: flex; align-items: center; gap: 6px; overflow: hidden; }
   .pane-title-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-
-  .status-dot {
-    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-    transition: background 0.3s;
-  }
-
-  .dot-idle { background: var(--status-idle, var(--fg-muted)); }
-  .dot-active { background: var(--status-running); animation: dot-spin 1s linear infinite; }
-  .dot-done { background: var(--status-running); box-shadow: 0 0 6px var(--status-running); }
-  /* Sleeping/waking: grey, static. No animation and no glow — a pane that is
-   * off must not compete for attention with one that needs it. */
-  .dot-sleeping, .dot-resuming { background: var(--fg-muted); opacity: 0.6; }
-
-  :global(.dot-waiting-permission),
-  :global(.dot-waiting-answer) {
-    background: var(--status-waiting);
-    box-shadow: 0 0 7px var(--status-waiting);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  :global(.dot-error) {
-    background: var(--status-danger);
-  }
-
-  @keyframes dot-spin { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
 
   .pane-name {
     font-size: 12px; color: var(--fg); white-space: nowrap;

@@ -59,20 +59,31 @@ describe('PaneGrid in focus mode', () => {
     expect(slotKind(container, a[1])).toBe('slot-small');
   });
 
-  it('lists only the waiting panes of other tabs', () => {
+  it('lists the waiting panes of every tab, the current one included', () => {
+    tabStore.updateActivity('h1:1', 'waitingAnswer', '', 100);
     const { container } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, layoutMode: 'focus' } });
-    const rows = Array.from(container.querySelectorAll('.wl-row')).map((r) => r.textContent ?? '');
-    expect(rows).toHaveLength(1);
+    const rows = Array.from(container.querySelectorAll('.wp-entry')).map((r) => r.textContent ?? '');
+    expect(rows).toHaveLength(2);
     expect(rows[0]).toContain('Beta');
     expect(rows[0]).toContain('b1');
+    expect(rows[1]).toContain('hier');
+    expect(rows[1]).toContain('a1');
   });
 
-  it('opens a waiting pane as floating window without switching the tab', async () => {
+  it('opens a waiting pane as floating window on Alt+click without switching the tab', async () => {
     const { container } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, layoutMode: 'focus' } });
-    await fireEvent.click(container.querySelector('.wl-row')!);
+    await fireEvent.click(container.querySelector('.wp-entry')!, { altKey: true });
 
     expect(get(floatingPane)).toEqual({ tabId: tabB, paneId: b });
     expect(tabStore.getState().activeTabId).toBe(tabA);
+  });
+
+  it('switches to a waiting pane on a plain click', async () => {
+    const { container } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, layoutMode: 'focus' } });
+    await fireEvent.click(container.querySelector('.wp-entry')!);
+
+    expect(tabStore.getState().activeTabId).toBe(tabB);
+    expect(get(floatingPane)).toBeNull();
   });
 
   it('draws the floating pane in its own, hidden tab layer and makes it live', () => {
@@ -101,7 +112,7 @@ describe('PaneGrid in focus mode', () => {
 describe('PaneGrid in grid mode', () => {
   it('has no waiting list and no small panes', () => {
     const { container } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA } });
-    expect(container.querySelector('.waiting-list')).toBeNull();
+    expect(container.querySelector('.waiting-slot')).toBeNull();
     expect(container.querySelector('.small-cover')).toBeNull();
     expect(slotKind(container, a[3])).toBe('slot-grid');
   });
@@ -110,11 +121,12 @@ describe('PaneGrid in grid mode', () => {
 describe('PaneGrid focus hand-off', () => {
   // TerminalPane will not take the keyboard from a focused button, so a
   // click that is meant to move typing into a terminal must release it.
-  it('lets go of the clicked list button so the floating terminal gets the keyboard', async () => {
+  it('lets go of the clicked list entry so the floating terminal gets the keyboard', async () => {
     const { container } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, layoutMode: 'focus' } });
-    const row = container.querySelector('.wl-row') as HTMLButtonElement;
+    const row = container.querySelector('.wp-entry') as HTMLElement;
     row.focus();
-    await fireEvent.click(row);
+    expect(document.activeElement).toBe(row);
+    await fireEvent.click(row, { altKey: true });
     expect(document.activeElement).not.toBe(row);
   });
 });
@@ -183,7 +195,7 @@ describe('PaneGrid focus mode: review fixes', () => {
 
   it('shows the waiting list only in the visible grid', () => {
     const { container } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, active: false, layoutMode: 'focus' } });
-    expect(container.querySelector('.waiting-list')).toBeNull();
+    expect(container.querySelector('.waiting-slot')).toBeNull();
   });
 
   it('does not save the window position on a click without a move', async () => {

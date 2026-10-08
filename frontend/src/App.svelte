@@ -49,7 +49,8 @@
   import { tabForProject } from './lib/projectTabs';
   import { seenTargetOf } from './lib/seenTracker';
   import { seenTracker } from './lib/seen';
-  import { layoutModeOf, waitingElsewhere, nextWaiting, floatingStillValid, type LayoutMode } from './lib/focusLayout';
+  import { layoutModeOf, floatingStillValid, type LayoutMode } from './lib/focusLayout';
+  import { next as nextAttention, back as backFromAttention } from './lib/attentionNav';
   import { floatingPane, focusOrders, placePane, slotIndexOf } from './stores/focusLayout';
 
   const MAX_PANES_PER_TAB = 10;
@@ -215,6 +216,7 @@
     },
     onOpenSkills: () => { if (projectInitialized) openSkillEditor(); },
     onNextWaiting: () => jumpToNextWaiting(),
+    onBackFromWaiting: () => backFromAttention(),
   });
 
   onMount(async () => {
@@ -1098,14 +1100,9 @@
     if (ref && (mode !== 'focus' || !floatingStillValid(ref, tabs, activeId))) floatingPane.set(null);
   }
 
-  /** Ctrl+Shift+J: the next pane in another tab that waits for the user. Focus
-   *  mode opens it floating over the current tab; the grid switches to it. */
+  /** Ctrl+Shift+J: the next pane that waits, from any tab. */
   function jumpToNextWaiting() {
-    const next = nextWaiting(waitingElsewhere($allTabs, $activeTab?.id ?? ''), get(floatingPane));
-    if (!next) return;
-    if (layoutMode === 'focus') floatingPane.set(next);
-    else tabStore.setActiveTab(next.tabId);
-    tabStore.focusPane(next.tabId, next.paneId);
+    nextAttention(layoutMode);
   }
 
   // Reflect the focused pane in the native window title (distinguishes multi-window).

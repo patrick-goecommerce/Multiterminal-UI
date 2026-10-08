@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Pane, Tab } from '../stores/tabs';
 import {
-  reconcileOrder, promoteInOrder, waitingElsewhere, nextWaiting, floatingStillValid,
+  reconcileOrder, promoteInOrder, floatingStillValid,
   focusGeometry, floatingRect, slotFor, layoutModeOf,
 } from './focusLayout';
 
@@ -58,50 +58,6 @@ describe('order', () => {
   });
 });
 
-describe('waitingElsewhere', () => {
-  const tabs = [
-    tab('t1', [pane('mine', 'waitingPermission')]),
-    tab('t2', [pane('q', 'waitingAnswer', 100), pane('run', 'active'), pane('done', 'done'), pane('err', 'error')]),
-    tab('t3', [pane('perm', 'waitingPermission', 300), pane('q-old', 'waitingAnswer', 50)]),
-  ];
-
-  it('lists only waiting panes of other tabs', () => {
-    const ids = waitingElsewhere(tabs, 't1').map((e) => e.pane.id);
-    expect(ids).not.toContain('mine');
-    expect(ids).not.toContain('run');
-    expect(ids).not.toContain('done');
-    expect(ids).not.toContain('err');
-    expect(ids).toHaveLength(3);
-  });
-
-  it('puts permission requests first, then the longest waiting', () => {
-    expect(waitingElsewhere(tabs, 't1').map((e) => e.pane.id)).toEqual(['perm', 'q-old', 'q']);
-  });
-
-  it('carries the tab name for the list', () => {
-    expect(waitingElsewhere(tabs, 't1')[0].tabName).toBe('Projekt t3');
-  });
-});
-
-describe('nextWaiting', () => {
-  const list = waitingElsewhere([
-    tab('t2', [pane('a', 'waitingAnswer', 1)]),
-    tab('t3', [pane('b', 'waitingAnswer', 2)]),
-  ], 't1');
-
-  it('starts with the first and wraps around', () => {
-    const first = nextWaiting(list, null);
-    expect(first).toEqual({ tabId: 't2', paneId: 'a' });
-    const second = nextWaiting(list, first);
-    expect(second).toEqual({ tabId: 't3', paneId: 'b' });
-    expect(nextWaiting(list, second)).toEqual(first);
-  });
-
-  it('is null when nothing waits', () => {
-    expect(nextWaiting([], null)).toBeNull();
-  });
-});
-
 describe('floatingStillValid', () => {
   const tabs = [tab('t1', []), tab('t2', [pane('a')])];
 
@@ -136,6 +92,16 @@ describe('focusGeometry', () => {
     expect(g.small).toHaveLength(3);
     const lastSmall = g.small[2];
     expect(lastSmall.y + lastSmall.h).toBeLessThanOrEqual(g.list.y);
+  });
+
+  it('shrinks the list to one line when nothing waits', () => {
+    const g = focusGeometry(2000, 1000, 4, 0);
+    expect(g.list.h).toBe(36);
+  });
+
+  it('caps the list at 40 % of the column', () => {
+    const g = focusGeometry(2000, 1000, 4, 50);
+    expect(g.list.h).toBeLessThanOrEqual(Math.round((1000 - 8) * 0.4));
   });
 });
 

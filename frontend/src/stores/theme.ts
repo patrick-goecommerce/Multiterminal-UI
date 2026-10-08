@@ -172,6 +172,7 @@ export const themeColors = derived(currentTheme, ($theme) => themes[$theme]);
 //   green  = you · running · healthy
 //   violet = AI · chat · skills
 //   amber  = waiting for you
+//   blue   = finished, not yet seen
 //   red    = danger · YOLO
 // (These are intended to be settings-swappable later; the layout never changes.)
 const SEMANTIC: Record<string, string> = {
@@ -184,6 +185,8 @@ const SEMANTIC: Record<string, string> = {
   'status-danger': '#d65f5f',
   'status-danger-tint': 'rgba(214,95,95,.15)',
   'status-idle': '#5a6457',
+  'status-done': '#4f9cf0',
+  'status-done-tint': 'rgba(79,156,240,.16)',
   'claude-orange': '#d8825f',
   'diff-add': '#5bbf8c',
   'diff-add-bg': 'rgba(91,191,140,.12)',

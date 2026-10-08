@@ -474,6 +474,8 @@
         // Ctrl+Shift+J belongs to the app (next waiting pane). Plain Ctrl+J
         // stays with the terminal: it is a newline there, Claude Code uses it.
         if (e.ctrlKey && e.shiftKey && (e.key === 'J' || e.key === 'j')) return false;
+        // Ctrl+Shift+K goes back to where the walk through waiting panes started.
+        if (e.ctrlKey && e.shiftKey && (e.key === 'K' || e.key === 'k')) return false;
         return true;
       });
 

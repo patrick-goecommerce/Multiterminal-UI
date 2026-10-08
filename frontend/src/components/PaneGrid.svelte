@@ -3,15 +3,17 @@
   import { t } from '../stores/i18n';
   import TerminalPane from './TerminalPane.svelte';
   import ChatPane from './ChatPane.svelte';
+  import WaitingPanel from './WaitingPanel.svelte';
+  import AttentionMenu from './AttentionMenu.svelte';
   import { tabStore, allTabs, paneDisplayName, type Pane } from '../stores/tabs';
   import { config } from '../stores/config';
-  import { now } from '../stores/clock';
-  import { formatDuration } from '../lib/duration';
   import {
     focusGeometry, floatingRect, promoteInOrder, reconcileOrder, slotFor, stateLabel,
-    waitingElsewhere, FLOAT_BAR, type LayoutMode, type Slot, type WaitingEntry,
+    FLOAT_BAR, type LayoutMode, type Slot,
   } from '../lib/focusLayout';
   import { focusOrders, setFocusOrder, floatingPane, saveFloatPosition, consumePlaced } from '../stores/focusLayout';
+  import { attentionList, panelRows, type AttentionEntry } from '../lib/attention';
+  import { jumpTo, preview, walkPaneId } from '../lib/attentionNav';
 
   export let panes: Pane[] = [];
   export let active: boolean = true;
@@ -227,11 +229,14 @@
   onDestroy(() => areaObserver?.disconnect());
 
   $: order = reconcileOrder($focusOrders[tabId], panes.map((p) => p.id));
-  // Only the visible grid needs the list; every tab has a PaneGrid, and the
-  // hidden ones would rescan all panes on each activity update for nothing.
-  // The count only sizes the small column, never the big panes.
-  $: waiting = focus && active ? waitingElsewhere($allTabs, tabId) : [];
-  $: geo = focusGeometry(areaW, areaH, panes.length, waiting.length);
+  // Only the visible grid needs the list; hidden tabs would re-sort on every
+  // update for nothing. It now holds every tab, the current one included.
+  // The row count only sizes the small column, never the big panes.
+  $: waitingAll = focus && active ? attentionList($allTabs, tabId) : [];
+  let expanded = false;
+  $: panel = panelRows(waitingAll, expanded);
+  $: geo = focusGeometry(areaW, areaH, panes.length, panel.rows.length + (panel.hiddenDone > 0 || expanded ? 1 : 0));
+  let menuFor: { entry: AttentionEntry; x: number; y: number } | null = null;
   // A pane of this tab shown floating over another tab. Only while this tab
   // is not the active one: here it has its own slot.
   $: floatingId = focus && !active && $floatingPane?.tabId === tabId ? $floatingPane.paneId : '';
@@ -301,22 +306,17 @@
 
   // The buttons below hand the keyboard to a terminal. TerminalPane leaves
   // focus alone while a button holds it (so it never steals it from a
-  // control), so the clicked button has to let go first.
+  // control), so the clicked button has to let go first. The waiting list's
+  // entries are buttons by role, and let go the same way.
   function releaseButtonFocus() {
     const ae = document.activeElement;
-    if (ae instanceof HTMLButtonElement) ae.blur();
+    if (ae instanceof HTMLButtonElement || (ae instanceof HTMLElement && ae.getAttribute('role') === 'button')) ae.blur();
   }
 
   function promoteSmall(id: string) {
     releaseButtonFocus();
     setFocusOrder(tabId, promoteInOrder(order, id, true));
     dispatch('focusPane', { paneId: id });
-  }
-
-  function openFloating(w: WaitingEntry) {
-    releaseButtonFocus();
-    floatingPane.set({ tabId: w.tabId, paneId: w.pane.id });
-    tabStore.focusPane(w.tabId, w.pane.id);
   }
 
   function closeFloating() {
@@ -352,8 +352,8 @@
     if (moved) void saveFloatPosition(r.x, r.y);
   }
 
-  // Same colours as the pane titlebar (PaneTitlebar.svelte), so a state reads
-  // the same in a big pane, a small card and the waiting list.
+  // The state dot of a small card and of the floating window's bar. (The
+  // title bar and the waiting list draw a StatusGlyph instead.)
   function dotClass(activity: Pane['activity']): string {
     switch (activity) {
       case 'waitingPermission':
@@ -450,30 +450,17 @@
   {/each}
 
   {#if focus && active && !maximizedPane}
-    <div class="waiting-list" style="left:{geo.list.x}px;top:{geo.list.y}px;width:{geo.list.w}px;height:{geo.list.h}px;">
-      <div class="wl-head">
-        <span>Wartet auf dich · andere Projekte</span>
-        <kbd title="Nächstes wartendes Pane öffnen">Strg+Umschalt+J</kbd>
-      </div>
-      <div class="wl-rows">
-        {#each waiting as w (w.pane.id)}
-          <button
-            class="wl-row"
-            class:open={$floatingPane?.paneId === w.pane.id}
-            on:click={() => openFloating(w)}
-            title="Schwebend öffnen, ohne den Tab zu wechseln"
-          >
-            <span class="dot {dotClass(w.pane.activity)}"></span>
-            <span class="wl-text">
-              <span class="wl-top"><span class="wl-tab">{w.tabName}</span> · {paneDisplayName(w.pane)}</span>
-              <span class="wl-state">{stateLabel(w.pane.activity)}{w.pane.activitySince ? ' · ' + formatDuration(w.pane.activitySince, $now) : ''}</span>
-            </span>
-          </button>
-        {:else}
-          <div class="wl-empty">Kein anderes Projekt wartet auf dich.</div>
-        {/each}
-      </div>
+    <div class="waiting-slot" style="left:{geo.list.x}px;top:{geo.list.y}px;width:{geo.list.w}px;height:{geo.list.h}px;">
+      <WaitingPanel rows={panel.rows} total={waitingAll.length} hiddenDone={panel.hiddenDone} {expanded}
+        selectedPaneId={$walkPaneId}
+        on:jump={(e) => { releaseButtonFocus(); jumpTo(e.detail.tabId, e.detail.pane.id); }}
+        on:preview={(e) => { releaseButtonFocus(); preview(e.detail, layoutMode); }}
+        on:toggleMore={() => (expanded = !expanded)}
+        on:menu={(e) => (menuFor = e.detail)} />
     </div>
+  {/if}
+  {#if menuFor}
+    <AttentionMenu entry={menuFor.entry} x={menuFor.x} y={menuFor.y} {layoutMode} on:close={() => (menuFor = null)} />
   {/if}
 
   {#if panes.length === 0}
@@ -621,44 +608,7 @@
   .state-waiting { color: var(--status-waiting); }
   .state-danger { color: var(--status-danger); }
 
-  .waiting-list {
-    position: absolute;
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--pane-border, #45475a);
-    border-radius: 8px;
-    background: var(--bg-secondary, var(--bg));
-    overflow: hidden;
-    z-index: 3;
-  }
-  .wl-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    height: 30px; flex-shrink: 0;
-    padding: 0 10px;
-    font-size: 11px; font-weight: 600;
-    letter-spacing: 0.04em;
-    color: var(--status-waiting, #d6a85c);
-    border-bottom: 1px solid var(--pane-border, #45475a);
-  }
-  .wl-rows { flex: 1; overflow-y: auto; }
-  .wl-row {
-    width: 100%;
-    display: flex; align-items: center; gap: 8px;
-    padding: 6px 10px;
-    min-height: 46px;
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid var(--pane-border, #45475a);
-    color: var(--fg);
-    text-align: left;
-    cursor: pointer;
-  }
-  .wl-row:hover, .wl-row.open { background: var(--status-waiting-tint, rgba(214,168,92,.16)); }
-  .wl-text { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
-  .wl-top { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .wl-tab { font-weight: 600; }
-  .wl-state { font-size: 11px; color: var(--status-waiting, #d6a85c); }
-  .wl-empty { padding: 10px; font-size: 12px; color: var(--fg-muted); }
+  .waiting-slot { position: absolute; display: flex; z-index: 3; }
 
   .pane-grid.focus .empty-state {
     position: absolute;
@@ -695,14 +645,6 @@
     border: 1px solid var(--pane-border, #45475a);
     border-top: 2px solid var(--status-ai, #a184f4);
     border-radius: 9px;
-  }
-
-  kbd {
-    background: var(--bg-tertiary);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: monospace;
-    font-size: 11px;
   }
 
   .resize-overlay {

@@ -5,9 +5,18 @@ function callbacks(): ShortcutCallbacks {
   return {
     onNewPane: vi.fn(), onNewTab: vi.fn(), onCloseTab: vi.fn(), onToggleSidebar: vi.fn(),
     onToggleMaximize: vi.fn(), onFocusPane: vi.fn(), onOpenIssues: vi.fn(),
-    canAddPane: () => true, onNextWaiting: vi.fn(),
+    canAddPane: () => true, onNextWaiting: vi.fn(), onBackFromWaiting: vi.fn(),
   };
 }
+
+describe('Ctrl+Shift+K', () => {
+  it('goes back to where the walk through waiting panes started', () => {
+    const cb = callbacks();
+    createGlobalKeyHandler(cb)(new KeyboardEvent('keydown', { key: 'K', ctrlKey: true, shiftKey: true }));
+    expect(cb.onBackFromWaiting).toHaveBeenCalledTimes(1);
+    expect(cb.onNextWaiting).not.toHaveBeenCalled();
+  });
+});
 
 describe('Ctrl+Shift+J', () => {
   it('jumps to the next waiting pane', () => {
