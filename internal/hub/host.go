@@ -101,6 +101,12 @@ type Host interface {
 	// than a debounce window and would otherwise swallow it (#189).
 	SeedActivity(id int, state Activity, at time.Time) error
 
+	// MarkSeen records that the person looked at the session; MarkUnseen puts
+	// it back. See Attention: seeing clears "done" and "error", not a
+	// permission or a question.
+	MarkSeen(id int) error
+	MarkUnseen(id int) error
+
 	// ResetActivity puts the session back to idle. A caller that has just sent
 	// it work uses this so the next "done" reads as a change rather than as
 	// the previous item's leftover state.
