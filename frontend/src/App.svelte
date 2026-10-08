@@ -1136,6 +1136,16 @@
   $: blockingCount = waitingAll.filter((e) => e.rank <= 1).length;
   $: syncWindowTitle($activeTab, appVersion, blockingCount);
 
+  // The taskbar number follows the blocked count; the call only goes out on a
+  // change. A function, so only the argument is a dependency (CLAUDE.md).
+  let _lastBadge = -1;
+  function syncBadge(n: number) {
+    if (n === _lastBadge) return;
+    _lastBadge = n;
+    App.SetAttentionBadge(n).catch(() => {});
+  }
+  $: syncBadge(blockingCount);
+
   async function handleChangeDir() {
     const tab = $activeTab;
     if (!tab || tab.panes.length > 0) return;

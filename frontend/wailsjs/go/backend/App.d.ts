@@ -416,3 +416,4 @@ export function AbortWorktreeRebase(arg1:string):Promise<void>;
 export function RemoveOrphanedWorktree(arg1:string):Promise<void>;
 
 export function EnsureProjectWorktreeSetup(arg1:string):Promise<void>;
+export function SetAttentionBadge(arg1:number):Promise<void>;

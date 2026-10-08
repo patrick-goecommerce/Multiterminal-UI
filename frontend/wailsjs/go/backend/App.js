@@ -799,3 +799,7 @@ export function RemoveOrphanedWorktree(arg1) {
 export function EnsureProjectWorktreeSetup(arg1) {
   return $Call.ByID(2109684008, arg1);
 }
+
+export function SetAttentionBadge(arg1) {
+  return $Call.ByID(2789518836, arg1);
+}
