@@ -105,4 +105,12 @@ describe('shouldToast', () => {
     expect(shouldToast(undefined, att(0), true)).toBe(false);
     expect(shouldToast(att(0, 5), att(0, 5, true), false)).toBe(false);
   });
+  it('without a record, only a state that began after notBefore toasts', () => {
+    expect(shouldToast(undefined, att(0, 100), false, 200)).toBe(false);
+    expect(shouldToast(undefined, att(0, 0), false, 200)).toBe(false);
+    expect(shouldToast(undefined, att(0, 300), false, 200)).toBe(true);
+  });
+  it('with a record, notBefore changes nothing', () => {
+    expect(shouldToast(att(4, 50), att(0, 100), false, 200)).toBe(true);
+  });
 });

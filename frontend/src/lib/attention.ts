@@ -127,7 +127,10 @@ export function tabTooltip(tab: Tab): string {
 
 /** A toast only for something new that blocks or failed, never for "done"
  *  and never for the pane the user is looking at in a focused window. */
-export function shouldToast(before: PaneAttention | undefined, next: PaneAttention, lookedAt: boolean): boolean {
+export function shouldToast(before: PaneAttention | undefined, next: PaneAttention, lookedAt: boolean, notBefore: number = 0): boolean {
   if (next.rank > RANK_ERROR || next.seen || lookedAt) return false;
-  return !before || before.rank !== next.rank || before.since !== next.since;
+  // No earlier record: a state that began before this window started (a
+  // reattach re-sends it) or of unknown start shows in the box, not as a toast.
+  if (!before) return next.since > 0 && next.since >= notBefore;
+  return before.rank !== next.rank || before.since !== next.since;
 }

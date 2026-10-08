@@ -363,7 +363,7 @@
       };
       tabStore.applyAttention(info.id, next);
       const lookedAt = document.hasFocus() && lookedAtRef === info.id;
-      if (tab && pane && shouldToast(before, next, lookedAt)) {
+      if (tab && pane && shouldToast(before, next, lookedAt, windowStartedAt)) {
         App.SendPaneNotification(`${ENTRY_LABEL[next.rank]} · ${tab.name}`,
           `${paneDisplayName(pane)}${next.detail ? ': ' + next.detail : ''}`, info.id).catch(() => {});
       }
@@ -1080,6 +1080,8 @@
 
   // The ref of the pane the user is looking at; '' for none. Read by the
   // toast rule, which never fires for this pane.
+  // Unix seconds; states older than this never toast (a reattach re-sends them).
+  const windowStartedAt = Math.floor(Date.now() / 1000);
   let lookedAtRef = '';
   // The pane being looked at: the floating one while it has the keyboard,
   // otherwise the active tab's focused pane. A function call, so only the
