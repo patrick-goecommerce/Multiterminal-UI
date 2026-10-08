@@ -74,7 +74,13 @@ export function attentionList(tabs: Tab[], currentTabId: string): AttentionEntry
   return out.sort((a, b) => a.rank - b.rank || sinceKey(a.since) - sinceKey(b.since) || a.pane.id.localeCompare(b.pane.id));
 }
 
-export interface PanelRows { rows: AttentionEntry[]; hiddenDone: number }
+export interface PanelRows {
+  rows: AttentionEntry[];
+  hiddenDone: number;
+  /** More finished entries than `keep`: only then is there a toggle. An
+   *  expanded panel whose finished entries dropped below that has none. */
+  collapsible: boolean;
+}
 
 /** What the panel shows: everything blocking or failed, and at most `keep`
  *  finished entries unless expanded. */
@@ -82,7 +88,7 @@ export function panelRows(list: AttentionEntry[], expanded: boolean, keep = 3): 
   const top = list.filter((e) => e.rank < RANK_DONE);
   const done = list.filter((e) => e.rank === RANK_DONE);
   const shown = expanded ? done : done.slice(0, keep);
-  return { rows: [...top, ...shown], hiddenDone: done.length - shown.length };
+  return { rows: [...top, ...shown], hiddenDone: done.length - shown.length, collapsible: done.length > keep };
 }
 
 export interface AttentionCursor { rank: number; since: number; paneId: string }

@@ -49,6 +49,15 @@ describe('PaneGrid in focus mode', () => {
     expect(slotKind(container, a[3])).toBe('slot-small');
   });
 
+  // R19: the same glyph as the title bar and the waiting list, so "finished,
+  // not yet seen" is blue on a small card too.
+  it('draws the state glyph on a small card', () => {
+    tabStore.applyAttention('h1:3', { state: 'done', rank: 3, seen: false, detail: '', source: '', since: 1 });
+    const { container } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, layoutMode: 'focus' } });
+    const card = container.querySelector(`[data-testid="pane-${a[2]}"]`)!.closest('.slot')!.querySelector('.small-cover')!;
+    expect(card.querySelector('svg.status-glyph')?.getAttribute('aria-label')).toBe('fertig, ungesehen');
+  });
+
   it('moves a clicked small pane to the left', async () => {
     const { container } = render(PaneGrid, { props: { panes: panesOf(tabA), tabId: tabA, layoutMode: 'focus' } });
     const cover = container.querySelector(`[data-testid="pane-${a[3]}"]`)!.closest('.slot')!.querySelector('.small-cover')!;
@@ -94,6 +103,7 @@ describe('PaneGrid in focus mode', () => {
     expect(slotKind(container, b)).toBe('slot-float');
     expect(container.querySelector(`[data-testid="pane-${b}"]`)!.getAttribute('data-active')).toBe('true');
     expect(getByText('Zum Projekt wechseln')).toBeTruthy();
+    expect(container.querySelector('.float-bar svg.status-glyph')?.getAttribute('aria-label')).toBe('braucht Freigabe');
   });
 
   it('switches to the project from the floating window', async () => {

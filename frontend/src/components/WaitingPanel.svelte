@@ -10,6 +10,8 @@
   export let total = 0;
   export let hiddenDone = 0;
   export let expanded = false;
+  /** More finished entries than the panel keeps; without that, no toggle. */
+  export let collapsible = false;
   export let selectedPaneId = '';
 
   const dispatch = createEventDispatcher<{
@@ -76,10 +78,8 @@
           <div class="l2" class:mono={entry.rank === 0 || entry.rank === 2}>{entry.pane.attention?.detail || ENTRY_LABEL[entry.rank]}</div>
         </div>
       {/each}
-      {#if hiddenDone > 0}
-        <button class="more" on:click={() => dispatch('toggleMore')}>+{hiddenDone} weitere fertig</button>
-      {:else if expanded}
-        <button class="more" on:click={() => dispatch('toggleMore')}>weniger anzeigen</button>
+      {#if collapsible}
+        <button class="more" on:click={() => dispatch('toggleMore')}>{expanded ? 'weniger anzeigen' : `+${hiddenDone} weitere fertig`}</button>
       {/if}
     </div>
   </div>

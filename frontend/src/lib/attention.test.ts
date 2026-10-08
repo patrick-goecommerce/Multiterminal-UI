@@ -45,6 +45,16 @@ describe('panelRows', () => {
     expect(r.hiddenDone).toBe(2);
     expect(panelRows(list, true).hiddenDone).toBe(0);
   });
+
+  // R21: an expanded panel whose finished entries dropped to `keep` or fewer
+  // has nothing to collapse and must not show a toggle row.
+  it('is collapsible only with more finished entries than it keeps', () => {
+    const done = (n: number) => attentionList([tab('t', Array.from({ length: n }, (_, i) =>
+      pane('d' + i, 'done', { rank: 3, since: i + 1 })))], '');
+    expect(panelRows(done(2), true).collapsible).toBe(false);
+    expect(panelRows(done(5), true).collapsible).toBe(true);
+    expect(panelRows(done(5), false).collapsible).toBe(true);
+  });
 });
 
 describe('nextEntry', () => {

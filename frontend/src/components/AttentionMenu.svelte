@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount, tick } from 'svelte';
   import { get } from 'svelte/store';
   import * as App from '../../wailsjs/go/backend/App';
   import { allTabs, type Pane } from '../stores/tabs';
@@ -21,10 +21,40 @@
   const canSee = rank === RANK_ERROR || rank === RANK_DONE;
   const canUnsee = !!att && att.seen && (att.state === 'done' || att.state === 'error');
 
-  function run(fn: () => void) { fn(); dispatch('close'); }
+  // Opened at the pointer, then measured: where it would run past the window
+  // (the list sits bottom right), it opens upward or leftward instead.
+  let menuEl: HTMLDivElement;
+  let left = x;
+  let top = y;
+  onMount(place);
+  function place() {
+    const r = menuEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const l = x + r.width > vw ? x - r.width : x;
+    const t = y + r.height > vh ? y - r.height : y;
+    left = Math.max(0, Math.min(l, vw - r.width));
+    top = Math.max(0, Math.min(t, vh - r.height));
+  }
+
+  // Close first and let go of the keyboard, then act: a terminal only takes
+  // the keyboard when no button holds it, and the menu's button would.
+  async function run(fn: () => void) {
+    dispatch('close');
+    const ae = document.activeElement;
+    if (ae instanceof HTMLElement) ae.blur();
+    await tick();
+    fn();
+  }
+  function markSeen(ref: string) {
+    App.MarkSessionSeen(ref).catch((err) => console.warn('[attention] MarkSessionSeen failed', ref, err));
+  }
+  function markUnseen(ref: string) {
+    App.MarkSessionUnseen(ref).catch((err) => console.warn('[attention] MarkSessionUnseen failed', ref, err));
+  }
   function seenAllDone() {
     for (const p of get(allTabs).flatMap((t) => t.panes)) {
-      if (paneRank(p) === RANK_DONE) App.MarkSessionSeen(p.sessionId).catch(() => {});
+      if (paneRank(p) === RANK_DONE) markSeen(p.sessionId);
     }
   }
 </script>
@@ -32,7 +62,7 @@
 <svelte:window on:keydown={(e) => e.key === 'Escape' && dispatch('close')} />
 <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 <div class="am-overlay" on:click={() => dispatch('close')} on:contextmenu|preventDefault={() => dispatch('close')}>
-  <div class="am" role="menu" tabindex="-1" style="left:{x}px; top:{y}px" on:click|stopPropagation>
+  <div class="am" role="menu" tabindex="-1" bind:this={menuEl} style="left:{left}px; top:{top}px" on:click|stopPropagation>
     {#if entry}
       <button role="menuitem" on:click={() => run(() => jumpTo(entry.tabId, entry.pane.id))}>Hingehen</button>
       {#if !entry.here && layoutMode === 'focus'}
@@ -40,10 +70,10 @@
       {/if}
     {/if}
     {#if canSee && target}
-      <button role="menuitem" on:click={() => run(() => App.MarkSessionSeen(target.sessionId).catch(() => {}))}>Als gesehen markieren</button>
+      <button role="menuitem" on:click={() => run(() => markSeen(target.sessionId))}>Als gesehen markieren</button>
     {/if}
     {#if canUnsee && target}
-      <button role="menuitem" on:click={() => run(() => App.MarkSessionUnseen(target.sessionId).catch(() => {}))}>Als ungelesen markieren</button>
+      <button role="menuitem" on:click={() => run(() => markUnseen(target.sessionId))}>Als ungelesen markieren</button>
     {/if}
     {#if entry}
       <div class="am-sep"></div>

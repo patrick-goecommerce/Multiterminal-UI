@@ -5,6 +5,7 @@
   import ChatPane from './ChatPane.svelte';
   import WaitingPanel from './WaitingPanel.svelte';
   import AttentionMenu from './AttentionMenu.svelte';
+  import StatusGlyph from './StatusGlyph.svelte';
   import { tabStore, allTabs, paneDisplayName, type Pane } from '../stores/tabs';
   import { config } from '../stores/config';
   import {
@@ -12,7 +13,7 @@
     FLOAT_BAR, type LayoutMode, type Slot,
   } from '../lib/focusLayout';
   import { focusOrders, setFocusOrder, floatingPane, saveFloatPosition, consumePlaced } from '../stores/focusLayout';
-  import { attentionList, panelRows, type AttentionEntry } from '../lib/attention';
+  import { attentionList, panelRows, glyphKind, type AttentionEntry } from '../lib/attention';
   import { jumpTo, preview, walkPaneId } from '../lib/attentionNav';
 
   export let panes: Pane[] = [];
@@ -235,7 +236,7 @@
   $: waitingAll = focus && active ? attentionList($allTabs, tabId) : [];
   let expanded = false;
   $: panel = panelRows(waitingAll, expanded);
-  $: geo = focusGeometry(areaW, areaH, panes.length, panel.rows.length + (panel.hiddenDone > 0 || expanded ? 1 : 0));
+  $: geo = focusGeometry(areaW, areaH, panes.length, panel.rows.length + (panel.collapsible ? 1 : 0));
   let menuFor: { entry: AttentionEntry; x: number; y: number } | null = null;
   // A pane of this tab shown floating over another tab. Only while this tab
   // is not the active one: here it has its own slot.
@@ -352,21 +353,8 @@
     if (moved) void saveFloatPosition(r.x, r.y);
   }
 
-  // The state dot of a small card and of the floating window's bar. (The
-  // title bar and the waiting list draw a StatusGlyph instead.)
-  function dotClass(activity: Pane['activity']): string {
-    switch (activity) {
-      case 'waitingPermission':
-      case 'waitingAnswer': return 'dot-waiting';
-      case 'active': return 'dot-running';
-      case 'done': return 'dot-done';
-      case 'error': return 'dot-error';
-      case 'sleeping':
-      case 'resuming': return 'dot-sleeping';
-      default: return 'dot-idle';
-    }
-  }
-
+  // The state label's colour, as in the title bar's status badge. The glyph
+  // in front of it is the same StatusGlyph the title bar and the list draw.
   function stateClass(activity: Pane['activity']): string {
     switch (activity) {
       case 'waitingPermission':
@@ -399,7 +387,7 @@
         on:pointerup={floatPointerUp}
         on:pointercancel={floatPointerUp}
       >
-        <span class="dot {dotClass(pane.activity)}"></span>
+        <StatusGlyph kind={glyphKind(pane)} />
         <span class="float-tab">{tabName}</span>
         <span class="float-sep">·</span>
         <span class="float-name">{paneDisplayName(pane)}</span>
@@ -440,7 +428,7 @@
     {#if slot?.kind === 'small'}
       <button class="small-cover" title="Nach links holen" on:click={() => promoteSmall(pane.id)}>
         <span class="small-head">
-          <span class="dot {dotClass(pane.activity)}"></span>
+          <StatusGlyph kind={glyphKind(pane)} />
           <span class="small-name">{paneDisplayName(pane)}</span>
           <span class="small-state {stateClass(pane.activity)}">{stateLabel(pane.activity)}</span>
         </span>
@@ -452,6 +440,7 @@
   {#if focus && active && !maximizedPane}
     <div class="waiting-slot" style="left:{geo.list.x}px;top:{geo.list.y}px;width:{geo.list.w}px;height:{geo.list.h}px;">
       <WaitingPanel rows={panel.rows} total={waitingAll.length} hiddenDone={panel.hiddenDone} {expanded}
+        collapsible={panel.collapsible}
         selectedPaneId={$walkPaneId}
         on:jump={(e) => { releaseButtonFocus(); jumpTo(e.detail.tabId, e.detail.pane.id); }}
         on:preview={(e) => { releaseButtonFocus(); preview(e.detail, layoutMode); }}
@@ -590,19 +579,6 @@
   }
   .small-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .small-state { color: var(--fg-muted); white-space: nowrap; }
-
-  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--status-idle, var(--fg-muted)); }
-  .dot-running { background: var(--status-running); animation: fl-spin 1s linear infinite; }
-  .dot-done { background: var(--status-running); box-shadow: 0 0 6px var(--status-running); }
-  .dot-waiting {
-    background: var(--status-waiting);
-    box-shadow: 0 0 7px var(--status-waiting);
-    animation: fl-pulse 1.2s ease-in-out infinite;
-  }
-  .dot-error { background: var(--status-danger); }
-  .dot-sleeping { background: var(--fg-muted); opacity: 0.6; }
-  @keyframes fl-spin { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-  @keyframes fl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
   .state-running { color: var(--status-running); }
   .state-waiting { color: var(--status-waiting); }

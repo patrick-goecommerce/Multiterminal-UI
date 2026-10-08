@@ -168,6 +168,14 @@
   let showIssueActions = false;
   let titleMenu: { x: number; y: number } | null = null;
 
+  // The rename field keeps its own menu (copy, paste); the rest of the bar
+  // opens the attention menu.
+  function openTitleMenu(e: MouseEvent) {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    e.preventDefault();
+    titleMenu = { x: e.clientX, y: e.clientY };
+  }
+
   function issueAction(action: string) {
     showIssueActions = false;
     dispatch('issueAction', { paneId: pane.id, sessionId: pane.sessionId, issueNumber: pane.issueNumber, action });
@@ -181,7 +189,7 @@
   class:titlebar-waiting-permission={pane.activity === 'waitingPermission'}
   class:titlebar-waiting-answer={pane.activity === 'waitingAnswer'}
   class:titlebar-error={pane.activity === 'error'}
-  on:contextmenu|preventDefault={(e) => (titleMenu = { x: e.clientX, y: e.clientY })}
+  on:contextmenu={openTitleMenu}
 >
   <div class="pane-title-left">
     {#if paneIndex > 0}

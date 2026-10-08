@@ -8,44 +8,77 @@ import { attentionList, nextEntry, cursorOf, type AttentionEntry, type Attention
 // Ctrl+Shift+K, a toast click. Module state on purpose: there is one walk per
 // window, and the panel, the toolbar counter and the shortcuts share it.
 
-let returnTo: { tabId: string; paneId: string } | null = null;
+interface PaneRef { tabId: string; paneId: string }
+
+let returnTo: PaneRef | null = null;
+/** Where the last jump or preview put the user. */
+let landedOn: PaneRef | null = null;
 let cursor: AttentionCursor | null = null;
 
 /** The pane the keyboard walk is on, for the panel's highlight; '' = none. */
 export const walkPaneId = writable('');
 
-function remember() {
-  if (returnTo) return;
+/** The user is still where the walk put them: the preview is open, or the
+ *  pane it jumped to still has the focus. Anything else means they moved on
+ *  by hand, and the way back is stale. */
+function stillThere(): boolean {
+  if (get(floatingPane)) return true;
   const tab = get(activeTab);
-  if (tab) returnTo = { tabId: tab.id, paneId: tab.focusedPaneId };
+  return !!landedOn && !!tab && tab.id === landedOn.tabId && tab.focusedPaneId === landedOn.paneId;
 }
 
-// In the focus layout a focused pane also moves to a big slot.
+function remember() {
+  if (returnTo && stillThere()) return;
+  const tab = get(activeTab);
+  returnTo = tab ? { tabId: tab.id, paneId: tab.focusedPaneId } : null;
+}
+
+function endWalk() {
+  cursor = null;
+  walkPaneId.set('');
+}
+
+// Writes the tab's focus order in both layouts. The grid never reads it, and
+// in the focus layout it does what a click on the pane would: a big pane
+// stays where it is, a small one moves up to the left.
 function focusIn(tabId: string, paneId: string) {
   const tab = get(allTabs).find((t) => t.id === tabId);
-  if (tab) setFocusOrder(tabId, promoteInOrder(reconcileOrder(get(focusOrders)[tabId], tab.panes.map((p) => p.id)), paneId, true));
+  if (tab) setFocusOrder(tabId, promoteInOrder(reconcileOrder(get(focusOrders)[tabId], tab.panes.map((p) => p.id)), paneId, false));
   tabStore.focusPane(tabId, paneId);
 }
 
-/** Switch to the pane's tab and give it the keyboard. */
-export function jumpTo(tabId: string, paneId: string) {
+function goTo(tabId: string, paneId: string) {
   remember();
   floatingPane.set(null);
   if (get(activeTab)?.id !== tabId) tabStore.setActiveTab(tabId);
   focusIn(tabId, paneId);
+  landedOn = { tabId, paneId };
 }
 
-/** Show the entry floating over the current tab. An entry of the current tab
- *  has its own slot, and the grid has no floating window: both are focused
- *  instead. */
-export function preview(entry: AttentionEntry, mode: LayoutMode) {
+function show(entry: AttentionEntry, mode: LayoutMode) {
   if (mode !== 'focus' || entry.here) {
-    jumpTo(entry.tabId, entry.pane.id);
+    goTo(entry.tabId, entry.pane.id);
     return;
   }
   remember();
   floatingPane.set({ tabId: entry.tabId, paneId: entry.pane.id });
   tabStore.focusPane(entry.tabId, entry.pane.id);
+  landedOn = { tabId: entry.tabId, paneId: entry.pane.id };
+}
+
+/** Switch to the pane's tab and give it the keyboard. A click, not the
+ *  keyboard walk: the walk's position and highlight end here. */
+export function jumpTo(tabId: string, paneId: string) {
+  endWalk();
+  goTo(tabId, paneId);
+}
+
+/** Show the entry floating over the current tab. An entry of the current tab
+ *  has its own slot, and the grid has no floating window: both are focused
+ *  instead. Like jumpTo, it ends the keyboard walk. */
+export function preview(entry: AttentionEntry, mode: LayoutMode) {
+  endWalk();
+  show(entry, mode);
 }
 
 /** Ctrl+Shift+J: the next entry in rank order. */
@@ -54,18 +87,20 @@ export function next(mode: LayoutMode): AttentionEntry | null {
   if (!e) return null;
   cursor = cursorOf(e);
   walkPaneId.set(e.pane.id);
-  preview(e, mode);
+  show(e, mode);
   return e;
 }
 
-/** Ctrl+Shift+K: back to the pane the user was in before the walk. */
+/** Ctrl+Shift+K: back to the pane the user was in before the walk, as long
+ *  as they are still where it put them. Otherwise it only forgets the walk. */
 export function back() {
   const t = returnTo;
+  const there = stillThere();
   returnTo = null;
-  cursor = null;
-  walkPaneId.set('');
+  landedOn = null;
+  endWalk();
+  if (!t || !there) return;
   floatingPane.set(null);
-  if (!t) return;
   if (get(activeTab)?.id !== t.tabId) tabStore.setActiveTab(t.tabId);
   if (t.paneId) focusIn(t.tabId, t.paneId);
 }
