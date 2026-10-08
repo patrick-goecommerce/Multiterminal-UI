@@ -46,6 +46,7 @@
   import { EventsOn, Window } from '../wailsjs/runtime/runtime';
   import { subscribeChatEvents } from './lib/chat-events';
   import { sendQuickAction } from './lib/quickActionQueue';
+  import { tabForProject } from './lib/projectTabs';
   import { layoutModeOf, waitingElsewhere, nextWaiting, floatingStillValid, type LayoutMode } from './lib/focusLayout';
   import { floatingPane, focusOrders, placePane, slotIndexOf } from './stores/focusLayout';
 
@@ -58,6 +59,16 @@
 
   const _windowId = getWindowId();
   const _isMain = isMainWindow();
+
+  // Tab dir -> project root, as the backend resolved it. Keyed by dir rather
+  // than by tab, so a tab whose dir changed is simply looked up again.
+  const projectRoots: Record<string, string> = {};
+  async function resolveProjectRoots(tabs: typeof $allTabs): Promise<Record<string, string>> {
+    await Promise.all(tabs.filter((t) => t.dir && !(t.dir in projectRoots)).map(async (t) => {
+      try { projectRoots[t.dir] = await App.ProjectRoot(t.dir); } catch { projectRoots[t.dir] = t.dir; }
+    }));
+    return projectRoots;
+  }
   // TODO: use _initialTabs to populate secondary window tabs (pending implementation)
   const _initialTabs = getInitialTabs();
   const _initialView = getInitialView();
@@ -438,16 +449,21 @@
     //
     // Main window only: every window receives the event, and without this each
     // one would draw its own pane for the same session.
-    EventsOn('mtui:session-spawned', (event: any) => {
-      const info = event.data; // SessionSpawnedEvent { id, tool, model, dir, name, origin }
+    EventsOn('mtui:session-spawned', async (event: any) => {
+      const info = event.data; // SessionSpawnedEvent { id, tool, model, dir, name, origin, projectRoot }
       if (!info?.id || !isMainWindow()) return;
-      let tab = get(activeTab);
+      // The pane goes to its own project's tab, never to whichever tab happens
+      // to be open: there it would sit in the wrong project and never show up
+      // as waiting elsewhere (spec Befund 2). No tab switch either way.
+      const roots = await resolveProjectRoots(get(allTabs));
+      let tab = tabForProject(get(allTabs), roots, info.projectRoot || info.dir);
       if (!tab) {
         const dirName = String(info.dir || '').replace(/\\/g, '/').split('/').pop() || 'Agent';
-        tabStore.addTab(dirName, info.dir);
-        tab = get(activeTab);
+        const id = tabStore.addTab(dirName, info.dir, !get(activeTab));
+        tab = get(allTabs).find((t) => t.id === id) ?? null;
       }
       if (!tab) return;
+      const isActive = tab.id === get(activeTab)?.id;
       const prevFocus = tab.focusedPaneId;
       const paneId = tabStore.addPane(tab.id, info.id, info.name || info.tool, info.tool, info.model || '',
         null, '', '', '', '', '', false, 'terminal', '', '');
@@ -456,7 +472,7 @@
       // user is typing somewhere else.
       if (layoutMode === 'focus') {
         placePane(tab.id, paneId, 2);
-        if (prevFocus && tab.panes.some((p) => p.id === prevFocus)) tabStore.focusPane(tab.id, prevFocus);
+        if (isActive && prevFocus && tab.panes.some((p) => p.id === prevFocus)) tabStore.focusPane(tab.id, prevFocus);
       }
     });
     EventsOn('terminal:exit', (event: any) => {

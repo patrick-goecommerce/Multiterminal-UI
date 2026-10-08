@@ -343,6 +343,10 @@ export function OpenLogDir() {
   return $Call.ByID(1351486042);
 }
 
+export function ProjectRoot(arg1) {
+  return $Call.ByID(861199428, arg1);
+}
+
 export function PushBranch(arg1) {
   return $Call.ByID(3236885099, arg1);
 }

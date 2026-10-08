@@ -28,6 +28,10 @@ type SessionSpawnedEvent struct {
 	// through mt new. The frontend shows both the same way; it is here so a
 	// pane can say where it came from without a second event.
 	Origin string `json:"origin" yaml:"origin"`
+	// ProjectRoot is the main checkout of the repo the session runs in, so
+	// the frontend puts the pane into that project's tab even while another
+	// tab is active. Outside a repo it is Dir.
+	ProjectRoot string `json:"projectRoot" yaml:"projectRoot"`
 }
 
 // onSessionCreated reacts to a new session on the host.
@@ -36,6 +40,7 @@ func (a *AppService) onSessionCreated(s hub.SessionSummary) {
 	if !ok {
 		return
 	}
+	ev.ProjectRoot = a.projectRootOf(s.Dir)
 	a.adoptSession(s)
 	if a.app == nil {
 		return // no frontend yet; the pane comes out of the restore instead
@@ -84,4 +89,18 @@ func spawnedEvent(hubID string, s hub.SessionSummary) (SessionSpawnedEvent, bool
 		Name:   name,
 		Origin: s.Origin,
 	}, true
+}
+
+// ProjectRoot returns the main checkout of the repo containing dir, or dir
+// itself outside a repo. A tab asks once to learn which project it is.
+func (a *AppService) ProjectRoot(dir string) string { return a.projectRootOf(dir) }
+
+func (a *AppService) projectRootOf(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	if root, err := mainRepoRoot(dir); err == nil {
+		return root
+	}
+	return dir
 }

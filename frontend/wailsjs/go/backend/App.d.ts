@@ -186,6 +186,8 @@ export function OpenFileInEditor(arg1:string):Promise<string>;
 
 export function OpenLogDir():Promise<void>;
 
+export function ProjectRoot(arg1:string):Promise<string>;
+
 export function PushBranch(arg1:string):Promise<void>;
 
 export function ReadFile(arg1:string):Promise<backend.FileContent>;
