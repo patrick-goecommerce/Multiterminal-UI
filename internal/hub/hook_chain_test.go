@@ -101,7 +101,7 @@ func TestHookChain_EveryStateReachesTheClient(t *testing.T) {
 		{"permission", hooks.Event{Event: "PermissionRequest", Tool: "Bash"}, ActivityWaitingPermission},
 		{"typed notification", hooks.Event{Event: "Notification", NotificationType: "permission_prompt", Message: "Claude needs your permission to use Bash"}, ActivityWaitingPermission},
 		{"tool ran", hooks.Event{Event: "PostToolUse", Tool: "Bash"}, ActivityActive},
-		{"tool failed", hooks.Event{Event: "PostToolUseFailure", Tool: "Bash"}, ActivityError},
+		{"tool failed", hooks.Event{Event: "PostToolUseFailure", Tool: "Bash"}, ActivityActive},
 		{"ask user", hooks.Event{Event: "PreToolUse", Tool: "AskUserQuestion"}, ActivityWaitingAnswer},
 		{"answered", hooks.Event{Event: "PostToolUse", Tool: "AskUserQuestion"}, ActivityActive},
 		{"elicitation", hooks.Event{Event: "Notification", NotificationType: "elicitation_dialog"}, ActivityWaitingAnswer},

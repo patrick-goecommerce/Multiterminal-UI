@@ -33,7 +33,9 @@ func hookActivity(ev hooks.Event) (Activity, bool) {
 	case "PostToolUse", "UserPromptSubmit":
 		return ActivityActive, true
 	case "PostToolUseFailure":
-		return ActivityError, true
+		// A failed tool call is part of the agent's work: a red test, a typo
+		// in a command. The agent goes on by itself, so it is still running.
+		return ActivityActive, true
 	case "Notification":
 		return notificationActivity(ev.NotificationType, ev.Message)
 	case "Stop":

@@ -50,3 +50,42 @@ func TestClassifyForScan_QuietPermissionStays(t *testing.T) {
 		t.Errorf("no output since: got %q, want waitingPermission", got)
 	}
 }
+
+// Declined with Esc: Claude Code prints "Interrupted" and its prompt, and no
+// hook follows. Once the pane is quiet the screen's reading wins.
+func TestClassifyForScan_DeclinedPermissionLetsGo(t *testing.T) {
+	sess := permissionSession(t,
+		"● Bash(rm -rf build)\r\n  ⎿  Interrupted · What should Claude do instead?\r\n\x1b[1;35m❯\x1b[0m ",
+		30*time.Second, 10*time.Second)
+	if got := classifyForScan(sess); got != terminal.ActivityWaitingAnswer {
+		t.Errorf("declined and quiet: got %v, want waitingAnswer", got)
+	}
+}
+
+func TestClassifyForScan_QuietDialogStillWaits(t *testing.T) {
+	sess := permissionSession(t,
+		"Bash command\r\n  rm -rf build\r\nDo you want to proceed?\r\n❯ 1. Yes\r\n  2. No, and tell Claude what to do differently (esc)\r\n",
+		30*time.Second, 20*time.Second)
+	if got := classifyForScan(sess); got != terminal.ActivityWaitingPermission {
+		t.Errorf("dialog still shown: got %v, want waitingPermission", got)
+	}
+}
+
+func TestScanOne_HungAgentIsAnError(t *testing.T) {
+	sess := terminal.NewSession(1, 24, 80)
+	sess.SetHookActivity(terminal.ActivityActive)
+	sess.SetHookActivityAtForTest(time.Now().Add(-11 * time.Minute))
+	sess.SetLastOutputAtForTest(time.Now().Add(-11 * time.Minute))
+	r, isHung := scanOne(1, sess)
+	if !isHung || r.Activity != ActivityError {
+		t.Errorf("got %v hung=%v, want error and hung", r.Activity, isHung)
+	}
+}
+
+func TestScanOne_ShellIsNeverHung(t *testing.T) {
+	sess := terminal.NewSession(1, 24, 80) // no hook data: a shell or an agent without hooks
+	sess.SetLastOutputAtForTest(time.Now().Add(-time.Hour))
+	if _, isHung := scanOne(1, sess); isHung {
+		t.Error("a session without hooks counted as hung")
+	}
+}

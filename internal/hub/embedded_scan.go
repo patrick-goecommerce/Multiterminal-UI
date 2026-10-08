@@ -21,7 +21,13 @@ func (h *Embedded) ScanActivity() []ScanResult {
 	now := time.Now()
 	out := make([]ScanResult, 0, len(ids))
 	for i, sess := range sessions {
-		r := scanOne(ids[i], sess)
+		if exited(sess) {
+			continue
+		}
+		r, isHung := scanOne(ids[i], sess)
+		if isHung {
+			h.attention.noteFact(r.ID, ActivityError, "keine Ausgabe und kein Hook seit 10 min", "keine Ausgabe seit 10 min")
+		}
 		if r.Asleep {
 			out = append(out, r)
 			continue
@@ -73,17 +79,22 @@ func (h *Embedded) SeedActivity(id int, state Activity, at time.Time) error {
 	return nil
 }
 
-func scanOne(id int, sess *terminal.Session) ScanResult {
+// scanOne also reports whether the session counts as hung.
+func scanOne(id int, sess *terminal.Session) (ScanResult, bool) {
 	// A sleeping pane has a frozen screen (#180). Classifying it would re-emit
 	// the state it had before falling asleep and overwrite the "schläft" badge
 	// on every tick; its tokens cannot change either.
 	if sess.IsSuspendedOrSuspending() {
-		return ScanResult{ID: id, Asleep: true}
+		return ScanResult{ID: id, Asleep: true}, false
 	}
 
 	sess.ScanTokens() // always scan for token/cost data
 
 	activity := classifyForScan(sess)
+	isHung := hung(sess, activity, time.Now())
+	if isHung {
+		activity = terminal.ActivityError
+	}
 	ctxPct, model, _ := sess.StatuslineInfo()
 	return ScanResult{
 		ID:         id,
@@ -93,7 +104,30 @@ func scanOne(id int, sess *terminal.Session) ScanResult {
 		ContextPct: ctxPct,
 		Model:      model,
 		Name:       sess.AgentName(),
+	}, isHung
+}
+
+// hangAfter is how long a hook-driven agent may stay "active" with neither
+// output nor a hook event before it counts as hung. Claude Code redraws its
+// spinner the whole time it works, so ten quiet minutes are a real stall.
+const hangAfter = 10 * time.Minute
+
+// hung reports a stalled agent. Only sessions with hook data qualify: a shell
+// running a quiet build is not stuck.
+func hung(sess *terminal.Session, activity terminal.ActivityState, now time.Time) bool {
+	if activity != terminal.ActivityActive || !sess.HasHookData() {
+		return false
 	}
+	last := sess.GetLastOutputAt()
+	return !last.IsZero() && now.Sub(last) > hangAfter && now.Sub(sess.HookActivityAt()) > hangAfter
+}
+
+// exited reports a session whose process ended for good. Its screen is the
+// last frame; classifying it would replace the exit's "error" with whatever
+// that frame looks like.
+func exited(s *terminal.Session) bool {
+	st := s.GetStatus()
+	return st == terminal.StatusExited || st == terminal.StatusError
 }
 
 // classifyForScan decides a session's activity for this tick.
@@ -127,10 +161,19 @@ func classifyForScan(sess *terminal.Session) terminal.ActivityState {
 	// the draw would otherwise read as "approved".
 	if activity == terminal.ActivityWaitingPermission {
 		lastOutput := sess.GetLastOutputAt()
-		if time.Since(sess.HookActivityAt()) > permissionSettle &&
-			!lastOutput.IsZero() && time.Since(lastOutput) < terminal.ActivityStaleThreshold &&
+		settled := time.Since(sess.HookActivityAt()) > permissionSettle
+		if settled && !lastOutput.IsZero() && time.Since(lastOutput) < terminal.ActivityStaleThreshold &&
 			sess.ClassifyScreenState() != terminal.ActivityWaitingAnswer {
 			return terminal.ActivityActive
+		}
+		// Declined with Esc: Claude Code prints "Interrupted" and its prompt,
+		// and no hook follows until the user types. Once the dialog is gone
+		// and the pane is quiet, the screen's reading wins, so the pane stops
+		// asking for a permission nobody can give any more.
+		if settled && time.Since(lastOutput) >= permissionSettle && !permissionDialogVisible(sess) {
+			if screen := sess.ClassifyScreenState(); screen == terminal.ActivityDone || screen == terminal.ActivityWaitingAnswer {
+				return screen
+			}
 		}
 		return activity
 	}

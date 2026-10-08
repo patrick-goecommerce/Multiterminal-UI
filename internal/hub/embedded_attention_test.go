@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -133,5 +134,45 @@ func TestEmbedded_SubagentWorkDoesNotEndATurn(t *testing.T) {
 	h.applyHookEvent(nil, hooks.Event{Event: "PermissionRequest", MtID: 1, Tool: "Bash", AgentID: "a-1"})
 	if got := sess.GetActivity(); got != terminal.ActivityWaitingPermission {
 		t.Errorf("after subagent permission: %v, want waitingPermission", got)
+	}
+}
+
+func exitArgv(code int) []string {
+	if isWindows() {
+		return []string{comspec(), "/c", fmt.Sprintf("exit %d", code)}
+	}
+	return []string{"/bin/sh", "-c", fmt.Sprintf("exit %d", code)}
+}
+
+func TestEmbedded_FailedExitIsAnError(t *testing.T) {
+	sink := newAttentionSink()
+	h := newTestHost(t, sink)
+	id, err := h.Create(CreateSpec{Argv: exitArgv(3), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink.await(t, EventSessionExited)
+	got, _ := h.Get(id)
+	if got.Attention.State != ActivityError || got.Attention.Source != "Prozess beendet (Exit 3)" {
+		t.Errorf("after exit 3: %+v", got.Attention)
+	}
+}
+
+func TestEmbedded_CloseIsNotAnError(t *testing.T) {
+	sink := newAttentionSink()
+	h := newTestHost(t, sink)
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink.await(t, EventSessionCreated)
+	if err := h.Close(id); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond) // watchExit runs after Close
+	for _, u := range sink.all() {
+		if u.ID == id && u.Attention.State == ActivityError {
+			t.Fatalf("closing the pane reported an error: %+v", u.Attention)
+		}
 	}
 }

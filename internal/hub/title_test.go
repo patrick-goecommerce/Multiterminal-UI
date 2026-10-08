@@ -35,7 +35,9 @@ func TestScanOne_TitleIgnoresTheSpinner(t *testing.T) {
 	a.Screen.Write([]byte("\x1b]0;✳ Aufgabe\x07"))
 	b := terminal.NewSession(2, 24, 80)
 	b.Screen.Write([]byte("\x1b]0;⠂ Aufgabe\x07"))
-	if ta, tb := scanOne(1, a).Title, scanOne(2, b).Title; ta != tb || ta != "Aufgabe" {
+	ra, _ := scanOne(1, a)
+	rb, _ := scanOne(2, b)
+	if ta, tb := ra.Title, rb.Title; ta != tb || ta != "Aufgabe" {
 		t.Errorf("titles %q and %q, want both %q", ta, tb, "Aufgabe")
 	}
 }
@@ -60,7 +62,8 @@ func TestShimStatusline_KeepsTheSessionName(t *testing.T) {
 	if got := sess.AgentName(); got != "Datenbankverbindung live" {
 		t.Errorf("name forgotten: %q", got)
 	}
-	if got := scanOne(5, sess).Name; got != "Datenbankverbindung live" {
+	r5, _ := scanOne(5, sess)
+	if got := r5.Name; got !="Datenbankverbindung live" {
 		t.Errorf("scan result Name = %q", got)
 	}
 	s, err := h.Get(5)

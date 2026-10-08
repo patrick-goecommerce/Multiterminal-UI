@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hooks"
@@ -52,6 +53,7 @@ type managed struct {
 	ring      *Ring
 	spec      CreateSpec
 	startedAt time.Time
+	closing   atomic.Bool // set by Close: the exit that follows is not a failure
 }
 
 // NewEmbedded returns a Host owning sessions in this process.
@@ -168,6 +170,7 @@ func (h *Embedded) Close(id int) error {
 	if err != nil {
 		return err
 	}
+	m.closing.Store(true)
 	// Kill the tree before Close(): Close only ends the root process, and once
 	// that is gone its descendants can no longer be reached from its PID.
 	if h.killTree != nil {
