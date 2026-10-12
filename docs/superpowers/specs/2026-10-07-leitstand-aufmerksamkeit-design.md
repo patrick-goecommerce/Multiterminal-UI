@@ -152,6 +152,14 @@ als **fertig und gesehen** (Rang 5) eingetragen, mit `Source` „Keep-alive, …
 Markierung ist weg. Jeder andere Zustand beendet die Markierung ohne Änderung. Die nächste
 echte Frage zählt wieder als Rang 1.
 
+Der Keep-alive grüßt kein Pane mit Rang ≤ 3 (Freigabe, Frage, ungesehener Fehler oder
+ungesehenes „fertig“): Die Antwort auf den Gruß würde den Eintrag als gesehen überschreiben, und
+Patrick verlöre ihn. Der einmalige Gruß beim App-Start läuft ebenfalls über den Host
+(`Host.Nudge`, Route `POST /v1/sessions/{id}/keepalive`) und trägt dieselbe Markierung; ginge er
+als gewöhnliche Eingabe ins Pane, stünde seine Antwort bei jedem Start als Frage im Kasten, in der
+Taskleiste und im Toast. Ein Claude-Pane, das der Keep-alive beim Start selbst anlegt, setzt sich
+wie ein wiederhergestelltes (offener Punkt 4).
+
 ## Teil B: die Oberfläche
 
 Das Fokus-Layout bleibt: zwei große Panes in der Mitte, kleine Panes rechts, der Kasten
@@ -225,7 +233,8 @@ und nimmt keinen Platz ein.
   Ein Klick holt das Fenster nach vorn **und springt zum Pane**. Der Toast feuert nur für
   Zustände, die nach dem Öffnen des Fensters begannen, wenn es keinen früheren Datensatz gab
   (kein Schwall beim Wiederanhängen). Der erste beruhigte Zustand eines nach einem Neustart
-  wiederhergestellten Panes toastet nie (offener Punkt 4). Ein Datensatz, an dem sich nur
+  wiederhergestellten Panes toastet nie, außer er ist ein Fehler (gescheiterter Neustart, offener
+  Punkt 4). Ein Datensatz, an dem sich nur
   „gesehen“ geändert hat (gleicher Zustand, gleiche Startzeit, etwa nach „Als ungelesen
   markieren“), toastet ebenfalls nicht. Der Text wird gegen PowerShell abgesichert, weil go-toast
   ihn in einen erweiterbaren Here-String einbettet: Leerraum zusammengezogen, Backtick und `$`
@@ -464,8 +473,10 @@ Bis diese Abnahme gelaufen ist, trägt das Issue `needs-e2e-testing`.
    Sonderregel stünde fast jedes wiederhergestellte Pane ungesehen im Kasten, und jede Frage
    toastete. Die Wiederherstellung merkt sich deshalb jede neu gestartete Session
    (`lib/restoreSettle.ts`). Deren erster beruhigter Datensatz (Rang ≠ 4) toastet nie; ist es
-   „fertig“ oder „Fehler“, wird er sofort als gesehen gemeldet; eine Frage bleibt ohne Toast im
-   Kasten stehen. Danach gilt das Pane wie jedes andere. Im Daemon-Modus hängt sich das Fenster
+   „fertig“, wird er sofort als gesehen gemeldet; eine Frage bleibt ohne Toast im Kasten
+   stehen. Ein „Fehler“ ist die Ausnahme: der Bildschirm-Scan liefert nie einen, also ist ein
+   erster Datensatz mit Rang 2 ein gescheiterter Neustart (Exit ≠ 0). Er wird wie bei jedem
+   anderen Pane behandelt, bleibt ungesehen und darf toasten. Danach gilt das Pane wie jedes andere. Im Daemon-Modus hängt sich das Fenster
    wieder an, und der Host behält das Flag.
 
 ## Marktbild (Quellen der Recherche, Stand Oktober 2026)
