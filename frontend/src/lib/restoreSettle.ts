@@ -8,10 +8,12 @@ import type { SessionRef } from './sessionRef';
 // visible prompt, "waitingAnswer" for a line above it ending in "?". Every
 // restored pane would land in the box as unseen and every restored question
 // would toast, since its state began after the window started. The first
-// settled record of a restored pane therefore never toasts; a finished or
-// failed one counts as seen at once, a question stays listed (spec, offener
-// Punkt 4). A re-attached daemon session is not restored here: its host kept
-// the record.
+// settled record of a restored pane therefore never toasts; a finished one
+// counts as seen at once, a question stays listed (spec, offener Punkt 4).
+// An error is different: the screen scan never yields one, so a first record
+// of rank error is a failed restart (exit code), and it is handled like any
+// other pane's, unseen and free to toast. A re-attached daemon session is not
+// restored here: its host kept the record.
 
 export interface Settle {
   /** Whether this record may toast at all (shouldToast still decides). */
@@ -37,7 +39,8 @@ export function createRestoreSettle() {
       if (!pending.has(ref)) return PASS;
       if (att.rank === RANK_WORKING) return { toast: false, markSeen: false };
       pending.delete(ref);
-      return { toast: false, markSeen: att.rank === RANK_ERROR || att.rank === RANK_DONE };
+      if (att.rank === RANK_ERROR) return PASS;
+      return { toast: false, markSeen: att.rank === RANK_DONE };
     },
   };
 }

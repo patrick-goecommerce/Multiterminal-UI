@@ -9,12 +9,17 @@ describe('restoreSettle', () => {
     expect(s.settleRestored('h:1', att(1))).toEqual({ toast: true, markSeen: false });
   });
 
-  it('a restored done or error is seen at once and never toasts', () => {
+  it('a restored done is seen at once and never toasts', () => {
     const s = createRestoreSettle();
     s.markRestored('h:1');
-    s.markRestored('h:2');
     expect(s.settleRestored('h:1', att(3))).toEqual({ toast: false, markSeen: true });
-    expect(s.settleRestored('h:2', att(2))).toEqual({ toast: false, markSeen: true });
+  });
+
+  it('a restored error is a failed restart: it stays unseen and may toast', () => {
+    const s = createRestoreSettle();
+    s.markRestored('h:1');
+    expect(s.settleRestored('h:1', att(2))).toEqual({ toast: true, markSeen: false });
+    expect(s.settleRestored('h:1', att(2))).toEqual({ toast: true, markSeen: false });
   });
 
   it('a restored question stays listed without a toast', () => {
