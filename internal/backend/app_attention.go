@@ -63,6 +63,17 @@ func (a *AppService) markSessionUnseen(id int) {
 	}
 }
 
+// nudgeSession has the host type the keep-alive message now and mark the turn
+// as the keep-alive's (NudgeSession). 0 is a ref this window cannot resolve.
+func (a *AppService) nudgeSession(id int) {
+	if id == 0 {
+		return
+	}
+	if err := a.host.Nudge(id); err != nil {
+		log.Printf("[keepalive] Nudge %d: %v", id, err)
+	}
+}
+
 // dashboardActivity is the confirmed state, the one the pane badge shows. The
 // raw reading flickers and disagreed with the badge (spec Befund 9).
 func dashboardActivity(s hub.SessionSummary) string {

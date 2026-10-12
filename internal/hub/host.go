@@ -107,6 +107,11 @@ type Host interface {
 	MarkSeen(id int) error
 	MarkUnseen(id int) error
 
+	// Nudge types the keep-alive message into the session now and marks the
+	// turn as the keep-alive's, so its reply settles as done and seen instead
+	// of a question. It fails when no keep-alive message is configured.
+	Nudge(id int) error
+
 	// ResetActivity puts the session back to idle. A caller that has just sent
 	// it work uses this so the next "done" reads as a change rather than as
 	// the previous item's leftover state.

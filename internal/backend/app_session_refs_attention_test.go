@@ -62,3 +62,38 @@ func TestMarkSessionSeen_LogsAFailure(t *testing.T) {
 		t.Errorf("log = %q, want both failures", out)
 	}
 }
+
+// nudgeRecorder is a Host that notes Nudge.
+type nudgeRecorder struct {
+	hub.Host
+	nudged []int
+	fail   error
+}
+
+func (n *nudgeRecorder) Nudge(id int) error {
+	n.nudged = append(n.nudged, id)
+	return n.fail
+}
+
+func TestNudgeSession_TranslatesTheRefAndLogsAFailure(t *testing.T) {
+	a := newTestApp()
+	t.Cleanup(a.host.Release)
+	rec := &nudgeRecorder{Host: a.host}
+	a.host = rec
+
+	a.NudgeSession(a.ref(4))
+	a.NudgeSession(hub.Local("elsewhere", 4)) // not ours
+	a.NudgeSession(hub.Ref{})
+	if len(rec.nudged) != 1 || rec.nudged[0] != 4 {
+		t.Errorf("nudged = %v, want [4]", rec.nudged)
+	}
+
+	rec.fail = errors.New("boom")
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	a.NudgeSession(a.ref(9))
+	if !strings.Contains(buf.String(), "[keepalive] Nudge 9: boom") {
+		t.Errorf("log = %q, want the failure", buf.String())
+	}
+}

@@ -204,11 +204,9 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	case action == "resize" && r.Method == http.MethodPost:
 		s.handleResize(w, r, id)
 	case action == "reset-activity" && r.Method == http.MethodPost:
-		if err := s.host.ResetActivity(id); err != nil {
-			writeHostError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		s.handleResetActivity(w, id)
+	case action == "keepalive" && r.Method == http.MethodPost:
+		s.handleKeepAlive(w, id)
 	case action == "activity":
 		s.handleActivity(w, r, id)
 	case action == "seen":

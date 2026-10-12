@@ -218,6 +218,49 @@ func TestKeepAlive_SendingMarksTheSession(t *testing.T) {
 	}
 }
 
+func nudged(h *Embedded, id int) bool {
+	h.attention.mu.Lock()
+	defer h.attention.mu.Unlock()
+	return h.attention.nudged[id]
+}
+
+// Nudge is the same greeting on demand (the app's startup ping): it marks the
+// turn like the loop does, and refuses where it has nothing to type.
+func TestNudge_MarksTheSession(t *testing.T) {
+	h := policyFor(t, claudePolicy())
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Nudge(id); err != nil {
+		t.Fatalf("Nudge: %v", err)
+	}
+	if !nudged(h, id) {
+		t.Error("Nudge typed into the session without marking it")
+	}
+}
+
+func TestNudge_UnknownSession(t *testing.T) {
+	h := policyFor(t, claudePolicy())
+	if err := h.Nudge(99); err == nil {
+		t.Error("Nudge on an unknown session: want an error")
+	}
+}
+
+func TestNudge_WithoutAMessageTypesNothing(t *testing.T) {
+	h := policyFor(t, KeepAlive{Every: time.Hour, Modes: []string{"claude"}})
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Nudge(id); err == nil {
+		t.Error("Nudge without a message: want an error")
+	}
+	if nudged(h, id) {
+		t.Error("a nudge that typed nothing marked the session")
+	}
+}
+
 // adoptForKeepAlive registers a session with a known mode and last-output
 // time.
 //

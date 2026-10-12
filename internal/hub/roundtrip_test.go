@@ -444,6 +444,27 @@ func TestRemote_SeedActivityKeepsItsRules(t *testing.T) {
 	}
 }
 
+func TestRemote_NudgeCrossesTheWire(t *testing.T) {
+	h := newTestHost(t, nil)
+	h.keepAliveFn = func() KeepAlive { return KeepAlive{Message: "Hi!"} }
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr, _ := serveHost(t, h)
+	r := dialTest(t, addr, newSink())
+
+	if err := r.Nudge(id); err != nil {
+		t.Fatalf("Nudge: %v", err)
+	}
+	if !nudged(h, id) {
+		t.Error("the nudge reached the host without its mark")
+	}
+	if err := r.Nudge(99); err == nil {
+		t.Error("Nudge on an unknown session: want an error")
+	}
+}
+
 func TestRemote_MarkSeenCrossesTheWire(t *testing.T) {
 	h := newTestHost(t, nil)
 	h.AdoptForTest(1, terminal.NewSession(1, 24, 80))

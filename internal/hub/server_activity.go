@@ -56,6 +56,24 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request, id int) 
 	}
 }
 
+// handleResetActivity serves POST /v1/sessions/{id}/reset-activity.
+func (s *Server) handleResetActivity(w http.ResponseWriter, id int) {
+	if err := s.host.ResetActivity(id); err != nil {
+		writeHostError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleKeepAlive serves POST /v1/sessions/{id}/keepalive.
+func (s *Server) handleKeepAlive(w http.ResponseWriter, id int) {
+	if err := s.host.Nudge(id); err != nil {
+		writeHostError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // handleSeen serves POST /v1/sessions/{id}/seen.
 func (s *Server) handleSeen(w http.ResponseWriter, r *http.Request, id int) {
 	if r.Method != http.MethodPost {

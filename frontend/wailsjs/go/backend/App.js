@@ -327,6 +327,10 @@ export function MarkSessionUnseen(arg1) {
   return $Call.ByID(1453842906, arg1);
 }
 
+export function NudgeSession(arg1) {
+  return $Call.ByID(1043925722, arg1);
+}
+
 export function OpenDashboardWindow() {
   return $Call.ByID(4209662349);
 }

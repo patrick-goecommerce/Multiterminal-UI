@@ -1,6 +1,8 @@
 package hub
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"time"
 )
@@ -136,19 +138,39 @@ func safeToNudge(s SessionSummary) bool {
 // in the same write as the text.
 func (h *Embedded) sendKeepAlive(id int) {
 	policy := h.keepAlive()
-	if err := h.Write(id, []byte(policy.Message)); err != nil {
+	if err := h.nudge(id, policy.Message); err != nil {
 		log.Printf("[keepalive] session %d: %v", id, err)
 		return
 	}
+	log.Printf("[keepalive] nudged session %d after %s of silence", id, policy.Every)
+}
+
+// Nudge implements Host. The caller decides it is time, so safeToNudge is not
+// consulted here.
+func (h *Embedded) Nudge(id int) error {
+	if _, err := h.lookup(id); err != nil {
+		return err
+	}
+	msg := h.keepAlive().Message
+	if msg == "" {
+		return errors.New("keep-alive has no message")
+	}
+	return h.nudge(id, msg)
+}
+
+// nudge types the message and submits it, then marks the turn.
+func (h *Embedded) nudge(id int, message string) error {
+	if err := h.Write(id, []byte(message)); err != nil {
+		return err
+	}
 	time.Sleep(enterDelay)
 	if err := h.Write(id, []byte("\r")); err != nil {
-		log.Printf("[keepalive] session %d: submitting: %v", id, err)
-		return
+		return fmt.Errorf("submitting: %w", err)
 	}
 	// The reply to a greeting is not something to answer: it settles as done
 	// and seen instead of an hourly question in every pane.
 	h.attention.keepAlive(id)
-	log.Printf("[keepalive] nudged session %d after %s of silence", id, policy.Every)
+	return nil
 }
 
 // keepAlive reads the current policy, or a zero value when none was
