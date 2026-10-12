@@ -166,6 +166,30 @@ func TestKeepAlive_SkipsTheAskingPaneForTheNextOne(t *testing.T) {
 	}
 }
 
+// A pane that finished and nobody has seen is left alone: the greeting's reply
+// would settle as done and seen and erase its entry in the waiting list.
+func TestKeepAlive_LeavesAnUnseenFinishedPaneAlone(t *testing.T) {
+	h := policyFor(t, claudePolicy())
+	long := time.Now().Add(-2 * time.Hour)
+	adoptForKeepAlive(t, h, 1, "claude", long)
+	adoptForKeepAlive(t, h, 2, "claude", long)
+	for _, id := range []int{1, 2} {
+		if err := h.SetHookActivity(id, ActivityDone); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.attention.confirmed(1, ActivityDone, long)
+
+	if id, ok := h.keepAliveTarget(time.Now(), time.Time{}); !ok || id != 2 {
+		t.Errorf("target = (%d, %v), want (2, true)", id, ok)
+	}
+
+	h.attention.markSeen(1, true)
+	if id, ok := h.keepAliveTarget(time.Now(), time.Time{}); !ok || id != 1 {
+		t.Errorf("after seeing it, target = (%d, %v), want (1, true)", id, ok)
+	}
+}
+
 // A session another agent opened is that agent's conversation.
 func TestKeepAlive_LeavesAgentSessionsAlone(t *testing.T) {
 	h := policyFor(t, claudePolicy())

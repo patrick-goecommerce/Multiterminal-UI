@@ -123,6 +123,11 @@ func safeToNudge(s SessionSummary) bool {
 	if s.Origin == OriginAgent {
 		return false
 	}
+	// A record that still waits for its owner (permission, question, unseen
+	// error or done) would be overwritten as seen by the greeting's reply.
+	if s.Attention.Rank <= RankDone {
+		return false
+	}
 	return s.Activity == ActivityIdle || s.Activity == ActivityDone
 }
 
