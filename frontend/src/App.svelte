@@ -364,7 +364,8 @@
       };
       tabStore.applyAttention(info.id, next);
       // A restored pane's first settled state is the transcript's last one:
-      // no toast, and a finished or failed one counts as seen at once.
+      // no toast, and a finished one counts as seen at once. A failed restart
+      // is handled like any other pane.
       const settle = settleRestored(info.id, next);
       if (settle.markSeen) markSessionSeen(info.id);
       const lookedAt = document.hasFocus() && lookedAtRef === info.id;

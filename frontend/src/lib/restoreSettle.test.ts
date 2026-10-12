@@ -19,7 +19,8 @@ describe('restoreSettle', () => {
     const s = createRestoreSettle();
     s.markRestored('h:1');
     expect(s.settleRestored('h:1', att(2))).toEqual({ toast: true, markSeen: false });
-    expect(s.settleRestored('h:1', att(2))).toEqual({ toast: true, markSeen: false });
+    // Forgotten: a later "done" is not marked seen like a restored one.
+    expect(s.settleRestored('h:1', att(3))).toEqual({ toast: true, markSeen: false });
   });
 
   it('a restored question stays listed without a toast', () => {

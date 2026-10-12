@@ -158,7 +158,9 @@ Patrick verlöre ihn. Der einmalige Gruß beim App-Start läuft ebenfalls über 
 (`Host.Nudge`, Route `POST /v1/sessions/{id}/keepalive`) und trägt dieselbe Markierung; ginge er
 als gewöhnliche Eingabe ins Pane, stünde seine Antwort bei jedem Start als Frage im Kasten, in der
 Taskleiste und im Toast. Ein Claude-Pane, das der Keep-alive beim Start selbst anlegt, setzt sich
-wie ein wiederhergestelltes (offener Punkt 4).
+wie ein wiederhergestelltes (offener Punkt 4). Offen: Der Startgruß prüft den Zustand seines
+Panes nicht, wie schon vor dieser Spec. Trifft er ein wartendes Pane, beantwortet „Hi!“ dessen
+Frage oder (im Daemon-Modus) dessen Freigabedialog, und der Eintrag endet als fertig und gesehen.
 
 ## Teil B: die Oberfläche
 
@@ -234,9 +236,8 @@ und nimmt keinen Platz ein.
   Zustände, die nach dem Öffnen des Fensters begannen, wenn es keinen früheren Datensatz gab
   (kein Schwall beim Wiederanhängen). Der erste beruhigte Zustand eines nach einem Neustart
   wiederhergestellten Panes toastet nie, außer er ist ein Fehler (gescheiterter Neustart, offener
-  Punkt 4). Ein Datensatz, an dem sich nur
-  „gesehen“ geändert hat (gleicher Zustand, gleiche Startzeit, etwa nach „Als ungelesen
-  markieren“), toastet ebenfalls nicht. Der Text wird gegen PowerShell abgesichert, weil go-toast
+  Punkt 4). Ein Datensatz, an dem sich nur „gesehen“ geändert hat (gleicher Zustand, gleiche
+  Startzeit, etwa nach „Als ungelesen markieren“), toastet ebenfalls nicht. Der Text wird gegen PowerShell abgesichert, weil go-toast
   ihn in einen erweiterbaren Here-String einbettet: Leerraum zusammengezogen, Backtick und `$`
   maskiert, `]]>` entschärft; das Startargument ist XML-maskiert und wird nur aus einem gültigen
   Pane-Ref gebaut.
@@ -429,8 +430,8 @@ Claude Design als zweite Meinung.
 - `nextEntry` mit Umlauf, Ctrl+Shift+K-Rücksprung
 - Gesehen-Melder: 1 s Fokus, Eingabe, kein Aufruf bei schon gesehen
 - `shouldToast`: kein Toast, wenn sich nur „gesehen“ geändert hat
-- Wiederherstellung (`restoreSettle`): erster beruhigter Datensatz ohne Toast, fertig und Fehler
-  gesehen, Frage bleibt
+- Wiederherstellung (`restoreSettle`): erster beruhigter Datensatz ohne Toast, fertig gesehen,
+  Frage bleibt; ein Fehler bleibt ungesehen und darf toasten
 - Agent-Pane landet im Tab mit passendem `projectRoot`, ohne Tab-Wechsel
 
 ## Abnahme (E2E mit echtem Claude CLI)
@@ -476,8 +477,8 @@ Bis diese Abnahme gelaufen ist, trägt das Issue `needs-e2e-testing`.
    „fertig“, wird er sofort als gesehen gemeldet; eine Frage bleibt ohne Toast im Kasten
    stehen. Ein „Fehler“ ist die Ausnahme: der Bildschirm-Scan liefert nie einen, also ist ein
    erster Datensatz mit Rang 2 ein gescheiterter Neustart (Exit ≠ 0). Er wird wie bei jedem
-   anderen Pane behandelt, bleibt ungesehen und darf toasten. Danach gilt das Pane wie jedes andere. Im Daemon-Modus hängt sich das Fenster
-   wieder an, und der Host behält das Flag.
+   anderen Pane behandelt, bleibt ungesehen und darf toasten. Danach gilt das Pane wie jedes
+   andere. Im Daemon-Modus hängt sich das Fenster wieder an, und der Host behält das Flag.
 
 ## Marktbild (Quellen der Recherche, Stand Oktober 2026)
 
