@@ -33,7 +33,9 @@ func hookActivity(ev hooks.Event) (Activity, bool) {
 	case "PostToolUse", "UserPromptSubmit":
 		return ActivityActive, true
 	case "PostToolUseFailure":
-		return ActivityError, true
+		// A failed tool call is part of the agent's work: a red test, a typo
+		// in a command. The agent goes on by itself, so it is still running.
+		return ActivityActive, true
 	case "Notification":
 		return notificationActivity(ev.NotificationType, ev.Message)
 	case "Stop":
@@ -85,20 +87,7 @@ var (
 // is a list, the question usually introduces it ("Wie weiter?\n\n1. ...
 // 2. ..."), so the paragraph before it counts too. Code blocks are ignored.
 func endsWithQuestion(msg string) bool {
-	// mtui-hook sends only the tail of a long message, which can start inside
-	// a code block. An odd number of fences means the first one closes a block
-	// whose start was cut off; without this it would be read as an opening
-	// fence and swallow the rest, question included.
-	if strings.Count(msg, "```")%2 == 1 {
-		msg = msg[strings.Index(msg, "```")+3:]
-	}
-	msg = codeFence.ReplaceAllString(msg, "")
-	var paras []string
-	for _, p := range strings.Split(strings.ReplaceAll(msg, "\r\n", "\n"), "\n\n") {
-		if strings.TrimSpace(p) != "" {
-			paras = append(paras, p)
-		}
-	}
+	paras := paragraphs(msg)
 	if len(paras) == 0 {
 		return false
 	}

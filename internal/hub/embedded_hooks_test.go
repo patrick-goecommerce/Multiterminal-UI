@@ -21,7 +21,7 @@ func TestHookActivity_MapsWhatAnEventClaims(t *testing.T) {
 		{"tool starts", hooks.Event{Event: "PreToolUse", Tool: "Bash"}, ActivityActive, true},
 		{"tool done", hooks.Event{Event: "PostToolUse", Tool: "Bash"}, ActivityActive, true},
 		{"prompt", hooks.Event{Event: "UserPromptSubmit"}, ActivityActive, true},
-		{"tool failed", hooks.Event{Event: "PostToolUseFailure"}, ActivityError, true},
+		{"tool failed", hooks.Event{Event: "PostToolUseFailure"}, ActivityActive, true},
 		{"permission", hooks.Event{Event: "PermissionRequest", Tool: "Bash"}, ActivityWaitingPermission, true},
 		{"stop", hooks.Event{Event: "Stop"}, ActivityDone, true},
 		{"stop with a statement", hooks.Event{Event: "Stop", Message: "Alles erledigt."}, ActivityDone, true},

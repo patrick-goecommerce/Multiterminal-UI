@@ -166,6 +166,30 @@ func TestKeepAlive_SkipsTheAskingPaneForTheNextOne(t *testing.T) {
 	}
 }
 
+// A pane that finished and nobody has seen is left alone: the greeting's reply
+// would settle as done and seen and erase its entry in the waiting list.
+func TestKeepAlive_LeavesAnUnseenFinishedPaneAlone(t *testing.T) {
+	h := policyFor(t, claudePolicy())
+	long := time.Now().Add(-2 * time.Hour)
+	adoptForKeepAlive(t, h, 1, "claude", long)
+	adoptForKeepAlive(t, h, 2, "claude", long)
+	for _, id := range []int{1, 2} {
+		if err := h.SetHookActivity(id, ActivityDone); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.attention.confirmed(1, ActivityDone, long)
+
+	if id, ok := h.keepAliveTarget(time.Now(), time.Time{}); !ok || id != 2 {
+		t.Errorf("target = (%d, %v), want (2, true)", id, ok)
+	}
+
+	h.attention.markSeen(1, true)
+	if id, ok := h.keepAliveTarget(time.Now(), time.Time{}); !ok || id != 1 {
+		t.Errorf("after seeing it, target = (%d, %v), want (1, true)", id, ok)
+	}
+}
+
 // A session another agent opened is that agent's conversation.
 func TestKeepAlive_LeavesAgentSessionsAlone(t *testing.T) {
 	h := policyFor(t, claudePolicy())
@@ -174,6 +198,66 @@ func TestKeepAlive_LeavesAgentSessionsAlone(t *testing.T) {
 
 	if _, ok := h.keepAliveTarget(time.Now(), time.Time{}); ok {
 		t.Error("nudged a session an agent opened")
+	}
+}
+
+// A greeting that reached the session marks it, so the reply settles as done
+// and seen (attentionBook.settleNudge) instead of an hourly question.
+func TestKeepAlive_SendingMarksTheSession(t *testing.T) {
+	h := policyFor(t, claudePolicy())
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.sendKeepAlive(id)
+	h.attention.mu.Lock()
+	marked := h.attention.nudged[id]
+	h.attention.mu.Unlock()
+	if !marked {
+		t.Error("the keep-alive typed into the session without marking it")
+	}
+}
+
+func nudged(h *Embedded, id int) bool {
+	h.attention.mu.Lock()
+	defer h.attention.mu.Unlock()
+	return h.attention.nudged[id]
+}
+
+// Nudge is the same greeting on demand (the app's startup ping): it marks the
+// turn like the loop does, and refuses where it has nothing to type.
+func TestNudge_MarksTheSession(t *testing.T) {
+	h := policyFor(t, claudePolicy())
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Nudge(id); err != nil {
+		t.Fatalf("Nudge: %v", err)
+	}
+	if !nudged(h, id) {
+		t.Error("Nudge typed into the session without marking it")
+	}
+}
+
+func TestNudge_UnknownSession(t *testing.T) {
+	h := policyFor(t, claudePolicy())
+	if err := h.Nudge(99); err == nil {
+		t.Error("Nudge on an unknown session: want an error")
+	}
+}
+
+func TestNudge_WithoutAMessageTypesNothing(t *testing.T) {
+	h := policyFor(t, KeepAlive{Every: time.Hour, Modes: []string{"claude"}})
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Nudge(id); err == nil {
+		t.Error("Nudge without a message: want an error")
+	}
+	if nudged(h, id) {
+		t.Error("a nudge that typed nothing marked the session")
 	}
 }
 

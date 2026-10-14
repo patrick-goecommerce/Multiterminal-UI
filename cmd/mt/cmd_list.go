@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
@@ -51,10 +52,11 @@ func cmdList(e *env, args []string) int {
 		return exitOK
 	}
 	tw := tabwriter.NewWriter(e.stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tMODUS\tZUSTAND\tVERZEICHNIS\tTITEL\tKOSTEN")
+	now := time.Now()
+	fmt.Fprintln(tw, "ID\tMODUS\tZUSTAND\tWARTET\tVERZEICHNIS\tTITEL\tKOSTEN")
 	for _, s := range sessions {
-		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\n",
-			s.ID, orDash(s.Mode), displayState(s), shortDir(s.Dir),
+		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			s.ID, orDash(s.Mode), displayState(s), waitingCell(s, now), shortDir(s.Dir),
 			orDash(truncate(s.Title, 40)), cost(s.Cost))
 	}
 	_ = tw.Flush()
@@ -100,6 +102,29 @@ func cmdKill(e *env, args []string) int {
 		fmt.Fprintf(e.stdout, "Session %d beendet.\n", id)
 	}
 	return code
+}
+
+// waitingCell is the WARTET column: what the session waits for and since
+// when, "-" when it waits for nobody. The rank is recomputed, because an older
+// daemon sends a zero record whose Rank would read as a permission.
+func waitingCell(s hub.SessionSummary, now time.Time) string {
+	label := map[int]string{hub.RankPermission: "Freigabe", hub.RankQuestion: "Frage", hub.RankError: "Fehler", hub.RankDone: "fertig"}
+	text, ok := label[hub.AttentionRank(s.Attention.State, s.Attention.Seen)]
+	if !ok {
+		return "-"
+	}
+	if s.Attention.Since.IsZero() {
+		return text
+	}
+	d := now.Sub(s.Attention.Since)
+	switch {
+	case d < time.Minute:
+		return text + " <1m"
+	case d < time.Hour:
+		return fmt.Sprintf("%s %dm", text, int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%s %dh%dm", text, int(d.Hours()), int(d.Minutes())%60)
+	}
 }
 
 // shortDir keeps a listing readable when the panes sit deep in a tree: the

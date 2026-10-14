@@ -1,8 +1,9 @@
 import { tabStore } from '../stores/tabs';
-import { buildClaudeArgv, encodeForPty } from './claude';
+import { buildClaudeArgv } from './claude';
 import * as App from '../../wailsjs/go/backend/App';
 import { isMainWindow } from './window';
 import type { SessionRef } from './sessionRef';
+import { markRestored } from './restoreSettle';
 
 export interface KeepAliveConfig {
   enabled: boolean | null;
@@ -25,7 +26,9 @@ export interface KeepAliveConfig {
  *    first tab. That adds a pane to a tab, which only a window can do.
  * 2. Ping once at startup, after Claude's own boot output has settled. This
  *    is about *this app starting*, not about a stretch of silence, so it has
- *    no counterpart on the host.
+ *    no counterpart on the host. It still goes through the host (Nudge), so
+ *    the turn carries the keep-alive mark and its reply settles as done and
+ *    seen instead of landing in the waiting list as a question.
  */
 export async function startKeepAliveLoop(
   cfg: KeepAliveConfig,
@@ -44,6 +47,9 @@ export async function startKeepAliveLoop(
       try {
         const sessionId = await App.CreateSession(argv, firstTab.dir || '', 24, 80, 'claude');
         if (sessionId) {
+          // A pane created at startup settles like a restored one: its first
+          // prompt is not news.
+          markRestored(sessionId);
           tabStore.addPane(firstTab.id, sessionId, 'Claude', 'claude', '');
         }
       } catch (err) {
@@ -57,11 +63,7 @@ export async function startKeepAliveLoop(
   let cancelled = false;
 
   async function sendPing(sessionId: SessionRef) {
-    // Message text and Enter as separate writes: an agent's redraw can swallow
-    // a Return that arrives in the same chunk as the text.
-    await App.WriteToSession(sessionId, encodeForPty(cfg.message));
-    await new Promise(r => setTimeout(r, 100));
-    await App.WriteToSession(sessionId, encodeForPty('\r'));
+    await App.NudgeSession(sessionId);
   }
 
   // Send once at startup — wait until Claude's startup output has settled

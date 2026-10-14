@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
 
 const testToken = "test-token"
@@ -439,5 +441,51 @@ func TestRemote_SeedActivityKeepsItsRules(t *testing.T) {
 	}
 	if _, began := client.ConfirmedActivity(id); began.Equal(seeded) {
 		t.Error("a seed overwrote a state that was already confirmed")
+	}
+}
+
+func TestRemote_NudgeCrossesTheWire(t *testing.T) {
+	h := newTestHost(t, nil)
+	h.keepAliveFn = func() KeepAlive { return KeepAlive{Message: "Hi!"} }
+	id, err := h.Create(CreateSpec{Argv: sleepArgv(), Dir: sessionDir(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr, _ := serveHost(t, h)
+	r := dialTest(t, addr, newSink())
+
+	if err := r.Nudge(id); err != nil {
+		t.Fatalf("Nudge: %v", err)
+	}
+	if !nudged(h, id) {
+		t.Error("the nudge reached the host without its mark")
+	}
+	if err := r.Nudge(99); err == nil {
+		t.Error("Nudge on an unknown session: want an error")
+	}
+}
+
+func TestRemote_MarkSeenCrossesTheWire(t *testing.T) {
+	h := newTestHost(t, nil)
+	h.AdoptForTest(1, terminal.NewSession(1, 24, 80))
+	_ = h.ForceActivity(1, ActivityDone, time.Now())
+	addr, _ := serveHost(t, h)
+	r := dialTest(t, addr, newSink())
+
+	if err := r.MarkSeen(1); err != nil {
+		t.Fatalf("MarkSeen: %v", err)
+	}
+	got, err := r.Get(1)
+	if err != nil || !got.Attention.Seen || AttentionRank(got.Attention.State, got.Attention.Seen) != RankQuiet {
+		t.Fatalf("after MarkSeen: %+v, %v", got.Attention, err)
+	}
+	if err := r.MarkUnseen(1); err != nil {
+		t.Fatalf("MarkUnseen: %v", err)
+	}
+	if got, _ := r.Get(1); got.Attention.Seen {
+		t.Errorf("after MarkUnseen still seen")
+	}
+	if err := r.MarkSeen(99); err == nil {
+		t.Error("MarkSeen on an unknown session: want an error")
 	}
 }

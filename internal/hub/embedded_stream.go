@@ -1,7 +1,9 @@
 package hub
 
 import (
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/terminal"
 )
@@ -33,7 +35,26 @@ func (h *Embedded) watchExit(id int, sess *terminal.Session) {
 			return // closed for good while asleep, nothing to report
 		}
 	}
+	if !h.isClosing(id) {
+		// The scan skips an exited session, so its last state would freeze
+		// ("active" for a process that finished cleanly). Force a final one.
+		if code := sess.GetExitCode(); code != 0 {
+			reason := fmt.Sprintf("Prozess beendet (Exit %d)", code)
+			h.attention.noteFact(id, ActivityError, reason, reason)
+			_ = h.ForceActivity(id, ActivityError, time.Now())
+		} else {
+			h.attention.noteFact(id, ActivityDone, "Prozess beendet (Exit 0)", "Prozess beendet")
+			_ = h.ForceActivity(id, ActivityDone, time.Now())
+		}
+	}
 	h.emit(EventSessionExited, SessionExited{ID: id, ExitCode: sess.GetExitCode()})
+}
+
+// isClosing reports a session that is being closed or already gone. Its exit
+// code comes from the kill, not from a failure.
+func (h *Embedded) isClosing(id int) bool {
+	m, err := h.lookup(id)
+	return err != nil || m.closing.Load()
 }
 
 // Attach implements Host.

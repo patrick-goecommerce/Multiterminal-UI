@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -27,7 +28,7 @@ func main() {
 	// signal the running instance to focus and exit immediately.
 	for _, arg := range os.Args[1:] {
 		if strings.HasPrefix(arg, "multiterminal:") {
-			signalFocus()
+			signalFocus(arg)
 			return
 		}
 	}
@@ -171,7 +172,7 @@ func runClean() {
 // same user's instances, and rejects records whose process has died. The token
 // echoed on the connection proves we reached that instance's listener and not
 // an unrelated process that inherited a recycled port.
-func signalFocus() {
+func signalFocus(arg string) {
 	rec, err := discovery.Resolve(discovery.ServiceFocus)
 	if err != nil {
 		return // no running instance of this user, or its listener never started
@@ -181,6 +182,14 @@ func signalFocus() {
 		return
 	}
 	defer conn.Close()
+	payload := rec.Token + "\n"
+	// A toast about one pane activates "multiterminal:focus/<ref>"; the
+	// running instance jumps to that pane after raising the window.
+	if ref, found := strings.CutPrefix(arg, "multiterminal:focus/"); found {
+		if ref, err := url.PathUnescape(strings.TrimSuffix(ref, "/")); err == nil && ref != "" {
+			payload += ref + "\n"
+		}
+	}
 	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-	_, _ = conn.Write([]byte(rec.Token + "\n"))
+	_, _ = conn.Write([]byte(payload))
 }

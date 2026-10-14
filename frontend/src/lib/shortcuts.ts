@@ -10,6 +10,7 @@ export interface ShortcutCallbacks {
   onToggleDashboard?: () => void;
   onOpenSkills?: () => void;
   onNextWaiting?: () => void;
+  onBackFromWaiting?: () => void;
 }
 
 /** Create a global keydown handler for the application shortcuts. */
@@ -26,6 +27,12 @@ export function createGlobalKeyHandler(cb: ShortcutCallbacks): (e: KeyboardEvent
     if (e.shiftKey && (e.key === 'J' || e.key === 'j')) {
       e.preventDefault();
       cb.onNextWaiting?.();
+      return;
+    }
+
+    if (e.shiftKey && (e.key === 'K' || e.key === 'k')) {
+      e.preventDefault();
+      cb.onBackFromWaiting?.();
       return;
     }
 

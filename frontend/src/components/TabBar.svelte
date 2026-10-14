@@ -2,6 +2,8 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { tabStore, allTabs } from '../stores/tabs';
   import { t } from '../stores/i18n';
+  import { tabRank, tabGlyphs, tabTooltip } from '../lib/attention';
+  import StatusGlyph from './StatusGlyph.svelte';
   import * as App from '../../wailsjs/go/backend/App';
   import { EventsOn } from '../../wailsjs/runtime/runtime';
   import { getWindowId, isMainWindow } from '../lib/window';
@@ -163,9 +165,10 @@
     </button>
     {#each $allTabs as tab (tab.id)}
       <button
-        class="tab"
+        class="tab rank-{tabRank(tab.panes)}"
         class:active={tab.id === activeTabId && !isDashboard}
         class:highlight={tab._highlight}
+        title={tabTooltip(tab)}
         draggable="true"
         on:click={(e) => handleTabClick(e, tab.id)}
         on:dblclick={() => handleTabDblClick(tab.id)}
@@ -175,10 +178,11 @@
       >
         <span class="tab-name">{tab.name}</span>
         {#if tab.panes.length > 0}
-          <span class="tab-count">{tab.panes.length}</span>
-        {/if}
-        {#if tab.unreadActivity}
-          <span class="tab-activity-dot tab-dot-{tab.unreadActivity}"></span>
+          {@const g = tabGlyphs(tab.panes)}
+          <span class="tab-glyphs">
+            {#each g.kinds as kind}<StatusGlyph {kind} size={10} />{/each}
+            {#if g.more > 0}<span class="tab-more">+{g.more}</span>{/if}
+          </span>
         {/if}
         <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
         <span class="tab-close" role="button" tabindex="-1" on:click={(e) => handleCloseTab(e, tab.id)}>
@@ -274,11 +278,6 @@
     box-shadow: inset 0 2px 0 var(--accent);
   }
 
-  .tab.active .tab-count {
-    background: var(--status-running-tint, rgba(76,197,106,.16));
-    color: var(--accent);
-  }
-
   .tab.highlight {
     animation: tab-arrive 0.5s ease-out;
   }
@@ -289,17 +288,19 @@
 
   .tab-name {
     max-width: 180px;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .tab-count {
-    font-size: 10px;
-    background: var(--bg-tertiary);
-    color: var(--fg-muted);
-    padding: 1px 5px;
-    border-radius: 8px;
-  }
+  .tab-glyphs { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+  .tab-more { font-size: 10px; color: var(--fg-muted); margin-left: 2px; }
+  .tab-close { opacity: 0; }
+  .tab:hover .tab-close, .tab.active .tab-close { opacity: 1; }
+  .tab.rank-0:not(.active), .tab.rank-1:not(.active) { background: var(--status-waiting-tint); color: var(--fg); }
+  .tab.rank-2:not(.active) { background: var(--status-danger-tint); color: var(--fg); }
+  .tab.rank-3:not(.active) { background: var(--status-done-tint); color: var(--fg); }
 
   .tab-close {
     background: none;
@@ -361,43 +362,4 @@
   .ctx-item-danger { color: #f87171; }
 
   .ctx-separator { height: 1px; background: var(--border); margin: 4px 0; }
-
-  .tab-activity-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    display: inline-block;
-  }
-
-  .tab-dot-done {
-    background: var(--status-running, #4cc56a);
-    box-shadow: 0 0 6px var(--status-running, #4cc56a);
-  }
-
-  .tab-dot-waitingPermission,
-  .tab-dot-waitingAnswer {
-    background: var(--status-waiting, #d6a85c);
-    box-shadow: 0 0 7px var(--status-waiting, #d6a85c);
-    animation: tab-dot-pulse 1s ease-in-out infinite;
-  }
-
-  .tab-dot-error {
-    background: var(--status-danger, #d65f5f);
-  }
-
-  .tab-dot-active {
-    background: var(--accent);
-    animation: tab-dot-slow-pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes tab-dot-pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50%       { opacity: 0.5; transform: scale(0.75); }
-  }
-
-  @keyframes tab-dot-slow-pulse {
-    0%, 100% { opacity: 0.8; }
-    50%       { opacity: 0.25; }
-  }
 </style>

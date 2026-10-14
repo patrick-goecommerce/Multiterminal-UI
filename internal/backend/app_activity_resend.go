@@ -16,12 +16,12 @@ func (a *AppService) resendActivity(id int) {
 	if summary.Asleep() {
 		activity = "sleeping"
 	}
-	if activity == "" {
-		return
+	if activity != "" {
+		a.app.Event.Emit("terminal:activity", ActivityInfo{
+			ID:            a.ref(id),
+			Activity:      activity,
+			ActivitySince: unixOrZero(since),
+		})
 	}
-	a.app.Event.Emit("terminal:activity", ActivityInfo{
-		ID:            a.ref(id),
-		Activity:      activity,
-		ActivitySince: unixOrZero(since),
-	})
+	a.emitAttention(id, summary.Attention)
 }

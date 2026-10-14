@@ -113,9 +113,10 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **Ein Issue ist erst "done" wenn:** (1) Code implementiert, (2) Tests geschrieben UND grün, (3) E2E-getestet oder als `needs-e2e-testing` getaggt, (4) Commit mit `Closes #N` referenziert das Issue.
 - **Nie Issues manuell schließen** ohne zugehörigen Commit. Ausnahme: Duplikate, obsolete Issues.
 - **`needs-e2e-testing` Label** bedeutet: Unit Tests passen, aber der Feature-Flow wurde nie real (mit echtem Claude CLI, echtem Git-Repo, echtem UI) getestet.
-- **Spec vs. Implementation:** Design Specs sind die Quelle der Wahrheit. Wenn Code abweicht, entweder Code anpassen oder Spec updaten — nie still divergieren. Das gilt in beide Richtungen: eine Behauptung in der Spec, die sich beim Nachmessen als falsch herausstellt, wird korrigiert und nicht stillschweigend überschrieben. Die beiden aktiven Specs:
+- **Spec vs. Implementation:** Design Specs sind die Quelle der Wahrheit. Wenn Code abweicht, entweder Code anpassen oder Spec updaten — nie still divergieren. Das gilt in beide Richtungen: eine Behauptung in der Spec, die sich beim Nachmessen als falsch herausstellt, wird korrigiert und nicht stillschweigend überschrieben. Die aktiven Specs:
   - `docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md` — Daemon, Host-Seam, CLI, Phasenplan
   - `docs/superpowers/specs/2026-04-01-kanban-orchestration-v3-design.md` — Kanban-Orchestrierung
+  - `docs/superpowers/specs/2026-10-07-leitstand-aufmerksamkeit-design.md` — Leitstand Teil 1: Aufmerksamkeit über alle Projekte
 
 ## Branch Strategy
 - **`main`** — stable releases only. Hotfixes land here first.
@@ -224,6 +225,11 @@ Design: `docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md`
 - Activity/tokens → the host's own `scanLoop` (`internal/hub/embedded_scan.go`, adaptive
   500/600/750 ms) → `EventSessionScan` → `applyScanResults` → `terminal:activity` → UI.
   There is no scan loop in the backend any more.
+- **Attention lives on the host** (`internal/hub/attention.go`): state, since, seen, detail,
+  source. `hub.AttentionRank` is the only urgency rule; the frontend sorts by the host's rank
+  and takes the smallest per tab, it never re-derives one. `MarkSeen` clears "done" and
+  "error", never a permission or a question. A reader that may face an older daemon
+  recomputes the rank from State and Seen, because a zero record has Rank 0.
 - Agent state → `cmd/mtui-hook` writes JSON → `internal/hooks` tails it on the host →
   `EventSessionHook`. Hook events are authoritative; once one arrives for a session, screen
   pattern detection stops overriding it. The mapping is `hookActivity` in
@@ -234,8 +240,11 @@ Design: `docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md`
   - `Notification` goes by `notification_type` (`permission_prompt`, `elicitation_dialog`, …),
     not by a "?" in the text; the "?" reading is only the fallback for older Claude Code.
   - `AskUserQuestion` (PreToolUse/PermissionRequest) is "waitingAnswer", not work.
-  - "waitingPermission" falls back to "active" once the dialog is gone and output flows
-    (`classifyForScan`), because the next hook, PostToolUse, only comes when the tool is done.
+  - "waitingPermission" has two fallbacks in `classifyForScan`: dialog gone and output
+    flowing within `ActivityStaleThreshold` → "active" (approved; PostToolUse only comes when
+    the tool is done); declined with Esc → "done", only on positive evidence ("Interrupted"
+    in the bottom 8 rows, no permission dialog visible, hook older than 2 s). An unrecognised
+    dialog keeps waiting for the next hook.
   - No hook events beyond the eight in `hookEvents` are registered: the hooks live in the
     user's global settings.json, and how older Claude Code versions react to unknown event
     names is undocumented.
@@ -347,7 +356,8 @@ go vet ./...                      # Static analysis
 | Ctrl+B           | Toggle file browser sidebar                   |
 | Ctrl+F           | Search in terminal output (per pane)          |
 | Ctrl+1-9         | Focus pane by index (1 = first pane)          |
-| Ctrl+Shift+J     | Next pane in another tab that waits for you   |
+| Ctrl+Shift+J     | Next pane that waits for you (any tab)        |
+| Ctrl+Shift+K     | Back to where you were before Ctrl+Shift+J    |
 
 ## Smart Features
 
@@ -363,8 +373,9 @@ The pane border **flashes** when Claude changes state:
 
 ### Focus Layout (opt-in)
 `layout.mode: focus` (Settings → Pane-Anordnung) replaces the grid: the two most recently used
-panes of a tab big, the rest small on the right, and below them the panes of OTHER tabs that
-wait for a permission or an answer. One of those opens as a draggable floating window over
+panes of a tab big, the rest small on the right, and below them everything that waits, from ALL
+tabs (the current one marked "hier"): permission, question, error, unseen done; finished ones
+collapse beyond three. Ctrl+Shift+K returns. One of those opens as a draggable floating window over
 the current tab; its position is saved in `layout.float_x/float_y`. Logic in
 `frontend/src/lib/focusLayout.ts`, rendering in `PaneGrid.svelte`.
 - **Panes are moved, never remounted.** Both layouts render through the same keyed `{#each}`;

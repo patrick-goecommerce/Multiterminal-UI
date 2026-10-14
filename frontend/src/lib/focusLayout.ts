@@ -2,9 +2,9 @@
 //
 // Two panes of a tab are shown big, the most recently used one on the left.
 // The rest of the tab sits small in a column on the right, and below them a
-// list of panes in OTHER tabs that wait for the user. One of those can be
-// opened as a floating window over the current tab, so answering it does not
-// mean leaving the project.
+// list of what waits for the user, from every tab (lib/attention.ts). A pane
+// of another tab can be opened as a floating window over the current tab, so
+// answering it does not mean leaving the project.
 //
 // Everything here is pure: PaneGrid feeds it sizes and ids and renders the
 // result, which is what keeps the terminals mounted while they move around.
@@ -45,48 +45,11 @@ export function promoteInOrder(order: string[], id: string, isNew = false): stri
   return [id, ...order.slice(0, idx), ...order.slice(idx + 1)];
 }
 
-// --- Waiting panes in other tabs --------------------------------------------
+// --- Floating window ----------------------------------------------------------
 
 export interface FloatingRef {
   tabId: string;
   paneId: string;
-}
-
-export interface WaitingEntry {
-  tabId: string;
-  tabName: string;
-  pane: Pane;
-}
-
-export function isWaiting(activity: Pane['activity']): boolean {
-  return activity === 'waitingPermission' || activity === 'waitingAnswer';
-}
-
-/** Panes outside `currentTabId` that wait for the user: a permission request
- *  or a question. Finished, working and failed panes are left out on purpose;
- *  the list is for what blocks an agent right now. Permission requests first,
- *  then whoever has been waiting longest. */
-export function waitingElsewhere(tabs: Tab[], currentTabId: string): WaitingEntry[] {
-  const out: WaitingEntry[] = [];
-  for (const tab of tabs) {
-    if (tab.id === currentTabId) continue;
-    for (const pane of tab.panes) {
-      if (isWaiting(pane.activity)) out.push({ tabId: tab.id, tabName: tab.name, pane });
-    }
-  }
-  const rank = (p: Pane) => (p.activity === 'waitingPermission' ? 0 : 1);
-  // 0 means "unknown since when"; sort those after the ones with a time.
-  const since = (p: Pane) => p.activitySince || Number.MAX_SAFE_INTEGER;
-  return out.sort((a, b) => rank(a.pane) - rank(b.pane) || since(a.pane) - since(b.pane));
-}
-
-/** The entry after `current`, wrapping around; the first one if `current` is
- *  not in the list. Null when nothing waits. */
-export function nextWaiting(list: WaitingEntry[], current: FloatingRef | null): FloatingRef | null {
-  if (list.length === 0) return null;
-  const i = current ? list.findIndex((e) => e.tabId === current.tabId && e.pane.id === current.paneId) : -1;
-  const next = list[(i + 1) % list.length];
-  return { tabId: next.tabId, paneId: next.pane.id };
 }
 
 /** Whether the floating reference still points at something worth showing:
@@ -111,15 +74,16 @@ export interface FocusGeometry {
 // Keep in sync with the .pane-grid padding and gap in PaneGrid.svelte.
 export const FOCUS_PAD = 4;
 export const FOCUS_GAP = 4;
-const LIST_HEAD = 30;
+const LIST_HEAD = 34;
 const LIST_ROW = 46;
+const LIST_QUIET = 36;
 export const FLOAT_BAR = 32;
 
 /** Where the big slots, the small slots and the waiting list go in a pane area
  *  of `w` x `h`. The right column is always there in focus mode: letting it
  *  appear only when something waits elsewhere would resize the big panes every
  *  time an agent in another project asked a question. */
-export function focusGeometry(w: number, h: number, paneCount: number, waitingCount: number): FocusGeometry {
+export function focusGeometry(w: number, h: number, paneCount: number, listRows: number): FocusGeometry {
   const P = FOCUS_PAD, G = FOCUS_GAP;
   const innerH = Math.max(0, h - 2 * P);
   const colW = Math.round(Math.min(420, Math.max(240, w * 0.22)));
@@ -135,7 +99,11 @@ export function focusGeometry(w: number, h: number, paneCount: number, waitingCo
     big.push({ x: P + half + G, y: P, w: bigW - half - G, h: innerH });
   }
 
-  const listH = Math.round(Math.min(innerH * 0.45, LIST_HEAD + Math.max(1, waitingCount) * LIST_ROW + 8));
+  // An empty list is one quiet line; the small panes get the room back. A
+  // busy one grows with its rows up to 40 % of the column and then scrolls.
+  const listH = listRows === 0
+    ? LIST_QUIET
+    : Math.round(Math.min(innerH * 0.4, LIST_HEAD + listRows * LIST_ROW + 8));
   const list: Rect = { x: column.x, y: P + innerH - listH, w: colW, h: listH };
 
   const smallCount = Math.max(0, paneCount - 2);
@@ -208,7 +176,7 @@ function ownSlot(id: string, order: string[], geo: FocusGeometry): Slot {
   return { kind: 'small', rect, logical: { w: ref.w, h: ref.h }, scale };
 }
 
-/** The state as the small cards and the waiting list spell it. */
+/** The state as the small cards and the floating window's bar spell it. */
 export function stateLabel(activity: Pane['activity']): string {
   switch (activity) {
     case 'waitingPermission': return 'braucht Freigabe';

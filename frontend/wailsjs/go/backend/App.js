@@ -319,6 +319,18 @@ export function LoadTabs() {
   return $Call.ByID(542856639);
 }
 
+export function MarkSessionSeen(arg1) {
+  return $Call.ByID(2450841005, arg1);
+}
+
+export function MarkSessionUnseen(arg1) {
+  return $Call.ByID(1453842906, arg1);
+}
+
+export function NudgeSession(arg1) {
+  return $Call.ByID(1043925722, arg1);
+}
+
 export function OpenDashboardWindow() {
   return $Call.ByID(4209662349);
 }
@@ -333,6 +345,10 @@ export function OpenFileInEditor(arg1) {
 
 export function OpenLogDir() {
   return $Call.ByID(1351486042);
+}
+
+export function ProjectRoot(arg1) {
+  return $Call.ByID(861199428, arg1);
 }
 
 export function PushBranch(arg1) {
@@ -425,6 +441,10 @@ export function SelectDirectory(arg1) {
 
 export function SendNotification(arg1, arg2) {
   return $Call.ByID(855829018, arg1, arg2);
+}
+
+export function SendPaneNotification(arg1, arg2, arg3) {
+  return $Call.ByID(3894238824, arg1, arg2, arg3);
 }
 
 export function StageFiles(arg1, arg2) {
@@ -782,4 +802,8 @@ export function RemoveOrphanedWorktree(arg1) {
 
 export function EnsureProjectWorktreeSetup(arg1) {
   return $Call.ByID(2109684008, arg1);
+}
+
+export function SetAttentionBadge(arg1) {
+  return $Call.ByID(2789518836, arg1);
 }

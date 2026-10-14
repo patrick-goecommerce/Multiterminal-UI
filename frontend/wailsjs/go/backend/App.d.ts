@@ -174,6 +174,12 @@ export function MergeWindowToMain(arg1:string,arg2:string):Promise<void>;
 
 export function LoadTabs():Promise<config.SessionState>;
 
+export function MarkSessionSeen(arg1:string):Promise<void>;
+
+export function MarkSessionUnseen(arg1:string):Promise<void>;
+
+export function NudgeSession(arg1:string):Promise<void>;
+
 export function OpenDashboardWindow():Promise<string>;
 
 export function OpenDirectory(arg1:string):Promise<string>;
@@ -181,6 +187,8 @@ export function OpenDirectory(arg1:string):Promise<string>;
 export function OpenFileInEditor(arg1:string):Promise<string>;
 
 export function OpenLogDir():Promise<void>;
+
+export function ProjectRoot(arg1:string):Promise<string>;
 
 export function PushBranch(arg1:string):Promise<void>;
 
@@ -219,6 +227,8 @@ export function RecordOpenedDir(arg1:string):Promise<void>;
 export function SelectDirectory(arg1:string):Promise<string>;
 
 export function SendNotification(arg1:string,arg2:string):Promise<void>;
+
+export function SendPaneNotification(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function StageFiles(arg1:string,arg2:Array<string>):Promise<void>;
 
@@ -408,3 +418,4 @@ export function AbortWorktreeRebase(arg1:string):Promise<void>;
 export function RemoveOrphanedWorktree(arg1:string):Promise<void>;
 
 export function EnsureProjectWorktreeSetup(arg1:string):Promise<void>;
+export function SetAttentionBadge(arg1:number):Promise<void>;

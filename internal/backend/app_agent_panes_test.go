@@ -104,3 +104,14 @@ func TestAdoptSession_IsNotDoneTwice(t *testing.T) {
 		t.Errorf("mode = %q, want the window's own %q", mode, "claude")
 	}
 }
+
+func TestProjectRootOf_OutsideARepoIsTheDirItself(t *testing.T) {
+	a := newTestApp()
+	dir := t.TempDir()
+	if got := a.projectRootOf(dir); got != dir {
+		t.Errorf("got %q, want %q", got, dir)
+	}
+	if got := a.projectRootOf(""); got != "" {
+		t.Errorf("empty dir: got %q", got)
+	}
+}

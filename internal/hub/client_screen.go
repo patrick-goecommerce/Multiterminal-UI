@@ -88,6 +88,21 @@ func (r *Remote) SeedActivity(id int, state Activity, at time.Time) error {
 		activityWrite{Activity: state, At: at, Seed: true}, nil)
 }
 
+// MarkSeen implements Host.
+func (r *Remote) MarkSeen(id int) error {
+	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/seen", id), seenWrite{Seen: true}, nil)
+}
+
+// MarkUnseen implements Host.
+func (r *Remote) MarkUnseen(id int) error {
+	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/seen", id), seenWrite{Seen: false}, nil)
+}
+
+// Nudge implements Host.
+func (r *Remote) Nudge(id int) error {
+	return r.call(http.MethodPost, fmt.Sprintf("/v1/sessions/%d/keepalive", id), nil, nil)
+}
+
 // ScanActivity implements Host.
 func (r *Remote) ScanActivity() []ScanResult {
 	var out struct {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { tabStore, computeTabActivity } from './tabs';
+import { tabStore } from './tabs';
+import { tabRank } from '../lib/attention';
 
 // Pane sleeping (issue #180, step 3): 'sleeping' and 'resuming' are lifecycle
 // states, not activity classifications. They must reach the pane instantly and
@@ -10,29 +11,18 @@ function paneOf(tabId: string, sessionNum: number) {
   return tab!.panes.find((p) => p.sessionId === `h1:${sessionNum}`)!;
 }
 
-describe('computeTabActivity with sleeping panes', () => {
+describe('tabRank with sleeping panes', () => {
   it('ignores a sleeping pane', () => {
-    expect(computeTabActivity([{ activity: 'sleeping' } as any])).toBeNull();
+    expect(tabRank([{ activity: 'sleeping' } as any])).toBe(5);
   });
 
   it('ignores a resuming pane', () => {
-    expect(computeTabActivity([{ activity: 'resuming' } as any])).toBeNull();
+    expect(tabRank([{ activity: 'resuming' } as any])).toBe(5);
   });
 
   it('does not let a sleeping pane mask a waiting one', () => {
-    const panes = [
-      { activity: 'sleeping' } as any,
-      { activity: 'waitingPermission' } as any,
-    ];
-    expect(computeTabActivity(panes)).toBe('waitingPermission');
-  });
-
-  it('keeps done when the other pane sleeps', () => {
-    const panes = [
-      { activity: 'done' } as any,
-      { activity: 'sleeping' } as any,
-    ];
-    expect(computeTabActivity(panes)).toBe('done');
+    const panes = [{ activity: 'sleeping' } as any, { activity: 'waitingPermission' } as any];
+    expect(tabRank(panes)).toBe(0);
   });
 });
 

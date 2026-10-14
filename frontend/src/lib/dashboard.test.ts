@@ -15,7 +15,7 @@ function makePane(overrides: Partial<Pane>): Pane {
 }
 
 function makeTab(id: string, name: string, panes: Pane[]): Tab {
-  return { id, name, dir: '/proj', panes, focusedPaneId: '', unreadActivity: null };
+  return { id, name, dir: '/proj', panes, focusedPaneId: '' };
 }
 
 describe('groupPanesByActivity', () => {

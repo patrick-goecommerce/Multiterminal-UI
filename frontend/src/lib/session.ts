@@ -7,6 +7,7 @@ import { resolveMCPConfigPath } from './mcp';
 import * as App from '../../wailsjs/go/backend/App';
 import { NO_SESSION, sameSession, sessionNumber, type SessionRef } from './sessionRef';
 import { focusOrderIndices, restoreFocusOrder } from '../stores/focusLayout';
+import { markRestored } from './restoreSettle';
 
 /**
  * Sessions the backend still holds.
@@ -125,6 +126,9 @@ export async function restoreSession(claudePath: string, codexPath?: string, gem
           }
           if (!reattached) {
             sessionId = await App.CreateSession(argv, sessionDir, 24, 80, mode);
+            // A new process replaying its transcript: its first settled
+            // state is the old one, not news (lib/restoreSettle.ts).
+            markRestored(sessionId);
           }
           if (sessionId) {
             // Restore the pane's state-start timestamp so its duration badge

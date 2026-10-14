@@ -22,7 +22,7 @@
   import WorktreeFinishDialog from './components/WorktreeFinishDialog.svelte';
   import CloseTabConfirmDialog from './components/CloseTabConfirmDialog.svelte';
   import { get } from 'svelte/store';
-  import { tabStore, activeTab, allTabs, windowTitle, tabNeedsCloseConfirm } from './stores/tabs';
+  import { tabStore, activeTab, allTabs, windowTitle, paneDisplayName, tabNeedsCloseConfirm } from './stores/tabs';
   import { workspace } from './stores/workspace';
   import { kanban } from './stores/kanban';
   import { config } from './stores/config';
@@ -46,7 +46,13 @@
   import { EventsOn, Window } from '../wailsjs/runtime/runtime';
   import { subscribeChatEvents } from './lib/chat-events';
   import { sendQuickAction } from './lib/quickActionQueue';
-  import { layoutModeOf, waitingElsewhere, nextWaiting, floatingStillValid, type LayoutMode } from './lib/focusLayout';
+  import { tabForProject } from './lib/projectTabs';
+  import { seenTargetOf } from './lib/seenTracker';
+  import { seenTracker, markSessionSeen } from './lib/seen';
+  import { settleRestored } from './lib/restoreSettle';
+  import { layoutModeOf, floatingStillValid, type LayoutMode } from './lib/focusLayout';
+  import { attentionList, shouldToast, ENTRY_LABEL } from './lib/attention';
+  import { next as nextAttention, back as backFromAttention, jumpToSession } from './lib/attentionNav';
   import { floatingPane, focusOrders, placePane, slotIndexOf } from './stores/focusLayout';
 
   const MAX_PANES_PER_TAB = 10;
@@ -58,6 +64,16 @@
 
   const _windowId = getWindowId();
   const _isMain = isMainWindow();
+
+  // Tab dir -> project root, as the backend resolved it. Keyed by dir rather
+  // than by tab, so a tab whose dir changed is simply looked up again.
+  const projectRoots: Record<string, string> = {};
+  async function resolveProjectRoots(tabs: typeof $allTabs): Promise<Record<string, string>> {
+    await Promise.all(tabs.filter((t) => t.dir && !(t.dir in projectRoots)).map(async (t) => {
+      try { projectRoots[t.dir] = await App.ProjectRoot(t.dir); } catch { projectRoots[t.dir] = t.dir; }
+    }));
+    return projectRoots;
+  }
   // TODO: use _initialTabs to populate secondary window tabs (pending implementation)
   const _initialTabs = getInitialTabs();
   const _initialView = getInitialView();
@@ -202,6 +218,7 @@
     },
     onOpenSkills: () => { if (projectInitialized) openSkillEditor(); },
     onNextWaiting: () => jumpToNextWaiting(),
+    onBackFromWaiting: () => backFromAttention(),
   });
 
   onMount(async () => {
@@ -336,6 +353,32 @@
       }
     });
 
+    EventsOn('terminal:attention', (event: any) => {
+      const info = event.data; // AttentionInfo { id, state, rank, seen, detail, source, since }
+      const tab = $allTabs.find((t) => t.panes.some((p) => p.sessionId === info.id));
+      const pane = tab?.panes.find((p) => p.sessionId === info.id);
+      const before = pane?.attention;
+      const next = {
+        state: info.state, rank: info.rank, seen: info.seen,
+        detail: info.detail ?? '', source: info.source ?? '', since: info.since ?? 0,
+      };
+      tabStore.applyAttention(info.id, next);
+      // A restored pane's first settled state is the transcript's last one:
+      // no toast, and a finished one counts as seen at once. A failed restart
+      // is handled like any other pane.
+      const settle = settleRestored(info.id, next);
+      if (settle.markSeen) markSessionSeen(info.id);
+      const lookedAt = document.hasFocus() && lookedAtRef === info.id;
+      if (settle.toast && tab && pane && shouldToast(before, next, lookedAt, windowStartedAt)) {
+        App.SendPaneNotification(`${ENTRY_LABEL[next.rank]} · ${tab.name}`,
+          `${paneDisplayName(pane)}${next.detail ? ': ' + next.detail : ''}`, info.id).catch(() => {});
+      }
+    });
+    // A toast about one pane was clicked: the backend raised the window.
+    EventsOn('mtui:focus-session', (event: any) => {
+      if (event.data?.id) jumpToSession(event.data.id);
+    });
+
     // Wails v3: event handlers receive a WailsEvent object; payload is in event.data
     EventsOn('terminal:activity', (event: any) => {
       const info = event.data; // ActivityInfo { id, activity, cost, activitySince, title }
@@ -438,16 +481,25 @@
     //
     // Main window only: every window receives the event, and without this each
     // one would draw its own pane for the same session.
-    EventsOn('mtui:session-spawned', (event: any) => {
-      const info = event.data; // SessionSpawnedEvent { id, tool, model, dir, name, origin }
+    EventsOn('mtui:session-spawned', async (event: any) => {
+      const info = event.data; // SessionSpawnedEvent { id, tool, model, dir, name, origin, projectRoot }
       if (!info?.id || !isMainWindow()) return;
-      let tab = get(activeTab);
+      // The pane goes to its own project's tab, never to whichever tab happens
+      // to be open: there it would sit in the wrong project and never show up
+      // as waiting elsewhere (spec Befund 2). No tab switch either way.
+      const roots = await resolveProjectRoots(get(allTabs));
+      let tab = tabForProject(get(allTabs), roots, info.projectRoot || info.dir);
       if (!tab) {
-        const dirName = String(info.dir || '').replace(/\\/g, '/').split('/').pop() || 'Agent';
-        tabStore.addTab(dirName, info.dir);
-        tab = get(activeTab);
+        // The project root is the tab's identity, so a second spawn for the
+        // same project finds this tab instead of creating another.
+        const newDir = info.projectRoot || info.dir;
+        const dirName = String(newDir || '').replace(/\\/g, '/').split('/').pop() || 'Agent';
+        const id = tabStore.addTab(dirName, newDir, !get(activeTab));
+        projectRoots[newDir] = newDir;
+        tab = get(allTabs).find((t) => t.id === id) ?? null;
       }
       if (!tab) return;
+      const isActive = tab.id === get(activeTab)?.id;
       const prevFocus = tab.focusedPaneId;
       const paneId = tabStore.addPane(tab.id, info.id, info.name || info.tool, info.tool, info.model || '',
         null, '', '', '', '', '', false, 'terminal', '', '');
@@ -456,7 +508,7 @@
       // user is typing somewhere else.
       if (layoutMode === 'focus') {
         placePane(tab.id, paneId, 2);
-        if (prevFocus && tab.panes.some((p) => p.id === prevFocus)) tabStore.focusPane(tab.id, prevFocus);
+        if (isActive && prevFocus && tab.panes.some((p) => p.id === prevFocus)) tabStore.focusPane(tab.id, prevFocus);
       }
     });
     EventsOn('terminal:exit', (event: any) => {
@@ -1024,11 +1076,38 @@
   $: tabInfo = `Tab ${($allTabs.findIndex((t) => t.id === $activeTab?.id) ?? 0) + 1}/${$allTabs.length}  Pane ${currentPanes}/${MAX_PANES_PER_TAB}`;
 
   $: layoutMode = layoutModeOf($config.layout?.mode);
+  $: waitingAll = attentionList($allTabs, $activeTab?.id ?? '');
+  $: showWaitCounter = layoutMode !== 'focus' || !!$activeTab?.panes.some((p) => p.maximized);
 
   // Whether the keyboard was last in the floating pane. Dialogs (command
   // palette, rename) take focus without changing it, so a command sent from
   // the palette still goes where the user was typing.
   let floatHasKeyboard = false;
+
+  // The ref of the pane the user is looking at; '' for none. Read by the
+  // toast rule, which never fires for this pane.
+  // Unix seconds; states older than this never toast (a reattach re-sends them).
+  const windowStartedAt = Math.floor(Date.now() / 1000);
+  let lookedAtRef = '';
+  // The pane being looked at: the floating one while it has the keyboard,
+  // otherwise the active tab's focused pane. A function call, so only the
+  // arguments are dependencies (CLAUDE.md).
+  $: trackLookedAt($allTabs, $activeTab, $floatingPane, floatHasKeyboard);
+  function trackLookedAt(tabs: typeof $allTabs, tab: typeof $activeTab, float: typeof $floatingPane, floatKeys: boolean) {
+    let pane = null;
+    if (float && floatKeys) pane = tabs.find((t) => t.id === float.tabId)?.panes.find((p) => p.id === float.paneId) ?? null;
+    else if (tab) pane = tab.panes.find((p) => p.id === tab.focusedPaneId) ?? null;
+    lookedAtRef = pane?.sessionId ?? '';
+    seenTracker.look(seenTargetOf(pane));
+  }
+  onMount(() => {
+    const onFocus = () => seenTracker.windowFocus(true);
+    const onBlur = () => seenTracker.windowFocus(false);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', onBlur);
+    seenTracker.windowFocus(document.hasFocus());
+    return () => { window.removeEventListener('focus', onFocus); window.removeEventListener('blur', onBlur); };
+  });
   function trackKeyboardOwner(e: FocusEvent) {
     const el = e.target as HTMLElement | null;
     if (!el?.closest) return;
@@ -1045,27 +1124,35 @@
     if (ref && (mode !== 'focus' || !floatingStillValid(ref, tabs, activeId))) floatingPane.set(null);
   }
 
-  /** Ctrl+Shift+J: the next pane in another tab that waits for the user. Focus
-   *  mode opens it floating over the current tab; the grid switches to it. */
+  /** Ctrl+Shift+J: the next pane that waits, from any tab. */
   function jumpToNextWaiting() {
-    const next = nextWaiting(waitingElsewhere($allTabs, $activeTab?.id ?? ''), get(floatingPane));
-    if (!next) return;
-    if (layoutMode === 'focus') floatingPane.set(next);
-    else tabStore.setActiveTab(next.tabId);
-    tabStore.focusPane(next.tabId, next.paneId);
+    nextAttention(layoutMode);
   }
 
   // Reflect the focused pane in the native window title (distinguishes multi-window).
   // Only $activeTab is a reactive dependency; the dedup lives inside the function so
   // Svelte does not track _lastWindowTitle (see CLAUDE.md $: footgun note).
   let _lastWindowTitle = '';
-  function syncWindowTitle(tab: typeof $activeTab, version: string) {
-    const title = windowTitle(tab, version);
+  function syncWindowTitle(tab: typeof $activeTab, version: string, blocking: number) {
+    const title = windowTitle(tab, version, blocking);
     if (title === _lastWindowTitle) return;
     _lastWindowTitle = title;
     Window.SetTitle(title).catch(() => {});
   }
-  $: syncWindowTitle($activeTab, appVersion);
+  $: blockingCount = waitingAll.filter((e) => e.rank <= 1).length;
+  $: syncWindowTitle($activeTab, appVersion, blockingCount);
+
+  // The taskbar number follows the blocked count; the call only goes out on a
+  // change. A function, so only the argument is a dependency (CLAUDE.md).
+  let _lastBadge = -1;
+  function syncBadge(n: number) {
+    if (n === _lastBadge) return;
+    _lastBadge = n;
+    App.SetAttentionBadge(n).catch(() => {});
+  }
+  // Only the main window: the overlay sits on its button, and a detached window
+  // counts only its own tabs.
+  $: if (_isMain) syncBadge(blockingCount);
 
   async function handleChangeDir() {
     const tab = $activeTab;
@@ -1366,6 +1453,9 @@
     maxPanes={MAX_PANES_PER_TAB}
     tabDir={$activeTab?.dir ?? ''}
     {canChangeDir}
+    waiting={waitingAll}
+    showCounter={showWaitCounter}
+    {layoutMode}
     on:newTerminal={() => (showLaunchDialog = true)}
     on:toggleSidebar={() => workspace.toggleSidebar()}
     on:changeDir={handleChangeDir}
