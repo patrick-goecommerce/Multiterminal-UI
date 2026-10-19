@@ -1,6 +1,6 @@
 # Leitstand, Teil 2: Review-Briefing — Design
 
-**Status:** Entwurf, von Patrick abschnittsweise freigegeben (2026-10-15 bis 2026-10-19), Spec-Review offen
+**Status:** Freigegeben (2026-10-19), Umsetzung offen
 **Worktree:** C:\Users\Patrick.Hennig\repos\Multiterminal-UI\.claude\worktrees\leitstand-review-briefing
 **Baut auf:** `docs/superpowers/specs/2026-10-07-leitstand-aufmerksamkeit-design.md` (Teil 1, gemergt mit #214)
 **Betrifft:** `cmd/mtui-hook`, neu `internal/hub/turn*.go`, `briefing*.go`, `ciwatch*.go`, `internal/hub/attention.go`,
@@ -106,9 +106,18 @@ dieser Präfixe beginnt:
 - Mehrere Prüfungen in einer Befehlszeile zählen als **eine** Prüfung mit verbundenem Label
   (`go vet + go test`), weil der Exit-Code nicht einem Segment zuzuordnen ist.
 - **Pipe:** Steht hinter einer Prüfung ein `|`, gilt der Exit-Code der Pipe, nicht der Prüfung.
-  Ergebnis dann „?“ (unsicher), es sei denn `output_tail` trägt ein eindeutiges Fehlerzeichen
-  (`--- FAIL`, `FAIL\t`, `FAIL `, `error TS`, `npm ERR!`, `Tests … failed`, `error[E`): dann ✗.
-  Ein „?“ wird nie zu ✓ und ist kein Warnzeichen.
+  Ergebnis dann „?“ (unsicher), es sei denn `output_tail` trägt ein eindeutiges Fehlerzeichen:
+  dann ✗. Ein „?“ wird nie zu ✓ und ist kein Warnzeichen. Die Fehlerzeichen sind an echten
+  Ausgaben gemessen (2026-10-19) und nur diese:
+
+  | Werkzeug | Fehlerzeichen (Zeilenanfang) |
+  |---|---|
+  | `go test` | `--- FAIL:`, oder eine Zeile `FAIL` bzw. `FAIL<Tab><paket>` |
+  | `tsc` | `<datei>(z,s): error TS<nr>:` (Muster `error TS\d+:`) |
+  | `vitest` | `Tests  <n> failed` bzw. `Test Files  <n> failed` (beliebig viele Leerzeichen) |
+
+  npm 11 schreibt bei einem gescheiterten Skript keine eigene Fehlerzeile; `npm run build | tail`
+  bleibt deshalb „?“. `pytest` und `cargo` sind nicht gemessen und haben keine Fehlerzeichen.
 - Alle anderen Befehle zählen nicht. Ein `grep` ohne Treffer endet auch mit Exit-Code 1.
 
 ## Teil B: Git-Signale
@@ -375,7 +384,9 @@ nie Zuweisungen im `$:`-Block.
 **Go**
 - Prüfbefehl-Erkennung als Tabelle: `cd x && go test ./...`, `FOO=1 npm run build`,
   `go vet ./... && go test ./...` (verbundenes Label), `go test ./... | tail -20` mit und ohne
-  `--- FAIL` im Tail, `grep` zählt nicht, `is_interrupt` zählt nicht.
+  `--- FAIL` im Tail, `npx tsc --noEmit | head` mit `error TS2322:`, `npx vitest run | tail` mit
+  `Tests  1 failed | 1 passed (2)`, `npm run build | tail` ohne Fehlerzeile → „?“, `grep` zählt
+  nicht, `is_interrupt` zählt nicht. Die Tails der Fixtures sind die gemessenen Ausgaben.
 - `turnBook`: erst rot, dann grün → ✓; Keep-alive-Turn ohne Briefing, letztes bleibt; Ereignis nach
   `Stop` und mit fremder `prompt_id` ignoriert; Session-Ende vergisst.
 - Git in einem Test-Repo (`t.TempDir()`, echtes `git`): Turn-Diff zählt eine Änderung ohne
@@ -428,5 +439,5 @@ Jede Stufe ist für sich nutzbar und endet grün:
 
 ## Offene Punkte
 
-1. Die Fehlerzeichen für Prüfungen mit Pipe (A3) sind eine Startliste; sie wird an echten Ausgaben
-   von `go test`, `vitest`, `tsc` und `pytest` geprüft, bevor sie in die Tests kommt.
+Keine. Beide Punkte des Entwurfs sind gemessen: `prompt_id` (Abschnitt „Gemessen“) und die
+Fehlerzeichen (A3).
