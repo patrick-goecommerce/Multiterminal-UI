@@ -94,7 +94,7 @@
           aria-label="{ENTRY_LABEL[entry.rank]}: {entry.here ? 'dieses Projekt' : entry.tabName}, {paneDisplayName(entry.pane)}"
           on:mouseenter={(e) => over(e, entry, true)} on:mouseleave={hover.leave}
           on:mousedown={() => (pointerDown = true)} on:mouseup={() => (pointerDown = false)}
-          on:focus={(e) => onFocus(e, entry)} on:blur={() => { pointerDown = false; hover.leave(); }}
+          on:focus={(e) => onFocus(e, entry)} on:blur={hover.leave}
           on:click={(e) => activate(e, entry)} on:keydown={(e) => onKey(e, entry)} on:contextmenu={(e) => onMenu(e, entry)}>
           <div class="l1">
             <StatusGlyph kind={glyphKind(entry.pane)} />

@@ -100,6 +100,23 @@ describe('WaitingPanel briefing', () => {
     expect(document.querySelector('.card')).not.toBeNull();
   });
 
+  it('clicking a second row while the first has focus does not open its card at once', async () => {
+    const second = { ...entry(3), pane: { ...entry(3).pane, id: 'p2', sessionId: 'h:2' } } as AttentionEntry;
+    briefings.set({ 'h:1': briefing(), 'h:2': briefing() });
+    const { container } = render(WaitingPanel, { props: { rows: [entry(3), second], total: 2 } });
+    const [a, b] = Array.from(container.querySelectorAll('.wp-entry'));
+    await fireEvent.mouseDown(b);
+    await fireEvent.blur(a);
+    await fireEvent.focus(b);
+    await tick();
+    expect(document.querySelector('.card')).toBeNull();
+    await fireEvent.mouseUp(b);
+    await fireEvent.mouseEnter(b);
+    vi.advanceTimersByTime(301);
+    await tick();
+    expect(document.querySelector('.card')).not.toBeNull();
+  });
+
   it('refreshes the open card when its briefing is updated', async () => {
     briefings.set({ 'h:1': briefing() });
     const { container } = render(WaitingPanel, { props: { rows: [entry(3)], total: 1 } });
