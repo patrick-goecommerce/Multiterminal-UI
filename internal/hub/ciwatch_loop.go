@@ -113,8 +113,8 @@ func (h *Embedded) ciPass(ctx context.Context) {
 	}
 }
 
-// ciAuthorized checks the gh login once and remembers it. Without a login
-// there is no PR line, and that is not an error.
+// ciAuthorized checks the gh login once and remembers it, and again after a
+// failed poll. Without a login there is no PR line, and that is not an error.
 func (h *Embedded) ciAuthorized(ctx context.Context) bool {
 	c := h.ci
 	switch c.authState() {
@@ -127,7 +127,10 @@ func (h *Embedded) ciAuthorized(ctx context.Context) bool {
 	if ctx.Err() != nil {
 		return false
 	}
-	c.setAuth(err == nil)
+	if err != nil {
+		log.Printf("[hub] ci watch: gh auth status: %v", err)
+	}
+	c.settleAuth(err == nil, c.now())
 	return err == nil
 }
 

@@ -43,13 +43,15 @@ func (c *fakeClock) advance(d time.Duration) {
 	c.t = c.t.Add(d)
 }
 
-// fakeGH answers `gh auth status` with authErr and the n-th `gh pr list`
-// (1-based) with prList(n).
+// fakeGH answers the n-th `gh auth status` (1-based) with authFn(n), else
+// authErr, and the n-th `gh pr list` with prList(n).
 type fakeGH struct {
 	mu      sync.Mutex
 	calls   []string
 	prCalls int
 	authErr error
+	authFn  func(n int) error
+	auths   int
 	prList  func(n int) ([]byte, error)
 }
 
@@ -58,6 +60,10 @@ func (f *fakeGH) run(_ context.Context, _ string, args ...string) ([]byte, error
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, strings.Join(args, " "))
 	if len(args) > 0 && args[0] == "auth" {
+		f.auths++
+		if f.authFn != nil {
+			return nil, f.authFn(f.auths)
+		}
 		return nil, f.authErr
 	}
 	f.prCalls++
@@ -86,6 +92,13 @@ func serve(fixtures ...[]byte) func(int) ([]byte, error) {
 		}
 		return fixtures[n-1], nil
 	}
+}
+
+// quietLog keeps the watcher's expected failure logs out of the test output.
+func quietLog(t *testing.T) {
+	prev := log.Writer()
+	log.SetOutput(io.Discard)
+	t.Cleanup(func() { log.SetOutput(prev) })
 }
 
 type prMod func(pr map[string]any)
@@ -366,9 +379,7 @@ func TestMergedStopsWatching(t *testing.T) {
 }
 
 func TestGHErrorPauses(t *testing.T) {
-	prev := log.Writer()
-	log.SetOutput(io.Discard)
-	t.Cleanup(func() { log.SetOutput(prev) })
+	quietLog(t)
 	gh := &fakeGH{prList: func(int) ([]byte, error) { return nil, errors.New("HTTP 403: API rate limit exceeded") }}
 	clock := newFakeClock()
 	h, sink, poll := ciHost(t, gh, clock, true)
@@ -402,6 +413,51 @@ func TestGHErrorPauses(t *testing.T) {
 	// The failure put the login back to unknown, so it was checked again.
 	if n := gh.count("auth status"); n != 2 {
 		t.Errorf("auth status calls = %d, want 2", n)
+	}
+}
+
+// An outage fails the pr list and then the login re-check too. That must not
+// read as "not logged in" for the rest of the host's life: the re-check is
+// paused like a gh error and tried again.
+func TestOutageDoesNotSwitchOffForGood(t *testing.T) {
+	quietLog(t)
+	outage := errors.New("error connecting to api.github.com")
+	gh := &fakeGH{
+		authFn: func(n int) error {
+			if n == 2 {
+				return outage
+			}
+			return nil
+		},
+		prList: func(n int) ([]byte, error) {
+			if n == 1 {
+				return nil, outage
+			}
+			return prFixture(t, pending), nil
+		},
+	}
+	clock := newFakeClock()
+	h, sink, poll := ciHost(t, gh, clock, true)
+	seedSession(t, h, 1, "feature-x", ciHead)
+
+	poll() // login fine, pr list fails: pause
+	clock.advance(ciPause)
+	poll() // login re-check fails: pause again, no pr list
+	if n := gh.count("pr list"); n != 1 {
+		t.Fatalf("pr list calls after a failed re-check = %d, want 1", n)
+	}
+	clock.advance(ciPause - time.Second)
+	poll()
+	if n := gh.count("auth status"); n != 2 {
+		t.Fatalf("auth status calls during the second pause = %d, want 2", n)
+	}
+	clock.advance(time.Second)
+	poll() // re-check passes, polling runs again
+	if n := gh.count("pr list"); n != 2 {
+		t.Fatalf("pr list calls after the outage = %d, want 2", n)
+	}
+	if b := sink.lastBriefing(t, 1); b.PR == nil || b.PR.Number != 214 {
+		t.Errorf("briefing PR after the outage = %+v", b.PR)
 	}
 }
 
@@ -441,6 +497,7 @@ func TestAuthCheckedOnce(t *testing.T) {
 }
 
 func TestNoLoginNoPRCalls(t *testing.T) {
+	quietLog(t)
 	gh := &fakeGH{authErr: errors.New("not logged in"), prList: serve(prFixture(t, red))}
 	clock := newFakeClock()
 	h, sink, poll := ciHost(t, gh, clock, true)

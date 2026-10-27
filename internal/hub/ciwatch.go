@@ -56,11 +56,12 @@ type ciWatch struct {
 	now  func() time.Time
 	wake chan struct{}
 
-	mu     sync.Mutex
-	auth   int
-	keys   map[ciKey]*ciTarget
-	byID   map[int]ciKey
-	raised map[string]bool // owner/name/branch|head|signal already raised
+	mu          sync.Mutex
+	auth        int
+	authChecked bool // the first login check of this host start is done
+	keys        map[ciKey]*ciTarget
+	byID        map[int]ciKey
+	raised      map[string]bool // owner/name/branch|head|signal already raised
 }
 
 func newCIWatch(gh GHRunner, now func() time.Time) *ciWatch {
@@ -171,12 +172,28 @@ func (c *ciWatch) authState() int {
 	return c.auth
 }
 
-func (c *ciWatch) setAuth(ok bool) {
+// settleAuth files the result of a login check. Only the first check of a
+// host start can conclude "not logged in". A later one runs after a failed
+// poll, and an outage that failed the poll fails the check too: that leaves
+// the login unknown and pauses the due keys like a gh error, instead of
+// switching the watch off until the next restart.
+func (c *ciWatch) settleAuth(ok bool, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.auth = authNone
-	if ok {
+	first := !c.authChecked
+	c.authChecked = true
+	switch {
+	case ok:
 		c.auth = authOK
+	case first:
+		c.auth = authNone
+	default:
+		c.auth = authUnknown
+		for _, t := range c.keys {
+			if !now.Before(t.due) {
+				t.paused, t.due = true, now.Add(ciPause)
+			}
+		}
 	}
 }
 
