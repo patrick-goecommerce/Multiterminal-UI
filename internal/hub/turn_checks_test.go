@@ -32,6 +32,13 @@ func TestClassifyCheck(t *testing.T) {
 		{"semicolon masks the exit code", "go test ./...; echo done", false, "", "go test", CheckUnsure, true},
 		{"|| true masks, failure mark", "go test ./... || true", false, "--- FAIL: TestX (0.00s)", "go test", CheckFail, true},
 		{"&& keeps the exit code", "go test ./... && echo done", false, "", "go test", CheckOK, true},
+		// I5: a failure after && may come from the non-check behind the check.
+		{"&& then a failing commit, no mark", "go test ./... && git commit -m x", true, "", "go test", CheckUnsure, true},
+		{"&& then a failing commit, failure mark", "go test ./... && git commit -m x", true,
+			"--- FAIL: TestX (0.00s)\nFAIL", "go test", CheckFail, true},
+		{"&& then a failing run, no mark", "go build -o x && ./x", true, "exit status 3", "go build", CheckUnsure, true},
+		{"&& then ok", "go test ./... && echo ok", false, "", "go test", CheckOK, true},
+		{"&& of checks only, failed", "go vet ./... && go test ./...", true, "", "go vet + go test", CheckFail, true},
 		{"pipe, failed, no marks", "go test ./... | tail", true, "", "go test", CheckUnsure, true},
 		{"check last after semicolon", "echo a; go test ./...", false, "", "go test", CheckOK, true},
 		{"prefix needs a word boundary", "gotest ./...", false, "", "", "", false},

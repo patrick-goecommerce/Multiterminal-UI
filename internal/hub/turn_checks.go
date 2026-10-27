@@ -6,7 +6,9 @@ import (
 )
 
 // Check results. CheckUnsure is never promoted to OK: it means the exit code
-// belonged to a pipe and the output carried no failure mark.
+// may not be the check's own (a pipe, a segment after ; or ||, a failure
+// after && with a non-check behind the check) and the output carried no
+// failure mark.
 const (
 	CheckOK     = "ok"
 	CheckFail   = "fail"
@@ -46,10 +48,13 @@ var publishPrefixes = []string{"git push", "gh pr create", "gh pr merge"}
 // one line give one result with the labels joined by " + ".
 func classifyCheck(command string, failed bool, outputTail string) (CheckResult, bool) {
 	var labels []string
-	piped := false
+	piped, trailing := false, false
 	for _, seg := range splitSegments(command) {
 		label, ok := checkLabel(seg.text)
 		if !ok {
+			// A non-check after a check (`&& git commit`, `&& ./x`) may be
+			// what failed the line; a success still proves the check.
+			trailing = trailing || len(labels) > 0
 			continue
 		}
 		if !containsLabel(labels, label) {
@@ -65,7 +70,7 @@ func classifyCheck(command string, failed bool, outputTail string) (CheckResult,
 	}
 	res := CheckOK
 	switch {
-	case piped:
+	case piped || (failed && trailing):
 		res = CheckUnsure
 		if failureMarks.MatchString(outputTail) {
 			res = CheckFail

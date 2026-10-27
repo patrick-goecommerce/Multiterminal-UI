@@ -129,8 +129,12 @@ dieser Präfixe beginnt:
   bleibt deshalb „?“. `pytest` und `cargo` sind nicht gemessen und haben keine Fehlerzeichen.
 - **Maskierter Exit-Code:** Folgt auf die Prüfung noch ein Segment nach `;` oder `||` (oder nach
   einem Zeilenumbruch), bestimmt dieses den Exit-Code des Befehls. Das Ergebnis ist dann wie bei
-  der Pipe „?“, es sei denn der `output_tail` trägt ein Fehlerzeichen. `&&`-Ketten behalten ihren
-  Exit-Code.
+  der Pipe „?“, es sei denn der `output_tail` trägt ein Fehlerzeichen.
+- **`&&`-Ketten:** Ein Erfolg belegt jede Prüfung der Kette (✓). Ein Fehlschlag belegt die Prüfung
+  nur, wenn hinter ihr keine Nicht-Prüfung mehr steht: Bei `go test ./... && git commit -m …` oder
+  `go build -o x && ./x` kann auch der Commit oder der Lauf gescheitert sein. Dann gilt „?“, es sei
+  denn der `output_tail` trägt ein Fehlerzeichen. Eine Kette nur aus Prüfungen
+  (`go vet ./... && go test ./...`) bleibt bei einem Fehlschlag ✗.
 - Alle anderen Befehle zählen nicht. Ein `grep` ohne Treffer endet auch mit Exit-Code 1.
 
 ## Teil B: Git-Signale
