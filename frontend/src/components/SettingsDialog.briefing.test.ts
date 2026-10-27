@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, fireEvent, cleanup } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import SettingsDialog from './SettingsDialog.svelte';
 import { config } from '../stores/config';
 
@@ -60,9 +61,40 @@ describe('SettingsDialog: Leitstand', () => {
     expect((getByLabelText('Großer Diff ab geänderten Zeilen') as HTMLInputElement).value).toBe('800');
   });
 
+  it('flags an assignment inside a multi-line $: block (guard self-check)', () => {
+    const bad = '$: if (visible) {\n  briefingBigFiles = 3;\n}\n';
+    expect(reactiveAssignments(bad)).toHaveLength(1);
+    const good = '$: if (visible) initDialog();\nlet x = 1;\n';
+    expect(reactiveAssignments(good)).toHaveLength(0);
+  });
+
   it('assigns none of the three inside a $: block (recurring-bug guard)', () => {
-    const src = readFileSync('src/components/SettingsDialog.svelte', 'utf8');
-    const reactive = src.split('\n').filter((l) => l.trim().startsWith('$:')).join('\n');
-    expect(reactive).not.toMatch(/briefing(BigFiles|BigLines|CIWatch)/);
+    const src = readFileSync(join(__dirname, 'SettingsDialog.svelte'), 'utf8');
+    expect(reactiveAssignments(src)).toEqual([]);
   });
 });
+
+/** reactiveAssignments returns every `$:` statement (through its matching
+ *  closing brace when it opens a block) that assigns one of the briefing locals. */
+function reactiveAssignments(src: string): string[] {
+  const found: string[] = [];
+  const assign = /\bbriefing(BigFiles|BigLines|CIWatch)\s*=(?!=)/;
+  let from = 0;
+  for (;;) {
+    const start = src.indexOf('$:', from);
+    if (start < 0) break;
+    let depth = 0;
+    let i = start;
+    for (; i < src.length; i++) {
+      const c = src[i];
+      if (c === '{') depth++;
+      else if (c === '}') {
+        depth--;
+        if (depth === 0 && !/^\s*else\b/.test(src.slice(i + 1, i + 12))) { i++; break; }
+      } else if (depth === 0 && (c === '\n' || c === ';')) break;
+    }
+    if (assign.test(src.slice(start, i))) found.push(src.slice(start, i));
+    from = i > start ? i : start + 2;
+  }
+  return found;
+}
