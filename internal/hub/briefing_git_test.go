@@ -63,9 +63,14 @@ func newRepoWithOrigin(t *testing.T) string {
 	return work
 }
 
+// runBriefing measures dir; a start tree is taken to come from dir itself.
 func runBriefing(t *testing.T, dir, start string) gitResult {
 	t.Helper()
-	res, ok := gitBriefing(context.Background(), dir, start, "", nil, BriefingPolicy{})
+	var top string
+	if start != "" {
+		top = tgit(t, dir, "rev-parse", "--show-toplevel")
+	}
+	res, ok := gitBriefing(context.Background(), dir, start, top, "", nil, BriefingPolicy{})
 	if !ok {
 		t.Fatal("not a repo")
 	}
@@ -166,7 +171,7 @@ func TestTargetOrder(t *testing.T) {
 }
 
 func TestNoRepo(t *testing.T) {
-	if _, ok := gitBriefing(context.Background(), t.TempDir(), "", "", nil, BriefingPolicy{}); ok {
+	if _, ok := gitBriefing(context.Background(), t.TempDir(), "", "", "", nil, BriefingPolicy{}); ok {
 		t.Fatal("ok in a plain directory")
 	}
 }

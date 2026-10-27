@@ -26,11 +26,12 @@ func gitCount(ctx context.Context, dir string, args ...string) int {
 }
 
 // gitBriefing measures the turn (startTree against a fresh snapshot of the
-// work tree) and the branch against its target. It returns false outside a
-// repository. It never fetches and never touches the real index. prBase may
-// be nil.
-func gitBriefing(ctx context.Context, dir, startTree, windowTarget string, prBase func(ghRepo, string) string, p BriefingPolicy) (gitResult, bool) {
-	return measureGit(ctx, gitx.SnapshotTree, dir, startTree, windowTarget, prBase, p)
+// work tree) and the branch against its target. startTop is the toplevel the
+// start tree was taken in; the turn counts only when the work tree still has
+// it. It returns false outside a repository. It never fetches and never
+// touches the real index. prBase may be nil.
+func gitBriefing(ctx context.Context, dir, startTree, startTop, windowTarget string, prBase func(ghRepo, string) string, p BriefingPolicy) (gitResult, bool) {
+	return measureGit(ctx, gitx.SnapshotTree, dir, startTree, startTop, windowTarget, prBase, p)
 }
 
 // snapshotFunc takes the work-tree snapshot; gitx.SnapshotTree outside tests.
@@ -38,10 +39,11 @@ type snapshotFunc func(ctx context.Context, dir string) (string, error)
 
 // measureGit is gitBriefing with the stop snapshot taken by snap, so the
 // briefing desk's test seam governs both ends of a turn.
-func measureGit(ctx context.Context, snap snapshotFunc, dir, startTree, windowTarget string, prBase func(ghRepo, string) string, p BriefingPolicy) (gitResult, bool) {
+func measureGit(ctx context.Context, snap snapshotFunc, dir, startTree, startTop, windowTarget string, prBase func(ghRepo, string) string, p BriefingPolicy) (gitResult, bool) {
 	p = p.normalized()
 	var res gitResult
-	if _, err := gitOut(ctx, dir, "rev-parse", "--show-toplevel"); err != nil {
+	top, err := gitOut(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
 		return res, false
 	}
 	f := &res.Facts
@@ -78,7 +80,9 @@ func measureGit(ctx context.Context, snap snapshotFunc, dir, startTree, windowTa
 	if err != nil {
 		return res, true
 	}
-	if startTree != "" {
+	// Linked worktrees share the object store, so a start tree from another
+	// checkout diffs without error and would still be wrong (EnterWorktree).
+	if startTree != "" && startTop == top {
 		if st, err := gitx.NumStat(ctx, dir, startTree, stop); err == nil {
 			f.TurnKnown = true
 			var lines int

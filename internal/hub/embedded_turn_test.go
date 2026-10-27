@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -376,5 +377,33 @@ func TestUpdatePRRecomputesWarnings(t *testing.T) {
 	}
 	if _, ok := h.desk.updatePR(2, nil, nil); ok {
 		t.Error("updatePR on a session without a briefing: want false")
+	}
+}
+
+// I1: a turn that starts in one checkout and stops in another (EnterWorktree)
+// shares the object store, so the trees diff fine but mean nothing. Without
+// the same toplevel at both ends the turn stays unknown.
+func TestTurnAcrossCheckoutsIsUnknown(t *testing.T) {
+	h, sink := briefingHost(t, 1)
+	repo := newRepoWithOrigin(t)
+	wt := filepath.Join(filepath.Dir(repo), "linked wt")
+	tgit(t, repo, "worktree", "add", "-q", "-b", "wt", wt)
+	twrite(t, repo, "dirty.txt", 5) // the main checkout is dirty
+
+	submit(h, 1, "p1", "mach was", repo)
+	waitStartTree(t, h, 1)
+	h.applyHookEvent(nil, hooks.Event{Event: "PostToolUse", MtID: 1, PromptID: "p1", Tool: "Bash", Command: "ls", Cwd: wt})
+	stop(h, 1, "p1", "Fertig.")
+
+	b := sink.await(t).Briefing
+	if b.Git == nil {
+		t.Fatal("Git = nil in a repository")
+	}
+	if b.Git.TurnKnown || b.Git.TurnFiles != 0 || b.Git.TurnAdded != 0 || b.Git.TurnDeleted != 0 {
+		t.Errorf("turn = known %v, %d files +%d -%d; want unknown and no numbers",
+			b.Git.TurnKnown, b.Git.TurnFiles, b.Git.TurnAdded, b.Git.TurnDeleted)
+	}
+	if b.Git.Branch != "wt" {
+		t.Errorf("Branch = %q, want the worktree's wt", b.Git.Branch)
 	}
 }

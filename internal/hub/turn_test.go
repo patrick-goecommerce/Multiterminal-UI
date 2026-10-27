@@ -102,10 +102,10 @@ func TestCwdAndStartTree(t *testing.T) {
 	b := newTurnBook()
 	b.begin(1, "p1", "x", "/a")
 	b.observe(1, hooks.Event{Event: "PreToolUse", PromptID: "p1", Cwd: "/b"})
-	b.setStartTree(1, "other", "tree0")
-	b.setStartTree(1, "p1", "tree1")
+	b.setStartTree(1, "other", "tree0", "/x")
+	b.setStartTree(1, "p1", "tree1", "/a")
 	tr, _ := b.close(1, "p1")
-	if tr.cwd != "/b" || tr.startTree != "tree1" {
-		t.Fatalf("cwd=%q startTree=%q", tr.cwd, tr.startTree)
+	if tr.cwd != "/b" || tr.startTree != "tree1" || tr.startTop != "/a" {
+		t.Fatalf("cwd=%q startTree=%q startTop=%q", tr.cwd, tr.startTree, tr.startTop)
 	}
 }

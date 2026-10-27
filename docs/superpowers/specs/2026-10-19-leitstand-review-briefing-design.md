@@ -153,6 +153,11 @@ Index mit, Git liest deshalb nur geänderte Dateien neu ein. „Turn: 3 Dateien 
 Anlegen. Damit zählen auch Änderungen per `sed` oder Skript
 und neue, nicht ignorierte Dateien.
 
+Zum Start-Tree merkt sich der Host die Wurzel des Checkouts (`rev-parse --show-toplevel`). Liegt
+der `cwd` bei `Stop` in einem anderen Checkout (nach `EnterWorktree` im Worktree), gibt es keine
+Turn-Zahlen. Worktrees teilen sich die Objekte, der Vergleich liefe ohne Fehler durch und zeigte
+trotzdem falsche Zahlen.
+
 Nebenwirkung: Inhalte geänderter Dateien landen als lose Objekte ohne Verweis im Repo; `git gc`
 räumt sie nach der Standardfrist (14 Tage) weg.
 

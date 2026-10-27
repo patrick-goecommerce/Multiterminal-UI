@@ -7,11 +7,12 @@ import (
 )
 
 // turn holds the facts of one agent turn while it runs: what was asked, where
-// it ran, the tree at its start and the checks it ran.
+// it ran, the tree at its start (with the toplevel of the checkout it was
+// taken in) and the checks it ran.
 type turn struct {
-	promptID, prompt, cwd, startTree string
-	keepAlive, publish, closed       bool
-	checks                           []CheckResult
+	promptID, prompt, cwd, startTree, startTop string
+	keepAlive, publish, closed                 bool
+	checks                                     []CheckResult
 }
 
 // turnBook keeps the current turn of every session. It is called from the
@@ -53,12 +54,13 @@ func (b *turnBook) begin(id int, promptID, prompt, cwd string) (keepAlive bool) 
 	return keepAlive
 }
 
-// setStartTree records the work-tree snapshot taken at the start of the turn.
-func (b *turnBook) setStartTree(id int, promptID, tree string) {
+// setStartTree records the work-tree snapshot taken at the start of the turn
+// and the toplevel of the checkout it was taken in.
+func (b *turnBook) setStartTree(id int, promptID, tree, top string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if t := b.turns[id]; t != nil && !t.closed && sameTurn(t, promptID) {
-		t.startTree = tree
+		t.startTree, t.startTop = tree, top
 	}
 }
 

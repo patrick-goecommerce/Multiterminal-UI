@@ -78,13 +78,18 @@ func (d *briefingDesk) currentPolicy() BriefingPolicy {
 	return d.policy().normalized()
 }
 
-// startSnapshot records the work tree at the start of a turn. A snapshot that
-// fails or lands after the turn ended leaves the turn without numbers.
+// startSnapshot records the work tree at the start of a turn, with the
+// toplevel of its checkout. A snapshot that fails or lands after the turn
+// ended leaves the turn without numbers.
 func (d *briefingDesk) startSnapshot(id int, promptID, dir string) {
 	ctx, cancel := context.WithTimeout(context.Background(), snapshotLimit)
 	defer cancel()
+	top, err := gitOut(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return
+	}
 	if tree, err := d.snapshot(ctx, dir); err == nil {
-		d.turns.setStartTree(id, promptID, tree)
+		d.turns.setStartTree(id, promptID, tree, top)
 	}
 }
 
