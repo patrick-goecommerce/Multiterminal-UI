@@ -48,14 +48,15 @@ func classifyCheck(command string, failed bool, outputTail string) (CheckResult,
 	var labels []string
 	piped := false
 	for _, seg := range splitSegments(command) {
-		label, ok := checkLabel(seg)
+		label, ok := checkLabel(seg.text)
 		if !ok {
 			continue
 		}
 		if !containsLabel(labels, label) {
 			labels = append(labels, label)
 		}
-		if hasPipe(seg) {
+		// A pipe, or a segment after ; or ||, hides the check's own exit code.
+		if hasPipe(seg.text) || seg.masked {
 			piped = true
 		}
 	}
@@ -79,9 +80,9 @@ func classifyCheck(command string, failed bool, outputTail string) (CheckResult,
 // git push, gh pr create or gh pr merge.
 func publishCommand(command string) bool {
 	for _, seg := range splitSegments(command) {
-		seg = stripLeading(seg)
+		text := stripLeading(seg.text)
 		for _, p := range publishPrefixes {
-			if hasWordPrefix(seg, p) {
+			if hasWordPrefix(text, p) {
 				return true
 			}
 		}
@@ -121,16 +122,28 @@ func hasWordPrefix(seg, prefix string) bool {
 	return rest == "" || rest[0] == ' ' || rest[0] == '\t'
 }
 
+// segment is one part of a command line. masked is set when another segment
+// follows after ; or ||: the line's exit code then is not this segment's.
+type segment struct {
+	text   string
+	masked bool
+}
+
 // splitSegments cuts at &&, ; and || outside quotes. A single | stays in the
 // segment, where hasPipe finds it.
-func splitSegments(command string) []string {
-	var segs []string
+func splitSegments(command string) []segment {
+	var segs []segment
 	var cur strings.Builder
 	var quote rune
 	rs := []rune(command)
-	flush := func() {
+	prevMasks := false // the separator that ended the previous segment was ; or ||
+	flush := func(masks bool) {
 		if s := strings.TrimSpace(cur.String()); s != "" {
-			segs = append(segs, s)
+			if n := len(segs); n > 0 {
+				segs[n-1].masked = prevMasks
+			}
+			segs = append(segs, segment{text: s})
+			prevMasks = masks
 		}
 		cur.Reset()
 	}
@@ -146,15 +159,15 @@ func splitSegments(command string) []string {
 			quote = r
 			cur.WriteRune(r)
 		case r == ';':
-			flush()
+			flush(true)
 		case (r == '&' || r == '|') && i+1 < len(rs) && rs[i+1] == r:
-			flush()
+			flush(r == '|')
 			i++
 		default:
 			cur.WriteRune(r)
 		}
 	}
-	flush()
+	flush(false)
 	return segs
 }
 
