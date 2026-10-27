@@ -49,6 +49,9 @@ type briefingDesk struct {
 	// prBase answers the base branch of the PR the watcher knows for a
 	// branch, which wins as a build's target. Nil without a watcher.
 	prBase func(repo ghRepo, branch string) string
+	// prKnown answers the PR the watcher last found for a branch, which a
+	// new build starts with. Nil without a watcher.
+	prKnown func(repo ghRepo, branch string) *PRFacts
 
 	mu      sync.Mutex
 	entries map[int]deskEntry
@@ -76,6 +79,15 @@ func (d *briefingDesk) currentPolicy() BriefingPolicy {
 		return BriefingPolicy{}.normalized()
 	}
 	return d.policy().normalized()
+}
+
+// knownPR is the PR the watcher last found for the branch a build measured;
+// nil without a watcher, with the CI watch off, or when it knows none.
+func (d *briefingDesk) knownPR(res gitResult, p BriefingPolicy) *PRFacts {
+	if _, ok := ciKeyOf(res); !ok || !p.CIWatch || d.prKnown == nil {
+		return nil
+	}
+	return d.prKnown(res.Repo, res.Facts.Branch)
 }
 
 // startSnapshot records the work tree at the start of a turn, with the
@@ -161,7 +173,8 @@ func (d *briefingDesk) get(id int) (Briefing, bool) {
 	return e.briefing.clone(), true
 }
 
-// updatePR replaces what is known about the session's PR and its CI notes,
+// updatePR replaces what is known about the session's PR and the watcher's
+// notes (ci_paused, ci_stale, no_pr),
 // keeps the build's own notes, and recomputes the warnings.
 func (d *briefingDesk) updatePR(id int, pr *PRFacts, notes []string) (Briefing, bool) {
 	d.mu.Lock()
@@ -178,7 +191,7 @@ func (d *briefingDesk) updatePR(id int, pr *PRFacts, notes []string) (Briefing, 
 	}
 	kept := []string{}
 	for _, n := range b.Notes {
-		if n != NoteCIPaused && n != NoteCIStale {
+		if n != NoteCIPaused && n != NoteCIStale && n != NoteNoPR {
 			kept = append(kept, n)
 		}
 	}

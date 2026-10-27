@@ -2,7 +2,6 @@ package hub
 
 import (
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -133,6 +132,16 @@ func (c *ciWatch) base(key ciKey) string {
 	return ""
 }
 
+// known is the key's last PR found, if any.
+func (c *ciWatch) known(key ciKey) *PRFacts {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if t := c.keys[key]; t != nil {
+		return copyPR(t.pr)
+	}
+	return nil
+}
+
 // ciJob is a key to ask gh about.
 type ciJob struct {
 	key ciKey
@@ -144,6 +153,7 @@ type ciOutcome struct {
 	ids    []int
 	pr     *PRFacts
 	paused bool
+	noPR   bool   // gh answered and knows no PR for the key
 	detail string // non-empty: raise the idle sessions with it
 }
 
@@ -210,6 +220,7 @@ func (c *ciWatch) record(key ciKey, pr PRFacts, found bool, err error, now time.
 		return out
 	}
 	t.paused, t.pr = false, nil
+	out.noPR = !found
 	if found {
 		t.pr, out.pr = copyPR(&pr), copyPR(&pr)
 	}
@@ -233,56 +244,4 @@ func (c *ciWatch) record(key ciKey, pr PRFacts, found bool, err error, now time.
 		out.detail = c.newSignalLocked(key, pr)
 	}
 	return out
-}
-
-// newSignalLocked returns the detail to raise with when the PR shows a signal
-// not seen before for its head commit; empty otherwise. Red wins over blocked.
-func (c *ciWatch) newSignalLocked(key ciKey, pr PRFacts) string {
-	red, blocked := ciSignals(pr)
-	first := func(signal string) bool {
-		k := key.Owner + "/" + key.Name + "/" + key.Branch + "|" + pr.HeadOID + "|" + signal
-		if c.raised[k] {
-			return false
-		}
-		c.raised[k] = true
-		return true
-	}
-	newRed := red && first("red")
-	newBlocked := blocked && first("blocked")
-	switch {
-	case newRed:
-		return "CI rot: " + pr.FailedCheck
-	case newBlocked && pr.Conflicting:
-		return "PR #" + strconv.Itoa(pr.Number) + ": Konflikte"
-	case newBlocked:
-		return "PR #" + strconv.Itoa(pr.Number) + ": Änderungen angefordert"
-	}
-	return ""
-}
-
-func copyPR(p *PRFacts) *PRFacts {
-	if p == nil {
-		return nil
-	}
-	c := *p
-	return &c
-}
-
-func sortedIDs(m map[int]bool) []int {
-	ids := make([]int, 0, len(m))
-	for id := range m {
-		ids = append(ids, id)
-	}
-	sort.Ints(ids)
-	return ids
-}
-
-func lessKey(a, b ciKey) bool {
-	if a.Owner != b.Owner {
-		return a.Owner < b.Owner
-	}
-	if a.Name != b.Name {
-		return a.Name < b.Name
-	}
-	return a.Branch < b.Branch
 }

@@ -33,6 +33,9 @@ func (h *Embedded) attachCI(c *ciWatch) {
 	h.desk.prBase = func(r ghRepo, branch string) string {
 		return c.base(ciKey{Owner: r.Owner, Name: r.Name, Branch: branch})
 	}
+	h.desk.prKnown = func(r ghRepo, branch string) *PRFacts {
+		return c.known(ciKey{Owner: r.Owner, Name: r.Name, Branch: branch})
+	}
 }
 
 // ciAfterBuild registers the branch a build found the session on and asks
@@ -149,7 +152,10 @@ func (h *Embedded) ciApply(o ciOutcome, now time.Time) {
 		if o.paused {
 			notes = append(notes, NoteCIPaused)
 		}
-		if o.pr != nil && o.pr.HeadOID != "" && res.Head != "" && res.Head != o.pr.HeadOID {
+		if o.noPR {
+			notes = append(notes, NoteNoPR)
+		}
+		if ciStale(o.pr, res.Head) {
 			notes = append(notes, NoteCIStale)
 		}
 		before, had := h.desk.get(id)
@@ -160,4 +166,9 @@ func (h *Embedded) ciApply(o ciOutcome, now time.Time) {
 			h.raiseFor(id, "ci", o.detail, now)
 		}
 	}
+}
+
+// ciStale reports a PR whose head is not the commit the build saw.
+func ciStale(pr *PRFacts, head string) bool {
+	return pr != nil && pr.HeadOID != "" && head != "" && head != pr.HeadOID
 }

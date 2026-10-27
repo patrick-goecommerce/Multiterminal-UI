@@ -234,6 +234,11 @@ Zeitlimit.
 Ein neues Briefing während einer 15-min-Pause beendet die Pause nicht; die Session bekommt dann den
 bekannten PR und `ci_paused`.
 
+Jedes neue Briefing startet mit dem PR, den der Wächter für seinen Branch zuletzt gefunden hat
+(samt `ci_stale` und den Warnzeichen daraus), nicht erst nach der nächsten Abfrage. Findet eine
+Abfrage keinen PR, bekommt das Briefing `note: "no_pr"`; nur dann sagt die Karte „kein PR“. Ohne
+Abfrage (kein Login, kein GitHub-Remote, `ci_watch` aus, noch nicht gefragt) gibt es keine PR-Zeile.
+
 ### C3 Was abgeleitet wird
 
 - Checks des PR-Heads: `none`, `pending` (ein `CheckRun` nicht `COMPLETED` oder ein `StatusContext`
@@ -278,7 +283,7 @@ type Briefing struct {
     Git      *GitFacts     // nil außerhalb eines Repos
     PR       *PRFacts      // nil: kein PR bekannt, kein gh, kein GitHub-Remote
     Warnings []string      // Codes, nach Vorrang sortiert
-    Notes    []string      // "diff_slow", "ci_paused", "ci_stale"
+    Notes    []string      // "diff_slow", "ci_paused", "ci_stale", "no_pr"
 }
 
 type CheckResult struct {
@@ -362,8 +367,8 @@ Zusammenklappen ab drei fertigen Einträgen (Teil 1) klappt damit zuerst die sau
   3. `Turn:   3 Dateien +40 −5`
   4. `Branch: 7 Dateien +212 −48 · 3 Commits · 2 ungepusht` (bzw. „nie gepusht“)
   5. Prüfungen: `go test ✓   go vet ✗   test ?`
-  6. PR: `PR #12 · CI 2/2 ✓ · Review offen`, `PR #12 · CI läuft 1/3`, `PR #12 gemergt`, `kein PR`,
-     `CI-Abfrage pausiert`; „für älteren Stand“ als Zusatz
+  6. PR: `PR #12 · CI 2/2 ✓ · Review offen`, `PR #12 · CI läuft 1/3`, `PR #12 gemergt`, `kein PR`
+     (nur mit `no_pr`, siehe C2), `CI-Abfrage pausiert`; „für älteren Stand“ als Zusatz
   7. Schlusswort, höchstens drei Zeilen
   8. Warnzeichen ausgeschrieben, Hinweise (`Diff zu langsam`)
 - Die PR-Nummer öffnet den PR im Browser. Bekannte Grenze: Die Karte schließt beim Fokusverlust, die PR-Nummer ist deshalb nur mit der Maus erreichbar. Weitere Knöpfe gibt es nicht; Klick, Alt+Klick und

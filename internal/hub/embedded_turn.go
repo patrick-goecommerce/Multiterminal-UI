@@ -66,8 +66,9 @@ func (h *Embedded) buildBriefing(ctx context.Context, id int, gen uint64, t turn
 	}
 	var res gitResult
 	if t.cwd != "" {
+		pol := d.currentPolicy()
 		limited, cancel := context.WithTimeout(ctx, d.limit)
-		r, isRepo := measureGit(limited, d.snapshot, t.cwd, t.startTree, t.startTop, d.target(id), d.prBase, d.currentPolicy())
+		r, isRepo := measureGit(limited, d.snapshot, t.cwd, t.startTree, t.startTop, d.target(id), d.prBase, pol)
 		slow := errors.Is(limited.Err(), context.DeadlineExceeded)
 		cancel()
 		if ctx.Err() != nil {
@@ -78,6 +79,13 @@ func (h *Embedded) buildBriefing(ctx context.Context, id int, gen uint64, t turn
 		if isRepo {
 			f := r.Facts
 			b.Git = &f
+			// What the watcher knows goes in now, not one gh round-trip later.
+			if pr := d.knownPR(r, pol); pr != nil {
+				b.PR = pr
+				if ciStale(pr, r.Head) {
+					b.Notes = append(b.Notes, NoteCIStale)
+				}
+			}
 		}
 		if slow {
 			b.Notes = append(b.Notes, NoteDiffSlow)

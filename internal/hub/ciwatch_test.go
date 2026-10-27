@@ -660,3 +660,78 @@ func TestBuildWakesLoopAndUsesPRBase(t *testing.T) {
 		t.Fatal("no second briefing")
 	}
 }
+
+// awaitPrompt returns the next published briefing of prompt p, skipping others.
+func (s *ciSink) awaitPrompt(t *testing.T, p string) Briefing {
+	t.Helper()
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case u := <-s.ch:
+			if u.Briefing.PromptID == p {
+				return u.Briefing
+			}
+		case <-deadline:
+			t.Fatalf("no briefing for %s within 10 s", p)
+		}
+	}
+}
+
+// I4: a new build starts with what the watcher knows about its branch, so
+// the card neither says "kein PR" nor misses ci_red for one gh round-trip.
+func TestBuildCarriesKnownPR(t *testing.T) {
+	quietLog(t)
+	gh := &fakeGH{prList: serve(prFixture(t, red))}
+	clock := newFakeClock()
+	h, sink, poll := ciHost(t, gh, clock, true)
+	h.AdoptForTest(1, terminal.NewSession(1, 24, 80))
+	repo := newRepoWithOrigin(t)
+	tgit(t, repo, "checkout", "-q", "-b", "feature-x")
+	tgit(t, repo, "remote", "set-url", "origin", "https://github.com/"+ciOwner+"/"+ciName+".git")
+
+	submit(h, 1, "p1", "mach", repo)
+	stop(h, 1, "p1", "Fertig.")
+	if b := sink.awaitPrompt(t, "p1"); b.PR != nil {
+		t.Fatalf("first build PR = %+v, want none before any poll", b.PR)
+	}
+	poll()
+
+	submit(h, 1, "p2", "weiter", repo)
+	stop(h, 1, "p2", "Fertig.")
+	b := sink.awaitPrompt(t, "p2") // the build's own event; no poll ran since
+	if b.PR == nil || b.PR.Number != 214 {
+		t.Fatalf("second build PR = %+v, want the known #214", b.PR)
+	}
+	if !slices.Contains(b.Warnings, WarnCIRed) {
+		t.Errorf("Warnings = %v, want %s at once", b.Warnings, WarnCIRed)
+	}
+	// The repo's HEAD is not the PR's head commit.
+	if !slices.Contains(b.Notes, NoteCIStale) {
+		t.Errorf("Notes = %v, want %s", b.Notes, NoteCIStale)
+	}
+}
+
+// I4: "kein PR" is a statement, so only a query that found none may make it.
+// A later query that finds one takes the note back.
+func TestNoPRNoteOnlyAfterQuery(t *testing.T) {
+	gh := &fakeGH{prList: serve([]byte("[]"), prFixture(t, pending))}
+	clock := newFakeClock()
+	h, sink, poll := ciHost(t, gh, clock, true)
+	seedSession(t, h, 1, "feature-x", ciHead)
+	if b, _ := h.desk.get(1); slices.Contains(b.Notes, NoteNoPR) {
+		t.Fatalf("Notes before any query = %v", b.Notes)
+	}
+
+	poll()
+	b := sink.lastBriefing(t, 1)
+	if b.PR != nil || !slices.Contains(b.Notes, NoteNoPR) {
+		t.Fatalf("after a query without a PR: PR %+v, notes %v; want no PR and %s", b.PR, b.Notes, NoteNoPR)
+	}
+
+	h.ciPublished(1) // gh pr create
+	poll()
+	b = sink.lastBriefing(t, 1)
+	if b.PR == nil || slices.Contains(b.Notes, NoteNoPR) {
+		t.Errorf("after a query with a PR: PR %+v, notes %v; want the PR and no %s", b.PR, b.Notes, NoteNoPR)
+	}
+}

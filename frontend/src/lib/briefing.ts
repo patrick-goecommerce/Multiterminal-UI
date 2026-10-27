@@ -55,7 +55,9 @@ export function prLine(b: hub.Briefing): string {
   const p = b.pr;
   if (!p) {
     if (notes.includes('ci_paused')) return 'CI-Abfrage pausiert';
-    return b.git && !b.git.on_target ? 'kein PR' : '';
+    // Only a query that found none says so; without one nobody looked
+    // (no login, no GitHub remote, CI watch off, not asked yet).
+    return notes.includes('no_pr') && b.git && !b.git.on_target ? 'kein PR' : '';
   }
   const stale = notes.includes('ci_stale') ? ' · für älteren Stand' : '';
   if (p.state === 'MERGED') return `PR #${p.number} gemergt${stale}`;

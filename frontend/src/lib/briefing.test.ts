@@ -85,9 +85,14 @@ describe('prLine', () => {
       .toBe('PR #12 · CI läuft 1/3 · für älteren Stand');
   });
   it('no PR', () => {
-    expect(prLine(br({ git: git() }))).toBe('kein PR');
+    expect(prLine(br({ git: git(), notes: ['no_pr'] }))).toBe('kein PR');
     expect(prLine(br({ git: git(), notes: ['ci_paused'] }))).toBe('CI-Abfrage pausiert');
     expect(prLine(br())).toBe('');
+  });
+  it('says "kein PR" only when the watcher looked and found none', () => {
+    // No login, no GitHub remote, ci_watch off, or not asked yet: no PR line.
+    expect(prLine(br({ git: git() }))).toBe('');
+    expect(prLine(br({ git: git({ on_target: true }), notes: ['no_pr'] }))).toBe('');
   });
 });
 

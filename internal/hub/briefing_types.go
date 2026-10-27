@@ -103,6 +103,9 @@ const (
 	NoteDiffSlow = "diff_slow"
 	NoteCIPaused = "ci_paused"
 	NoteCIStale  = "ci_stale"
+	// NoteNoPR: the watcher asked GitHub about the branch and found no PR.
+	// Without it a missing PR only means nobody looked.
+	NoteNoPR = "no_pr"
 )
 
 // warningsFor derives the warnings of a briefing, most urgent first. Only an
