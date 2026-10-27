@@ -51,7 +51,11 @@ func bashCommand(input json.RawMessage) string {
 	if json.Unmarshal(input, &in) != nil {
 		return ""
 	}
-	s := strings.Join(strings.Fields(in.Command), " ")
+	// A newline ends a command like ";" does; a backslash-newline continues it.
+	cmd := strings.ReplaceAll(strings.TrimSpace(in.Command), "\r\n", "\n")
+	cmd = strings.ReplaceAll(cmd, "\\\n", " ")
+	cmd = strings.ReplaceAll(cmd, "\n", "; ")
+	s := strings.Join(strings.Fields(cmd), " ")
 	if r := []rune(s); len(r) > commandMax {
 		return string(r[:commandMax])
 	}
