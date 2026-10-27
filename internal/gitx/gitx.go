@@ -9,13 +9,11 @@
 package gitx
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/patrick-goecommerce/Multiterminal-UI/internal/procs"
 )
 
 // Cmd builds a git command for dir.
@@ -28,16 +26,7 @@ import (
 // looking at. HideConsole is what keeps a GUI app from flashing a console
 // window on every call.
 func Cmd(dir string, args ...string) *exec.Cmd {
-	full := append([]string{"--no-optional-locks", "-c", "core.fsmonitor=false"}, args...)
-	cmd := exec.Command("git", full...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(),
-		"GIT_OPTIONAL_LOCKS=0",
-		"GIT_TERMINAL_PROMPT=0",
-		"GCM_INTERACTIVE=never",
-	)
-	procs.HideConsole(cmd)
-	return cmd
+	return CmdContext(context.Background(), dir, args...)
 }
 
 // Worktree is one entry of `git worktree list --porcelain`.
