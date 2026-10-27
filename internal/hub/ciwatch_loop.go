@@ -113,17 +113,19 @@ func (h *Embedded) ciPass(ctx context.Context) {
 	}
 }
 
-// ciAuthorized checks the gh login once and remembers it, and again after a
-// failed poll. Without a login there is no PR line, and that is not an error.
+// ciAuthorized checks the gh login for github.com and remembers it; again
+// after a failed poll, and ciPause after a failed check. Without a login
+// there is no PR line, and that is not an error. --hostname keeps a second gh
+// host with an expired token from failing the check.
 func (h *Embedded) ciAuthorized(ctx context.Context) bool {
 	c := h.ci
-	switch c.authState() {
+	switch c.authState(c.now()) {
 	case authOK:
 		return true
 	case authNone:
 		return false
 	}
-	_, err := c.gh(ctx, "", "auth", "status")
+	_, err := c.gh(ctx, "", "auth", "status", "--hostname", "github.com")
 	if ctx.Err() != nil {
 		return false
 	}

@@ -207,10 +207,12 @@ fehlt er, fehlt nur der Turn-Diff.
 
 Branches, die eine Session gerade hat (aus ihrem letzten Briefing) und deren Remote auf GitHub liegt
 (`owner/repo` aus der Remote-URL). Mehrere Sessions auf demselben Branch teilen sich eine Abfrage.
-Ohne `gh` oder ohne Login fehlt die PR-Zeile; das ist kein Fehler. Der Login wird einmal je
-Hoststart geprüft (`gh auth status`); nur diese erste Prüfung kann „nicht angemeldet“ ergeben. Eine
-fehlschlagende spätere Prüfung lässt den Zustand „unbekannt“ und pausiert die fälligen Branches
-15 min wie einen `gh`-Fehler.
+Ohne `gh` oder ohne Login fehlt die PR-Zeile; das ist kein Fehler. Der Login wird vor der ersten
+Abfrage geprüft (`gh auth status --hostname github.com`, damit ein abgelaufenes Token eines anderen
+gh-Hosts nicht stört) und danach gemerkt; nach einem `gh`-Fehler wird er neu geprüft. Eine
+fehlgeschlagene Prüfung kann „nicht angemeldet“ nicht von einem Ausfall unterscheiden: Der Wächter
+fragt dann 15 min nichts und prüft danach erneut. Die Branches bleiben fällig und werden abgefragt,
+sobald eine Prüfung gelingt.
 
 Abfrage: `gh pr list --repo <owner/repo> --head <branch> --state all --limit 5 --json
 number,state,isDraft,baseRefName,headRefOid,headRepositoryOwner,mergeable,reviewDecision,statusCheckRollup,url`.

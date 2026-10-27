@@ -33,7 +33,8 @@ func ciKeyOf(res gitResult) (ciKey, bool) {
 	return k, k.Owner != "" && k.Name != "" && k.Branch != ""
 }
 
-// Login state of gh, checked once per host start.
+// Login state of gh. A failed check holds for ciPause, then gh is asked
+// again; a failed poll makes the state unknown again.
 const (
 	authUnknown = iota
 	authOK
@@ -56,12 +57,12 @@ type ciWatch struct {
 	now  func() time.Time
 	wake chan struct{}
 
-	mu          sync.Mutex
-	auth        int
-	authChecked bool // the first login check of this host start is done
-	keys        map[ciKey]*ciTarget
-	byID        map[int]ciKey
-	raised      map[string]bool // owner/name/branch|head|signal already raised
+	mu        sync.Mutex
+	auth      int
+	authRetry time.Time // with authNone: when to check the login again
+	keys      map[ciKey]*ciTarget
+	byID      map[int]ciKey
+	raised    map[string]bool // owner/name/branch|head|signal already raised
 }
 
 func newCIWatch(gh GHRunner, now func() time.Time) *ciWatch {
@@ -165,36 +166,29 @@ func (c *ciWatch) collect(now time.Time) (due []ciJob, refill []ciOutcome) {
 	return due, refill
 }
 
-// authState returns the remembered login state.
-func (c *ciWatch) authState() int {
+// authState returns the remembered login state; a failed check whose pause
+// is over reads as unknown, so the login is checked again.
+func (c *ciWatch) authState(now time.Time) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.auth == authNone && !now.Before(c.authRetry) {
+		return authUnknown
+	}
 	return c.auth
 }
 
-// settleAuth files the result of a login check. Only the first check of a
-// host start can conclude "not logged in". A later one runs after a failed
-// poll, and an outage that failed the poll fails the check too: that leaves
-// the login unknown and pauses the due keys like a gh error, instead of
-// switching the watch off until the next restart.
+// settleAuth files the result of a login check. A failed check cannot tell
+// "not logged in" from an outage, so it never holds for good: the watcher
+// asks gh nothing for ciPause and then checks the login again. The keys stay
+// due and are polled as soon as a check passes.
 func (c *ciWatch) settleAuth(ok bool, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	first := !c.authChecked
-	c.authChecked = true
-	switch {
-	case ok:
+	if ok {
 		c.auth = authOK
-	case first:
-		c.auth = authNone
-	default:
-		c.auth = authUnknown
-		for _, t := range c.keys {
-			if !now.Before(t.due) {
-				t.paused, t.due = true, now.Add(ciPause)
-			}
-		}
+		return
 	}
+	c.auth, c.authRetry = authNone, now.Add(ciPause)
 }
 
 // record files a poll's result for key and works out what its sessions get.

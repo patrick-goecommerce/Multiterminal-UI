@@ -504,19 +504,66 @@ func TestNoLoginNoPRCalls(t *testing.T) {
 	seedSession(t, h, 1, "feature-x", ciHead)
 
 	poll()
+	clock.advance(ciPause - time.Second)
+	poll()
+	if n := gh.count("auth status"); n != 1 {
+		t.Errorf("auth status calls within the pause = %d, want 1 (remembered)", n)
+	}
 	clock.advance(time.Hour)
 	poll()
 	if n := gh.count("pr list"); n != 0 {
 		t.Errorf("pr list without a login: %d calls", n)
 	}
-	if n := gh.count("auth status"); n != 1 {
-		t.Errorf("auth status calls = %d, want 1 (remembered)", n)
+	if n := gh.count("auth status"); n != 2 {
+		t.Errorf("auth status calls after the pause = %d, want 2 (asked again)", n)
 	}
 	if b, _ := h.desk.get(1); b.PR != nil || len(b.Notes) != 0 {
 		t.Errorf("briefing without a login = %+v", b)
 	}
 	if len(sink.raised()) != 0 {
 		t.Error("raised without a login")
+	}
+}
+
+// I2: the first login check runs at the first briefing. A transient failure
+// there (network, an expired token of another gh host) must not switch the
+// watcher off until the next restart: it pauses, then the check is repeated.
+func TestFailedFirstLoginCheckIsRetried(t *testing.T) {
+	quietLog(t)
+	gh := &fakeGH{
+		authFn: func(n int) error {
+			if n == 1 {
+				return errors.New("error connecting to api.github.com")
+			}
+			return nil
+		},
+		prList: serve(prFixture(t, pending)),
+	}
+	clock := newFakeClock()
+	h, sink, poll := ciHost(t, gh, clock, true)
+	seedSession(t, h, 1, "feature-x", ciHead)
+
+	poll()
+	if n := gh.count("pr list"); n != 0 {
+		t.Fatalf("pr list after a failed login check = %d, want 0", n)
+	}
+	clock.advance(ciPause - time.Second)
+	poll()
+	if n := gh.count("auth status"); n != 1 {
+		t.Fatalf("auth status calls within the pause = %d, want 1", n)
+	}
+	clock.advance(time.Second)
+	poll()
+	if n := gh.count("pr list"); n != 1 {
+		t.Fatalf("pr list after the check passed = %d, want 1", n)
+	}
+	if b := sink.lastBriefing(t, 1); b.PR == nil || b.PR.Number != 214 {
+		t.Errorf("briefing PR = %+v, want #214", b.PR)
+	}
+	// Only github.com counts: another gh host with an expired token must not
+	// fail the check.
+	if !slices.Contains(gh.calls, "auth status --hostname github.com") {
+		t.Errorf("gh calls = %v, want auth status --hostname github.com", gh.calls)
 	}
 }
 
