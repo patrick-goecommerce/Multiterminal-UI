@@ -72,6 +72,23 @@ describe('WaitingPanel briefing', () => {
     expect(browserOpenURL).toHaveBeenCalledWith('https://example.test/pr/42');
   });
 
+  it('a mouse press focuses the entry without opening the card at once', async () => {
+    briefings.set({ 'h:1': briefing() });
+    const { container } = render(WaitingPanel, { props: { rows: [entry(3)], total: 1 } });
+    const row = container.querySelector('.wp-entry')!;
+    await fireEvent.mouseEnter(row);
+    await fireEvent.mouseDown(row);
+    await fireEvent.focus(row);
+    await fireEvent.mouseUp(row);
+    await fireEvent.click(row);
+    await tick();
+    expect(document.querySelector('.card')).toBeNull();
+    // the pending hover timer was not cancelled
+    vi.advanceTimersByTime(301);
+    await tick();
+    expect(document.querySelector('.card')).not.toBeNull();
+  });
+
   it('shows no card without a briefing or for a rank 0 entry', async () => {
     const { container } = render(WaitingPanel, { props: { rows: [entry(3)], total: 1 } });
     await fireEvent.focus(container.querySelector('.wp-entry')!);

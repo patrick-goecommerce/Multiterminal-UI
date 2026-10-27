@@ -46,8 +46,13 @@
   const hover = createCardHover(300, 120);
   const shown = hover.shown;
   $: shownEntry = rows.find((e) => e.pane.id === $shown?.paneId);
-  $: shownBriefing = shownEntry ? $briefings[shownEntry.pane.sessionId] : undefined;
+  $: shownBriefing = shownEntry ? cardOf(shownEntry) : undefined;
   onDestroy(hover.destroy);
+  // A click focuses the entry too; only keyboard focus opens the card at once.
+  let pointerDown = false;
+  function onFocus(e: Event, entry: AttentionEntry) {
+    if (!pointerDown) over(e, entry, false);
+  }
   function over(e: Event, entry: AttentionEntry, delay: boolean) {
     if (!cardOf(entry)) return;
     const el = e.currentTarget as HTMLElement;
@@ -85,7 +90,8 @@
           role="button" tabindex="0" title={tip(entry)}
           aria-label="{ENTRY_LABEL[entry.rank]}: {entry.here ? 'dieses Projekt' : entry.tabName}, {paneDisplayName(entry.pane)}"
           on:mouseenter={(e) => over(e, entry, true)} on:mouseleave={hover.leave}
-          on:focus={(e) => over(e, entry, false)} on:blur={hover.leave}
+          on:mousedown={() => (pointerDown = true)} on:mouseup={() => (pointerDown = false)}
+          on:focus={(e) => onFocus(e, entry)} on:blur={hover.leave}
           on:click={(e) => activate(e, entry)} on:keydown={(e) => onKey(e, entry)} on:contextmenu={(e) => onMenu(e, entry)}>
           <div class="l1">
             <StatusGlyph kind={glyphKind(entry.pane)} />
