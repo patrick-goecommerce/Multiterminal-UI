@@ -53,6 +53,16 @@ describe('verdict', () => {
     const att = { state: 'error', rank: 2, seen: false, detail: 'CI rot: backend', source: 'ci', since: 0 };
     expect(verdict(br({ closing: 'x' }), att)).toEqual({ kind: 'detail', text: 'CI rot: backend' });
   });
+  it('a briefing older than the entry falls back to the detail', () => {
+    // Exit after a closed turn, or a turn ended with Esc: the entry is not about that briefing.
+    const att = { state: 'error', rank: 2, seen: false, detail: 'Prozess beendet (Exit 1)', source: '', since: 1000 };
+    expect(verdict(br({ built_at: 900, closing: 'alt' }), att)).toEqual({ kind: 'detail', text: 'Prozess beendet (Exit 1)' });
+    // Built with the entry, within the slack: the briefing speaks.
+    expect(verdict(br({ built_at: 996, closing: 'neu' }), att)).toEqual({ kind: 'clean', text: '✓ sauber · „neu“' });
+    expect(verdict(br({ built_at: 1002, closing: 'neu' }), att)).toEqual({ kind: 'clean', text: '✓ sauber · „neu“' });
+    // An unknown since keeps the briefing.
+    expect(verdict(br({ built_at: 900, closing: 'alt' }), { ...att, since: 0 })).toEqual({ kind: 'clean', text: '✓ sauber · „alt“' });
+  });
   it('no briefing falls back to the detail', () => {
     const att = { state: 'done', rank: 3, seen: false, detail: 'Fertig', source: '', since: 0 };
     expect(verdict(undefined, att)).toEqual({ kind: 'detail', text: 'Fertig' });

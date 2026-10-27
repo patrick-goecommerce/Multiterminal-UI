@@ -349,6 +349,7 @@ Detailzeile:
 | keine | `✓ sauber · „<Schlusswort>“` |
 | zurückgeholter Fehler (`Source = "ci"`) | sein Detail, z. B. `CI rot: backend` |
 | kein Briefing | wie Teil 1: das Detail |
+| Briefing mehr als 5 s älter als der Eintrag (`built_at` < `since` − 5 s), etwa Exit nach geschlossenem Turn oder ein mit Esc beendeter Turn | wie Teil 1: das Detail |
 
 Kurzformen: `CI rot`, `PR blockiert`, `<label> ✗`, `Fehlerende`, `ungesichert`, `großer Diff`.
 

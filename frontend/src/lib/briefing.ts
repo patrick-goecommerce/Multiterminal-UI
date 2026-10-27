@@ -36,9 +36,18 @@ function oneLine(s: string): string {
   return s.replace(/\s+/g, ' ').trim();
 }
 
+/** Seconds a briefing may predate the attention record its own turn end raised. */
+const BRIEFING_SLACK = 5;
+
+/** Whether b belongs to the entry: an exit after a closed turn, or a turn ended
+ *  with Esc, raises an entry the last briefing knows nothing about. */
+function briefingCurrent(b: hub.Briefing, att: PaneAttention | undefined): boolean {
+  return !att?.since || (b.built_at ?? 0) >= att.since - BRIEFING_SLACK;
+}
+
 export function verdict(b: hub.Briefing | undefined, att: PaneAttention | undefined): Verdict {
   const detail = att?.detail ?? '';
-  if (!b || att?.source === 'ci') return { kind: 'detail', text: detail };
+  if (!b || att?.source === 'ci' || !briefingCurrent(b, att)) return { kind: 'detail', text: detail };
   if (hasWarnings(b)) {
     const parts = byPrecedence(b.warnings).slice(0, 3).map((c) => warningShort(c, b));
     return { kind: 'warn', text: '⚠ ' + parts.join(' · ') };
