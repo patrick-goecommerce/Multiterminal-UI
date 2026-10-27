@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/patrick-goecommerce/Multiterminal-UI/internal/config"
+	"github.com/patrick-goecommerce/Multiterminal-UI/internal/hub"
 )
 
 // The agent-control tools themselves are internal/mcpsrv now, and tested
@@ -51,5 +52,15 @@ func TestLaunchPolicyRejectsAnUnknownTool(t *testing.T) {
 	a := newTestAgentControlService()
 	if _, err := a.launchPolicy().Argv("bogus", ""); err == nil {
 		t.Fatal("expected an error for an unsupported tool, got nil")
+	}
+}
+
+func TestBriefingPolicyFromConfig(t *testing.T) {
+	a := newTestAgentControlService()
+	off := false
+	a.cfg.Briefing = config.BriefingSettings{BigDiffFiles: 20, BigDiffLines: 800, CIWatch: &off}
+	want := hub.BriefingPolicy{BigDiffFiles: 20, BigDiffLines: 800, CIWatch: false}
+	if got := a.briefingPolicy(); got != want {
+		t.Fatalf("briefingPolicy() = %+v, want %+v", got, want)
 	}
 }

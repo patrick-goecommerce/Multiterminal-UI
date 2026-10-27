@@ -130,6 +130,7 @@ func run(args []string) int {
 		// The keep-alive belongs here too: in a window it stops the moment the
 		// window closes, which is exactly the stretch a session goes cold in.
 		KeepAlive: keepAlivePolicy,
+		Briefing:  briefingPolicy,
 		Sink: hub.SinkFunc(func(name string, payload any) {
 			srv.Sink().Emit(name, payload)
 		}),

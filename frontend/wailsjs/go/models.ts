@@ -844,6 +844,22 @@ export namespace backend {
 
 export namespace config {
 	
+	export class BriefingSettings {
+	    big_diff_files: number;
+	    big_diff_lines: number;
+	    ci_watch: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new BriefingSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.big_diff_files = source["big_diff_files"];
+	        this.big_diff_lines = source["big_diff_lines"];
+	        this.ci_watch = source["ci_watch"];
+	    }
+	}
 	export class KeepAliveSettings {
 	    enabled: boolean;
 	    interval_minutes: number;
@@ -1164,6 +1180,7 @@ export namespace config {
 	    gemini_models: ModelEntry[];
 	    gemini_enabled?: boolean;
 	    keep_alive: KeepAliveSettings;
+	    briefing: BriefingSettings;
 	    status_line: StatusLineSettings;
 	    background_agents: BackgroundAgents;
 	    orchestrator: OrchestratorSettings;
@@ -1219,6 +1236,7 @@ export namespace config {
 	        this.gemini_models = this.convertValues(source["gemini_models"], ModelEntry);
 	        this.gemini_enabled = source["gemini_enabled"];
 	        this.keep_alive = this.convertValues(source["keep_alive"], KeepAliveSettings);
+	        this.briefing = this.convertValues(source["briefing"], BriefingSettings);
 	        this.status_line = this.convertValues(source["status_line"], StatusLineSettings);
 	        this.background_agents = this.convertValues(source["background_agents"], BackgroundAgents);
 	        this.orchestrator = this.convertValues(source["orchestrator"], OrchestratorSettings);

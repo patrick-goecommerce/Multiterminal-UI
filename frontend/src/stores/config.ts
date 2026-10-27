@@ -30,6 +30,12 @@ export interface KeepAliveConfig {
   message: string;
 }
 
+export interface BriefingConfig {
+  big_diff_files: number;
+  big_diff_lines: number;
+  ci_watch?: boolean;
+}
+
 export interface StatusLineConfig {
   enabled: boolean;
   template: string;
@@ -136,6 +142,7 @@ export interface AppConfig {
   quick_actions: QuickAction[];
   audio: AudioConfig;
   keep_alive: KeepAliveConfig;
+  briefing: BriefingConfig;
   status_line: StatusLineConfig;
   localhost_auto_open: string;
   sidebar_pinned: boolean;
@@ -209,6 +216,11 @@ export const config = writable<AppConfig>({
     enabled: true,
     interval_minutes: 60,
     message: 'Hi!',
+  },
+  briefing: {
+    big_diff_files: 15,
+    big_diff_lines: 500,
+    ci_watch: true,
   },
   audio: {
     enabled: true,

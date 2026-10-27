@@ -74,3 +74,14 @@ func keepAlivePolicy() hub.KeepAlive {
 		Modes:   launch.KeepAliveModes(),
 	}
 }
+
+// briefingPolicy reads the briefing thresholds for one build, per call like
+// keepAlivePolicy, so a change in the settings dialog needs no daemon restart.
+func briefingPolicy() hub.BriefingPolicy {
+	cfg := config.Load()
+	return hub.BriefingPolicy{
+		BigDiffFiles: cfg.Briefing.BigDiffFiles,
+		BigDiffLines: cfg.Briefing.BigDiffLines,
+		CIWatch:      cfg.ShouldWatchCI(),
+	}
+}
