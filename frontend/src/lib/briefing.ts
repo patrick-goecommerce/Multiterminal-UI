@@ -45,7 +45,8 @@ export function verdict(b: hub.Briefing | undefined, att: PaneAttention | undefi
   }
   const closing = oneLine(b.closing ?? '');
   const tail = closing ? ` · „${closing}“` : '';
-  if (b.pr?.checks === 'pending') return { kind: 'pending', text: '◷ CI läuft' + tail };
+  // A merged or closed PR is no longer watched: its pending checks are frozen.
+  if (b.pr?.state === 'OPEN' && b.pr.checks === 'pending') return { kind: 'pending', text: '◷ CI läuft' + tail };
   return { kind: 'clean', text: '✓ sauber' + tail };
 }
 

@@ -9,7 +9,7 @@ func TestWarningsOrder(t *testing.T) {
 	b := Briefing{
 		Checks: []CheckResult{{Label: "go test", Result: CheckFail}},
 		Git:    &GitFacts{Uncommitted: 2},
-		PR:     &PRFacts{Checks: "red", Conflicting: true},
+		PR:     &PRFacts{State: "OPEN", Checks: "red", Conflicting: true},
 	}
 	got := warningsFor(b, true, true)
 	want := []string{WarnCIRed, WarnPRBlocked, WarnCheckFailed, WarnEndedError, WarnDirty, WarnBigDiff}
@@ -19,9 +19,21 @@ func TestWarningsOrder(t *testing.T) {
 	if w := warningsFor(Briefing{}, false, false); len(w) != 0 {
 		t.Fatalf("empty briefing warns: %v", w)
 	}
-	w := warningsFor(Briefing{PR: &PRFacts{Review: "CHANGES_REQUESTED"}}, false, false)
+	w := warningsFor(Briefing{PR: &PRFacts{State: "OPEN", Review: "CHANGES_REQUESTED"}}, false, false)
 	if len(w) != 1 || w[0] != WarnPRBlocked {
 		t.Fatalf("changes requested: %v", w)
+	}
+}
+
+// I3: after a merge or a close the watcher stops, so the PR's last state is
+// frozen. Its red rollup or old conflict must not keep warning: spec C3 makes
+// "gemergt" info.
+func TestClosedPRDoesNotWarn(t *testing.T) {
+	for _, state := range []string{"MERGED", "CLOSED"} {
+		b := Briefing{PR: &PRFacts{State: state, Checks: "red", Conflicting: true, Review: "CHANGES_REQUESTED"}}
+		if w := warningsFor(b, false, false); len(w) != 0 {
+			t.Errorf("%s PR warns: %v", state, w)
+		}
 	}
 }
 

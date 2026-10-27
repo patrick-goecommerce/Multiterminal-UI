@@ -365,8 +365,13 @@ func TestMergedStopsWatching(t *testing.T) {
 	seedSession(t, h, 1, "feature-x", ciHead)
 
 	poll()
-	if b := sink.lastBriefing(t, 1); b.PR == nil || b.PR.State != "MERGED" {
+	b := sink.lastBriefing(t, 1)
+	if b.PR == nil || b.PR.State != "MERGED" {
 		t.Fatalf("briefing PR = %+v, want the merged PR", b.PR)
+	}
+	// The watch ends here, so the red rollup would stay for good.
+	if slices.Contains(b.Warnings, WarnCIRed) || slices.Contains(b.Warnings, WarnPRBlocked) {
+		t.Errorf("Warnings of a merged PR = %v, want no CI or PR warning", b.Warnings)
 	}
 	clock.advance(time.Hour)
 	poll()

@@ -244,6 +244,8 @@ bekannten PR und `ci_paused`.
 - `pr_blocked`: `mergeable == "CONFLICTING"` oder `reviewDecision == "CHANGES_REQUESTED"`.
 - Nur Info: Draft, „CI läuft“, „gemergt“, und „CI gilt für älteren Stand“, wenn der lokale HEAD
   nicht `headRefOid` ist.
+- `ci_red`, `pr_blocked` und das Urteil „CI läuft“ gelten nur für einen offenen PR. Nach Merge oder
+  Schließen endet die Beobachtung (C2); ihr letzter Stand bliebe sonst für immer stehen.
 
 ### C4 Zurückholen
 

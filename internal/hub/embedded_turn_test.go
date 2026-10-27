@@ -362,7 +362,7 @@ func TestUpdatePRRecomputesWarnings(t *testing.T) {
 	h.finishTurn(1, true, "")
 	sink.await(t)
 
-	b, ok := h.desk.updatePR(1, &PRFacts{Number: 7, Checks: "red"}, []string{NoteCIStale})
+	b, ok := h.desk.updatePR(1, &PRFacts{Number: 7, State: "OPEN", Checks: "red"}, []string{NoteCIStale})
 	if !ok {
 		t.Fatal("updatePR on a session with a briefing: want true")
 	}

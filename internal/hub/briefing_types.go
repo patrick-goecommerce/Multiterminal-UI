@@ -105,13 +105,16 @@ const (
 	NoteCIStale  = "ci_stale"
 )
 
-// warningsFor derives the warnings of a briefing, most urgent first.
+// warningsFor derives the warnings of a briefing, most urgent first. Only an
+// open PR warns: the watch ends at a merge or a close, and the last state it
+// saw would otherwise stay for good.
 func warningsFor(b Briefing, endedError, bigDiff bool) []string {
 	var w []string
-	if b.PR != nil && b.PR.Checks == "red" {
+	open := b.PR != nil && b.PR.State == "OPEN"
+	if open && b.PR.Checks == "red" {
 		w = append(w, WarnCIRed)
 	}
-	if b.PR != nil && (b.PR.Conflicting || b.PR.Review == "CHANGES_REQUESTED") {
+	if open && (b.PR.Conflicting || b.PR.Review == "CHANGES_REQUESTED") {
 		w = append(w, WarnPRBlocked)
 	}
 	for _, c := range b.Checks {

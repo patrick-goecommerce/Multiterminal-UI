@@ -39,6 +39,12 @@ describe('verdict', () => {
     const b = br({ closing: 'Fertig.', git: git(), pr: pr({ checks: 'pending' }) });
     expect(verdict(b, undefined)).toEqual({ kind: 'pending', text: '◷ CI läuft · „Fertig.“' });
   });
+  it('a merged or closed PR with checks still pending is clean', () => {
+    for (const state of ['MERGED', 'CLOSED']) {
+      const b = br({ closing: 'Fertig.', git: git(), pr: pr({ state, checks: 'pending' }) });
+      expect(verdict(b, undefined)).toEqual({ kind: 'clean', text: '✓ sauber · „Fertig.“' });
+    }
+  });
   it('clean', () => {
     expect(verdict(br({ closing: 'Fertig.' }), undefined)).toEqual({ kind: 'clean', text: '✓ sauber · „Fertig.“' });
     expect(verdict(br(), undefined)).toEqual({ kind: 'clean', text: '✓ sauber' });
