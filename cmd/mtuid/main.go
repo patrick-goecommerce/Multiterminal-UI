@@ -131,6 +131,8 @@ func run(args []string) int {
 		// window closes, which is exactly the stretch a session goes cold in.
 		KeepAlive: keepAlivePolicy,
 		Briefing:  briefingPolicy,
+		// CI turns red while no window is open; the watcher only reads.
+		GH: hub.ExecGH,
 		Sink: hub.SinkFunc(func(name string, payload any) {
 			srv.Sink().Emit(name, payload)
 		}),

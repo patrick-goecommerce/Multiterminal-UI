@@ -43,8 +43,12 @@ type briefingDesk struct {
 	snapshot snapshotFunc          // a seam for tests
 	limit    time.Duration
 	sem      chan struct{}
-	// afterBuild sees every published build. Nil until the CI watch uses it.
+	// afterBuild sees every published build, after its event went out; the
+	// CI watcher registers the branch there. Nil without a watcher.
 	afterBuild func(id int, res gitResult, publish bool)
+	// prBase answers the base branch of the PR the watcher knows for a
+	// branch, which wins as a build's target. Nil without a watcher.
+	prBase func(repo ghRepo, branch string) string
 
 	mu      sync.Mutex
 	entries map[int]deskEntry
@@ -130,6 +134,14 @@ func (d *briefingDesk) setTarget(id int, branch string) {
 		return
 	}
 	d.targets[id] = branch
+}
+
+// result is what the session's last build measured.
+func (d *briefingDesk) result(id int) (gitResult, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	e, ok := d.entries[id]
+	return e.res, ok
 }
 
 // get returns a copy of the session's briefing. Stored slices are never

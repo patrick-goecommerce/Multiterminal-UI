@@ -28,6 +28,9 @@ func (h *Embedded) onTurnHook(ev hooks.Event) {
 		go h.desk.startSnapshot(id, ev.PromptID, cwd)
 	case "PostToolUse", "PostToolUseFailure":
 		h.desk.turns.observe(id, ev)
+		if publishCommand(ev.Command) {
+			h.ciPublished(id)
+		}
 	case "Stop":
 		h.finishTurn(id, false, closingWords(ev.Message))
 	}
@@ -64,7 +67,7 @@ func (h *Embedded) buildBriefing(ctx context.Context, id int, gen uint64, t turn
 	var res gitResult
 	if t.cwd != "" {
 		limited, cancel := context.WithTimeout(ctx, d.limit)
-		r, isRepo := measureGit(limited, d.snapshot, t.cwd, t.startTree, d.target(id), nil, d.currentPolicy())
+		r, isRepo := measureGit(limited, d.snapshot, t.cwd, t.startTree, d.target(id), d.prBase, d.currentPolicy())
 		slow := errors.Is(limited.Err(), context.DeadlineExceeded)
 		cancel()
 		if ctx.Err() != nil {
@@ -90,10 +93,12 @@ func (h *Embedded) buildBriefing(ctx context.Context, id int, gen uint64, t turn
 	if !d.finish(id, gen, &deskEntry{briefing: b, endedError: endedError, bigDiff: res.BigDiff, res: res}) {
 		return
 	}
+	h.emit(EventSessionBriefing, BriefingUpdate{ID: id, Briefing: b.clone()})
+	// After the event, so whatever the watcher learns next goes out after
+	// this build's own briefing and is not painted over by it.
 	if d.afterBuild != nil {
 		d.afterBuild(id, res, t.publish)
 	}
-	h.emit(EventSessionBriefing, BriefingUpdate{ID: id, Briefing: b.clone()})
 }
 
 // Briefing returns the session's last briefing; false when no turn of it has
