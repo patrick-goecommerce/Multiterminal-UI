@@ -50,7 +50,8 @@
   import { seenTargetOf } from './lib/seenTracker';
   import { seenTracker, markSessionSeen } from './lib/seen';
   import { settleRestored } from './lib/restoreSettle';
-  import { applyBriefing, loadBriefings } from './stores/briefings';
+  import { applyBriefing, loadBriefings, briefings } from './stores/briefings';
+  import { hasWarnings } from './lib/briefing';
   import { createTargetSync } from './lib/targetSync';
   import { layoutModeOf, floatingStillValid, type LayoutMode } from './lib/focusLayout';
   import { attentionList, shouldToast, ENTRY_LABEL } from './lib/attention';
@@ -1089,7 +1090,8 @@
   $: tabInfo = `Tab ${($allTabs.findIndex((t) => t.id === $activeTab?.id) ?? 0) + 1}/${$allTabs.length}  Pane ${currentPanes}/${MAX_PANES_PER_TAB}`;
 
   $: layoutMode = layoutModeOf($config.layout?.mode);
-  $: waitingAll = attentionList($allTabs, $activeTab?.id ?? '');
+  $: warnedOf = (p: { sessionId: string }) => hasWarnings($briefings[p.sessionId]);
+  $: waitingAll = attentionList($allTabs, $activeTab?.id ?? '', warnedOf);
   $: showWaitCounter = layoutMode !== 'focus' || !!$activeTab?.panes.some((p) => p.maximized);
 
   // Whether the keyboard was last in the floating pane. Dialogs (command

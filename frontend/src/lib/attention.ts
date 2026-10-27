@@ -60,8 +60,10 @@ export interface AttentionEntry {
 const sinceKey = (since: number) => since || Number.MAX_SAFE_INTEGER;
 
 /** Everything that waits, from every tab, most urgent first; within a rank the
- *  longest waiting first. An unknown start sorts after the known ones. */
-export function attentionList(tabs: Tab[], currentTabId: string): AttentionEntry[] {
+ *  longest waiting first. An unknown start sorts after the known ones. A pane
+ *  with warnings in its briefing goes before the others of its rank, so the
+ *  clean finished ones are what the panel collapses. */
+export function attentionList(tabs: Tab[], currentTabId: string, warned: (p: Pane) => boolean = () => false): AttentionEntry[] {
   const out: AttentionEntry[] = [];
   for (const tab of tabs) {
     for (const pane of tab.panes) {
@@ -71,7 +73,8 @@ export function attentionList(tabs: Tab[], currentTabId: string): AttentionEntry
         since: pane.attention?.since || pane.activitySince || 0 });
     }
   }
-  return out.sort((a, b) => a.rank - b.rank || sinceKey(a.since) - sinceKey(b.since) || a.pane.id.localeCompare(b.pane.id));
+  const w = (e: AttentionEntry) => (warned(e.pane) ? 0 : 1);
+  return out.sort((a, b) => a.rank - b.rank || w(a) - w(b) || sinceKey(a.since) - sinceKey(b.since) || a.pane.id.localeCompare(b.pane.id));
 }
 
 export interface PanelRows {

@@ -121,3 +121,28 @@ describe('shouldToast', () => {
     expect(shouldToast(att(5, 10, true, 'error'), att(2, 20, false, 'error'), false)).toBe(true);
   });
 });
+
+describe('attentionList with warnings', () => {
+  const tabs = [tab('t1', [
+    pane('old', 'done', { rank: 3, since: 100 }),
+    pane('new', 'done', { rank: 3, since: 300 }),
+    pane('err', 'error', { rank: 2, since: 400 }),
+    pane('warnedOld', 'done', { rank: 3, since: 50 }),
+  ])];
+  const ids = (warned: (p: any) => boolean) => attentionList(tabs, 't1', warned).map((e) => e.pane.id);
+  it('puts warned entries before clean ones within a rank', () => {
+    expect(ids((p) => p.id === 'new')).toEqual(['err', 'new', 'warnedOld', 'old']);
+  });
+  it('sorts two warned entries by age', () => {
+    expect(ids((p) => p.id === 'new' || p.id === 'old')).toEqual(['err', 'old', 'new', 'warnedOld']);
+  });
+  it('lets the rank dominate: a clean rank 2 stays before a warned rank 3', () => {
+    expect(ids((p) => p.id === 'new')[0]).toBe('err');
+  });
+  it('panelRows hides the clean finished entries first', () => {
+    const list = attentionList(tabs, 't1', (p) => p.id === 'new' || p.id === 'old');
+    const r = panelRows(list, false, 2);
+    expect(r.rows.map((e) => e.pane.id)).toEqual(['err', 'old', 'new']);
+    expect(r.hiddenDone).toBe(1);
+  });
+});
