@@ -8,6 +8,7 @@ import * as App from '../../wailsjs/go/backend/App';
 import { NO_SESSION, sameSession, sessionNumber, type SessionRef } from './sessionRef';
 import { focusOrderIndices, restoreFocusOrder } from '../stores/focusLayout';
 import { markRestored } from './restoreSettle';
+import { forgetBriefing } from '../stores/briefings';
 
 /**
  * Sessions the backend still holds.
@@ -250,6 +251,7 @@ export function closePaneSession(pane: Pane): void {
     ? (pane.conversationId ? App.CloseChatSession(pane.conversationId) : undefined)
     : (pane.sessionId ? App.CloseSession(pane.sessionId) : undefined);
   Promise.resolve(done).catch((err) => console.error('[closePaneSession]', pane.id, err));
+  if (pane.sessionId) forgetBriefing(pane.sessionId);
 }
 
 /**

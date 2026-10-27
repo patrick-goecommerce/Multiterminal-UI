@@ -50,6 +50,8 @@
   import { seenTargetOf } from './lib/seenTracker';
   import { seenTracker, markSessionSeen } from './lib/seen';
   import { settleRestored } from './lib/restoreSettle';
+  import { applyBriefing, loadBriefings } from './stores/briefings';
+  import { createTargetSync } from './lib/targetSync';
   import { layoutModeOf, floatingStillValid, type LayoutMode } from './lib/focusLayout';
   import { attentionList, shouldToast, ENTRY_LABEL } from './lib/attention';
   import { next as nextAttention, back as backFromAttention, jumpToSession } from './lib/attentionNav';
@@ -185,6 +187,7 @@
   let updateCheckInterval: ReturnType<typeof setInterval> | null = null;
   let storeUnsubscribe: (() => void) | null = null;
   let orderUnsubscribe: (() => void) | null = null;
+  let targetSyncUnsubscribe: (() => void) | null = null;
   let keepAliveCleanup: (() => void) | null = null;
   let chatEventsCleanup: (() => void) | null = null;
   let linkInterceptorCleanup: (() => void) | null = null;
@@ -323,6 +326,9 @@
       tabStore.addTab('Workspace', workDir);
     }
 
+    // A window opened later in daemon mode still shows the briefings that exist.
+    loadBriefings(get(allTabs).flatMap((t) => t.panes.map((p) => p.sessionId)));
+
     // Reconcile pane-worktree finish markers left over from a previous run.
     const reconcileDir = $activeTab?.dir || '';
     if (reconcileDir) App.ReconcileFinishMarkers(reconcileDir).catch(() => {});
@@ -373,6 +379,10 @@
         App.SendPaneNotification(`${ENTRY_LABEL[next.rank]} · ${tab.name}`,
           `${paneDisplayName(pane)}${next.detail ? ': ' + next.detail : ''}`, info.id).catch(() => {});
       }
+    });
+    // The host's review briefing for a pane whose turn just ended.
+    EventsOn('terminal:briefing', (event: any) => {
+      if (event.data?.id) applyBriefing(event.data.id, event.data.briefing);
     });
     // A toast about one pane was clicked: the backend raised the window.
     EventsOn('mtui:focus-session', (event: any) => {
@@ -552,6 +562,8 @@
     storeUnsubscribe = tabStore.subscribe(scheduleSave);
     // The focus layout's order is saved with the tabs (SavedTab.focus_order).
     orderUnsubscribe = focusOrders.subscribe(scheduleSave);
+    // Merge targets go to the host so a briefing can compare against them.
+    targetSyncUnsubscribe = allTabs.subscribe(createTargetSync(App.SetSessionTarget));
 
     window.addEventListener('beforeunload', saveSession);
     updateBranch();
@@ -580,6 +592,7 @@
     if (updateCheckInterval) clearInterval(updateCheckInterval);
     if (storeUnsubscribe) storeUnsubscribe();
     if (orderUnsubscribe) orderUnsubscribe();
+    if (targetSyncUnsubscribe) targetSyncUnsubscribe();
     if (keepAliveCleanup) keepAliveCleanup();
     if (chatEventsCleanup) chatEventsCleanup();
     if (linkInterceptorCleanup) linkInterceptorCleanup();
