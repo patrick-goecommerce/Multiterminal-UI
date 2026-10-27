@@ -628,6 +628,7 @@ func TestBuildWakesLoopAndUsesPRBase(t *testing.T) {
 	t.Cleanup(h.Release)
 	h.AdoptForTest(1, terminal.NewSession(1, 24, 80))
 	repo := newRepoWithOrigin(t)
+	tgit(t, repo, "branch", "alpha-main") // the PR's base must name a ref (M3)
 	tgit(t, repo, "checkout", "-q", "-b", "feature-x")
 	tgit(t, repo, "remote", "set-url", "origin", "https://github.com/"+ciOwner+"/"+ciName+".git")
 

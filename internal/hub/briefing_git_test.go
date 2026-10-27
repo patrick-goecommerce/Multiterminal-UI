@@ -176,6 +176,41 @@ func TestNoRepo(t *testing.T) {
 	}
 }
 
+// M3: without origin/HEAD the target falls back to "main". In a repository
+// whose trunk is master that names no ref: the branch numbers would all be
+// zeros presented as facts. They stay out, the target too; the rest stays,
+// and the big-diff threshold measures the turn as on the target.
+func TestUnresolvableTargetLeavesBranchOut(t *testing.T) {
+	w := t.TempDir()
+	tgit(t, w, "init", "-q", "-b", "master")
+	twrite(t, w, "base.txt", 1)
+	tcommit(t, w, "base")
+	tgit(t, w, "checkout", "-q", "-b", "feat")
+	twrite(t, w, "a.txt", 3)
+	tcommit(t, w, "one")
+	start, err := gitx.SnapshotTree(context.Background(), w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 16; i++ {
+		twrite(t, w, fmt.Sprintf("n%d.txt", i), 1)
+	}
+	res := runBriefing(t, w, start)
+	f := res.Facts
+	if f.Target != "" || f.OnTarget {
+		t.Errorf("Target/OnTarget = %q/%v, want empty/false", f.Target, f.OnTarget)
+	}
+	if f.Commits != 0 || f.BranchFiles != 0 || f.BranchAdded != 0 || f.BranchDeleted != 0 {
+		t.Errorf("branch numbers = %+v, want none", f)
+	}
+	if f.Branch != "feat" || f.Uncommitted != 16 || !f.NoUpstream || !f.TurnKnown || f.TurnFiles != 16 {
+		t.Errorf("the rest = %+v, want kept", f)
+	}
+	if !res.BigDiff {
+		t.Error("16 files in the turn without branch numbers: want big diff")
+	}
+}
+
 func TestDetachedHead(t *testing.T) {
 	w := newRepoWithOrigin(t)
 	tgit(t, w, "checkout", "-q", "--detach")

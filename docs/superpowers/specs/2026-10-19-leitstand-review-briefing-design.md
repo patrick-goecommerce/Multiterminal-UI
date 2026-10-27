@@ -172,9 +172,11 @@ Ziel ist, in dieser Reihenfolge:
 1. die Basis des PRs, sobald der Wächter (Teil C) einen kennt,
 2. das Ziel, das das Fenster für MTUI-Worktrees kennt (`Pane.targetBranch`); neu über
    `SetSessionTarget(ref, branch)` an den Host gegeben, wann immer das Fenster es setzt,
-3. der Standard-Branch des Remotes (`origin/HEAD`).
+3. der Standard-Branch des Remotes (`origin/HEAD`), ohne ihn `main`.
 
 Verglichen wird mit `origin/<ziel>`, falls vorhanden, sonst mit `<ziel>`. Es wird nie gefetcht.
+Benennt keiner der beiden einen Commit (etwa der Rückfall `main` in einem Repo mit `master`), fehlen
+Ziel und Branch-Zahlen; Nullen wären sonst als Fakten ausgegeben. Die übrigen Zahlen bleiben.
 
 | Zahl | Herkunft |
 |---|---|
@@ -192,7 +194,7 @@ abgekoppeltem HEAD sagt sie „abgekoppelt“, und es gibt keine PR-Suche.
 - `big_diff`: Branch über `big_diff_files` Dateien (Standard 15) oder über `big_diff_lines`
   geänderte Zeilen (+ und −, Standard 500). Bei den Zeilen zählen `package-lock.json`, `go.sum`,
   `pnpm-lock.yaml`, `yarn.lock`, `Cargo.lock` und `composer.lock` nicht mit. Ohne Branch-Zahlen
-  (auf dem Ziel) misst die Schwelle den Turn.
+  (auf dem Ziel oder ohne auflösbares Ziel) misst die Schwelle den Turn.
 
 ### B4 Kosten
 

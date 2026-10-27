@@ -75,6 +75,15 @@ func measureGit(ctx context.Context, snap snapshotFunc, dir, startTree, startTop
 	}
 	f.Target = resolveTarget(ctx, dir, base, windowTarget)
 	f.OnTarget = !f.Detached && f.Branch == f.Target
+	var cmp string
+	if !f.OnTarget {
+		var ok bool
+		// A target that names no ref (the "main" fallback in a master repo)
+		// would turn every branch number into a zero presented as a fact.
+		if cmp, ok = compareRef(ctx, dir, f.Target); !ok {
+			f.Target = ""
+		}
+	}
 
 	stop, err := snap(ctx, dir)
 	if err != nil {
@@ -82,20 +91,21 @@ func measureGit(ctx context.Context, snap snapshotFunc, dir, startTree, startTop
 	}
 	// Linked worktrees share the object store, so a start tree from another
 	// checkout diffs without error and would still be wrong (EnterWorktree).
+	turnBig := false
 	if startTree != "" && startTop == top {
 		if st, err := gitx.NumStat(ctx, dir, startTree, stop); err == nil {
 			f.TurnKnown = true
 			var lines int
 			f.TurnFiles, f.TurnAdded, f.TurnDeleted, lines = sumStats(st)
-			if f.OnTarget {
-				res.BigDiff = f.TurnFiles > p.BigDiffFiles || lines > p.BigDiffLines
-			}
+			turnBig = f.TurnFiles > p.BigDiffFiles || lines > p.BigDiffLines
 		}
 	}
-	if f.OnTarget {
+	// Without branch numbers (on the target, or no target) the threshold
+	// measures the turn.
+	if cmp == "" {
+		res.BigDiff = turnBig
 		return res, true
 	}
-	cmp := compareRef(ctx, dir, f.Target)
 	f.Commits = gitCount(ctx, dir, "rev-list", "--count", cmp+"..HEAD")
 	if mb, err := gitOut(ctx, dir, "merge-base", cmp, "HEAD"); err == nil && mb != "" {
 		if st, err := gitx.NumStat(ctx, dir, mb, stop); err == nil {
@@ -152,12 +162,16 @@ func resolveTarget(ctx context.Context, dir, prBase, windowTarget string) string
 	return "main"
 }
 
-// compareRef is origin/<target> when that ref exists, else <target>.
-func compareRef(ctx context.Context, dir, target string) string {
+// compareRef is origin/<target> when that ref exists, else <target>; false
+// when neither names a commit.
+func compareRef(ctx context.Context, dir, target string) (string, bool) {
 	if _, err := gitOut(ctx, dir, "rev-parse", "--verify", "-q", "refs/remotes/origin/"+target); err == nil {
-		return "origin/" + target
+		return "origin/" + target, true
 	}
-	return target
+	if _, err := gitOut(ctx, dir, "rev-parse", "--verify", "-q", target+"^{commit}"); err == nil {
+		return target, true
+	}
+	return "", false
 }
 
 var ghRemoteRe = regexp.MustCompile(`^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/\s]+)/([^/\s]+?)(?:\.git)?/?$`)

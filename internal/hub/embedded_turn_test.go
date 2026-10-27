@@ -309,6 +309,7 @@ func TestNoRepoNoGit(t *testing.T) {
 func TestSetTargetUsed(t *testing.T) {
 	h, sink := briefingHost(t, 1)
 	repo := newRepoWithOrigin(t)
+	tgit(t, repo, "branch", "alpha-main") // a target must name a ref (M3)
 	tgit(t, repo, "checkout", "-q", "-b", "feat")
 	if err := h.SetTarget(1, "alpha-main"); err != nil {
 		t.Fatalf("SetTarget: %v", err)
