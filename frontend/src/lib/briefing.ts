@@ -99,10 +99,13 @@ export function cardLines(b: hub.Briefing, head: { project: string; pane: string
     rows.push({ key: 'turn', text: `Turn:   ${plural(g.turn_files, 'Datei', 'Dateien')} +${g.turn_added} −${g.turn_deleted}` });
   }
   if (g) {
-    let t = `Branch: ${plural(g.branch_files, 'Datei', 'Dateien')} +${g.branch_added} −${g.branch_deleted} · ${plural(g.commits, 'Commit', 'Commits')}`;
-    if (g.no_upstream) t += ' · nie gepusht';
-    else if (g.unpushed > 0) t += ` · ${g.unpushed} ungepusht`;
-    rows.push({ key: 'branch', text: t });
+    // Branch numbers only against a target the host resolved, and not on it.
+    const parts = !g.on_target && g.target
+      ? [`${plural(g.branch_files, 'Datei', 'Dateien')} +${g.branch_added} −${g.branch_deleted}`, plural(g.commits, 'Commit', 'Commits')]
+      : [];
+    if (g.no_upstream) parts.push('nie gepusht');
+    else if (g.unpushed > 0) parts.push(`${g.unpushed} ungepusht`);
+    if (parts.length) rows.push({ key: 'branch', text: `Branch: ${parts.join(' · ')}` });
   }
   if (b.checks?.length) {
     rows.push({ key: 'checks', text: b.checks.map((c) => `${c.label} ${CHECK_MARK[c.result] ?? '?'}`).join('   ') });

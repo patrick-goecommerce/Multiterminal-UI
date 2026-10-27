@@ -132,7 +132,16 @@ describe('cardLines', () => {
     const b = full();
     b.git = git({ on_target: true, no_upstream: true });
     expect(text(cardLines(b, head), 'head')).toBe('goki · hook-refactor · auf alpha-main');
-    expect(text(cardLines(b, head), 'branch')).toBe('Branch: 7 Dateien +212 −48 · 3 Commits · nie gepusht');
+    // On the target there are no branch numbers (spec B2): only the push state.
+    expect(text(cardLines(b, head), 'branch')).toBe('Branch: nie gepusht');
+    b.git = git({ on_target: true, branch_files: 0, branch_added: 0, branch_deleted: 0, commits: 0, unpushed: 2 });
+    expect(text(cardLines(b, head), 'branch')).toBe('Branch: 2 ungepusht');
+    b.git = git({ on_target: true, branch_files: 0, branch_added: 0, branch_deleted: 0, commits: 0, unpushed: 0 });
+    expect(cardLines(b, head).map((l) => l.key)).not.toContain('branch');
+    // No target the host could resolve (M3): no branch numbers either.
+    b.git = git({ target: '', branch_files: 0, branch_added: 0, branch_deleted: 0, commits: 0, unpushed: 1 });
+    expect(text(cardLines(b, head), 'head')).toBe('goki · hook-refactor');
+    expect(text(cardLines(b, head), 'branch')).toBe('Branch: 1 ungepusht');
     b.git = git({ detached: true });
     expect(text(cardLines(b, head), 'head')).toBe('goki · hook-refactor · abgekoppelt');
   });

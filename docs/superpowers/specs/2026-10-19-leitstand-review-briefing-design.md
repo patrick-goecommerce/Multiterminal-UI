@@ -372,7 +372,9 @@ Zusammenklappen ab drei fertigen Einträgen (Teil 1) klappt damit zuerst die sau
   1. Projekt · Pane · „gegen alpha-main“ (bzw. „auf alpha-main“, „abgekoppelt“)
   2. `Auftrag: „…“`
   3. `Turn:   3 Dateien +40 −5`
-  4. `Branch: 7 Dateien +212 −48 · 3 Commits · 2 ungepusht` (bzw. „nie gepusht“)
+  4. `Branch: 7 Dateien +212 −48 · 3 Commits · 2 ungepusht` (bzw. „nie gepusht“). Auf dem Ziel
+     oder ohne auflösbares Ziel (B2) nur der Push-Stand, etwa `Branch: 2 ungepusht`; ohne ihn fällt
+     die Zeile weg.
   5. Prüfungen: `go test ✓   go vet ✗   test ?`
   6. PR: `PR #12 · CI 2/2 ✓ · Review offen`, `PR #12 · CI läuft 1/3`, `PR #12 gemergt`, `kein PR`
      (nur mit `no_pr`, siehe C2), `CI-Abfrage pausiert`; „für älteren Stand“ als Zusatz
