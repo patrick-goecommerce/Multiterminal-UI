@@ -33,6 +33,7 @@ type Embedded struct {
 	launcher    Launcher
 	activity    *activityDebouncer
 	attention   *attentionBook
+	desk        *briefingDesk
 	queueMu     sync.Mutex
 	queues      map[int]*sessionQueue
 	keepAliveFn func() KeepAlive
@@ -79,6 +80,7 @@ func NewEmbedded(opts Options) *Embedded {
 		launcher:    opts.Launcher,
 		activity:    newActivityDebouncer(),
 		attention:   newAttentionBook(),
+		desk:        newBriefingDesk(opts.Briefing),
 		queues:      make(map[int]*sessionQueue),
 		keepAliveFn: opts.KeepAlive,
 		startedAt:   time.Now(),
@@ -193,6 +195,7 @@ func (h *Embedded) Close(id int) error {
 	// ID would inherit a stranger's confirmed state.
 	h.activity.forget(id)
 	h.attention.forget(id)
+	h.desk.forget(id)
 	h.forgetQueue(id)
 	return nil
 }

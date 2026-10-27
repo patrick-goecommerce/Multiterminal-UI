@@ -33,6 +33,13 @@ func (b *turnBook) expectKeepAlive(id int) {
 	b.mu.Unlock()
 }
 
+// cancelKeepAlive takes back an expectation whose keep-alive never got sent.
+func (b *turnBook) cancelKeepAlive(id int) {
+	b.mu.Lock()
+	delete(b.keepAlive, id)
+	b.mu.Unlock()
+}
+
 // begin starts a turn, replacing the previous one, and reports whether it is
 // a keep-alive turn.
 func (b *turnBook) begin(id int, promptID, prompt, cwd string) (keepAlive bool) {

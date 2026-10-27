@@ -51,4 +51,8 @@ type Options struct {
 	// it while the host runs; it is read per tick. Nil leaves the keep-alive
 	// off, and so does a policy that returns a zero interval or no message.
 	KeepAlive func() KeepAlive
+	// Briefing supplies the thresholds of a turn briefing. Like KeepAlive it
+	// is read per build, so a changed setting applies to the next turn. Nil
+	// means the defaults, with the CI watch off.
+	Briefing func() BriefingPolicy
 }

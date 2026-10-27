@@ -159,12 +159,20 @@ func (h *Embedded) Nudge(id int) error {
 }
 
 // nudge types the message and submits it, then marks the turn.
+//
+// The turn it starts is announced before the first keystroke: the agent's
+// UserPromptSubmit can arrive before the write returns. A nudge that did not
+// get through takes the announcement back, or the next real turn would be
+// taken for the greeting's and get no briefing.
 func (h *Embedded) nudge(id int, message string) error {
+	h.desk.turns.expectKeepAlive(id)
 	if err := h.Write(id, []byte(message)); err != nil {
+		h.desk.turns.cancelKeepAlive(id)
 		return err
 	}
 	time.Sleep(enterDelay)
 	if err := h.Write(id, []byte("\r")); err != nil {
+		h.desk.turns.cancelKeepAlive(id)
 		return fmt.Errorf("submitting: %w", err)
 	}
 	// The reply to a greeting is not something to answer: it settles as done

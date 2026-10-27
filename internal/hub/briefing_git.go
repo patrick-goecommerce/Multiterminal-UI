@@ -30,6 +30,15 @@ func gitCount(ctx context.Context, dir string, args ...string) int {
 // repository. It never fetches and never touches the real index. prBase may
 // be nil.
 func gitBriefing(ctx context.Context, dir, startTree, windowTarget string, prBase func(ghRepo, string) string, p BriefingPolicy) (gitResult, bool) {
+	return measureGit(ctx, gitx.SnapshotTree, dir, startTree, windowTarget, prBase, p)
+}
+
+// snapshotFunc takes the work-tree snapshot; gitx.SnapshotTree outside tests.
+type snapshotFunc func(ctx context.Context, dir string) (string, error)
+
+// measureGit is gitBriefing with the stop snapshot taken by snap, so the
+// briefing desk's test seam governs both ends of a turn.
+func measureGit(ctx context.Context, snap snapshotFunc, dir, startTree, windowTarget string, prBase func(ghRepo, string) string, p BriefingPolicy) (gitResult, bool) {
 	p = p.normalized()
 	var res gitResult
 	if _, err := gitOut(ctx, dir, "rev-parse", "--show-toplevel"); err != nil {
@@ -65,7 +74,7 @@ func gitBriefing(ctx context.Context, dir, startTree, windowTarget string, prBas
 	f.Target = resolveTarget(ctx, dir, base, windowTarget)
 	f.OnTarget = !f.Detached && f.Branch == f.Target
 
-	stop, err := gitx.SnapshotTree(ctx, dir)
+	stop, err := snap(ctx, dir)
 	if err != nil {
 		return res, true
 	}

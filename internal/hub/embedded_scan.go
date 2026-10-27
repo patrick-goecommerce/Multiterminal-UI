@@ -27,6 +27,7 @@ func (h *Embedded) ScanActivity() []ScanResult {
 		r, isHung := scanOne(ids[i], sess)
 		if isHung {
 			h.attention.noteFact(r.ID, ActivityError, "keine Ausgabe und kein Hook seit 10 min", "keine Ausgabe seit 10 min")
+			h.finishTurn(r.ID, true, "")
 		}
 		if r.Asleep {
 			out = append(out, r)
