@@ -4,6 +4,7 @@
 import {backend} from '../models';
 import {board} from '../models';
 import {config} from '../models';
+import {hub} from '../models';
 
 export function AddFavorite(arg1:string,arg2:string):Promise<void>;
 
@@ -134,6 +135,8 @@ export function GetProjectForceWorktrees(arg1:string):Promise<string>;
 
 export function SetProjectForceWorktrees(arg1:string,arg2:string):Promise<void>;
 
+export function SetSessionTarget(arg1:string,arg2:string):Promise<void>;
+
 export function GetQueue(arg1:string):Promise<Array<backend.QueueItem>>;
 
 export function GetRepoURL(arg1:string):Promise<string>;
@@ -145,6 +148,8 @@ export function GetStatusLineStatus():Promise<backend.StatusLineStatus>;
 export function GetResolvedCodexPath():Promise<string>;
 
 export function GetResolvedGeminiPath():Promise<string>;
+
+export function GetSessionBriefing(arg1:string):Promise<hub.Briefing|null>;
 
 export function GetSessionIssue(arg1:string):Promise<number>;
 
