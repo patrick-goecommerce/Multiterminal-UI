@@ -89,6 +89,28 @@ describe('WaitingPanel briefing', () => {
     expect(document.querySelector('.card')).not.toBeNull();
   });
 
+  it('a press released outside the row does not block keyboard focus afterwards', async () => {
+    briefings.set({ 'h:1': briefing() });
+    const { container } = render(WaitingPanel, { props: { rows: [entry(3)], total: 1 } });
+    const row = container.querySelector('.wp-entry')!;
+    await fireEvent.mouseDown(row);
+    await fireEvent.mouseUp(window);
+    await fireEvent.focus(row);
+    await tick();
+    expect(document.querySelector('.card')).not.toBeNull();
+  });
+
+  it('refreshes the open card when its briefing is updated', async () => {
+    briefings.set({ 'h:1': briefing() });
+    const { container } = render(WaitingPanel, { props: { rows: [entry(3)], total: 1 } });
+    await fireEvent.focus(container.querySelector('.wp-entry')!);
+    await tick();
+    expect(document.querySelector('.card')!.textContent).not.toContain('Neuer Schluss');
+    briefings.set({ 'h:1': briefing({ closing: 'Neuer Schluss' }) });
+    await tick();
+    expect(document.querySelector('.card')!.textContent).toContain('Neuer Schluss');
+  });
+
   it('shows no card without a briefing or for a rank 0 entry', async () => {
     const { container } = render(WaitingPanel, { props: { rows: [entry(3)], total: 1 } });
     await fireEvent.focus(container.querySelector('.wp-entry')!);

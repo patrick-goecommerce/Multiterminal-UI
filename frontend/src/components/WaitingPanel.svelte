@@ -46,7 +46,8 @@
   const hover = createCardHover(300, 120);
   const shown = hover.shown;
   $: shownEntry = rows.find((e) => e.pane.id === $shown?.paneId);
-  $: shownBriefing = shownEntry ? cardOf(shownEntry) : undefined;
+  // $briefings stays in this statement: $: does not track what cardOf reads.
+  $: shownBriefing = shownEntry && (shownEntry.rank === 2 || shownEntry.rank === 3) ? $briefings[shownEntry.pane.sessionId] : undefined;
   onDestroy(hover.destroy);
   // A click focuses the entry too; only keyboard focus opens the card at once.
   let pointerDown = false;
@@ -76,6 +77,8 @@
   }
 </script>
 
+<svelte:window on:mouseup={() => (pointerDown = false)} />
+
 {#if total === 0}
   <div class="wp quiet"><span class="wp-title">Wartet auf dich</span><span class="wp-q">Nichts wartet</span></div>
 {:else}
@@ -91,7 +94,7 @@
           aria-label="{ENTRY_LABEL[entry.rank]}: {entry.here ? 'dieses Projekt' : entry.tabName}, {paneDisplayName(entry.pane)}"
           on:mouseenter={(e) => over(e, entry, true)} on:mouseleave={hover.leave}
           on:mousedown={() => (pointerDown = true)} on:mouseup={() => (pointerDown = false)}
-          on:focus={(e) => onFocus(e, entry)} on:blur={hover.leave}
+          on:focus={(e) => onFocus(e, entry)} on:blur={() => { pointerDown = false; hover.leave(); }}
           on:click={(e) => activate(e, entry)} on:keydown={(e) => onKey(e, entry)} on:contextmenu={(e) => onMenu(e, entry)}>
           <div class="l1">
             <StatusGlyph kind={glyphKind(entry.pane)} />
