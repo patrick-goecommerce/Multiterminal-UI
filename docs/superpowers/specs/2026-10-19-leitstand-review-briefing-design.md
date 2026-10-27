@@ -1,9 +1,9 @@
 # Leitstand, Teil 2: Review-Briefing — Design
 
-**Status:** Freigegeben (2026-10-19), Umsetzung offen
+**Status:** Umgesetzt auf `worktree-leitstand-review-briefing`, E2E-Abnahme offen
 **Worktree:** C:\Users\Patrick.Hennig\repos\Multiterminal-UI\.claude\worktrees\leitstand-review-briefing
 **Baut auf:** `docs/superpowers/specs/2026-10-07-leitstand-aufmerksamkeit-design.md` (Teil 1, gemergt mit #214)
-**Betrifft:** `cmd/mtui-hook`, neu `internal/hub/turn*.go`, `briefing*.go`, `ciwatch*.go`, `internal/hub/attention.go`,
+**Betrifft:** `cmd/mtui-hook`, `cmd/mtuid` (Policy), neu `internal/gitx/snapshot.go`, neu `internal/hub/turn*.go`, `briefing*.go`, `ciwatch*.go`, `internal/hub/attention.go`,
 Wire (`server_briefing.go`, `client_*.go`), `internal/backend` (Bindings, Events, Policy), `internal/config`,
 `frontend/src/lib/attention.ts`, neu `frontend/src/lib/briefing.ts` und `BriefingCard.svelte`, `WaitingPanel.svelte`,
 `SettingsDialog.svelte`, `models.ts`, `stores/config.ts`
@@ -67,9 +67,14 @@ Review verlangt ist. Verbrauch zur Messung: 14 von 5000 GraphQL-Punkten pro Stun
 
 Bei `PostToolUse` und `PostToolUseFailure` mit `tool_name == "Bash"` schreibt der Hook zusätzlich:
 
-- `detail`: den Befehl (`tool_input.command`, eine Zeile, gekürzt wie in Teil 1),
+- `command`: den rohen Befehl (`tool_input.command`) in einem eigenen Feld, eine Zeile, höchstens
+  1000 Zeichen. Der Klassifizierer braucht den ungekürzten Befehl; eine Pipe hinter Zeichen 200
+  ginge sonst verloren. Ein Zeilenumbruch im Befehl trennt Befehle wie ein `;`, ein Backslash vor
+  dem Umbruch verbindet die Zeilen.
+- `detail`: wie bisher „Bash: …“, höchstens 200 Zeichen (Teil 1),
 - `prompt_id`, `is_interrupt`,
-- `output_tail`: die letzten 300 Zeichen aus `stdout`+`stderr` bzw. aus `error`.
+- `output_tail`: höchstens 300 Zeichen. Bei einem Fehlschlag der `error`-Text, bei Erfolg `stdout`
+  und `stderr`.
 
 Bei `UserPromptSubmit` und `Stop` kommt `prompt_id` dazu. Die übrigen Ereignisse bleiben, wie sie sind. Es wird
 kein neues Hook-Ereignis registriert; alle nötigen (`UserPromptSubmit`, `PostToolUse`,
@@ -82,9 +87,13 @@ Neu in `internal/hub`, neben dem `attentionBook`, eigener Mutex, je Session ein 
 | Ereignis | Wirkung |
 |---|---|
 | `UserPromptSubmit` | Neuer Turn: Auftrag (≤ 200 Zeichen, `clipDetail`), `prompt_id`, Startzeit, Git-Schnappschuss (B1), leere Prüfliste. Ist der Turn ein Keep-alive-Turn (Markierung aus Teil 1), wird er als solcher geführt und baut kein Briefing. |
-| Bash-Befehl fertig | Ist der Befehl eine Prüfung (A3), gilt für ihr Label das Ergebnis dieses Laufs; der letzte Lauf zählt. `is_interrupt` zählt nicht. Ereignisse mit fremder `prompt_id` oder nach `Stop` werden ignoriert (Hintergrund-Subagenten). |
+| Bash-Befehl fertig | Ist der Befehl eine Prüfung (A3), gilt für ihr Label das Ergebnis dieses Laufs; der letzte Lauf zählt. `is_interrupt` zählt nicht. Ereignisse mit fremder `prompt_id` oder nach `Stop` werden ignoriert (Hintergrund-Subagenten). Ist die `prompt_id` auf einer der beiden Seiten leer, zählt das Ereignis für den offenen Turn, weil ältere Claude-Code-Versionen sie weglassen können. |
 | `Stop`, Exit, „hängt“ | Briefing bauen (Teil B, D), ablegen, `EventSessionBriefing` senden. Der Turn ist geschlossen. |
 | Session endet | Turn und Briefing vergessen. |
+
+Bekannte Grenze: Blockiert ein Stop-Hook des Nutzers (`stop_hook_active`), arbeitet Claude im selben
+Turn weiter. Der erste `Stop` hat den Turn schon geschlossen, das Briefing zeigt dann den
+Zwischenstand.
 
 ### A3 Prüfbefehle
 
@@ -118,6 +127,10 @@ dieser Präfixe beginnt:
 
   npm 11 schreibt bei einem gescheiterten Skript keine eigene Fehlerzeile; `npm run build | tail`
   bleibt deshalb „?“. `pytest` und `cargo` sind nicht gemessen und haben keine Fehlerzeichen.
+- **Maskierter Exit-Code:** Folgt auf die Prüfung noch ein Segment nach `;` oder `||` (oder nach
+  einem Zeilenumbruch), bestimmt dieses den Exit-Code des Befehls. Das Ergebnis ist dann wie bei
+  der Pipe „?“, es sei denn der `output_tail` trägt ein Fehlerzeichen. `&&`-Ketten behalten ihren
+  Exit-Code.
 - Alle anderen Befehle zählen nicht. Ein `grep` ohne Treffer endet auch mit Exit-Code 1.
 
 ## Teil B: Git-Signale
@@ -136,7 +149,8 @@ Am Turn-Anfang und bei `Stop` wird der vollständige Arbeitsstand als Tree festg
 
 Der echte Index und der Arbeitsbaum werden nicht berührt. Die Kopie bringt die Zeitstempel des echten
 Index mit, Git liest deshalb nur geänderte Dateien neu ein. „Turn: 3 Dateien +40 −5“ ist
-`git diff --numstat <tree_start> <tree_stop>`. Damit zählen auch Änderungen per `sed` oder Skript
+`git diff --numstat --no-renames <tree_start> <tree_stop>`; eine Umbenennung zählt als Löschen plus
+Anlegen. Damit zählen auch Änderungen per `sed` oder Skript
 und neue, nicht ignorierte Dateien.
 
 Nebenwirkung: Inhalte geänderter Dateien landen als lose Objekte ohne Verweis im Repo; `git gc`
@@ -155,7 +169,7 @@ Verglichen wird mit `origin/<ziel>`, falls vorhanden, sonst mit `<ziel>`. Es wir
 
 | Zahl | Herkunft |
 |---|---|
-| Branch: Dateien, +, − | `diff --numstat $(merge-base <ziel> HEAD) <tree_stop>`, also Commits und Uncommittetes |
+| Branch: Dateien, +, − | `diff --numstat --no-renames $(merge-base <ziel> HEAD) <tree_stop>`, also Commits und Uncommittetes |
 | Commits vor dem Ziel | `rev-list --count <ziel>..HEAD` |
 | Ungepusht | `rev-list --count @{upstream}..HEAD`; ohne Upstream „nie gepusht“ |
 | Uncommittet | Einträge aus `status --porcelain` |
@@ -189,13 +203,15 @@ fehlt er, fehlt nur der Turn-Diff.
 Branches, die eine Session gerade hat (aus ihrem letzten Briefing) und deren Remote auf GitHub liegt
 (`owner/repo` aus der Remote-URL). Mehrere Sessions auf demselben Branch teilen sich eine Abfrage.
 Ohne `gh` oder ohne Login fehlt die PR-Zeile; das ist kein Fehler. Der Login wird einmal je
-Hoststart geprüft (`gh auth status`) und das Ergebnis gemerkt; ein fehlgeschlagener Aufruf später
-setzt ihn auf „unbekannt“ und prüft beim nächsten Briefing erneut.
+Hoststart geprüft (`gh auth status`); nur diese erste Prüfung kann „nicht angemeldet“ ergeben. Eine
+fehlschlagende spätere Prüfung lässt den Zustand „unbekannt“ und pausiert die fälligen Branches
+15 min wie einen `gh`-Fehler.
 
 Abfrage: `gh pr list --repo <owner/repo> --head <branch> --state all --limit 5 --json
 number,state,isDraft,baseRefName,headRefOid,headRepositoryOwner,mergeable,reviewDecision,statusCheckRollup,url`.
-Genommen wird der PR, dessen `headRepositoryOwner` dem Owner des Remotes entspricht, der offene vor
-geschlossenen, sonst der jüngste. `gh` läuft mit `HideConsole`, `GH_PROMPT_DISABLED=1` und 15 s
+Genommen wird der PR, dessen `headRepositoryOwner.login` dem Owner des Remotes entspricht
+(Groß- und Kleinschreibung zählt nicht; gemessen: das Feld ist ein Objekt `{id, name, login}`), der
+offene vor geschlossenen, sonst der jüngste. `gh` läuft mit `HideConsole`, `GH_PROMPT_DISABLED=1` und 15 s
 Zeitlimit.
 
 ### C2 Wann
@@ -203,15 +219,19 @@ Zeitlimit.
 | Lage | Takt |
 |---|---|
 | Nach jedem Briefing und nach einem erkannten `git push`, `gh pr create`, `gh pr merge` | sofort |
-| Checks laufen | jede Minute; nach 30 min alle 5 min; nach 3 h nicht mehr |
+| Checks laufen | jede Minute; nach 30 min alle 5 min; nach 3 h endet dieser schnelle Takt, und ein offener PR fällt auf 15 min zurück |
 | PR offen, Checks fertig | alle 15 min (Konflikte, angeforderte Änderungen) |
 | PR gemergt oder geschlossen, Session beendet, `ci_watch` aus | Schluss |
 | Rate-Limit oder `gh`-Fehler | 15 min Pause, `note: "ci_paused"` |
 
+Ein neues Briefing während einer 15-min-Pause beendet die Pause nicht; die Session bekommt dann den
+bekannten PR und `ci_paused`.
+
 ### C3 Was abgeleitet wird
 
 - Checks des PR-Heads: `none`, `pending` (ein `CheckRun` nicht `COMPLETED` oder ein `StatusContext`
-  `PENDING`/`EXPECTED`), `red`, sonst `green`. Dazu Anzahl, Anzahl grün, Name des ersten roten.
+  `PENDING`/`EXPECTED`), `red`, sonst `green`. Ein rotes Ergebnis geht vor laufenden. `STALE`,
+  `NEUTRAL` und `SKIPPED` zählen als bestanden. Dazu Anzahl, Anzahl grün, Name des ersten roten.
 - `ci_red`: ein `CheckRun` mit `conclusion` `FAILURE`, `TIMED_OUT`, `CANCELLED`, `ACTION_REQUIRED`
   oder `STARTUP_FAILURE`, oder ein `StatusContext` mit `state` `ERROR`/`FAILURE`.
 - `pr_blocked`: `mergeable == "CONFLICTING"` oder `reviewDecision == "CHANGES_REQUESTED"`.
@@ -228,6 +248,8 @@ error`, `Source = "ci"`, `Seen = false`, `Since = jetzt`, mit Detail „CI rot: 
 „PR #12: Konflikte“ oder „PR #12: Änderungen angefordert“. Das ist Rang 2: Er steht vor allen
 fertigen Einträgen und darf toasten (Regel aus Teil 1).
 
+Nur ein offener PR holt ein Pane zurück; ein gemergter PR mit rotem Rollup tut es nicht.
+
 Ausnahme: Ist die Session gerade `active`, `waitingPermission` oder `waitingAnswer`, wird nur das
 Briefing aktualisiert. Der Agent ist dann schon dran, oder das Pane steht ohnehin oben. Der nächste
 bestätigte Zustand der Session ersetzt den zurückgeholten Datensatz wie jeden anderen.
@@ -240,7 +262,7 @@ raus, das Briefing ist größer und entsteht einmal pro Turn. Alle Felder mit `j
 ```go
 type Briefing struct {
     PromptID string        // Turn, zu dem es gehört
-    BuiltAt  time.Time
+    BuiltAt  int64         // Unix-Sekunden
     Prompt   string        // Auftrag, ≤ 200 Zeichen
     Closing  string        // letzter Absatz der Agent-Antwort, ≤ 600 Zeichen
     Checks   []CheckResult // in der Reihenfolge des ersten Laufs
@@ -267,7 +289,8 @@ type GitFacts struct {
 type PRFacts struct {
     Number                      int
     URL, State, Base, HeadOID   string
-    Draft, Conflicting, ChangesRequested bool
+    Draft, Conflicting          bool
+    Review                      string // rohes reviewDecision
     Checks                      string // "none", "pending", "green", "red"
     ChecksTotal, ChecksPassed   int
     FailedCheck                 string
@@ -277,8 +300,12 @@ type PRFacts struct {
 Warnzeichen und ihr Vorrang: `ci_red`, `pr_blocked`, `check_failed` (letzter Lauf einer Prüfung
 `fail`), `ended_error` (Turn endet als Fehler: Exit ≠ 0, „hängt“), `dirty`, `big_diff`.
 
+`Checks`, `Warnings` und `Notes` gehen als `[]` raus, nie als `null`.
+
 **Leitung:** `EventSessionBriefing` (Payload `{session, briefing}`) über denselben Weg wie
-`EventSessionAttention`; `GET /v1/sessions/{id}/briefing` (404 ohne Briefing) und
+`EventSessionAttention`; `GET /v1/sessions/{id}/briefing` antwortet ohne Briefing mit 200
+`{"briefing": null}` (404 heißt: unbekannte Session oder älterer Daemon, `Remote` bildet 404 auf
+`ErrNoSession` ab; das Fenster behandelt jeden Fehler als „kein Briefing“) und
 `POST /v1/sessions/{id}/target`, beide in neuer Datei `server_briefing.go`. `Host` bekommt
 `Briefing(id int) (Briefing, bool, error)` und `SetTarget(id int, branch string) error`; `Remote`
 implementiert beide über die Leitung.
@@ -310,13 +337,14 @@ Kurzformen: `CI rot`, `PR blockiert`, `<label> ✗`, `Fehlerende`, `ungesichert`
 ### E2 Sortierung
 
 Innerhalb eines Ranges stehen Einträge mit Warnzeichen vor denen ohne, dann nach Alter wie bisher.
+Das gilt für den Kasten; der Ctrl+Shift+J-Lauf behält Rang und Alter aus Teil 1.
 Der Rang kommt weiter nur vom Host; die Warnzeichen sind ein zweiter Sortierschlüssel. Das
 Zusammenklappen ab drei fertigen Einträgen (Teil 1) klappt damit zuerst die sauberen weg.
 
 ### E3 Die Karte
 
 - Erscheint, wenn die Maus 300 ms auf einem fertigen oder fehlerhaften Eintrag liegt oder der Eintrag
-  den Tastaturfokus hat; verschwindet beim Verlassen. Für Fragen und Freigaben gibt es keine Karte.
+  den Tastaturfokus hat; verschwindet beim Verlassen; ein Mausklick öffnet sie nicht. Für Fragen und Freigaben gibt es keine Karte.
 - Steht links neben dem Kasten auf Höhe des Eintrags, an den Fensterrand geklemmt; in der
   Toolbar-Liste (Grid-Modus) links neben der Liste. Breite etwa 340 px.
 - Inhalt, Zeilen ohne Daten fallen weg:
@@ -329,12 +357,13 @@ Zusammenklappen ab drei fertigen Einträgen (Teil 1) klappt damit zuerst die sau
      `CI-Abfrage pausiert`; „für älteren Stand“ als Zusatz
   7. Schlusswort, höchstens drei Zeilen
   8. Warnzeichen ausgeschrieben, Hinweise (`Diff zu langsam`)
-- Die PR-Nummer öffnet den PR im Browser. Weitere Knöpfe gibt es nicht; Klick, Alt+Klick und
+- Die PR-Nummer öffnet den PR im Browser. Bekannte Grenze: Die Karte schließt beim Fokusverlust, die PR-Nummer ist deshalb nur mit der Maus erreichbar. Weitere Knöpfe gibt es nicht; Klick, Alt+Klick und
   Rechtsklick auf den Eintrag bleiben, wie Teil 1 sie festlegt.
 
 ### E4 Toasts
 
-Zurückgeholte CI- und PR-Probleme toasten als Rang 2: „goki · hook-refactor: CI rot (backend)“.
+Zurückgeholte CI- und PR-Probleme toasten als Rang 2 mit dem Wortlaut aus Teil 1: Titel „Fehler · <Tab>“,
+Text „<Pane>: CI rot: backend“. Der Detailtext trägt den Inhalt.
 Ein fertiges Pane mit Warnzeichen toastet nicht; Rang 3 bleibt still. Der Auftrag steht nie in einem
 Toast.
 

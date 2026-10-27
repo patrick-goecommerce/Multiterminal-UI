@@ -34,7 +34,7 @@ für die Entscheidung brauchst.** Vier Teilprojekte, jedes mit eigener Spec:
 | # | Teilprojekt | Kern |
 |---|---|---|
 | 1 | **Aufmerksamkeit** (diese Spec) | Ein Zustandsmodell auf dem Host, der Kasten als Leitstand, die Lecks gestopft |
-| 2 | Review-Briefing | Karte beim Fertigwerden: was getan, Diff-Stats, Branch, PR und CI; Zustände abgeleitet statt gepflegt |
+| 2 | [Review-Briefing](2026-10-19-leitstand-review-briefing-design.md) | Karte beim Fertigwerden: was getan, Diff-Stats, Branch, PR und CI; Zustände abgeleitet statt gepflegt |
 | 3 | Weniger Unterbrechungen | Freigabe-Politik je Projekt über `PermissionRequest`-Entscheidungen, Freigabe aus dem Leitstand, Kosten- und Schleifenalarm |
 | 4 | Autonom: Issue → PR, Chef-Agent je Projekt | Läufe in echten Panes statt `claude -p`, der Chef-Agent fragt den Leitstand über MCP und eskaliert nur, was er nicht selbst klären kann |
 
