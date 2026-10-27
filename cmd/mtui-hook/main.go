@@ -42,6 +42,12 @@ type claudeEvent struct {
 	// ends in a question decides between "done" and "has a question", which
 	// the screen cannot tell once Claude prints anything below the question.
 	LastAssistantMessage string `json:"last_assistant_message"`
+	// PromptID ties every event of a turn to the prompt that started it.
+	PromptID string `json:"prompt_id"`
+	// IsInterrupt and Error come with PostToolUseFailure: whether the user
+	// interrupted the call, and "Exit code N\n<output>" for a Bash failure.
+	IsInterrupt bool   `json:"is_interrupt"`
+	Error       string `json:"error"`
 }
 
 // stopMessageTail is how much of the last assistant message a Stop line
@@ -70,6 +76,10 @@ type hookLine struct {
 	NotificationType string `json:"notification_type,omitempty"`
 	Detail           string `json:"detail,omitempty"`
 	AgentID          string `json:"agent_id,omitempty"`
+	PromptID         string `json:"prompt_id,omitempty"`
+	Command          string `json:"command,omitempty"`
+	Interrupt        bool   `json:"is_interrupt,omitempty"`
+	OutputTail       string `json:"output_tail,omitempty"`
 }
 
 // hookSpecificOutput / preToolUseOutput implement Claude Code's documented
@@ -163,6 +173,12 @@ func run() {
 	if eventType == "PreToolUse" || eventType == "PermissionRequest" {
 		detail = toolDetail(ev.ToolName, ev.ToolInput)
 	}
+	var command, outputTail string
+	if ev.ToolName == "Bash" && (eventType == "PostToolUse" || eventType == "PostToolUseFailure") {
+		detail = toolDetail(ev.ToolName, ev.ToolInput)
+		command = bashCommand(ev.ToolInput)
+		outputTail = bashOutputTail(eventType, ev.ToolResponse, ev.Error)
+	}
 
 	line, err := json.Marshal(hookLine{
 		Ts:             time.Now().Unix(),
@@ -180,6 +196,10 @@ func run() {
 		NotificationType: ev.NotificationType,
 		Detail:           detail,
 		AgentID:          ev.AgentID,
+		PromptID:         ev.PromptID,
+		Command:          command,
+		Interrupt:        ev.IsInterrupt,
+		OutputTail:       outputTail,
 	})
 	if err == nil {
 		if f, ferr := os.OpenFile(

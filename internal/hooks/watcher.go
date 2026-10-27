@@ -43,6 +43,15 @@ type Event struct {
 	// AgentID is set when the event comes from a subagent, not from the main
 	// conversation (Claude Code's agent_id).
 	AgentID string `json:"agent_id"`
+	// PromptID ties an event to the user prompt that started its turn
+	// (Claude Code's prompt_id).
+	PromptID string `json:"prompt_id,omitempty"`
+	// Command, Interrupt and OutputTail describe a finished Bash call
+	// (PostToolUse / PostToolUseFailure): the command on one line, whether the
+	// user interrupted it, and the last 300 runes of its output.
+	Command    string `json:"command,omitempty"`
+	Interrupt  bool   `json:"is_interrupt,omitempty"`
+	OutputTail string `json:"output_tail,omitempty"`
 }
 
 // Watcher tails a hooks directory and reports what it finds.
