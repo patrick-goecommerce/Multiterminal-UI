@@ -13,19 +13,16 @@ import (
 	"path/filepath"
 )
 
-// worktreeDenyRules are the hard-enforced Bash denies (user-mandated after a
-// real dev test caught Claude switching branches while a worktree was open —
-// the memory-only instruction "Haupt-Branch darf nie direkt gewechselt
-// werden" is prompt context, not enforcement). settings.local.json rules
-// written at the project root apply for the whole session, even after
-// EnterWorktree moves the cwd into a worktree (design doc 2026-07-03 section
-// 2), so these block a self-switch both inside an active worktree and in the
-// main checkout. Accepted collateral: also blocks the file-restore form
-// (`git checkout -- <file>`), same trade-off already made for the
-// merge-abort collateral in the pre-EnterWorktree design (spec 2026-07-02
-// section 3.5). Deny always wins over any Allow entry a project already has
-// (e.g. a pre-existing blanket "Bash(git checkout:*)" allow) — verified.
-var worktreeDenyRules = []string{
+// worktreeAskRules make Claude Code ask before a branch switch instead of
+// letting it happen silently (a real dev test caught Claude switching
+// branches while a worktree was open; the memory instruction alone did not
+// stop it). settings.local.json rules at the project root apply for the whole
+// session, even after EnterWorktree moves the cwd (design doc 2026-07-03
+// section 2). Ask, not deny: the user wants these actions "nicht einfach so",
+// not "gar nicht" — the same correction section 3 of that spec records for
+// merge/push. Ask also wins over a broader allow entry such as a
+// pre-existing "Bash(git checkout:*)".
+var worktreeAskRules = []string{
 	"Bash(git checkout *)",
 	"Bash(git switch *)",
 }
@@ -35,7 +32,7 @@ const projectWorktreeSettingsContent = `{
     "baseRef": "head"
   },
   "permissions": {
-    "deny": [
+    "ask": [
       "Bash(git checkout *)",
       "Bash(git switch *)"
     ]
@@ -53,8 +50,7 @@ const projectWorktreeSettingsContent = `{
 //
 // Which memory variant is written follows the worktree-mandatory policy for
 // this project (EffectiveForceWorktrees). The settings half is written
-// identically either way — the git checkout/switch denies are worth having
-// regardless of who creates the worktree.
+// identically either way.
 func (a *AppService) EnsureProjectWorktreeSetup(dir string) error {
 	root, err := mainRepoRoot(dir)
 	if err != nil {
@@ -109,15 +105,16 @@ func ensureProjectWorktreeSettings(root string) error {
 	return nil
 }
 
-// mergeWorktreeSettings brings an existing settings.local.json up to date
-// with two independent, additive changes, preserving every other key
-// untouched: worktree.baseRef="head" if no baseRef is set at all (an
-// existing custom value, e.g. "fresh", is left alone), and each rule in
-// worktreeDenyRules appended to permissions.deny if not already present
-// (order-preserving, no duplicates). Either half can apply on its own —
-// e.g. a project with baseRef already set from an older MTUI version still
-// gets the deny rules added when this fix rolls out. changed is false (and
-// raw is returned as-is) when both are already satisfied.
+// mergeWorktreeSettings brings an existing settings.local.json up to date,
+// preserving every other key untouched: worktree.baseRef="head" if no baseRef
+// is set at all (an existing custom value, e.g. "fresh", is left alone), and
+// the one-time move of the branch-switch rules from permissions.deny to
+// permissions.ask (migrateWorktreeDenyToAsk). changed is false (and raw is
+// returned as-is) when neither applies.
+//
+// The ask rules are deliberately NOT added to an existing file that lacks
+// them: its owner may have removed them, and re-adding on every launch is
+// exactly how the old deny rules kept coming back.
 func mergeWorktreeSettings(raw []byte) (merged []byte, changed bool, err error) {
 	var settings map[string]any
 	if err := json.Unmarshal(raw, &settings); err != nil {
@@ -125,8 +122,8 @@ func mergeWorktreeSettings(raw []byte) (merged []byte, changed bool, err error) 
 	}
 
 	baseRefChanged := ensureWorktreeBaseRef(settings)
-	denyChanged := ensureWorktreeDenyRules(settings)
-	if !baseRefChanged && !denyChanged {
+	migrated := migrateWorktreeDenyToAsk(settings)
+	if !baseRefChanged && !migrated {
 		return raw, false, nil
 	}
 
@@ -153,35 +150,52 @@ func ensureWorktreeBaseRef(settings map[string]any) bool {
 	return true
 }
 
-// ensureWorktreeDenyRules appends any of worktreeDenyRules missing from
-// settings["permissions"]["deny"], preserving existing entries and order.
-// Reports whether it changed anything.
-func ensureWorktreeDenyRules(settings map[string]any) bool {
+// migrateWorktreeDenyToAsk removes the branch-switch rules that earlier MTUI
+// versions wrote into permissions.deny (and re-added on every launch) and
+// puts them into permissions.ask instead, once. A deny list left empty is
+// dropped. Once the rules are out of deny this is a no-op, so a user who then
+// removes them from ask keeps it that way. Reports whether it changed anything.
+func migrateWorktreeDenyToAsk(settings map[string]any) bool {
 	permissions, _ := settings["permissions"].(map[string]any)
 	if permissions == nil {
-		permissions = map[string]any{}
+		return false
+	}
+	deny, _ := permissions["deny"].([]any)
+	isRule := make(map[string]bool, len(worktreeAskRules))
+	for _, r := range worktreeAskRules {
+		isRule[r] = true
+	}
+	keep := make([]any, 0, len(deny))
+	var moved []string
+	for _, v := range deny {
+		if s, ok := v.(string); ok && isRule[s] {
+			moved = append(moved, s)
+			continue
+		}
+		keep = append(keep, v)
+	}
+	if len(moved) == 0 {
+		return false
+	}
+	if len(keep) == 0 {
+		delete(permissions, "deny")
+	} else {
+		permissions["deny"] = keep
 	}
 
-	existingDeny, _ := permissions["deny"].([]any)
-	have := make(map[string]bool, len(existingDeny))
-	for _, v := range existingDeny {
+	ask, _ := permissions["ask"].([]any)
+	have := make(map[string]bool, len(ask))
+	for _, v := range ask {
 		if s, ok := v.(string); ok {
 			have[s] = true
 		}
 	}
-
-	changed := false
-	for _, rule := range worktreeDenyRules {
-		if !have[rule] {
-			existingDeny = append(existingDeny, rule)
-			changed = true
+	for _, s := range moved {
+		if !have[s] {
+			ask = append(ask, s)
+			have[s] = true
 		}
 	}
-	if !changed {
-		return false
-	}
-
-	permissions["deny"] = existingDeny
-	settings["permissions"] = permissions
+	permissions["ask"] = ask
 	return true
 }
