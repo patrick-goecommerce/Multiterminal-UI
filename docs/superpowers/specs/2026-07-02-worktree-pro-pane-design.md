@@ -209,6 +209,15 @@ Haupt-Worktree, `branch -d` ohne Force) — sie funktioniert auch, wenn alle
 Deny-Regeln versagen. Exakte Patterns werden bei der Implementierung gegen das
 reale Permission-Matching E2E verifiziert.
 
+**Nachtrag 2026-11-16 — `ask` statt `deny`:** Dieselben Regeln stehen jetzt unter
+`permissions.ask` (`settingsLocalJSON` in `internal/backend/app_worktree_pane_files.go`).
+Claude Code fragt vor jeder dieser Aktionen nach, statt sie zu sperren. Grund:
+Der Nutzer will sie „nicht einfach so", nicht „gar nicht" (dieselbe Korrektur wie
+in Abschnitt 3 der Spec 2026-07-03). Damit entfällt auch der Kollateralschaden bei
+`git merge --abort`: Der Befehl fragt nach, statt zu scheitern. Bestehende
+Pane-Worktrees behalten ihre beim Anlegen geschriebene Deny-Datei, erst neue
+Worktrees bekommen `ask`.
+
 ## 4. Tracking & Persistenz
 
 ### 4.1 Pane-State (Frontend)

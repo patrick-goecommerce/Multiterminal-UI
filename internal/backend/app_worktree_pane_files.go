@@ -1,5 +1,5 @@
 // Control files written into each pane worktree: CLAUDE.local.md (context for
-// Claude Code) and .claude/settings.local.json (best-effort deny backstop).
+// Claude Code) and .claude/settings.local.json (best-effort ask backstop).
 // Both are excluded via the SHARED .git/info/exclude so they never appear in
 // git status or get committed by "git add -A" (spec 3.3/5 — the real safety
 // net is the merge verification, not these files).
@@ -70,10 +70,13 @@ Regeln:
 `, branch, target, target, target)
 }
 
+// settingsLocalJSON makes Claude Code ask before the actions only MTUI's
+// finish flow should normally take. Ask, not deny: the user wants them
+// "nicht einfach so", not "gar nicht" (spec 2026-07-03 section 3).
 func settingsLocalJSON() string {
 	return `{
   "permissions": {
-    "deny": [
+    "ask": [
       "Bash(git merge *)",
       "Bash(git worktree remove *)",
       "Bash(git branch -D *)",

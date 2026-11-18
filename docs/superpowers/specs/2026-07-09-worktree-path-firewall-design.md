@@ -2,7 +2,7 @@
 
 **Datum:** 2026-07-09
 **Status:** Entwurf (Brainstorming abgeschlossen, wartet auf Freigabe der Spec)
-**Baut auf:** `docs/superpowers/specs/2026-07-03-worktree-enterworktree-design.md` (Erkennung von Claude-Codes nativem `EnterWorktree` per Hook) und der seither ergänzten `worktreeDenyRules` in `internal/backend/app_worktree_setup.go` (Bash-Deny für `git checkout`/`git switch`).
+**Baut auf:** `docs/superpowers/specs/2026-07-03-worktree-enterworktree-design.md` (Erkennung von Claude-Codes nativem `EnterWorktree` per Hook) und der seither ergänzten `worktreeDenyRules` in `internal/backend/app_worktree_setup.go` (Bash-Deny für `git checkout`/`git switch`; seit 2026-11-16 als `worktreeAskRules` unter `permissions.ask`, siehe Abschnitt 9 der Spec 2026-07-03).
 
 ## 1. Anlass
 

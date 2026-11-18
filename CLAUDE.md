@@ -83,7 +83,7 @@ A GUI terminal multiplexer built for Claude Code power users.
 - **Worktree-mandatory policy** (`force_worktrees`, opt-in): enforced by the `PreToolUse` firewall
   in `cmd/mtui-hook/firewall.go`, NOT by the generated `CLAUDE.local.md`. The memory text only
   tells the model what to do up front — prompt text has twice failed as enforcement here (see the
-  comment on `worktreeDenyRules`). Policy is resolved once per pane at launch and passed to the
+  comment on `worktreeAskRules`). Policy is resolved once per pane at launch and passed to the
   hook via `MULTITERMINAL_FORCE_WORKTREE_ROOT`.
 - **The generated `CLAUDE.local.md` is recognized by its marker line**, not by whole-body
   comparison — a byte-exact check breaks on CRLF round-trips through git on Windows and would

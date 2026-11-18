@@ -55,10 +55,14 @@ func TestWriteWorktreeControlFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"deny"`, "git merge ", "git worktree remove ", "git branch -D ", "git push "} {
+	// Ask, not deny: the user wants these actions confirmed, not forbidden.
+	for _, want := range []string{`"ask"`, "git merge ", "git worktree remove ", "git branch -D ", "git push ", "Edit(CLAUDE.local.md)"} {
 		if !strings.Contains(string(settings), want) {
 			t.Errorf("settings.local.json missing %q", want)
 		}
+	}
+	if strings.Contains(string(settings), `"deny"`) {
+		t.Errorf("settings.local.json must not carry a deny list: %s", settings)
 	}
 	// Control files must be invisible to git status (tracked-only AND untracked):
 	if out := gitRunOut(t, wt, "status", "--porcelain"); strings.Contains(out, "CLAUDE.local.md") || strings.Contains(out, "settings.local.json") {
