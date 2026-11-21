@@ -212,19 +212,15 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	case action == "seen":
 		s.handleSeen(w, r, id)
 	case action == "suspend" && r.Method == http.MethodPost:
-		if err := s.host.Suspend(id); err != nil {
-			writeHostError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
+		s.handleSuspend(w, id)
 	case action == "queue" || strings.HasPrefix(action, "queue/"):
 		s.handleQueue(w, r, id, strings.TrimPrefix(strings.TrimPrefix(action, "queue"), "/"))
 	case action == "wake" && r.Method == http.MethodPost:
-		if err := s.host.Wake(id); err != nil {
-			writeHostError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
+		s.handleWake(w, id)
+	case action == "briefing" && r.Method == http.MethodGet:
+		s.handleBriefing(w, id)
+	case action == "target" && r.Method == http.MethodPost:
+		s.handleTarget(w, r, id)
 	case action == "resume" && r.Method == http.MethodPost:
 		s.handleResume(w, r, id)
 	case action == "text" && r.Method == http.MethodGet:

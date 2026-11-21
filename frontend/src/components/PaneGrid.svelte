@@ -15,6 +15,8 @@
   import { focusOrders, setFocusOrder, floatingPane, saveFloatPosition, consumePlaced } from '../stores/focusLayout';
   import { attentionList, panelRows, glyphKind, type AttentionEntry } from '../lib/attention';
   import { jumpTo, preview, walkPaneId } from '../lib/attentionNav';
+  import { briefings } from '../stores/briefings';
+  import { hasWarnings } from '../lib/briefing';
 
   export let panes: Pane[] = [];
   export let active: boolean = true;
@@ -233,7 +235,8 @@
   // Only the visible grid needs the list; hidden tabs would re-sort on every
   // update for nothing. It now holds every tab, the current one included.
   // The row count only sizes the small column, never the big panes.
-  $: waitingAll = focus && active ? attentionList($allTabs, tabId) : [];
+  $: warnedOf = (p: Pane) => hasWarnings($briefings[p.sessionId]);
+  $: waitingAll = focus && active ? attentionList($allTabs, tabId, warnedOf) : [];
   let expanded = false;
   $: panel = panelRows(waitingAll, expanded);
   $: geo = focusGeometry(areaW, areaH, panes.length, panel.rows.length + (panel.collapsible ? 1 : 0));

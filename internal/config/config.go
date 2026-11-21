@@ -59,6 +59,7 @@ type Config struct {
 	QuickActions      []QuickAction        `yaml:"quick_actions" json:"quick_actions"`
 	Audio             AudioSettings        `yaml:"audio" json:"audio"`
 	KeepAlive         KeepAliveSettings    `yaml:"keep_alive" json:"keep_alive"`
+	Briefing          BriefingSettings     `yaml:"briefing" json:"briefing"`
 	StatusLine        StatusLineSettings   `yaml:"status_line" json:"status_line"`
 	LocalhostAutoOpen string               `yaml:"localhost_auto_open" json:"localhost_auto_open"`
 	SidebarPinned     bool                 `yaml:"sidebar_pinned" json:"sidebar_pinned"`
@@ -177,6 +178,13 @@ type KeepAliveSettings struct {
 	Enabled         *bool  `yaml:"enabled" json:"enabled"`
 	IntervalMinutes int    `yaml:"interval_minutes" json:"interval_minutes"`
 	Message         string `yaml:"message" json:"message"`
+}
+
+// BriefingSettings holds the thresholds of a turn briefing and the CI watch switch.
+type BriefingSettings struct {
+	BigDiffFiles int   `yaml:"big_diff_files" json:"big_diff_files"`
+	BigDiffLines int   `yaml:"big_diff_lines" json:"big_diff_lines"`
+	CIWatch      *bool `yaml:"ci_watch" json:"ci_watch"`
 }
 
 // StatusLineSettings controls the Claude Code statusline written to ~/.claude/settings.json.
@@ -315,6 +323,7 @@ func DefaultConfig() Config {
 			IntervalMinutes: 60,
 			Message:         "Hi!",
 		},
+		Briefing: BriefingSettings{BigDiffFiles: 15, BigDiffLines: 500, CIWatch: boolPtr(true)},
 		StatusLine: StatusLineSettings{
 			Enabled:     false,
 			Template:    "standard",
@@ -427,6 +436,11 @@ func (c Config) ShouldKeepAlive() bool {
 	return *c.KeepAlive.Enabled
 }
 
+// ShouldWatchCI returns whether the briefing watches CI for the work's pull request.
+func (c Config) ShouldWatchCI() bool {
+	return c.Briefing.CIWatch == nil || *c.Briefing.CIWatch
+}
+
 // ShouldRunMCPServer returns whether the local agent-control MCP server
 // should be started.
 func (c Config) ShouldRunMCPServer() bool {
@@ -529,6 +543,15 @@ func Load() Config {
 	}
 	if cfg.KeepAlive.Message == "" {
 		cfg.KeepAlive.Message = "Hi!"
+	}
+	if cfg.Briefing.BigDiffFiles <= 0 {
+		cfg.Briefing.BigDiffFiles = 15
+	}
+	if cfg.Briefing.BigDiffLines <= 0 {
+		cfg.Briefing.BigDiffLines = 500
+	}
+	if cfg.Briefing.CIWatch == nil {
+		cfg.Briefing.CIWatch = boolPtr(true)
 	}
 
 	if cfg.RestoreSession == nil {

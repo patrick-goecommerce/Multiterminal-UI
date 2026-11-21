@@ -34,6 +34,7 @@ var mirrored = map[string]string{
 	"backend": "internal/backend",
 	"config":  "internal/config",
 	"board":   "internal/board",
+	"hub":     "internal/hub",
 }
 
 // The recurring bug, as a test.

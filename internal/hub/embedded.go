@@ -33,6 +33,8 @@ type Embedded struct {
 	launcher    Launcher
 	activity    *activityDebouncer
 	attention   *attentionBook
+	desk        *briefingDesk
+	ci          *ciWatch // nil without Options.GH
 	queueMu     sync.Mutex
 	queues      map[int]*sessionQueue
 	keepAliveFn func() KeepAlive
@@ -79,10 +81,15 @@ func NewEmbedded(opts Options) *Embedded {
 		launcher:    opts.Launcher,
 		activity:    newActivityDebouncer(),
 		attention:   newAttentionBook(),
+		desk:        newBriefingDesk(opts.Briefing),
 		queues:      make(map[int]*sessionQueue),
 		keepAliveFn: opts.KeepAlive,
 		startedAt:   time.Now(),
 		stop:        make(chan struct{}),
+	}
+	// Wired before any loop starts: a build reads the desk hooks it sets.
+	if opts.GH != nil {
+		h.startCIWatch(opts.GH)
 	}
 	if opts.Scan {
 		go h.scanLoop()
@@ -193,6 +200,8 @@ func (h *Embedded) Close(id int) error {
 	// ID would inherit a stranger's confirmed state.
 	h.activity.forget(id)
 	h.attention.forget(id)
+	h.desk.forget(id)
+	h.ci.drop(id)
 	h.forgetQueue(id)
 	return nil
 }
@@ -260,23 +269,6 @@ func (h *Embedded) Release() {
 		}(id)
 	}
 	wg.Wait()
-}
-
-// sessions returns every session object, paired with its ID.
-//
-// It is unexported on purpose: handing out the session itself is the one thing
-// a host in another process cannot do, so the only caller is this package's
-// own activity scan, which runs where the screens are.
-func (h *Embedded) sessionObjects() (ids []int, sessions []*terminal.Session) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	ids = make([]int, 0, len(h.sessions))
-	sessions = make([]*terminal.Session, 0, len(h.sessions))
-	for id, m := range h.sessions {
-		ids = append(ids, id)
-		sessions = append(sessions, m.sess)
-	}
-	return ids, sessions
 }
 
 func (h *Embedded) lookup(id int) (*managed, error) {

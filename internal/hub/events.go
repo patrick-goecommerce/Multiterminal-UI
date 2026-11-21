@@ -36,6 +36,9 @@ const (
 	// EventSessionAttention carries a session's attention record after any
 	// change: a newly confirmed state, a person looking at the pane.
 	EventSessionAttention = "session.attention"
+	// EventSessionBriefing carries a session's briefing after a finished turn
+	// was measured, or after what is known about its PR changed.
+	EventSessionBriefing = "session.briefing"
 )
 
 // SessionCreated is the payload of EventSessionCreated.
@@ -151,4 +154,10 @@ type QueueItemDone struct {
 type AttentionUpdate struct {
 	ID        int       `json:"id" yaml:"id"`
 	Attention Attention `json:"attention" yaml:"attention"`
+}
+
+// BriefingUpdate is the payload of EventSessionBriefing.
+type BriefingUpdate struct {
+	ID       int      `json:"id" yaml:"id"`
+	Briefing Briefing `json:"briefing" yaml:"briefing"`
 }

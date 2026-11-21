@@ -117,6 +117,7 @@ A GUI terminal multiplexer built for Claude Code power users.
   - `docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md` — Daemon, Host-Seam, CLI, Phasenplan
   - `docs/superpowers/specs/2026-04-01-kanban-orchestration-v3-design.md` — Kanban-Orchestrierung
   - `docs/superpowers/specs/2026-10-07-leitstand-aufmerksamkeit-design.md` — Leitstand Teil 1: Aufmerksamkeit über alle Projekte
+  - `docs/superpowers/specs/2026-10-19-leitstand-review-briefing-design.md` — Leitstand Teil 2: Review-Briefing
 
 ## Branch Strategy
 - **`main`** — stable releases only. Hotfixes land here first.
@@ -230,6 +231,9 @@ Design: `docs/superpowers/specs/2026-09-15-mtuid-daemon-architecture-design.md`
   and takes the smallest per tab, it never re-derives one. `MarkSeen` clears "done" and
   "error", never a permission or a question. A reader that may face an older daemon
   recomputes the rank from State and Seen, because a zero record has Rank 0.
+- **Briefings live on the host** (`turnBook`, `briefingDesk`, `ciWatch` in `internal/hub`): the
+  per-turn facts, the git/PR numbers and the CI watch. The frontend only formats them. A CI or PR
+  turning red re-raises attention as an error with source `ci`, even for a pane already seen.
 - Agent state → `cmd/mtui-hook` writes JSON → `internal/hooks` tails it on the host →
   `EventSessionHook`. Hook events are authoritative; once one arrives for a session, screen
   pattern detection stops overriding it. The mapping is `hookActivity` in
@@ -274,7 +278,9 @@ internal/
                 resolution, the per-project override file, the agent CLI table. Depends only
                 on config and git, which is what lets the daemon start a session.
   gitx/         Git plumbing both processes need: Cmd (no locks, no prompt, no console flash),
-                MainRepoRoot, Toplevel, IsLinkedWorktree.
+                MainRepoRoot, Toplevel, IsLinkedWorktree, and the read-only work-tree snapshot
+                (SnapshotTree: a tree ID from a copy of the index, the real one untouched;
+                NumStat between two trees).
   procs/        Platform process helpers: HideConsole, KillProcessTree, Detach.
   hooks/        Lifecycle-hook file tailer (size guard #192, Windows read-before-delete).
   discovery/    Per-user runtime port records (publish/resolve/stale check) + the single-
@@ -420,6 +426,12 @@ session_host: embedded
 # focus mode's floating window was dragged to (-1 = centred).
 layout:
   mode: grid
+# Leitstand review briefing: warning thresholds for a finished pane, and the
+# read-only CI/PR watch that brings a pane back when it turns red.
+briefing:
+  big_diff_files: 15
+  big_diff_lines: 500
+  ci_watch: true
 claude_models:
   - label: Default
     id: ""

@@ -45,6 +45,8 @@ func (a *AppService) newSessionHost() hub.Host {
 			// The same keep-alive the daemon runs, so the feature does not
 			// depend on which host this window happens to be using.
 			KeepAlive: a.keepAlivePolicy,
+			Briefing:  a.briefingPolicy,
+			GH:        hub.ExecGH,
 			Sink:      hub.SinkFunc(a.onHostEvent),
 		})
 	}

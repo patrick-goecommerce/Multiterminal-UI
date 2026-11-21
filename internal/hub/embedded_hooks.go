@@ -40,6 +40,7 @@ func (h *Embedded) applyHookEvent(w *hooks.Watcher, ev hooks.Event) {
 	if err != nil {
 		return // an event for a session this host does not have
 	}
+	h.onTurnHook(ev)
 
 	// Record the agent's own session UUID on the first event that carries one.
 	if ev.SessionID != "" && m.sess.HookSessionID() == "" {

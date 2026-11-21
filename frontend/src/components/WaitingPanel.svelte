@@ -1,6 +1,10 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onDestroy } from 'svelte';
   import StatusGlyph from './StatusGlyph.svelte';
+  import BriefingCard from './BriefingCard.svelte';
+  import { briefings } from '../stores/briefings';
+  import { verdict } from '../lib/briefing';
+  import { createCardHover } from '../lib/cardHover';
   import { paneDisplayName } from '../stores/tabs';
   import { glyphKind, ENTRY_LABEL, type AttentionEntry } from '../lib/attention';
   import { formatDuration } from '../lib/duration';
@@ -37,6 +41,25 @@
     primed = true;
   }
 
+  // The briefing card: only for finished or failed entries that have one.
+  const cardOf = (e: AttentionEntry) => (e.rank === 2 || e.rank === 3 ? $briefings[e.pane.sessionId] : undefined);
+  const hover = createCardHover(300, 120);
+  const shown = hover.shown;
+  $: shownEntry = rows.find((e) => e.pane.id === $shown?.paneId);
+  // $briefings stays in this statement: $: does not track what cardOf reads.
+  $: shownBriefing = shownEntry && (shownEntry.rank === 2 || shownEntry.rank === 3) ? $briefings[shownEntry.pane.sessionId] : undefined;
+  onDestroy(hover.destroy);
+  // A click focuses the entry too; only keyboard focus opens the card at once.
+  let pointerDown = false;
+  function onFocus(e: Event, entry: AttentionEntry) {
+    if (!pointerDown) over(e, entry, false);
+  }
+  function over(e: Event, entry: AttentionEntry, delay: boolean) {
+    if (!cardOf(entry)) return;
+    const el = e.currentTarget as HTMLElement;
+    hover.enter(entry.pane.id, () => ({ entry: el.getBoundingClientRect(), panel: (el.closest('.wp') ?? el).getBoundingClientRect() }), delay);
+  }
+
   function activate(e: MouseEvent | KeyboardEvent, entry: AttentionEntry) {
     dispatch(e.altKey ? 'preview' : 'jump', entry);
   }
@@ -54,6 +77,8 @@
   }
 </script>
 
+<svelte:window on:mouseup={() => (pointerDown = false)} />
+
 {#if total === 0}
   <div class="wp quiet"><span class="wp-title">Wartet auf dich</span><span class="wp-q">Nichts wartet</span></div>
 {:else}
@@ -67,6 +92,9 @@
         <div class="wp-entry r{entry.rank}" class:sel={entry.pane.id === selectedPaneId} class:flash={flashing.has(entry.pane.id)}
           role="button" tabindex="0" title={tip(entry)}
           aria-label="{ENTRY_LABEL[entry.rank]}: {entry.here ? 'dieses Projekt' : entry.tabName}, {paneDisplayName(entry.pane)}"
+          on:mouseenter={(e) => over(e, entry, true)} on:mouseleave={hover.leave}
+          on:mousedown={() => (pointerDown = true)} on:mouseup={() => (pointerDown = false)}
+          on:focus={(e) => onFocus(e, entry)} on:blur={hover.leave}
           on:click={(e) => activate(e, entry)} on:keydown={(e) => onKey(e, entry)} on:contextmenu={(e) => onMenu(e, entry)}>
           <div class="l1">
             <StatusGlyph kind={glyphKind(entry.pane)} />
@@ -75,7 +103,12 @@
             <span class="pane">{paneDisplayName(entry.pane)}</span>
             <span class="age">{entry.since ? formatDuration(entry.since, $now) : ''}</span>
           </div>
-          <div class="l2" class:mono={entry.rank === 0 || entry.rank === 2}>{entry.pane.attention?.detail || ENTRY_LABEL[entry.rank]}</div>
+          {#if entry.rank === 2 || entry.rank === 3}
+            {@const v = verdict($briefings[entry.pane.sessionId], entry.pane.attention)}
+            <div class="l2 {v.kind}" class:mono={v.kind === 'detail' && entry.rank === 2}>{v.text || ENTRY_LABEL[entry.rank]}</div>
+          {:else}
+            <div class="l2" class:mono={entry.rank === 0}>{entry.pane.attention?.detail || ENTRY_LABEL[entry.rank]}</div>
+          {/if}
         </div>
       {/each}
       {#if collapsible}
@@ -83,6 +116,10 @@
       {/if}
     </div>
   </div>
+  {#if $shown && shownEntry && shownBriefing}
+    <BriefingCard briefing={shownBriefing} project={shownEntry.here ? 'hier' : shownEntry.tabName} pane={paneDisplayName(shownEntry.pane)}
+      entryRect={$shown.entry} panelRect={$shown.panel} on:enter={hover.keep} on:leave={hover.leave} />
+  {/if}
 {/if}
 
 <style>
@@ -107,6 +144,8 @@
   .pane { color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
   .age { margin-left: auto; padding-left: 6px; flex: none; font: 10.5px var(--font-mono); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
   .l2 { padding-left: 18px; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .l2.warn { color: var(--status-waiting); }
+  .l2.pending, .l2.clean { color: var(--fg-muted); }
   .l2.mono { font: 11px var(--font-mono); }
   .more { align-self: flex-start; margin: 2px 0 4px 18px; background: none; border: 0; padding: 3px 0; color: var(--fg-muted); font: 500 11.5px var(--font-sans); cursor: pointer; }
   .more:hover { color: var(--fg); }

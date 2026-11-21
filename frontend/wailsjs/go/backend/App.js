@@ -239,6 +239,10 @@ export function SetProjectForceWorktrees(arg1, arg2) {
   return $Call.ByID(3782727065, arg1, arg2);
 }
 
+export function SetSessionTarget(arg1, arg2) {
+  return $Call.ByID(2176172594, arg1, arg2);
+}
+
 export function GetQueue(arg1) {
   return $Call.ByID(2075083900, arg1);
 }
@@ -261,6 +265,10 @@ export function GetResolvedCodexPath() {
 
 export function GetResolvedGeminiPath() {
   return $Call.ByID(1942354009);
+}
+
+export function GetSessionBriefing(arg1) {
+  return $Call.ByID(3334881243, arg1);
 }
 
 export function GetSessionIssue(arg1) {

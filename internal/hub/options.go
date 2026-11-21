@@ -1,5 +1,7 @@
 package hub
 
+import "context"
+
 // How a host is configured.
 //
 // Split out of embedded.go for the file-size rule. Every field here answers
@@ -51,4 +53,16 @@ type Options struct {
 	// it while the host runs; it is read per tick. Nil leaves the keep-alive
 	// off, and so does a policy that returns a zero interval or no message.
 	KeepAlive func() KeepAlive
+	// Briefing supplies the thresholds of a turn briefing. Like KeepAlive it
+	// is read per build, so a changed setting applies to the next turn. Nil
+	// means the defaults, with the CI watch off.
+	Briefing func() BriefingPolicy
+	// GH runs the GitHub CLI for the CI and PR watcher (ExecGH outside
+	// tests). Like the scan it belongs wherever the sessions are: CI turns
+	// red while no window is open. Nil leaves the watcher off; the policy's
+	// CIWatch switches it off per poll.
+	GH GHRunner
 }
+
+// GHRunner runs `gh` with args in dir and returns its stdout.
+type GHRunner func(ctx context.Context, dir string, args ...string) ([]byte, error)

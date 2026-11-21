@@ -122,6 +122,13 @@ func (a *AppService) onHostEvent(name string, payload any) {
 		}
 		a.emitAttention(ev.ID, ev.Attention)
 
+	case hub.EventSessionBriefing:
+		ev, ok := hub.DecodePayload[hub.BriefingUpdate](payload)
+		if !ok {
+			return
+		}
+		a.emitBriefing(ev.ID, ev.Briefing)
+
 	case hub.EventSessionSuspended:
 		ev, ok := hub.DecodePayload[hub.SessionSuspended](payload)
 		if !ok {

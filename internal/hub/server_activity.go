@@ -74,6 +74,24 @@ func (s *Server) handleKeepAlive(w http.ResponseWriter, id int) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleSuspend serves POST /v1/sessions/{id}/suspend.
+func (s *Server) handleSuspend(w http.ResponseWriter, id int) {
+	if err := s.host.Suspend(id); err != nil {
+		writeHostError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// handleWake serves POST /v1/sessions/{id}/wake.
+func (s *Server) handleWake(w http.ResponseWriter, id int) {
+	if err := s.host.Wake(id); err != nil {
+		writeHostError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
 // handleSeen serves POST /v1/sessions/{id}/seen.
 func (s *Server) handleSeen(w http.ResponseWriter, r *http.Request, id int) {
 	if r.Method != http.MethodPost {

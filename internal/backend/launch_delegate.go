@@ -125,3 +125,14 @@ func (a *AppService) keepAlivePolicy() hub.KeepAlive {
 		Modes:   launch.KeepAliveModes(),
 	}
 }
+
+// briefingPolicy reads the briefing thresholds for one build. Per call, like
+// keepAlivePolicy, so the settings dialog applies at once.
+func (a *AppService) briefingPolicy() hub.BriefingPolicy {
+	cfg := a.cfg
+	return hub.BriefingPolicy{
+		BigDiffFiles: cfg.Briefing.BigDiffFiles,
+		BigDiffLines: cfg.Briefing.BigDiffLines,
+		CIWatch:      cfg.ShouldWatchCI(),
+	}
+}

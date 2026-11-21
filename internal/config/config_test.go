@@ -782,3 +782,38 @@ func TestStatusLine_YAMLRoundTrip(t *testing.T) {
 		t.Error("StatusLine.ShowDuration should be true")
 	}
 }
+
+func TestBriefingDefaults(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Briefing.BigDiffFiles != 15 || cfg.Briefing.BigDiffLines != 500 {
+		t.Errorf("Briefing thresholds = %d/%d, want 15/500", cfg.Briefing.BigDiffFiles, cfg.Briefing.BigDiffLines)
+	}
+	if !cfg.ShouldWatchCI() {
+		t.Error("ShouldWatchCI on a fresh config should be true")
+	}
+	if !(Config{}).ShouldWatchCI() {
+		t.Error("ShouldWatchCI with nil should return true")
+	}
+}
+
+func TestBriefingYAMLRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "briefing-test.yaml")
+
+	original := DefaultConfig()
+	original.Briefing = BriefingSettings{BigDiffFiles: 20, BigDiffLines: 800, CIWatch: boolPtr(false)}
+	if err := writeDefaults(path, original); err != nil {
+		t.Fatalf("writeDefaults: %v", err)
+	}
+
+	data, _ := os.ReadFile(path)
+	var loaded Config
+	if err := yaml.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("yaml.Unmarshal: %v", err)
+	}
+	if loaded.Briefing.BigDiffFiles != 20 || loaded.Briefing.BigDiffLines != 800 {
+		t.Errorf("Briefing thresholds = %d/%d, want 20/800", loaded.Briefing.BigDiffFiles, loaded.Briefing.BigDiffLines)
+	}
+	if loaded.ShouldWatchCI() {
+		t.Error("ci_watch: false did not survive the round-trip")
+	}
+}

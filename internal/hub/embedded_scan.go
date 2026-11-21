@@ -27,6 +27,7 @@ func (h *Embedded) ScanActivity() []ScanResult {
 		r, isHung := scanOne(ids[i], sess)
 		if isHung {
 			h.attention.noteFact(r.ID, ActivityError, "keine Ausgabe und kein Hook seit 10 min", "keine Ausgabe seit 10 min")
+			h.finishTurn(r.ID, true, "")
 		}
 		if r.Asleep {
 			out = append(out, r)
@@ -266,4 +267,21 @@ func (h *Embedded) setLastOutputForTest(id int, at time.Time) {
 	if m, err := h.lookup(id); err == nil {
 		m.sess.SetLastOutputAtForTest(at)
 	}
+}
+
+// sessionObjects returns every session object, paired with its ID.
+//
+// It is unexported on purpose: handing out the session itself is the one thing
+// a host in another process cannot do, so the only caller is this package's
+// own activity scan, which runs where the screens are.
+func (h *Embedded) sessionObjects() (ids []int, sessions []*terminal.Session) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ids = make([]int, 0, len(h.sessions))
+	sessions = make([]*terminal.Session, 0, len(h.sessions))
+	for id, m := range h.sessions {
+		ids = append(ids, id)
+		sessions = append(sessions, m.sess)
+	}
+	return ids, sessions
 }

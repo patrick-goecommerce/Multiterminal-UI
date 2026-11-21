@@ -844,6 +844,22 @@ export namespace backend {
 
 export namespace config {
 	
+	export class BriefingSettings {
+	    big_diff_files: number;
+	    big_diff_lines: number;
+	    ci_watch: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new BriefingSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.big_diff_files = source["big_diff_files"];
+	        this.big_diff_lines = source["big_diff_lines"];
+	        this.ci_watch = source["ci_watch"];
+	    }
+	}
 	export class KeepAliveSettings {
 	    enabled: boolean;
 	    interval_minutes: number;
@@ -1164,6 +1180,7 @@ export namespace config {
 	    gemini_models: ModelEntry[];
 	    gemini_enabled?: boolean;
 	    keep_alive: KeepAliveSettings;
+	    briefing: BriefingSettings;
 	    status_line: StatusLineSettings;
 	    background_agents: BackgroundAgents;
 	    orchestrator: OrchestratorSettings;
@@ -1219,6 +1236,7 @@ export namespace config {
 	        this.gemini_models = this.convertValues(source["gemini_models"], ModelEntry);
 	        this.gemini_enabled = source["gemini_enabled"];
 	        this.keep_alive = this.convertValues(source["keep_alive"], KeepAliveSettings);
+	        this.briefing = this.convertValues(source["briefing"], BriefingSettings);
 	        this.status_line = this.convertValues(source["status_line"], StatusLineSettings);
 	        this.background_agents = this.convertValues(source["background_agents"], BackgroundAgents);
 	        this.orchestrator = this.convertValues(source["orchestrator"], OrchestratorSettings);
@@ -1351,6 +1369,145 @@ export namespace config {
 	        this.tabs = this.convertValues(source["tabs"], SavedTab);
 	    }
 	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace hub {
+
+	export class CheckResult {
+	    label: string;
+	    result: string;
+
+	    static createFrom(source: any = {}) {
+	        return new CheckResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.result = source["result"];
+	    }
+	}
+	export class GitFacts {
+	    branch: string;
+	    target: string;
+	    on_target: boolean;
+	    detached: boolean;
+	    no_upstream: boolean;
+	    turn_known: boolean;
+	    turn_files: number;
+	    turn_added: number;
+	    turn_deleted: number;
+	    branch_files: number;
+	    branch_added: number;
+	    branch_deleted: number;
+	    commits: number;
+	    unpushed: number;
+	    uncommitted: number;
+
+	    static createFrom(source: any = {}) {
+	        return new GitFacts(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.branch = source["branch"];
+	        this.target = source["target"];
+	        this.on_target = source["on_target"];
+	        this.detached = source["detached"];
+	        this.no_upstream = source["no_upstream"];
+	        this.turn_known = source["turn_known"];
+	        this.turn_files = source["turn_files"];
+	        this.turn_added = source["turn_added"];
+	        this.turn_deleted = source["turn_deleted"];
+	        this.branch_files = source["branch_files"];
+	        this.branch_added = source["branch_added"];
+	        this.branch_deleted = source["branch_deleted"];
+	        this.commits = source["commits"];
+	        this.unpushed = source["unpushed"];
+	        this.uncommitted = source["uncommitted"];
+	    }
+	}
+	export class PRFacts {
+	    number: number;
+	    url: string;
+	    state: string;
+	    base: string;
+	    head_oid: string;
+	    review: string;
+	    checks: string;
+	    failed_check: string;
+	    draft: boolean;
+	    conflicting: boolean;
+	    checks_total: number;
+	    checks_passed: number;
+
+	    static createFrom(source: any = {}) {
+	        return new PRFacts(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.number = source["number"];
+	        this.url = source["url"];
+	        this.state = source["state"];
+	        this.base = source["base"];
+	        this.head_oid = source["head_oid"];
+	        this.review = source["review"];
+	        this.checks = source["checks"];
+	        this.failed_check = source["failed_check"];
+	        this.draft = source["draft"];
+	        this.conflicting = source["conflicting"];
+	        this.checks_total = source["checks_total"];
+	        this.checks_passed = source["checks_passed"];
+	    }
+	}
+	export class Briefing {
+	    prompt_id: string;
+	    built_at: number;
+	    prompt: string;
+	    closing: string;
+	    checks: CheckResult[];
+	    git?: GitFacts;
+	    pr?: PRFacts;
+	    warnings: string[];
+	    notes: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new Briefing(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.prompt_id = source["prompt_id"];
+	        this.built_at = source["built_at"];
+	        this.prompt = source["prompt"];
+	        this.closing = source["closing"];
+	        this.checks = this.convertValues(source["checks"], CheckResult);
+	        this.git = this.convertValues(source["git"], GitFacts);
+	        this.pr = this.convertValues(source["pr"], PRFacts);
+	        this.warnings = source["warnings"];
+	        this.notes = source["notes"];
+	    }
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;

@@ -68,6 +68,9 @@
 
   let idleSuspendEnabled = ($config as any).idle_suspend?.enabled ?? false;
   let idleSuspendMinutes = ($config as any).idle_suspend?.timeout_minutes || 30;
+  let briefingBigFiles = $config.briefing?.big_diff_files || 15;
+  let briefingBigLines = $config.briefing?.big_diff_lines || 500;
+  let briefingCIWatch = $config.briefing?.ci_watch ?? true;
   let autoNamingEnabled = $config.auto_naming?.enabled ?? true;
   let autoNamingModel = $config.auto_naming?.model || 'claude-haiku-4-5';
 
@@ -150,6 +153,9 @@
     App.UsesSessionDaemon().then((v: boolean) => { sessionDaemonLive = v; }).catch(() => {});
     idleSuspendEnabled = ($config as any).idle_suspend?.enabled ?? false;
     idleSuspendMinutes = ($config as any).idle_suspend?.timeout_minutes || 30;
+    briefingBigFiles = $config.briefing?.big_diff_files || 15;
+    briefingBigLines = $config.briefing?.big_diff_lines || 500;
+    briefingCIWatch = $config.briefing?.ci_watch ?? true;
     autoNamingEnabled = $config.auto_naming?.enabled ?? true;
     autoNamingModel = $config.auto_naming?.model || 'claude-haiku-4-5';
     mcpEnabled = ($config as any).mcp_server?.enabled ?? true;
@@ -379,6 +385,11 @@
         enabled: idleSuspendEnabled,
         timeout_minutes: idleSuspendMinutes,
       },
+      briefing: {
+        big_diff_files: Math.max(1, Math.round(Number(briefingBigFiles)) || 15),
+        big_diff_lines: Math.max(1, Math.round(Number(briefingBigLines)) || 500),
+        ci_watch: briefingCIWatch,
+      },
       auto_naming: {
         enabled: autoNamingEnabled,
         model: autoNamingModel,
@@ -420,6 +431,9 @@
     audioErrorSound = '';
     idleSuspendEnabled = false;
     idleSuspendMinutes = 30;
+    briefingBigFiles = 15;
+    briefingBigLines = 500;
+    briefingCIWatch = true;
     autoNamingEnabled = true;
     autoNamingModel = 'claude-haiku-4-5';
     mcpEnabled = true;
@@ -754,6 +768,23 @@
           </select>
           <p class="setting-desc" style="margin-top: 6px;">Das Aufwachen dauert etwa 12&ndash;15&nbsp;Sekunden, weil Claude neu startet und den Gesprächsverlauf lädt.</p>
         {/if}
+      </div>
+
+      <div class="setting-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label class="setting-label">Leitstand: CI und PRs beobachten</label>
+        <p class="setting-desc">Der Leitstand schaut regelmäßig nach CI-Läufen und Pull Requests der Panes und holt ein Pane zurück, wenn etwas rot wird.</p>
+        <div class="toggle-row" style="margin-bottom: 12px;">
+          <button class="toggle-btn" class:toggle-on={briefingCIWatch} on:click={() => briefingCIWatch = !briefingCIWatch}>
+            <span class="toggle-knob"></span>
+          </button>
+          <span class="toggle-label">{briefingCIWatch ? 'Aktiv' : 'Inaktiv'}</span>
+        </div>
+        <label class="setting-label" for="briefing-big-files">Großer Diff ab Dateien</label>
+        <input id="briefing-big-files" type="number" class="orch-number" min="1" bind:value={briefingBigFiles} />
+        <label class="setting-label" for="briefing-big-lines" style="margin-top: 8px;">Großer Diff ab geänderten Zeilen</label>
+        <input id="briefing-big-lines" type="number" class="orch-number" min="1" bind:value={briefingBigLines} />
+        <p class="setting-desc" style="margin-top: 6px;">Lockfiles zählen bei den Zeilen nicht mit.</p>
       </div>
 
       <div class="setting-group">

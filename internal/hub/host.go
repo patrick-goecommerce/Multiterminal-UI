@@ -107,6 +107,13 @@ type Host interface {
 	MarkSeen(id int) error
 	MarkUnseen(id int) error
 
+	// Briefing returns what the host measured when the session's last turn
+	// ended; false when no turn has been measured yet. SetTarget names the
+	// branch the window means as the session's target (empty clears it), which
+	// the next build compares against.
+	Briefing(id int) (Briefing, bool, error)
+	SetTarget(id int, branch string) error
+
 	// Nudge types the keep-alive message into the session now and marks the
 	// turn as the keep-alive's, so its reply settles as done and seen instead
 	// of a question. It fails when no keep-alive message is configured.
